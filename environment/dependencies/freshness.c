@@ -2,8 +2,8 @@
 /* Metadata freshness for installed imports and their configuration/media inputs. */
 #include "ball/store.h"
 #include "storage/container.h"
-#include "ball/dependency_freshness.h"
-#include "ball/os2_dependencies.h"
+#include "environment/dependencies/freshness.h"
+#include "environment/dependencies/audit.h"
 #include "ball/vendor/sha256/sha256.h"
 
 static void dependency_token_text(SHA256_CTX *state, const char *text)

@@ -2,14 +2,14 @@
 /* Category-based OS/2 media planning and staged extraction into a ball. */
 #include "ball/store.h"
 #include "storage/container.h"
-#include "ball/os2_component_store.h"
-#include "ball/os2_extract.h"
-#include "ball/os2_groups.h"
-#include "ball/os2_paths.h"
-#include "ball/os2_som.h"
-#include "ball/os2_support.h"
-#include "ball/os2_tree.h"
-#include "ball/system_modules.h"
+#include "environment/components/store.h"
+#include "environment/media/extract.h"
+#include "environment/media/groups.h"
+#include "environment/components/search_paths.h"
+#include "environment/components/som.h"
+#include "environment/media/support.h"
+#include "environment/media/tree.h"
+#include "environment/components/system_modules.h"
 #include "ball/vendor/sha256/sha256.h"
 
 int extract_extension(const char *name, const char *extension)

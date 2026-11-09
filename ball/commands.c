@@ -3,7 +3,6 @@
 #include "ball/ball_internal.h"
 #include "ball/host_environment.h"
 #include "ball/runtime_config.h"
-#include "ball/wps_applications.h"
 #include "storage/volume.h"
 
 int tb_ball_command(TbBall *c, const cJSON *request)

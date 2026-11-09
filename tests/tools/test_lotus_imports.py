@@ -32,6 +32,10 @@ def segmented(named=False, size=8, iterated=False):
 
 
 class ImportParserTests(unittest.TestCase):
+    def test_builtin_modules_follow_the_installation_manager_table(self):
+        provided = inventory.builtin_modules(Path(__file__).resolve().parents[2])
+        self.assertTrue({"DOSCALLS", "PMMERGE", "REGISTRY"} <= provided)
+
     def test_linear_ordinals_names_lists_and_exact_locations(self):
         records = [
             struct.pack("<BBhBH", 7, 1, 32, 1, 99),

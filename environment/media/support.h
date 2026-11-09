@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared installation-media browser and original OS/2 support-file import. */
-#ifndef TB_BALL_OS2_SUPPORT_H
-#define TB_BALL_OS2_SUPPORT_H
+#ifndef TB_ENVIRONMENT_MEDIA_SUPPORT_H
+#define TB_ENVIRONMENT_MEDIA_SUPPORT_H
 #include "ball/store.h"
 
 enum

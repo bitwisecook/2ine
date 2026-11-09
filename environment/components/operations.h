@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read-only live state is independent of the per-ball mutation guard. */
-#ifndef TB_BALL_OS2_COMPONENT_OPERATIONS_H
-#define TB_BALL_OS2_COMPONENT_OPERATIONS_H
+#ifndef TB_ENVIRONMENT_COMPONENTS_OPERATIONS_H
+#define TB_ENVIRONMENT_COMPONENTS_OPERATIONS_H
 #include "ball/store.h"
 
 cJSON *os2_component_state(TbBall *c, const cJSON *request);

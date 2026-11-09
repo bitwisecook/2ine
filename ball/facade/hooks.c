@@ -4,11 +4,11 @@
 #include "ball/ball_internal.h"
 #include "ball/facade/facade.h"
 #include "ball/host_environment.h"
-#include "ball/os2_dependencies.h"
-#include "ball/os2_support.h"
+#include "environment/dependencies/audit.h"
+#include "environment/media/support.h"
 #include "ball/runtime.h"
 #include "ball/runtime_config.h"
-#include "ball/wps_applications.h"
+#include "environment/wps_sync.h"
 
 static int facade_regenerate(TbBall *c)
 {

@@ -50,17 +50,17 @@ endif()
 if(NOT TARGET twoine_storage)
     add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/storage" storage)
 endif()
+if(NOT TARGET twoine_environment)
+    add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/environment" environment)
+endif()
 set(TWOINE_BALL_SOURCES
     application_icon.c
     applications.c
-    audio.c
     ball_archive.c
     ball_rename.c
     commands.c
     configuration.c
     context.c
-    dependency_database.c
-    dependency_freshness.c
     facade/dispatch.c
     facade/hooks.c
     drives.c
@@ -71,15 +71,6 @@ set(TWOINE_BALL_SOURCES
     launch_dependencies.c
     launch_prerequisites.c
     manifest.c
-    os2_component_operations.c
-    os2_component_store.c
-    os2_dependencies.c
-    os2_extract.c
-    os2_groups.c
-    os2_paths.c
-    os2_som.c
-    os2_support.c
-    os2_tree.c
     paths.c
     prepare.c
     runtime.c
@@ -88,11 +79,10 @@ set(TWOINE_BALL_SOURCES
     runtime_selection.c
     settings_schema.c
     snapshot.c
-    system_modules.c
-    wps_applications.c
     platform.c
     vendor/cjson/cJSON.c
     vendor/sha256/sha256.c
+    $<TARGET_OBJECTS:twoine_environment>
 )
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})
 target_link_libraries(

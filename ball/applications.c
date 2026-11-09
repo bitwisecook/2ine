@@ -1,7 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Saving launcher records and their custom icon assets. */
 #include "ball/ball_internal.h"
-#include "ball/wps_applications.h"
 
 int tb_ball_save_application(TbBall *c, const cJSON *request)
 {

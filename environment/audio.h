@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Private, portable bank installation and per-ball MIDI preferences. */
-#ifndef TB_BALL_AUDIO_H
-#define TB_BALL_AUDIO_H
+#ifndef TB_ENVIRONMENT_AUDIO_H
+#define TB_ENVIRONMENT_AUDIO_H
 #include "ball/store.h"
 
 cJSON *audio_snapshot(TbBall *c);

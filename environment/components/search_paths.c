@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Add installed component directories to OS/2's configuration search lists. */
 #include "ball/store.h"
-#include "ball/os2_paths.h"
+#include "environment/components/search_paths.h"
 
 static int os2_path_equal(const char *first, size_t length, const char *second)
 {

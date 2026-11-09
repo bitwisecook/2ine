@@ -1,8 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Original DSOM package companions and ball-owned service configuration. */
 #include "ball/store.h"
-#include "ball/host_environment.h"
-#include "ball/os2_som.h"
+#include "environment/components/som.h"
 
 const char *os2_som_companions[] = {"C:\\OS2\\SOMDD.EXE",
                                     "C:\\OS2\\SOMDSVR.EXE",

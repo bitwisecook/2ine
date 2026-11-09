@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared installation-media browser and original OS/2 support-file import. */
 #include "ball/store.h"
-#include "ball/os2_component_store.h"
-#include "ball/os2_paths.h"
-#include "ball/os2_support.h"
+#include "environment/components/store.h"
+#include "environment/components/search_paths.h"
+#include "environment/media/support.h"
 #include "storage/container.h"
 #include "formats/executable/os2_executable.h"
 #include "ball/vendor/sha256/sha256.h"

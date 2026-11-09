@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Category-based OS/2 media planning and staged extraction into a ball. */
-#ifndef TB_BALL_OS2_EXTRACT_H
-#define TB_BALL_OS2_EXTRACT_H
+#ifndef TB_ENVIRONMENT_MEDIA_EXTRACT_H
+#define TB_ENVIRONMENT_MEDIA_EXTRACT_H
 #include "ball/store.h"
 
 int extract_extension(const char *name, const char *extension);

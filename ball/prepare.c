@@ -5,13 +5,13 @@
 #include "ball/host_environment.h"
 #include "ball/interpreter.h"
 #include "ball/launch_prerequisites.h"
-#include "ball/os2_support.h"
+#include "environment/media/support.h"
 #include "ball/prepare.h"
 #include "ball/runtime.h"
 #include "ball/runtime_config.h"
 #include "ball/runtime_features.h"
 #include "ball/runtime_selection.h"
-#include "ball/wps_applications.h"
+#include "environment/wps_sync.h"
 #include "storage/volume.h"
 
 cJSON *launch_prepare(TbBall *c, const cJSON *request)

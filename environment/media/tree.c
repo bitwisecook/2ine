@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Hierarchical media choices and exact planned-source selection. */
 #include "ball/store.h"
-#include "ball/os2_extract.h"
-#include "ball/os2_groups.h"
-#include "ball/os2_tree.h"
+#include "environment/media/extract.h"
+#include "environment/media/groups.h"
+#include "environment/media/tree.h"
 
 static int extract_source_order(const void *first, const void *second)
 {

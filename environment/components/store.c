@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Component jobs persist progress atomically and journal each committed file. */
 #include "ball/store.h"
-#include "ball/os2_component_store.h"
+#include "environment/components/store.h"
 #include "storage/volume.h"
 #include "ball/vendor/sha256/sha256.h"
 

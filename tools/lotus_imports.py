@@ -290,6 +290,18 @@ def export_inventory(root: Path) -> dict:
     return inventories
 
 
+SYSTEM_MODULES = "environment/components/system_modules.c"
+
+
+def builtin_modules(source: Path) -> set:
+    """Module names 2ine supplies itself, from the installation manager's table."""
+    text = (source / SYSTEM_MODULES).read_text()
+    block = re.search(r"static const char \*modules\[\].*?\{(.*?)NULL", text, re.S)
+    if not block:
+        raise ValueError(f"{SYSTEM_MODULES} no longer holds the supplied-module table")
+    return set(re.findall(r'"([A-Z0-9]+)"', block[1]))
+
+
 def config_environment(ball: Path, manifest: dict) -> dict:
     values = {}
     config = ball / manifest.get("drives", {}).get("C", "drive_c") / "CONFIG.SYS"
@@ -324,9 +336,7 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
     exports = export_inventory(source)
     env = config_environment(ball, manifest)
     catalogue = json.loads((source / "tools/data/os2imports.json").read_text())
-    builtin_text = (source / "ball/system_modules.h").read_text()
-    builtin_block = re.search(r"static const char \*modules\[\].*?\{(.*?)NULL", builtin_text, re.S)
-    provided = set(re.findall(r'"([A-Z0-9]+)"', builtin_block[1])) if builtin_block else set()
+    provided = builtin_modules(source)
     provided |= (
         {"OPENGL", "PGL"} if manifest.get("system", {}).get("opengl", "mesa") == "mesa" else set()
     )
@@ -545,7 +555,7 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
                 "emulator/loader/load_ne.c",
                 "formats/executable/lx.h",
                 "formats/executable/ne.h",
-                "ball/system_modules.h",
+                SYSTEM_MODULES,
             )
         },
         "parserOrigins": [
@@ -560,7 +570,7 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
             "fixupCount counts encoded relocation records/forwarders, not dynamic calls or all links in a source chain.",
             "Export presence, ABI policies, located source bodies and explicit markers do not establish complete semantics.",
             "Internal-entry fixups are decoded using the primary IBM LX specification; opaque parameter-type payloads, compressed chain expansion and unsupported format records remain explicit rather than invented.",
-            "Provider precedence follows ball/system_modules.h plus selected Mesa/TLS policy; directory lookup uses importer directory then configured LIBPATH. Optional Lotus DLL closures are a separate conservative superset.",
+            "Provider precedence follows environment/components/system_modules.c plus selected Mesa/TLS policy; directory lookup uses importer directory then configured LIBPATH. Optional Lotus DLL closures are a separate conservative superset.",
         ],
         "applications": applications,
         "optionalRoots": optional_roots,

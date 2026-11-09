@@ -2,13 +2,13 @@
 /* Normal launches read the stored graph. No executable parsing, directory
    enumeration, media inspection, recovery, or database writes happen here. */
 #include "ball/store.h"
-#include "ball/dependency_database.h"
+#include "environment/dependencies/database.h"
 #include "ball/launch_dependencies.h"
 #include "ball/launch_prerequisites.h"
-#include "ball/os2_component_store.h"
-#include "ball/os2_dependencies.h"
-#include "ball/os2_extract.h"
-#include "ball/system_modules.h"
+#include "environment/components/store.h"
+#include "environment/dependencies/audit.h"
+#include "environment/media/extract.h"
+#include "environment/components/system_modules.h"
 
 static const cJSON *dependency_cached_binary(TbBall *c, const cJSON *database, const char *path)
 {

@@ -6,9 +6,9 @@
 #include "ball/host_environment.h"
 #include "ball/interpreter.h"
 #include "ball/launch_prerequisites.h"
-#include "ball/os2_component_store.h"
-#include "ball/os2_groups.h"
-#include "ball/os2_support.h"
+#include "environment/components/store.h"
+#include "environment/media/groups.h"
+#include "environment/media/support.h"
 #include "formats/executable/os2_executable.h"
 
 int installer_support_required(TbBall *c, const char *host)

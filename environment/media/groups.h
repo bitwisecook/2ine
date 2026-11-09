@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Stable media group identifiers shared by extraction and dependency reports. */
-#ifndef TB_BALL_OS2_GROUPS_H
-#define TB_BALL_OS2_GROUPS_H
+#ifndef TB_ENVIRONMENT_MEDIA_GROUPS_H
+#define TB_ENVIRONMENT_MEDIA_GROUPS_H
 #include "ball/store.h"
 
 /* Public domain. No rights reserved. Wholly AI-authored. */

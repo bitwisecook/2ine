@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The host environment for the loader of a launch. */
 #include "ball/store.h"
-#include "ball/audio.h"
+#include "environment/audio.h"
 #include "ball/host_environment.h"
 #include "ball/runtime.h"
 #include "ball/settings_schema.h"

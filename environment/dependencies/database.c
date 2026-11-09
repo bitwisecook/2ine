@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Portable metadata only: no host paths, executable bytes, or media contents. */
 #include "ball/store.h"
-#include "ball/dependency_database.h"
-#include "ball/os2_component_store.h"
-#include "ball/os2_dependencies.h"
+#include "environment/dependencies/database.h"
+#include "environment/components/store.h"
+#include "environment/dependencies/audit.h"
 
 static cJSON *dependency_database_from_report(TbBall *c, const cJSON *report)
 {

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Private, portable bank installation and per-ball MIDI preferences. */
 #include "ball/store.h"
-#include "ball/audio.h"
+#include "environment/audio.h"
 #include "storage/container.h"
 #include "ball/vendor/sha256/sha256.h"
 #include <math.h>

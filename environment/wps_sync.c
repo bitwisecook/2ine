@@ -1,8 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Project persistent WPProgram registrations into independently managed launchers. */
 #include "ball/store.h"
-#include "ball/host_environment.h"
-#include "ball/wps_applications.h"
+#include "environment/wps_sync.h"
 #include "formats/endian.h"
 #include "formats/profile/os2_ini.h"
 #include "formats/resources/icon.h"

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Stable media group identifiers shared by extraction and dependency reports. */
 #include "ball/store.h"
-#include "ball/os2_groups.h"
+#include "environment/media/groups.h"
 
 const char *extract_categories[EXTRACT_COUNT] = {
     "cmd",        "fonts",   "assets",    "printers",  "help",        "full",   "som",   "runtime",

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Hierarchical media choices and exact planned-source selection. */
-#ifndef TB_BALL_OS2_TREE_H
-#define TB_BALL_OS2_TREE_H
+#ifndef TB_ENVIRONMENT_MEDIA_TREE_H
+#define TB_ENVIRONMENT_MEDIA_TREE_H
 #include "ball/store.h"
 
 /* Public domain. No rights reserved. Wholly AI-authored. */

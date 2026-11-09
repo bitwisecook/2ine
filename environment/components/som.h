@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Original DSOM package companions and ball-owned service configuration. */
-#ifndef TB_BALL_OS2_SOM_H
-#define TB_BALL_OS2_SOM_H
+#ifndef TB_ENVIRONMENT_COMPONENTS_SOM_H
+#define TB_ENVIRONMENT_COMPONENTS_SOM_H
 #include "ball/store.h"
 
 extern const char *os2_som_companions[];

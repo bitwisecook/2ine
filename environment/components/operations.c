@@ -1,13 +1,13 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read-only live state is independent of the per-ball mutation guard. */
 #include "ball/store.h"
-#include "ball/os2_component_operations.h"
-#include "ball/os2_component_store.h"
-#include "ball/os2_extract.h"
-#include "ball/os2_groups.h"
-#include "ball/os2_som.h"
-#include "ball/os2_support.h"
-#include "ball/os2_tree.h"
+#include "environment/components/operations.h"
+#include "environment/components/store.h"
+#include "environment/media/extract.h"
+#include "environment/media/groups.h"
+#include "environment/components/som.h"
+#include "environment/media/support.h"
+#include "environment/media/tree.h"
 
 static cJSON *component_current_progress(TbBall *c, const cJSON *request)
 {

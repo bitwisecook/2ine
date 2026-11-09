@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Static OS/2 import auditing and media-backed dependency recovery. */
-#ifndef TB_BALL_OS2_DEPENDENCIES_H
-#define TB_BALL_OS2_DEPENDENCIES_H
+#ifndef TB_ENVIRONMENT_DEPENDENCIES_AUDIT_H
+#define TB_ENVIRONMENT_DEPENDENCIES_AUDIT_H
 #include "ball/store.h"
 #define DEPENDENCY_ENTRY_LIMIT 100000u
 #define DEPENDENCY_BINARY_LIMIT 30000u

@@ -14,7 +14,7 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 # Every top-level directory that holds sources has a role, so a new component is
 # placed under the rules below before it can pass.
 PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "os2"}
-HOST_COMPONENTS = {"host", "ball"}
+HOST_COMPONENTS = {"host", "ball", "environment"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
 FOREIGN_DIRECTORIES = {"ports", "research"}
@@ -37,13 +37,40 @@ PORTABLE_OS_ADAPTERS = ("storage/common/host", "emulator/execution/native_i386/"
 
 # Includes each component may not use: formats/ is self-contained, storage/
 # builds on formats/ only, the emulator knows nothing of the OS/2 libraries or
-# their bindings, and nothing outside ball/ depends on ball/.
+# their bindings, and only the components layered on the ball store (below)
+# depend on ball/.
 FORBIDDEN_INCLUDES = {
     "formats": ("storage/", "ball/", "host/", "emulator/", "os2/"),
     "storage": ("ball/", "host/", "emulator/", "os2/"),
     "emulator": ("ball/", "os2/"),
     "host": ("ball/", "emulator/", "os2/"),
     "os2": ("ball/",),
+}
+
+# The ball store keeps a ball's settings, files and references. The OS/2
+# installation manager (environment/) and launch planning (emulator/launch/)
+# build on it through ball/store.h; only the JSON facade (ball/facade/)
+# composes them. Each path takes the rules of its longest matching prefix:
+# included paths matching a pattern are refused.
+STORE_CLIENT_BALL_INCLUDES = r"ball/(?!store\.h|platform\.h|vendor/)"
+LAYERED_INCLUDES = {
+    "ball/facade/": (r"host/", r"apps/", r"emulator/(?!launch/)", r"os2/(?!config/)"),
+    "ball/": (r"emulator/", r"host/", r"apps/", r"os2/(?!config/)"),
+    "environment/": (
+        r"emulator/",
+        r"host/",
+        r"apps/",
+        r"os2/(?!config/)",
+        STORE_CLIENT_BALL_INCLUDES,
+    ),
+    "emulator/launch/": (
+        r"emulator/(?!launch/)",
+        r"host/",
+        r"apps/",
+        r"os2/(?!config/)",
+        STORE_CLIENT_BALL_INCLUDES,
+    ),
+    "emulator/": (r"emulator/launch/", r"environment/"),
 }
 
 # os2/ follows IBM's component build trees. include/ holds the Toolkit-shaped
@@ -295,11 +322,18 @@ for directory in sorted(PORTABLE_COMPONENTS):
         )
 for directory, prefixes in sorted(FORBIDDEN_INCLUDES.items()):
     for path in sources(directory):
-        if foreign(relative(path)):
+        # Launch planning is the emulator's client of the ball store.
+        if foreign(relative(path)) or relative(path).startswith("emulator/launch/"):
             continue
         check(
             path, [rf"#\s*(?:include|import)\s*<{re.escape(prefix)}[^>]*>" for prefix in prefixes]
         )
+for path in sources():
+    name = relative(path)
+    prefixes = [prefix for prefix in LAYERED_INCLUDES if name.startswith(prefix)]
+    if prefixes and not foreign(name):
+        rules = LAYERED_INCLUDES[max(prefixes, key=len)]
+        check(path, [rf"#\s*(?:include|import)\s*<{pattern}[^>]*>" for pattern in rules])
 for path in sources("host/include", {".h"}):
     check(path, platform + [r"\bHANDLE\b"])
 # The core holds the platform-free half of each function: no host APIs.

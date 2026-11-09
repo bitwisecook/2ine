@@ -2,7 +2,7 @@
 /* Module services supplied by 2ine. Optional original SOM and HELPMGR are not
    substitutes for empty/fallback native modules and remain media dependencies. */
 #include "ball/store.h"
-#include "ball/system_modules.h"
+#include "environment/components/system_modules.h"
 
 int os2_module_matches(const char *name, const char *module)
 {

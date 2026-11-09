@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Receiving-host capability resolution is read-only; saved preferences stay portable. */
 #include "ball/store.h"
-#include "ball/os2_dependencies.h"
+#include "environment/dependencies/audit.h"
 #include "ball/runtime_features.h"
 #include "ball/settings_schema.h"
 

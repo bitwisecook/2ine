@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Component jobs persist progress atomically and journal each committed file. */
-#ifndef TB_BALL_OS2_COMPONENT_STORE_H
-#define TB_BALL_OS2_COMPONENT_STORE_H
+#ifndef TB_ENVIRONMENT_COMPONENTS_STORE_H
+#define TB_ENVIRONMENT_COMPONENTS_STORE_H
 #include "ball/store.h"
 
 struct ComponentOperation
