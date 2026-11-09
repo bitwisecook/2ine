@@ -17,11 +17,11 @@ PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "os2"}
 HOST_COMPONENTS = {"host", "ball", "environment", "apps"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
-FOREIGN_DIRECTORIES = {"ports", "research"}
+FOREIGN_DIRECTORIES = {"ports", "research", "third_party"}
 
-# Paths whose sources follow another project's or toolchain's conventions:
-# vendored libraries and OS/2 guest programs built with OS/2 compilers.
-FOREIGN_SOURCE_PATHS = ("ball/vendor/", "storage/vendor/", "tests/programs/")
+# Paths whose sources follow another toolchain's conventions: OS/2 guest
+# programs built with OS/2 compilers. Vendored libraries live in third_party/.
+FOREIGN_SOURCE_PATHS = ("tests/programs/",)
 
 # Execution backends run guest code on the host CPU or an emulator, so they
 # use host APIs, CPU-specific assembly and emulator headers.
@@ -52,7 +52,7 @@ FORBIDDEN_INCLUDES = {
 # build on it through ball/store.h; only the JSON facade (ball/facade/)
 # composes them. Each path takes the rules of its longest matching prefix:
 # included paths matching a pattern are refused.
-STORE_CLIENT_BALL_INCLUDES = r"ball/(?!store\.h|platform\.h|vendor/)"
+STORE_CLIENT_BALL_INCLUDES = r"ball/(?!store\.h|platform\.h)"
 LAYERED_INCLUDES = {
     "ball/facade/": (r"host/", r"apps/", r"emulator/(?!launch/)", r"os2/(?!config/)"),
     "ball/": (r"environment/", r"emulator/", r"host/", r"apps/", r"os2/(?!config/)"),
@@ -73,7 +73,7 @@ LAYERED_INCLUDES = {
     "emulator/": (r"emulator/launch/", r"environment/"),
     # Applications talk to the engine through its JSON ABI only.
     "apps/": (
-        r"ball/(?!include/|vendor/)",
+        r"ball/(?!include/)",
         r"environment/",
         r"emulator/",
         r"host/",
@@ -213,7 +213,7 @@ INCLUDE_ROOTS = (root, root / "host/include", root / "storage/include", root / "
 
 
 def excluded_top_level(name):
-    return name.startswith((".", "build", "cmake-")) or name in {"_deps", "third_party"}
+    return name.startswith((".", "build", "cmake-")) or name == "_deps"
 
 
 def sources(directory="", suffixes=SOURCE_SUFFIXES):
@@ -517,6 +517,16 @@ for pair, count in sorted(cross_dll.items(), key=str):
 for pair in OS2_CROSS_DLL_ALLOWANCES:
     if pair not in cross_dll:
         failures.append(f"{pair}: cross-DLL include allowance names no include")
+# Vendored libraries stay as their authors wrote them: they include only their
+# own headers and the system's, never project code. Adapters live in the
+# component that uses the library.
+PROJECT_DIRECTORIES = PORTABLE_COMPONENTS | HOST_COMPONENTS | SUPPORT_DIRECTORIES | {"ports"}
+for path in sources("third_party"):
+    text = path.read_text(errors="replace")
+    for match in re.finditer(r'^[ \t]*#[ \t]*include[ \t]*[<"](\w+)/', text, re.M):
+        if match.group(1) in PROJECT_DIRECTORIES:
+            line = text[: match.start()].count("\n") + 1
+            failures.append(f"{relative(path)}:{line}: third-party code includes project code")
 if failures:
     raise SystemExit("\n".join(failures))
 print(

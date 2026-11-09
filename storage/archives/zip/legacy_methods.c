@@ -3,10 +3,10 @@
    retains its own public-domain dedication. */
 #include "storage/archives/container_internal.h"
 #include "storage/archives/zip/zip_internal.h"
-#include "storage/vendor/hwzip/implode.h"
-#include "storage/vendor/hwzip/shrink.h"
-#include "storage/vendor/hwzip/reduce.h"
-#include "storage/vendor/libarchive/archive.h"
+#include "third_party/hwzip/implode.h"
+#include "third_party/hwzip/shrink.h"
+#include "third_party/hwzip/reduce.h"
+#include "third_party/libarchive/archive.h"
 #include "formats/endian.h"
 #include <stdlib.h>
 #include <string.h>

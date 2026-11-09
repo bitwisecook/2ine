@@ -3,7 +3,7 @@
 #include "ball/ball_internal.h"
 #include "os2/config/config_sys.h"
 #include "storage/volume.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 #include <time.h>
 
 int tb_ball_fail(TbBall *c, const char *format, ...)

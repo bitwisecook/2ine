@@ -4,7 +4,7 @@
    re-read by compressed offset, so snapshots never reference a reused buffer. */
 #include "storage/archives/container_internal.h"
 #include "storage/archives/zip/zip_internal.h"
-#include "storage/vendor/libarchive/archive.h"
+#include "third_party/libarchive/archive.h"
 #include "formats/endian.h"
 #include <stddef.h>
 #include <stdlib.h>

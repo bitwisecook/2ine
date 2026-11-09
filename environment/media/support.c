@@ -6,7 +6,7 @@
 #include "environment/media/support.h"
 #include "storage/container.h"
 #include "formats/executable/os2_executable.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 
 const char *os2_support_names[] = {"CMD.EXE",     "SYSLEVEL.OS2", "OSO001.MSG",   "REXX.DLL",
                                    "REXXAPI.DLL", "REXXUTIL.DLL", "REXXINIT.DLL", "REX.MSG",

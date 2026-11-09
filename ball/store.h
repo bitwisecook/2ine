@@ -8,7 +8,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include "ball/platform.h"
-#include "ball/vendor/cjson/cJSON.h"
+#include "third_party/cjson/cJSON.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>

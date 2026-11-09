@@ -106,12 +106,12 @@ def stage(build, destination):
     licenses = destination / "usr/share/doc/2ine-ball"
     copy(ROOT / "LICENSE.txt", licenses / "copyright")
     copy(ROOT / "docs/project-sources.md", licenses / "project-sources.md")
-    copy(ROOT / "ball/vendor/sha256/README.md", licenses / "SHA256-public-domain.md")
+    copy(ROOT / "third_party/sha256/README.md", licenses / "SHA256-public-domain.md")
     shutil.copytree(ROOT / "docs/licenses", licenses / "licenses")
-    copy(ROOT / "ball/vendor/cjson/LICENSE", licenses / "licenses/cJSON-MIT.txt")
-    copy(ROOT / "storage/vendor/fatfs/LICENSE.txt", licenses / "licenses/FatFs-license.txt")
-    copy(ROOT / "storage/vendor/libarchive/COPYING", licenses / "licenses/libarchive-BSD.txt")
-    copy(ROOT / "storage/vendor/hwzip/LICENSE", licenses / "licenses/HWZIP-Unlicense.txt")
+    copy(ROOT / "third_party/cjson/LICENSE", licenses / "licenses/cJSON-MIT.txt")
+    copy(ROOT / "third_party/fatfs/LICENSE.txt", licenses / "licenses/FatFs-license.txt")
+    copy(ROOT / "third_party/libarchive/COPYING", licenses / "licenses/libarchive-BSD.txt")
+    copy(ROOT / "third_party/hwzip/LICENSE", licenses / "licenses/HWZIP-Unlicense.txt")
     if (build / "2ine-build.json").is_file():
         copy(build / "2ine-build.json", runtime / "2ine-build.json")
     if (build / "ffmpeg-build.json").is_file():

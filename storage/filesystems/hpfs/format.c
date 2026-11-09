@@ -6,7 +6,7 @@
 #include "storage/volume/volume_internal.h"
 #include "storage/common/host.h"
 #include "storage/common/host_stdio.h"
-#include "storage/vendor/fatfs/ff.h"
+#include "third_party/fatfs/ff.h"
 #include "formats/endian.h"
 #include <ctype.h>
 #include <errno.h>

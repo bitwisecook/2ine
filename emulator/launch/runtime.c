@@ -2,7 +2,7 @@
 /* Runtime build identity and the per-ball runtime snapshot. */
 #include "ball/store.h"
 #include "emulator/launch/runtime.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 
 static int runtime_name(const char *s)
 {

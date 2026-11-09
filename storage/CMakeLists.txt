@@ -5,7 +5,7 @@
 # objects, so each caller builds the static library for its ABI and options.
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH _twoine_storage_root)
 # macOS provides libarchive without public SDK headers; use the pinned API headers.
-set(LibArchive_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/libarchive")
+set(LibArchive_INCLUDE_DIR "${_twoine_storage_root}/third_party/libarchive")
 find_package(LibArchive REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
@@ -53,8 +53,8 @@ function(twoine_add_storage target)
         "${_storage}/filesystems/hpfs/format.c"
         "${_storage}/filesystems/hpfs/ea.c"
         "${_storage}/images/floppy.c"
-        "${_storage}/vendor/fatfs/ff.c"
-        "${_storage}/vendor/fatfs/ffunicode.c"
+        "${_root}/third_party/fatfs/ff.c"
+        "${_root}/third_party/fatfs/ffunicode.c"
     )
     if(NOT STORAGE_VOLUMES_ONLY)
         target_sources(
@@ -82,12 +82,12 @@ function(twoine_add_storage target)
                 "${_storage}/archives/ibm_pack/walk.c"
                 "${_storage}/archives/ibm_pack/decode.c"
                 "${_storage}/archives/warpin/warpin.c"
-                "${_storage}/vendor/hwzip/implode.c"
-                "${_storage}/vendor/hwzip/huffman.c"
-                "${_storage}/vendor/hwzip/lz77.c"
-                "${_storage}/vendor/hwzip/tables.c"
-                "${_storage}/vendor/hwzip/shrink.c"
-                "${_storage}/vendor/hwzip/reduce.c"
+                "${_root}/third_party/hwzip/implode.c"
+                "${_root}/third_party/hwzip/huffman.c"
+                "${_root}/third_party/hwzip/lz77.c"
+                "${_root}/third_party/hwzip/tables.c"
+                "${_root}/third_party/hwzip/shrink.c"
+                "${_root}/third_party/hwzip/reduce.c"
         )
         target_link_libraries(${target} PUBLIC LibArchive::LibArchive ZLIB::ZLIB)
     endif()

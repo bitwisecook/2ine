@@ -35,7 +35,7 @@ and protected macros may exceed the column target.
 
 ## Exclusions
 
-Third-party sources (`ball/vendor/`), reference experiments (`research/`) and
+Third-party sources (`third_party/`), reference experiments (`research/`) and
 build output retain their own layout. Generated export glue retains its
 generator's layout; validate it with `python3 tools/lxapigen.py --check` and
 `python3 tools/gen_opengl.py --check`. Generators emit a blank line between

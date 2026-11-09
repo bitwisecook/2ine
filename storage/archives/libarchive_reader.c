@@ -4,8 +4,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "storage/archives/container_internal.h"
 #include "storage/common/host_stdio.h"
-#include "storage/vendor/libarchive/archive.h"
-#include "storage/vendor/libarchive/archive_entry.h"
+#include "third_party/libarchive/archive.h"
+#include "third_party/libarchive/archive_entry.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

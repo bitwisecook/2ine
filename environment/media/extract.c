@@ -10,7 +10,7 @@
 #include "environment/media/support.h"
 #include "environment/media/tree.h"
 #include "environment/components/system_modules.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 
 int extract_extension(const char *name, const char *extension)
 {

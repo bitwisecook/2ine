@@ -3,7 +3,7 @@
 #include "ball/store.h"
 #include "environment/components/store.h"
 #include "storage/volume.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 
 int component_token(const char *token)
 {

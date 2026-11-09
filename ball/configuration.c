@@ -3,7 +3,7 @@
 #include "ball/ball_internal.h"
 #include "formats/endian.h"
 #include "os2/config/os2_ini.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 #include <time.h>
 
 static char *configuration_hex(TbBall *c, const unsigned char *p, size_t n)

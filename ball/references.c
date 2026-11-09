@@ -9,7 +9,7 @@
 #include "ball/ball_internal.h"
 #include "storage/image_path.h"
 #include "storage/volume.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 
 #define REFERENCE_DRIVE_PREFIX "drive-"
 #define REFERENCE_MEDIA_PREFIX "media-"

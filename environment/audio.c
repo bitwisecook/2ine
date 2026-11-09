@@ -4,7 +4,7 @@
 #include "formats/audio/soundbank.h"
 #include "environment/audio.h"
 #include "storage/container.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 #include <math.h>
 
 static const char *audio_profiles[][2] = {{"gm", "General MIDI"},

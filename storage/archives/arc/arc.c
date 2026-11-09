@@ -6,7 +6,7 @@
 #include "storage/archives/container_internal.h"
 #include "storage/archives/codecs/codecs.h"
 #include "storage/common/file_time.h"
-#include "storage/vendor/libarchive/archive.h"
+#include "third_party/libarchive/archive.h"
 #include "formats/endian.h"
 #include <stdlib.h>
 #include <string.h>

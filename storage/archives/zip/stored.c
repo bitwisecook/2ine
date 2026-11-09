@@ -2,7 +2,7 @@
 /* Stored ZIP members as direct slices of the parent reader. */
 #include "storage/archives/container_internal.h"
 #include "storage/archives/zip/zip_internal.h"
-#include "storage/vendor/libarchive/archive.h"
+#include "third_party/libarchive/archive.h"
 #include "formats/endian.h"
 #include <string.h>
 

@@ -4,7 +4,7 @@
 #include "environment/install_records.h"
 #include "environment/dependencies/audit.h"
 #include "environment/wps_sync.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 
 int environment_record_install(TbBall *c, const cJSON *request)
 {

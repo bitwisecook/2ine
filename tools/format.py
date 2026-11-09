@@ -27,7 +27,7 @@ GERSEMI = "gersemi@0.29.2"
 LANGUAGES = ("c", "python", "swift", "cmake")
 
 # Third-party, reference and generated trees keep the layout of their origin.
-EXCLUDED_PREFIXES = ("ball/vendor/", "storage/vendor/", "research/", "third_party/", "build/")
+EXCLUDED_PREFIXES = ("research/", "third_party/", "build/")
 
 
 def tracked(*patterns: str) -> list[str]:

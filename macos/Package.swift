@@ -44,37 +44,43 @@ let package = Package(
         .target(
             name: "TwoineFormats", path: "Sources/TwoineFormats", exclude: ["CMakeLists.txt"],
             cSettings: [.unsafeFlags(["-I", projectRoot])]),
+        // Vendored libraries compiled into the engine: cJSON, SHA-256, FatFs and
+        // HWZIP. Deark's decoder is included by storage, and libarchive supplies
+        // only API headers.
         .target(
-            name: "TwoineStorage", path: "Sources/TwoineStorage",
+            name: "TwoineThirdParty", path: "Sources/TwoineThirdParty",
             exclude: [
-                "CMakeLists.txt", "vendor/libarchive/COPYING", "vendor/fatfs/README.md",
-                "vendor/fatfs/LICENSE.txt", "vendor/hwzip/LICENSE", "vendor/hwzip/README.md",
-                "vendor/deark/COPYING", "vendor/deark/README.md",
-                "vendor/deark/readme-dskdcmps.txt",
-            ], publicHeadersPath: "include",
+                "cjson/LICENSE", "sha256/README.md", "fatfs/README.md", "fatfs/LICENSE.txt",
+                "hwzip/LICENSE", "hwzip/README.md", "deark", "libarchive",
+            ],
+            cSettings: [.define("CJSON_HIDE_SYMBOLS")]),
+        .target(
+            name: "TwoineStorage", dependencies: ["TwoineThirdParty"],
+            path: "Sources/TwoineStorage",
+            exclude: ["CMakeLists.txt"], publicHeadersPath: "include",
             cSettings: [.unsafeFlags(["-I", projectRoot]), .define("TB_MEDIA_TIME_CACHE")],
             linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
         .target(
             name: "TwoineOS2Config", path: "Sources/TwoineOS2Config", exclude: ["CMakeLists.txt"],
             cSettings: [.unsafeFlags(["-I", projectRoot])]),
         .target(
-            name: "TwoineEnvironment", dependencies: ["TwoineFormats", "TwoineStorage"],
+            name: "TwoineEnvironment",
+            dependencies: ["TwoineFormats", "TwoineStorage", "TwoineThirdParty"],
             path: "Sources/TwoineEnvironment", exclude: ["CMakeLists.txt"],
             cSettings: [.unsafeFlags(["-I", projectRoot]), .define("CJSON_HIDE_SYMBOLS")]),
         .target(
-            name: "TwoineLaunch", dependencies: ["TwoineFormats", "TwoineStorage"],
+            name: "TwoineLaunch",
+            dependencies: ["TwoineFormats", "TwoineStorage", "TwoineThirdParty"],
             path: "Sources/TwoineLaunch", exclude: ["CMakeLists.txt"],
             cSettings: [.unsafeFlags(["-I", projectRoot]), .define("CJSON_HIDE_SYMBOLS")]),
         .target(
             name: "BallEngine",
             dependencies: [
                 "TwoineFormats", "TwoineOS2Config", "TwoineStorage", "TwoineEnvironment",
-                "TwoineLaunch",
+                "TwoineLaunch", "TwoineThirdParty",
             ],
             path: "Sources/BallEngine",
-            exclude: [
-                "CMakeLists.txt", "vendor/cjson/LICENSE", "vendor/sha256/README.md",
-            ],
+            exclude: ["CMakeLists.txt"],
             publicHeadersPath: "include", cSettings: ballBuildSettings,
             linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
         .target(

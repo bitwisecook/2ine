@@ -62,7 +62,7 @@
 //    is at most a shared IBM lineage of ideas, not derivation.
 
 #define DE_NOT_IN_MODULE
-#include "storage/archives/ibm_pack/deark_shim.h"
+// The including unit provides the Deark API (deark, dbuf, de_dfilter_*) first.
 
 #define FTC_DESCRIPTORTABLE_LEN  433
 #define FTC_LEAF_LIMIT_WO  (FTC_DESCRIPTORTABLE_LEN*4) // 1732

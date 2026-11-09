@@ -177,14 +177,12 @@ def main():
     shutil.copy2(ROOT / "docs/project-sources.md", resources / "Project Sources.md")
     shutil.copy2(ROOT / "LICENSE.txt", resources / "LICENSE.txt")
     shutil.copytree(ROOT / "docs/licenses", resources / "Licenses")
-    shutil.copy2(ROOT / "ball/vendor/cjson/LICENSE", resources / "Licenses/cJSON-MIT.txt")
+    shutil.copy2(ROOT / "third_party/cjson/LICENSE", resources / "Licenses/cJSON-MIT.txt")
     shutil.copy2(
-        ROOT / "ball/vendor/sha256/README.md", resources / "Licenses/SHA256-public-domain.txt"
+        ROOT / "third_party/sha256/README.md", resources / "Licenses/SHA256-public-domain.txt"
     )
-    shutil.copy2(
-        ROOT / "storage/vendor/fatfs/LICENSE.txt", resources / "Licenses/FatFs-license.txt"
-    )
-    shutil.copy2(ROOT / "storage/vendor/hwzip/LICENSE", resources / "Licenses/HWZIP-Unlicense.txt")
+    shutil.copy2(ROOT / "third_party/fatfs/LICENSE.txt", resources / "Licenses/FatFs-license.txt")
+    shutil.copy2(ROOT / "third_party/hwzip/LICENSE", resources / "Licenses/HWZIP-Unlicense.txt")
     for source in copied:
         for parent in source.parents:
             if (parent / "INSTALL_RECEIPT.json").is_file():

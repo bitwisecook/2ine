@@ -9,8 +9,6 @@ host/include/host/gl/constants.h
 # Reference experiments and dependency sources retain their own formatting.
 research/**
 third_party/**
-ball/vendor/**
-storage/vendor/**
 _deps/**
 build/**
 build-*/**

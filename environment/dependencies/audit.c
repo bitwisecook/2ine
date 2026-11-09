@@ -12,7 +12,7 @@
 #include "environment/media/support.h"
 #include "environment/components/system_modules.h"
 #include "formats/executable/os2_executable.h"
-#include "ball/vendor/sha256/sha256.h"
+#include "third_party/sha256/sha256.h"
 #include <time.h>
 #include <limits.h>
 #include <sys/stat.h>

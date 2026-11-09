@@ -88,7 +88,7 @@ upstream credits and notices.
 OS/2 media import uses vendored **HWZIP 2.4** by Hans Wennborg for legacy ZIP
 methods 1–6 (Shrink, Reduce and Implode), alongside libarchive's other formats.
 The unchanged codec sources retain their public-domain dedication and complete
-[Unlicense text](../storage/vendor/hwzip/LICENSE). The original
+[Unlicense text](../third_party/hwzip/LICENSE). The original
 [source archive](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip) SHA-256 is
 `5a3fecfaf362972673d40ca0611622cfa94170c70029fbd8c9aa64a9e7d387ac`.
 Only individual selected members are decoded; legacy compressed members have a

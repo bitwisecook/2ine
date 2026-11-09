@@ -7,7 +7,7 @@ endif()
 # also the parent directory when this file is configured on its own.
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH TWOINE_BALL_PROJECT_ROOT)
 # macOS provides libarchive without public SDK headers; use the pinned API headers.
-set(LibArchive_INCLUDE_DIR "${TWOINE_BALL_PROJECT_ROOT}/storage/vendor/libarchive")
+set(LibArchive_INCLUDE_DIR "${TWOINE_BALL_PROJECT_ROOT}/third_party/libarchive")
 find_package(LibArchive REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Git QUIET)
@@ -77,8 +77,8 @@ set(TWOINE_BALL_SOURCES
     settings.c
     snapshot.c
     platform.c
-    vendor/cjson/cJSON.c
-    vendor/sha256/sha256.c
+    "${TWOINE_BALL_PROJECT_ROOT}/third_party/cjson/cJSON.c"
+    "${TWOINE_BALL_PROJECT_ROOT}/third_party/sha256/sha256.c"
     $<TARGET_OBJECTS:twoine_launch>
     $<TARGET_OBJECTS:twoine_environment>
 )

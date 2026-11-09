@@ -7,8 +7,8 @@
 #include "storage/common/file_time.h"
 #include "storage/common/host.h"
 #include "storage/common/host_stdio.h"
-#include "storage/vendor/fatfs/ff.h"
-#include "storage/vendor/fatfs/diskio.h"
+#include "third_party/fatfs/ff.h"
+#include "third_party/fatfs/diskio.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
