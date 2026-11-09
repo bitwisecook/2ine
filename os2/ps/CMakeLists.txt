@@ -20,7 +20,7 @@ twoine_os2_dll(
     pmmerge
     pmmerge/module.c
     pmmerge/pmgre/dispatch.c
-    pmmerge/ishapi/profiles.c
+    pmmerge/ishapi/readini.c
     pmmerge/ishapi/switches.c
     pmmerge/ishapi/startapp.c
     pmmerge/pmwin/cptype.c
