@@ -81,6 +81,11 @@ OS2_FORWARDER_DLLS = {
     "os2/mm/mmio/mmio": "MMPM",
 }
 OS2_FORWARDER_FILES = {"module.c", "README.md"}
+# Exports that a DLL with code of its own forwards, as in Warp 4.52: the
+# export names matching the pattern must forward to the named DLL.
+OS2_PARTIAL_FORWARDERS = {
+    "os2/ps/awe/pmwinx.def": (r"REG(?!ISTER)[A-Z]*", "REGISTRY"),
+}
 # Static helper code shared by several DLLs of one group, outside any DLL.
 OS2_SHARED = ("os2/ps/common/", "os2/mm/midi/", "os2/mm/video/decode/", "os2/mptn/common/")
 # Internal headers one DLL still takes from another DLL's directory, with the
@@ -410,6 +415,16 @@ for directory in sorted(OS2_FORWARDER_DLLS):
     for path in dll.iterdir():
         if path.name not in OS2_FORWARDER_FILES | {definition.name, "generated"}:
             failures.append(f"{relative(path)}: a forwarder DLL holds no implementation")
+for definition, (pattern, target) in sorted(OS2_PARTIAL_FORWARDERS.items()):
+    matched = 0
+    for line in (root / definition).read_text().splitlines():
+        entry = line.split(";", 1)[0].strip()
+        if re.fullmatch(pattern, entry.split(" ", 1)[0]) and "@" in entry:
+            matched += 1
+            if f"= {target}." not in entry:
+                failures.append(f"{definition}: {entry!r} must forward to {target}")
+    if not matched:
+        failures.append(f"{definition}: no export matches {pattern}")
 for path in sources("os2"):
     name = relative(path)
     if name.split("/")[1] not in OS2_GROUPS:
