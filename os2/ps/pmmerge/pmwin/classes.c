@@ -7,10 +7,9 @@
  */
 /* Window classes: the preregistered WC_* classes and WinRegisterClass. */
 #include "emulator/launch_record.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
+#include "os2/include/private/pmwctlp.h"
 #include "os2/include/private/pmp.h"
 
 WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)

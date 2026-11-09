@@ -1,9 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Damage persists until validated; the message loop synthesizes paint requests. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/paint.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmp.h"
+#include "os2/include/private/pmgrep.h"
 
 static void remove_paint(AnchorBlock *anchor, HWND handle)
 {

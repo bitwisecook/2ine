@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM timers are dispatched on the owning message-queue thread. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/timers.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmp.h"
 
 ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
 {

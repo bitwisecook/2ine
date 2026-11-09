@@ -10,7 +10,6 @@
 #include "os2/include/pmshl.h"
 #include "os2/include/pmwp.h"
 #include "os2/include/private/pmp.h"
-#include "os2/ps/pmmerge/pmwin/open32_post.h"
 #include "emulator/handles.h"
 #include "emulator/launch_record.h"
 #include "host/clock.h"

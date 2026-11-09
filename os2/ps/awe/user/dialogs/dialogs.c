@@ -3,7 +3,7 @@
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/user/input/keyboard.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/include/pmgpi.h"
 #include <stdio.h>
 

@@ -7,8 +7,8 @@
  */
 /* Presentation spaces: the one table that WinGetPS, WinBeginPaint, GpiCreatePS and every
    engine entry look handles up in, their default attributes, and their release. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 
 PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor, const HPS hps)
 {

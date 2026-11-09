@@ -1,9 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Enumerations retain a snapshot of immediate child handles in snapshotted z order. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "emulator/handles.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include <ctype.h>

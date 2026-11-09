@@ -7,8 +7,8 @@
  */
 /* Colours of a presentation space: the default colour indexes, the logical colour table, RGB
    mode and palettes. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 
 void os2ColorIndexToRGB(const LONG os2color, uint8 *r, uint8 *g, uint8 *b)
 {

@@ -9,7 +9,6 @@
 #include "emulator/abi.h"
 #include "host/sync.h"
 #include "host/clock.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/private/pmgrep.h"
 
 enum

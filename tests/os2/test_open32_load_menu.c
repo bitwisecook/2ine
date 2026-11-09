@@ -2,8 +2,7 @@
 /* Loaded PM resource menus retain their complete queryable hierarchy and ownership. */
 #include "os2/include/private/export.h"
 #include "os2/include/os2win.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
+#include "os2/include/private/pmwinp.h"
 #include "emulator/abi.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>

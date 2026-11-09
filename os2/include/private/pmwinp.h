@@ -5,8 +5,10 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#ifndef TWOINE_OS2LIBS_PMWIN_INTERNAL_H
-#define TWOINE_OS2LIBS_PMWIN_INTERNAL_H
+/* Private window manager interfaces shared by 2ine's DLLs: windows, classes, queues and anchor
+   blocks, and the menu control's items. */
+#ifndef _INCL_PMWINP_H_
+#define _INCL_PMWINP_H_
 #define FIRST_HWND_VALUE 10
 #define FIRST_HPS_VALUE 10
 #define SET_WIN_ERROR_AND_RETURN(anchor, err, rc)                                                  \
@@ -145,7 +147,7 @@ typedef struct
     MessageQueueItem *free_pool;
 } MessageQueue;
 
-#include "os2/ps/pmmerge/pmgre/gpi.h"
+#include "os2/include/private/pmgpip.h"
 
 typedef struct PmTimer
 {
@@ -295,4 +297,32 @@ LX_PRIVATE void destroySharedPointers(void);
 LX_PRIVATE LONG queryPointerLevel(void);
 LX_PRIVATE void destroyHooks(AnchorBlock *anchor);
 LX_PRIVATE BOOL filterInputMessage(AnchorBlock *anchor, QMSG *message, ULONG flags);
+
+/* Menus */
+/* Menu entries retain command IDs, attributes and owned submenu windows. */
+void dismissMenusForClick(AnchorBlock *anchor, Window *target);
+
+typedef struct PmMenuItem
+{
+    MENUITEM item;
+    char *text;
+    RECTL rect;
+} PmMenuItem;
+
+typedef struct PmMenu
+{
+    PmMenuItem *items;
+    size_t count;
+    int selected;
+    HWND focus;
+    HWND active_parent;
+    unsigned codepage;
+} PmMenu;
+
+LX_PRIVATE BOOL createSystemMenu(Window *frame, ULONG flags);
+LX_PRIVATE BOOL createMinMaxMenu(Window *frame, ULONG flags);
+Window *lx_pm_menu_window(HWND handle);
+BOOL lx_pm_menu_attach(HWND menu, HWND parent);
+BOOL lx_pm_menu_owner(HWND menu, HWND owner);
+BOOL lx_pm_menu_remove(HWND handle, size_t index, BOOL destroy_submenu);
 #endif

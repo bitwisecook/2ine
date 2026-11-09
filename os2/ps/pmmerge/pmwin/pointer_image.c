@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "os2/ps/pmmerge/pmwin/pointer_image.h"
+#include "os2/include/private/pmgrep.h"
 
 PmPointerImage *pmPointerImage(const uint8_t *bytes, size_t size)
 {

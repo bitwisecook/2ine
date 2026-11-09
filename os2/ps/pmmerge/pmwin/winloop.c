@@ -7,14 +7,10 @@
  */
 /* The message loop: WinGetMsg, WinPeekMsg and WinDispatchMsg, with WM_PAINT
    synthesis from window damage and host event pumping. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/input.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
-#include "os2/ps/pmmerge/pmwin/open32_post.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmp.h"
+#include "os2/include/private/pmgrep.h"
 #include "emulator/launch_record.h"
-#include "os2/ps/pmmerge/pmwin/paint.h"
 #include "emulator/abi.h"
 #include <ctype.h>
 

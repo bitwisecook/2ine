@@ -1,12 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The PM clipboard: format storage, ownership and transfers between guest
    memory and the host clipboard. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/ps/pmmerge/pmwin/clipboard.h"
 #include "os2/include/private/pmp.h"
 #include "host/sync.h"
 #include "host/clipboard.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include <strings.h>
 #include <ctype.h>
 

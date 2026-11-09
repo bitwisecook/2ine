@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Window styles control sibling and child clipping. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 
 static BOOL exclude_window(PmRegion *visible, Window *window, const LxHostRect *origin)

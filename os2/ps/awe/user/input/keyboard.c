@@ -2,7 +2,7 @@
 /* PM key packets become Windows key/character messages in the active window. */
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/ps/awe/user/input/keyboard.h"
-#include "os2/ps/pmmerge/pmwin/input.h"
+#include "os2/include/private/pmp.h"
 #include "os2/ps/awe/internal.h"
 #include "host/input.h"
 #include <stdio.h>

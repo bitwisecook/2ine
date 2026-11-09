@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Device contexts: typed identities, display contexts, association with a PS.
    A context cannot close while associated. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/ps/pmmerge/pmwin/print_job.h"
 
 static void destroy_dc(void *resource)

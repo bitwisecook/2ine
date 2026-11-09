@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The standard font chooser enumerates actual host catalogue faces and writes
    the OS/2 FONTDLG/FATTRS records through checked execution spans. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/pmstddlg.h"
 #include "emulator/abi.h"

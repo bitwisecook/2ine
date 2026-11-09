@@ -6,14 +6,12 @@
  *  This file written by Ryan C. Gordon.
  */
 /* System cursor handles retain the host cursor and distinguish shared resources from copies. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/pointer_image.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "host/fs.h"
 #include "emulator/launch_record.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
+#include "os2/include/private/pmwctlp.h"
 
 typedef struct PmPointer
 {

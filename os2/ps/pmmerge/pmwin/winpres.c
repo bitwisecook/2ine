@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Presentation attributes are copied, inherited through owners and changed synchronously. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "emulator/abi.h"
 
 static void notify(AnchorBlock *anchor, Window *window, ULONG id)

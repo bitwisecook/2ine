@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Numeric and string-array spin values retain validated limits and current state. */
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
+#include "os2/include/private/pmwctlp.h"
 #include "emulator/abi.h"
 #include <errno.h>
 

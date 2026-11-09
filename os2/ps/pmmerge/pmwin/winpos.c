@@ -7,15 +7,13 @@
  */
 /* Window position, size, z-order, visibility and parent (WinSetWindowPos and
    its relatives), minimised and maximised positions, and flashing. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include <ctype.h>
 #include "emulator/launch_record.h"
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
+#include "os2/include/private/pmwctlp.h"
 
 BOOL WinFlashWindow(HWND handle, BOOL flash)
 {

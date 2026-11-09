@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Queue input hooks run newest first and can consume or modify returned messages. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 
 typedef struct PmHook
 {

@@ -4,7 +4,7 @@
 #define TWOINE_PMGPI_INTERNAL_H
 #include "os2/include/pmerr.h"
 #include "os2/include/pmsei.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 
 /* The identity transform in the Toolkit MATRIXLF layout: FIXED 16.16
    coefficients, integral translation and homogeneous term. */

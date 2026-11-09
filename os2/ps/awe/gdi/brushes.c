@@ -4,7 +4,6 @@
 #include "os2/ps/awe/gdi/dc.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/gdi/brushes.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/private/pmgrep.h"
 
 static void free_brush(void *resource)

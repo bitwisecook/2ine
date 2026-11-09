@@ -1,9 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Window-menu buttons keep title geometry and open the real command submenu. */
 #include "os2/include/private/export.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 #include "emulator/features.h"
 #include <stdio.h>
 #define CHECK(test)                                                                                \

@@ -1,7 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_PM_CONTROLS_H
-#define TWOINE_PM_CONTROLS_H
-#include "os2/ps/pmmerge/pmwin/internal.h"
+/* Private interfaces of the PM window controls (WC_*): the shared control state that PMCTLS's
+   dialogs and PMMERGE's controls use. */
+#ifndef _INCL_PMWCTLP_H_
+#define _INCL_PMWCTLP_H_
+#include "os2/include/private/pmwinp.h"
 
 typedef struct
 {

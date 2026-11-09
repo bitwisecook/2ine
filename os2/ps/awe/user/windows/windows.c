@@ -2,10 +2,9 @@
 /* Open32 custom windows translate their lifecycle callbacks through PM. */
 #include "emulator/launch_record.h"
 #include "os2/ps/awe/user/windows/windows.h"
-#include "os2/ps/pmmerge/pmwin/open32_post.h"
+#include "os2/include/private/pmp.h"
 #include "os2/ps/awe/user/input/keyboard.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/include/private/pmp.h"
 #include <stdio.h>
 static _Thread_local Open32Window *windows, *creating;
 static _Thread_local LxGuestMapping *pm_procedure_mapping, *pm_frame_mapping;

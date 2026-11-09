@@ -2,7 +2,7 @@
 /* One queue-thread driver schedules Windows timer IDs without truncating them to PM USHORTs. */
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmmerge/pmwin/timers.h"
+#include "os2/include/private/pmp.h"
 #include "host/window.h"
 
 typedef struct Open32Timer

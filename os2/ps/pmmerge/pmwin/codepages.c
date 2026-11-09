@@ -1,8 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Single-byte PM conversions use 0xFF for an unrepresentable character. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include <ctype.h>

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PGL rendering reaches retained PM pixels at the client window's origin. */
 #include "os2/opengl/opengl/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/pmgpi.h"
 #include <stdio.h>
 #include <stdlib.h>

@@ -17,7 +17,10 @@ controls and the PMMERGE-only entries.
   ordinal Warp's forwarder names, and WinQueryCpType. Other native DLLs
   (PMGPI, PMCTLS, PMWINX, PMWP, PMSPL, DIVE, MDM, OPENGL) link this library
   for the C entry points and for the private interfaces in
-  `os2/include/private/pmp.h`.
+  `os2/include/private/`: `pmp.h` (PM services, Open32 hooks), `pmwinp.h`
+  (window manager types, menus), `pmgrep.h` (graphics engine: presentation
+  spaces, regions, bit maps, raster access, rasteriser, raster operations),
+  `pmgpip.h` (GPI state types) and `pmwctlp.h` (control framework).
 - Exports: `pmmerge.def`.
 
 ## Units
@@ -90,10 +93,10 @@ release them, and they read PMMERGE's window state.
 | `32xform.c` | `32xform.c` | Transforms, page units, coordinate conversion, clipping limits, correlation |
 | `32bitmap.c` | `32bitmap.c` | Bitmap objects, raster read/write |
 | `32chstr.c` | `32chstr.c` | Character string engine and the PS font (lx_pm_font) |
-| `raster.c` | unknown | Raster primitives: mixes, patterns, spans, lines |
+| `raster.c` | unknown | Raster primitives: mixes, patterns, spans, lines; ternary raster operations and the shared read-modify-write blitter |
+| `rasterize.c` | unknown | Scan conversion of polygons (even-odd, non-zero, GPI inclusive) and the Bresenham line walk, shared by PMGPI, PMWINX and PMCTLS |
 | `regions.c` | unknown | Region engine |
 | `dispatch.c` | unknown | Gre32Entry3, Gre32Entry5 |
-| `graphics.h`, `gpi.h` | — | Engine interface and state types, used by PMGPI, PMWINX, PMCTLS, PMWP, DIVE and OPENGL |
 
 ### `ishapi/` (IBM `ps\ishapi`; the link to PMSHAPI is inferred)
 
@@ -110,7 +113,7 @@ Which controls IBM placed in `pmwctls` rather than `pmwin` is unknown
 
 | 2ine unit | Control |
 |---|---|
-| `controls.c`, `controls.h` | Control framework: record, creation, painting, dispatch |
+| `controls.c` | Control framework: record, creation, painting, dispatch (declared in `os2/include/private/pmwctlp.h`) |
 | `buttons.c` | WC_BUTTON |
 | `entry.c` | WC_ENTRYFIELD |
 | `combo.c` | WC_COMBOBOX |

@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The WC_* control framework: one PmControl record per control, creation,
    painting and message dispatch to the control kinds. */
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwctlp.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/ps/common/pm_text.h"
 
 enum

@@ -88,17 +88,11 @@ OS2_PARTIAL_FORWARDERS = {
 }
 # Static helper code shared by several DLLs of one group, outside any DLL.
 OS2_SHARED = ("os2/ps/common/", "os2/mm/midi/", "os2/mm/video/decode/", "os2/mptn/common/")
-# Internal headers one DLL still takes from another DLL's directory, with the
-# number of such includes. A count change fails, so new coupling goes through
-# os2/include/private/ instead.
-OS2_CROSS_DLL_ALLOWANCES = {
-    ("os2/mm/video/dive", "os2/ps/pmmerge"): 1,
-    ("os2/opengl/opengl", "os2/ps/pmmerge"): 1,
-    ("os2/ps/awe", "os2/ps/pmmerge"): 37,
-    ("os2/ps/controls/pmctls", "os2/ps/pmmerge"): 4,
-    ("os2/ps/pmgpi", "os2/ps/pmmerge"): 21,
-    ("os2/wpsh/pmwp", "os2/ps/pmmerge"): 1,
-}
+# Internal headers one DLL may take from another DLL's directory, with the
+# number of such includes; a count change fails. None remain: internals that
+# several DLLs share are declared in os2/include/private/ (pmp.h, pmwinp.h,
+# pmgrep.h, pmgpip.h, pmwctlp.h, ...).
+OS2_CROSS_DLL_ALLOWANCES = {}
 
 # Layers inside emulator/, lowest first. The execution core and backends and
 # the guest ABI helpers know no process state; the process runtime (lib2ine)

@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Accelerator tables translate a QMSG in place and retain their packed resource bytes. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "emulator/abi.h"
 #include <ctype.h>
 

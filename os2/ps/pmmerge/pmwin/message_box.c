@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Standard message boxes use resource-template controls and the PM modal loop. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmwctlp.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 

@@ -2,9 +2,9 @@
 /* Public outline families are explicit substitutions backed by measured host faces. */
 #include "os2/include/private/export.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include "host/font.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/ps/common/pm_text.h"
 static const char *families[] = {"Helv", "Tms Rmn", "Courier"};
 static const char *styles[] = {"", " Bold", " Italic", " Bold Italic"};

@@ -5,8 +5,8 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 
 BOOL WinEndPaint(HPS hps)
 {

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* GPI attributes and saved-state stack belong to each presentation space. */
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include "emulator/abi.h"
 #include "os2/include/pmerr.h"
 #include "os2/include/pmsei.h"

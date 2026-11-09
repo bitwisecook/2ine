@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Packed templates are validated completely before any window is published. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "emulator/abi.h"
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwctlp.h"
+#include "os2/include/private/pmgrep.h"
 
 enum
 {

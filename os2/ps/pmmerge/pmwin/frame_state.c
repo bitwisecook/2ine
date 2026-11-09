@@ -6,10 +6,9 @@
  *  This file written by Ryan C. Gordon.
  */
 /* Frame restore geometry uses the public QWS_*RESTORE words. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/pmwin/menus.h"
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
+#include "os2/include/private/pmwctlp.h"
 #include "emulator/features.h"
 #include "emulator/launch_record.h"
 #include "os2/include/private/pmp.h"

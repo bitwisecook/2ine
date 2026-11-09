@@ -2,7 +2,7 @@
 /* Physical face identity and grayscale glyph coverage survive repeated font-state queries. */
 #include "os2/include/pmwin.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/ps/common/pm_text.h"
 #include "host/font.h"
 #include <stdio.h>

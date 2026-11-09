@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM owns its palette and control metrics; screen dimensions come from the host display. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmgrep.h"
 
 static LONG changed_colors[41], changed_values[108];
 static unsigned char color_changed[41], value_changed[108];

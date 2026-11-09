@@ -3,7 +3,7 @@
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/ps/awe/internal.h"
 #include "host/sync.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static Open32Class *classes;

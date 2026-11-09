@@ -3,7 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/gdi/dc.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 
 LONG GetObject(ULONG handle, LONG capacity, PVOID output)
 {

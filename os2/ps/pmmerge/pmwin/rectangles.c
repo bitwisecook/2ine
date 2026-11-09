@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM rectangles are half-open and window coordinates have an upward y axis. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 
 BOOL WinIsRectEmpty(HAB hab, PRECTL r)
 {

@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM semaphore handles share DOSCALLS resources and timeout values. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "host/library.h"
 
 static void *semaphore_service(const char *name)

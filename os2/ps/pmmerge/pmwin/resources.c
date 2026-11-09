@@ -1,11 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* OS/2 string bundles contain a codepage word and sixteen counted ASCIIZ strings. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "formats/resources/icon.h"
 #include "host/fs.h"
 #include "host/sync.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include <ctype.h>

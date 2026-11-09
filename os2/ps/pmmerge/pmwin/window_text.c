@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Window text is owned by its window; queries exclude the terminating NUL. */
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
+#include "os2/include/private/pmwctlp.h"
 
 BOOL WinSetWindowText(HWND handle, PSZ text)
 {

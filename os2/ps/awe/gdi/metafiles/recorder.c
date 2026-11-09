@@ -5,7 +5,7 @@
 #include "emulator/handles.h"
 #include "host/sync.h"
 #include "os2/ps/awe/gdi/metafiles/metafile_objects.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 
 /* A recording DC owns an ordinary checked DC plus an independent WMF stream.
    The original PMWINX likewise separates metafile records from its HPS wrapper. */

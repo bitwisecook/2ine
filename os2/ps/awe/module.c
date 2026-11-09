@@ -7,8 +7,7 @@
 #include "host/window.h"
 #include "os2/include/pmshl.h"
 #include "os2/include/private/pmp.h"
-#include "os2/ps/pmmerge/pmwin/open32_post.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 static void open32Shutdown(void);
 #define LX_NATIVE_MODULE_SHUTDOWN() open32Shutdown()
 #include "os2/ps/awe/generated/pmwinx-lx.h"

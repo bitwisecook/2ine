@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* File selection uses guest drive mappings and ordinary modal PM controls. */
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
+#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmwctlp.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/pmstddlg.h"
 #include "host/fs.h"

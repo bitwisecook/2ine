@@ -2,8 +2,7 @@
 /* Retained paths share the ordinary PM drawing stream; raster filling uses
    scanline edge intersections, including disjoint contours and holes. */
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 #include <math.h>
 

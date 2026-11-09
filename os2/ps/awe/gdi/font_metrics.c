@@ -3,7 +3,7 @@
 #include "os2/ps/awe/gdi/dc.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include "host/font.h"
 #include "os2/ps/common/pm_text.h"
 

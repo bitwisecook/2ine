@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Byte-oriented entry selection and editing in the presentation space's codepage. */
-#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
+#include "os2/include/private/pmwctlp.h"
 
 enum
 {

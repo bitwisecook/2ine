@@ -144,6 +144,38 @@ extern "C"
     /* Starts the first program object whose ASSOCFILTER matches the file name. */
     BOOL lx_pmwp_open_associated(PSZ path);
 
+/* Open32 messages through PM queues */
+
+/* Tagged Windows packets retain their message number through the PM owner queue. */
+#define LX_PM_OPEN32_POST 0x7ffef001u
+/* A mailbox record for no particular window: end this worker's PM session. */
+#define LX_PM_SESSION_END 0x7ffef002u
+    /* Tells every other live PM worker in the ball to end its session. FALSE when
+       one could not be told. Without a ball this worker is the whole session. */
+    BOOL lx_pm_end_session(void);
+    BOOL lx_pm_mark_open32_window(HWND window);
+    BOOL lx_pm_post_open32_message(HWND window, ULONG message, ULONG first, ULONG second);
+    typedef BOOL (*LxPmPaintFilter)(HWND window, void *context);
+    BOOL lx_pm_peek_open32_message(HAB hab, PQMSG message, LxPmPaintFilter paint_filter,
+                                   void *context);
+    BOOL lx_pm_get_open32_message(HAB hab, PQMSG message, LxPmPaintFilter paint_filter,
+                                  void *context);
+
+    /* Private timers */
+
+    /* Private timer callbacks run on the queue thread and must not change its timer list. */
+    ULONG lx_pm_timer_create(HWND owner, ULONG interval, void (*callback)(void));
+    BOOL lx_pm_timer_stop(ULONG id);
+
+    /* Input polling */
+
+    BOOL lx_pm_poll_input(void);
+    LONG lx_pm_mouse_state(unsigned button);
+
+    /* Update regions */
+
+    BOOL lx_pm_validate_rect(HWND handle, const RECTL *rectangle, BOOL internal_only);
+
 #ifdef __cplusplus
 }
 #endif

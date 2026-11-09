@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/pmshl.h"
 #include "emulator/arguments.h"
