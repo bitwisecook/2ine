@@ -3,6 +3,7 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include <math.h>
 
 typedef struct Open32Pen
@@ -166,7 +167,7 @@ LONG SetROP2(ULONG handle, LONG mode)
 static BOOL dash_pixel(const Open32Pen *pen, uint64_t step)
 {
     LONG style = pen->style;
-    if (style == 8)
+    if (style == PS_ALTERNATE)
         return !(step & 1);
     static const unsigned lengths[4][6] = {{6, 2}, {1, 2}, {6, 2, 1, 2}, {6, 2, 1, 2, 1, 2}};
     static const unsigned counts[] = {2, 2, 4, 6}, cycles[] = {8, 3, 11, 14};
@@ -197,43 +198,35 @@ static BOOL stroke_polygonal(const Open32Pen *pen)
     return diameter > 1 && (pen->cap || pen->join || diameter > 32);
 }
 
+typedef struct PlaneSpans
+{
+    StrokePlane *plane;
+    uint8 value;
+} PlaneSpans;
+
+static BOOL plane_span(void *context, LONG y, LONG left, LONG right)
+{
+    PlaneSpans *spans = context;
+    StrokePlane *plane = spans->plane;
+    int64_t begin = left < plane->left ? plane->left : left,
+            end = right > plane->right ? plane->right : right;
+    for (int64_t x = begin; x < end; x++)
+        plane
+            ->coverage[(size_t)(plane->bottom - 1 - y) * plane->width + (size_t)(x - plane->left)] =
+            spans->value;
+    return TRUE;
+}
+
+/* Every polygon of a stroke is convex, so the non-zero rule gives its full span on each row. */
 static void fill_convex(StrokePlane *plane, const double *points, unsigned count, uint8 value)
 {
-    double minimum = points[1], maximum = points[1];
-    for (unsigned i = 1; i < count; i++)
-    {
-        minimum = fmin(minimum, points[i * 2 + 1]);
-        maximum = fmax(maximum, points[i * 2 + 1]);
-    }
-    int64_t first = (int64_t)ceil(minimum - 0.5), last = (int64_t)ceil(maximum - 0.5);
-    if (first < plane->top)
-        first = plane->top;
-    if (last > plane->bottom)
-        last = plane->bottom;
-    for (int64_t y = first; y < last; y++)
-    {
-        double scan = y + 0.5, low = INFINITY, high = -INFINITY;
-        for (unsigned i = 0; i < count; i++)
-        {
-            const double *a = points + i * 2, *b = points + ((i + 1) % count) * 2;
-            if ((a[1] <= scan && b[1] > scan) || (b[1] <= scan && a[1] > scan))
-            {
-                double x = a[0] + (scan - a[1]) * (b[0] - a[0]) / (b[1] - a[1]);
-                low = fmin(low, x);
-                high = fmax(high, x);
-            }
-        }
-        if (low > high)
-            continue;
-        int64_t begin = (int64_t)ceil(low - 0.5), end = (int64_t)ceil(high - 0.5);
-        if (begin < plane->left)
-            begin = plane->left;
-        if (end > plane->right)
-            end = plane->right;
-        for (int64_t x = begin; x < end; x++)
-            plane->coverage[(size_t)(plane->bottom - 1 - y) * plane->width +
-                            (size_t)(x - plane->left)] = value;
-    }
+    PmScanPoint polygon[32];
+    size_t counts[1] = {count};
+    for (unsigned i = 0; i < count; i++)
+        polygon[i] = (PmScanPoint){points[i * 2], points[i * 2 + 1]};
+    PlaneSpans spans = {plane, value};
+    lx_pm_scan_polygons(polygon, counts, 1, LX_PM_SCAN_WINDING, (LONG)plane->top,
+                        (LONG)plane->bottom, plane_span, &spans);
 }
 
 static void fill_disc(StrokePlane *plane, double x, double y, double radius, uint8 value)
@@ -312,7 +305,8 @@ static void stroke_polyline(StrokePlane *plane, Open32DC *dc, const Open32Pen *p
     double half = (pen->width ? pen->width : 1) / 2.0;
     LONG cap = (LONG)pen->cap, join = (LONG)pen->join;
     double limit = dc->miter_limit > 0 ? dc->miter_limit : 10;
-    BOOL dashed = pen->style >= 1 && pen->style != 5 && pen->style != 6 && pen->style <= 8;
+    BOOL dashed =
+        pen->style >= 1 && pen->style != PS_NULL && pen->style != PS_INSIDEFRAME && pen->style <= 8;
     LONG segments = closed ? count : count - 1;
     uint64 step = 0;
     for (LONG i = 0; i < segments; i++)
@@ -353,6 +347,60 @@ static void stroke_polyline(StrokePlane *plane, Open32DC *dc, const Open32Pen *p
                                ink);
         }
     }
+}
+
+/* Thin strokes stamp the pen's square or disc of pels at each pel of the line. */
+typedef struct ThinStroke
+{
+    StrokePlane *plane;
+    const Open32Pen *pen;
+    LONG before, after, diameter;
+    uint8 ink, gap;
+    uint64 step;
+} ThinStroke;
+
+static BOOL thin_pel(void *context, LONG x, LONG y)
+{
+    ThinStroke *stroke = context;
+    StrokePlane *plane = stroke->plane;
+    uint8 value = dash_pixel(stroke->pen, stroke->step++) ? stroke->ink : stroke->gap;
+    if (!value)
+        return TRUE;
+    LONG before = stroke->before, after = stroke->after, diameter = stroke->diameter;
+    for (LONG oy = -before; oy <= after; oy++)
+        for (LONG ox = -before; ox <= after; ox++)
+        {
+            LONG cx = 2 * (ox + before) - diameter + 1, cy = 2 * (oy + before) - diameter + 1;
+            if (diameter > 1 && cx * cx + cy * cy > diameter * diameter)
+                continue;
+            int64_t px = (int64_t)x + ox, py = (int64_t)y + oy;
+            if (px >= plane->left && px < plane->right && py >= plane->top && py < plane->bottom)
+                plane->coverage[(size_t)(plane->bottom - 1 - py) * plane->width +
+                                (size_t)(px - plane->left)] = value;
+        }
+    return TRUE;
+}
+
+/* The PM foreground mix that applies each Win32 binary raster operation (R2_*). */
+static LONG rop2_mix(LONG rop2)
+{
+    static const LONG mixes[] = {[R2_BLACK] = FM_ZERO,
+                                 [R2_NOTMERGEPEN] = FM_NOTMERGESRC,
+                                 [R2_MASKNOTPEN] = FM_SUBTRACT,
+                                 [R2_NOTCOPYPEN] = FM_NOTCOPYSRC,
+                                 [R2_MASKPENNOT] = FM_MASKSRCNOT,
+                                 [R2_NOT] = FM_INVERT,
+                                 [R2_XORPEN] = FM_XOR,
+                                 [R2_NOTMASKPEN] = FM_NOTMASKSRC,
+                                 [R2_MASKPEN] = FM_AND,
+                                 [R2_NOTXORPEN] = FM_NOTXORSRC,
+                                 [R2_NOP] = FM_LEAVEALONE,
+                                 [R2_MERGENOTPEN] = FM_MERGENOTSRC,
+                                 [R2_COPYPEN] = FM_OVERPAINT,
+                                 [R2_MERGEPENNOT] = FM_MERGESRCNOT,
+                                 [R2_MERGEPEN] = FM_OR,
+                                 [R2_WHITE] = FM_ONE};
+    return mixes[rop2];
 }
 
 static BOOL pen_pixel(Open32DC *dc, Open32Pen *pen, LONG x, LONG y, uint32 *rgb)
@@ -399,7 +447,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
         open32SetError(87);
         return FALSE;
     }
-    if (pen->style == 5 || (!dx && !dy))
+    if (pen->style == PS_NULL || (!dx && !dy))
     {
         dc->position_x = logical_target_x;
         dc->position_y = logical_target_y;
@@ -444,48 +492,19 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
         open32SetError(8);
         return FALSE;
     }
-    int64_t error = dx - dy;
-    LONG sx = x < target_x ? 1 : -1, sy = y < target_y ? 1 : -1;
-    uint64_t step = 0;
+    StrokePlane plane = {coverage, left, top, right, bottom, width};
+    uint8 gap = dc->background_mode == OPAQUE ? 2 : 0;
     if (polygonal)
+        stroke_polyline(&plane, dc, pen, (POINTL[2]){{x, y}, {target_x, target_y}}, 2, FALSE, 1,
+                        gap);
+    else
     {
-        StrokePlane plane = {coverage, left, top, right, bottom, width};
-        POINTL ends[2] = {{x, y}, {target_x, target_y}};
-        stroke_polyline(&plane, dc, pen, ends, 2, FALSE, 1, dc->background_mode == 2 ? 2 : 0);
-        x = target_x;
-        y = target_y;
-    }
-    /* The final point is excluded, matching Windows LineTo and joined segments. */
-    while (x != target_x || y != target_y)
-    {
-        uint8 value = dash_pixel(pen, step++) ? 1 : dc->background_mode == 2 ? 2 : 0;
-        if (value)
-            for (LONG oy = -before; oy <= after; oy++)
-                for (LONG ox = -before; ox <= after; ox++)
-                {
-                    int64_t px = (int64_t)x + ox, py = (int64_t)y + oy;
-                    LONG cx = 2 * (ox + before) - diameter + 1,
-                         cy = 2 * (oy + before) - diameter + 1;
-                    if (diameter > 1 && cx * cx + cy * cy > diameter * diameter)
-                        continue;
-                    if (px >= left && px < right && py >= top && py < bottom)
-                        coverage[(size_t)(bottom - 1 - py) * width + (size_t)(px - left)] = value;
-                }
-        int64_t twice = error * 2;
-        if (twice > -dy)
-        {
-            error -= dy;
-            x += sx;
-        }
-        if (twice < dx)
-        {
-            error += dx;
-            y += sy;
-        }
+        /* The final point is excluded, matching Windows LineTo and joined segments. */
+        ThinStroke thin = {&plane, pen, before, after, diameter, 1, gap, 0};
+        lx_pm_walk_line(x, y, target_x, target_y, FALSE, thin_pel, &thin);
     }
     BOOL result = lx_pm_raster_read(handle, (LONG)left, canvas_height - (LONG)bottom,
                                     (unsigned)width, (unsigned)height, pixels);
-    static const LONG mixes[] = {0, 9, 10, 7, 14, 8, 12, 4, 16, 6, 11, 5, 15, 2, 13, 1, 17};
     if (result)
     {
         for (size_t i = 0; i < area; i++)
@@ -496,7 +515,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
                 if (coverage[i] == 1 && !pen_pixel(dc, pen, (LONG)(left + i % width),
                                                    (LONG)(bottom - 1 - i / width), &rgb))
                     continue;
-                pixels[i] = lx_pm_mix_pixel(rgb, pixels[i], mixes[dc->rop2]);
+                pixels[i] = lx_pm_mix_pixel(rgb, pixels[i], rop2_mix(dc->rop2));
             }
         result = lx_pm_raster_write(handle, (LONG)left, canvas_height - (LONG)bottom,
                                     (unsigned)width, (unsigned)height, pixels);
@@ -567,8 +586,8 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     if (left == right || top == bottom)
         return TRUE;
     LONG diameter = pen->width ? pen->width : 1;
-    LONG before = pen->style == 6 ? 0 : (diameter - 1) / 2;
-    LONG after = pen->style == 6 ? 0 : diameter / 2;
+    LONG before = pen->style == PS_INSIDEFRAME ? 0 : (diameter - 1) / 2;
+    LONG after = pen->style == PS_INSIDEFRAME ? 0 : diameter / 2;
     int64_t l = (int64_t)left - before, t = (int64_t)top - before;
     int64_t r = (int64_t)right + after, b = (int64_t)bottom + after;
     LONG canvas_height = open32DCHeight(handle), canvas_width = open32DCWidth(handle);
@@ -597,7 +616,6 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     }
     BOOL result =
         lx_pm_raster_read(handle, (LONG)l, canvas_height - (LONG)b, width, height, pixels);
-    static const LONG mixes[] = {0, 9, 10, 7, 14, 8, 12, 4, 16, 6, 11, 5, 15, 2, 13, 1, 17};
     if (result)
         for (unsigned row = 0; row < height; row++)
             for (unsigned column = 0; column < width; column++)
@@ -606,9 +624,9 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
                 BOOL inside = x >= left && x < right && y >= top && y < bottom;
                 BOOL stroke = FALSE;
                 uint64_t step = 0;
-                if (pen->style != 5)
+                if (pen->style != PS_NULL)
                 {
-                    if (pen->style == 6)
+                    if (pen->style == PS_INSIDEFRAME)
                         stroke = inside && (x - left < diameter || right - 1 - x < diameter ||
                                             y - top < diameter || bottom - 1 - y < diameter);
                     else if (x >= (int64_t)left - before && x <= (int64_t)right - 1 + after &&
@@ -649,7 +667,7 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
                 {
                     if (dash_pixel(pen, step))
                         color = pen->color;
-                    else if (dc->background_mode == 2)
+                    else if (dc->background_mode == OPAQUE)
                         color = dc->background_color;
                     else
                         continue;
@@ -660,7 +678,7 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
                     if (inside && open32BrushPixel(dc, (LONG)x, (LONG)y, &fill))
                     {
                         size_t filled = (size_t)row * width + column;
-                        pixels[filled] = lx_pm_mix_pixel(fill, pixels[filled], mixes[dc->rop2]);
+                        pixels[filled] = lx_pm_mix_pixel(fill, pixels[filled], rop2_mix(dc->rop2));
                     }
                     continue;
                 }
@@ -668,7 +686,7 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
                 if (stroke && dash_pixel(pen, step) && !pen_pixel(dc, pen, (LONG)x, (LONG)y, &rgb))
                     continue;
                 size_t index = (size_t)row * width + column;
-                pixels[index] = lx_pm_mix_pixel(rgb, pixels[index], mixes[dc->rop2]);
+                pixels[index] = lx_pm_mix_pixel(rgb, pixels[index], rop2_mix(dc->rop2));
             }
     if (result)
         result =
@@ -677,18 +695,6 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     if (!result)
         open32SetError(87);
     return result;
-}
-
-typedef struct PenCrossing
-{
-    double x;
-    LONG direction;
-} PenCrossing;
-
-static int compare_crossings(const void *a, const void *b)
-{
-    double left = ((const PenCrossing *)a)->x, right = ((const PenCrossing *)b)->x;
-    return left < right ? -1 : left > right;
 }
 
 static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL filled)
@@ -712,11 +718,11 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
         return captured > 0;
     open32MetafilePoints(handle, closed ? 0x324 : 0x325, input, count);
     POINTL *points = malloc((size_t)count * sizeof *points);
-    PenCrossing *crossings = malloc((size_t)count * sizeof *crossings);
-    if (!points || !crossings)
+    PmScanPoint *shape = malloc((size_t)count * sizeof *shape);
+    if (!points || !shape)
     {
         free(points);
-        free(crossings);
+        free(shape);
         open32SetError(8);
         return FALSE;
     }
@@ -728,7 +734,7 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
         if (!open32MapPoint(dc, &points[i].x, &points[i].y, TRUE))
         {
             free(points);
-            free(crossings);
+            free(shape);
             return FALSE;
         }
         if (points[i].x < left)
@@ -745,7 +751,7 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     BOOL polygonal = stroke_polygonal(pen);
     uint64 work = 0;
     LONG segments = closed ? count : count - 1;
-    for (LONG i = 0; valid && !polygonal && i < segments && pen->style != 5; i++)
+    for (LONG i = 0; valid && !polygonal && i < segments && pen->style != PS_NULL; i++)
     {
         POINTL a = points[i], b = points[(i + 1) % count];
         uint64 dx = (uint64)llabs((int64_t)a.x - b.x), dy = (uint64)llabs((int64_t)a.y - b.y);
@@ -768,14 +774,14 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     if (!valid || (bottom > top && (uint64)(bottom - top) * (ULONG)count > 67108864))
     {
         free(points);
-        free(crossings);
+        free(shape);
         open32SetError(8);
         return FALSE;
     }
     if (left >= right || top >= bottom)
     {
         free(points);
-        free(crossings);
+        free(shape);
         return TRUE;
     }
     size_t width = (size_t)(right - left), height = (size_t)(bottom - top), area = width * height;
@@ -784,86 +790,35 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     if (!coverage || !pixels)
     {
         free(points);
-        free(crossings);
+        free(shape);
         free(coverage);
         free(pixels);
         open32SetError(8);
         return FALSE;
     }
-    for (LONG y = (LONG)top; filled && y < bottom; y++)
+    StrokePlane plane = {coverage, left, top, right, bottom, width};
+    if (filled)
     {
-        unsigned n = 0;
-        double scan = y + 0.5;
         for (LONG i = 0; i < count; i++)
-        {
-            POINTL a = points[i], b = points[(i + 1) % count];
-            if ((a.y <= scan && b.y > scan) || (b.y <= scan && a.y > scan))
-                crossings[n++] =
-                    (PenCrossing){a.x + (scan - a.y) * ((double)b.x - a.x) / ((double)b.y - a.y),
-                                  b.y > a.y ? 1 : -1};
-        }
-        qsort(crossings, n, sizeof *crossings, compare_crossings);
-        LONG winding = 0;
-        for (unsigned i = 0; i + 1 < n; i++)
-        {
-            winding += crossings[i].direction;
-            if (dc->poly_fill_mode == 2 ? !winding : (i & 1))
-                continue;
-            int64_t begin = (int64_t)ceil(crossings[i].x - 0.5),
-                    end = (int64_t)ceil(crossings[i + 1].x - 0.5);
-            if (begin < left)
-                begin = left;
-            if (end > right)
-                end = right;
-            for (int64_t x = begin; x < end; x++)
-                coverage[(size_t)(bottom - 1 - y) * width + (size_t)(x - left)] = 1;
-        }
+            shape[i] = (PmScanPoint){points[i].x, points[i].y};
+        size_t contour[1] = {(size_t)count};
+        PlaneSpans spans = {&plane, 1};
+        lx_pm_scan_polygons(shape, contour, 1,
+                            dc->poly_fill_mode == WINDING ? LX_PM_SCAN_WINDING
+                                                          : LX_PM_SCAN_ALTERNATE,
+                            (LONG)top, (LONG)bottom, plane_span, &spans);
     }
-    uint64 step = 0;
-    if (polygonal && pen->style != 5)
-    {
-        StrokePlane plane = {coverage, left, top, right, bottom, width};
-        stroke_polyline(&plane, dc, pen, points, count, closed, 2,
-                        dc->background_mode == 2 ? 3 : 0);
-    }
-    for (LONG i = 0; !polygonal && i < segments && pen->style != 5; i++)
+    uint8 gap = dc->background_mode == OPAQUE ? 3 : 0;
+    if (polygonal && pen->style != PS_NULL)
+        stroke_polyline(&plane, dc, pen, points, count, closed, 2, gap);
+    ThinStroke thin = {&plane, pen, before, after, diameter, 2, gap, 0};
+    for (LONG i = 0; !polygonal && i < segments && pen->style != PS_NULL; i++)
     {
         POINTL a = points[i], b = points[(i + 1) % count];
-        int64_t x = a.x, y = a.y, dx = llabs((int64_t)b.x - a.x), dy = llabs((int64_t)b.y - a.y),
-                error = dx - dy;
-        LONG sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1;
-        while (x != b.x || y != b.y)
-        {
-            uint8 value = dash_pixel(pen, step++) ? 2 : dc->background_mode == 2 ? 3 : 0;
-            if (value)
-                for (LONG oy = -before; oy <= after; oy++)
-                    for (LONG ox = -before; ox <= after; ox++)
-                    {
-                        LONG cx = 2 * (ox + before) - diameter + 1,
-                             cy = 2 * (oy + before) - diameter + 1;
-                        if (diameter > 1 && cx * cx + cy * cy > diameter * diameter)
-                            continue;
-                        int64_t px = x + ox, py = y + oy;
-                        if (px >= left && px < right && py >= top && py < bottom)
-                            coverage[(size_t)(bottom - 1 - py) * width + (size_t)(px - left)] =
-                                value;
-                    }
-            int64_t twice = error * 2;
-            if (twice > -dy)
-            {
-                error -= dy;
-                x += sx;
-            }
-            if (twice < dx)
-            {
-                error += dx;
-                y += sy;
-            }
-        }
+        lx_pm_walk_line(a.x, a.y, b.x, b.y, FALSE, thin_pel, &thin);
     }
     BOOL result = lx_pm_raster_read(handle, (LONG)left, canvas_height - (LONG)bottom,
                                     (unsigned)width, (unsigned)height, pixels);
-    static const LONG mixes[] = {0, 9, 10, 7, 14, 8, 12, 4, 16, 6, 11, 5, 15, 2, 13, 1, 17};
     if (result)
     {
         for (size_t i = 0; i < area; i++)
@@ -885,13 +840,13 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
                                                    (LONG)(bottom - 1 - i / width), &rgb))
                     continue;
             }
-            pixels[i] = lx_pm_mix_pixel(rgb, pixels[i], mixes[dc->rop2]);
+            pixels[i] = lx_pm_mix_pixel(rgb, pixels[i], rop2_mix(dc->rop2));
         }
         result = lx_pm_raster_write(handle, (LONG)left, canvas_height - (LONG)bottom,
                                     (unsigned)width, (unsigned)height, pixels);
     }
     free(points);
-    free(crossings);
+    free(shape);
     free(coverage);
     free(pixels);
     return result;

@@ -3,6 +3,7 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/private/pmp.h"
 #include <math.h>
@@ -425,21 +426,34 @@ ULONG CreateEllipticRgnIndirect(PVOID p)
                              (LONG)lx_guest_load_u32((uint8 *)p + 12));
 }
 
-typedef struct RegionCrossing
+typedef struct RegionSpans
 {
-    double x;
-    LONG winding;
-} RegionCrossing;
+    RECTL *rects;
+    size_t count, capacity;
+} RegionSpans;
 
-static int crossing_order(const void *a, const void *b)
+static BOOL region_span(void *context, LONG y, LONG left, LONG right)
 {
-    double x = ((const RegionCrossing *)a)->x, y = ((const RegionCrossing *)b)->x;
-    return x < y ? -1 : x > y;
+    RegionSpans *spans = context;
+    if (spans->count == spans->capacity)
+    {
+        size_t next = spans->capacity ? spans->capacity * 2 : 256;
+        if (next > 16777216)
+            return FALSE;
+        RECTL *more = realloc(spans->rects, next * sizeof *more);
+        if (!more)
+            return FALSE;
+        spans->rects = more;
+        spans->capacity = next;
+    }
+    spans->rects[spans->count++] = (RECTL){left, y, right, y + 1};
+    return TRUE;
 }
 
 ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
 {
-    if (!points || !counts || polygons < 1 || polygons > 65536 || (mode != 1 && mode != 2))
+    if (!points || !counts || polygons < 1 || polygons > 65536 ||
+        (mode != ALTERNATE && mode != WINDING))
     {
         open32SetError(87);
         return 0;
@@ -477,88 +491,30 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
         open32SetError(8);
         return 0;
     }
-    RegionCrossing *edges = calloc(total ? total : 1, sizeof *edges);
+    PmScanPoint *shape = malloc(total * sizeof *shape);
+    size_t *contours = malloc((size_t)polygons * sizeof *contours);
     PmRegion *region = calloc(1, sizeof *region);
-    RECTL *spans = NULL;
-    size_t used = 0, capacity = 0;
-    BOOL ok = edges && region;
-    for (LONG y = top; ok && y < bottom; y++)
-    {
-        size_t offset = 0, n = 0;
-        for (LONG p = 0; p < polygons; p++)
-        {
-            LONG count = (LONG)lx_guest_load_u32((uint8 *)counts + p * 4);
-            for (LONG i = 0; i < count; i++)
-            {
-                const uint8 *a = (uint8 *)points + (offset + i) * 8,
-                            *b = (uint8 *)points + (offset + (i + 1) % count) * 8;
-                LONG ax = (LONG)lx_guest_load_u32(a), ay = (LONG)lx_guest_load_u32(a + 4),
-                     bx = (LONG)lx_guest_load_u32(b), by = (LONG)lx_guest_load_u32(b + 4);
-                double scan = y + 0.5;
-                if ((ay <= scan && by > scan) || (by <= scan && ay > scan))
-                    edges[n++] = (RegionCrossing){
-                        ax + (scan - ay) * ((double)bx - ax) / ((double)by - ay), by > ay ? 1 : -1};
-            }
-            offset += (size_t)count;
-        }
-        qsort(edges, n, sizeof *edges, crossing_order);
-        LONG winding = 0;
-        BOOL inside = FALSE;
-        double left = 0;
-        for (size_t i = 0; i < n;)
-        {
-            double x = edges[i].x;
-            LONG delta = 0;
-            size_t j = i;
-            while (j < n && edges[j].x == x)
-                delta += edges[j++].winding;
-            BOOL prior = inside;
-            if (mode == 1)
-                inside ^= ((j - i) & 1) != 0;
-            else
-            {
-                winding += delta;
-                inside = winding != 0;
-            }
-            if (!prior && inside)
-                left = x;
-            if (prior && !inside)
-            {
-                LONG l = (LONG)ceil(left - 0.5), r = (LONG)ceil(x - 0.5);
-                if (l < r)
-                {
-                    if (used == capacity)
-                    {
-                        size_t next = capacity ? capacity * 2 : 256;
-                        if (next > 16777216)
-                        {
-                            ok = FALSE;
-                            break;
-                        }
-                        RECTL *more = realloc(spans, next * sizeof *more);
-                        if (!more)
-                        {
-                            ok = FALSE;
-                            break;
-                        }
-                        spans = more;
-                        capacity = next;
-                    }
-                    spans[used++] = (RECTL){l, y, r, y + 1};
-                }
-            }
-            i = j;
-        }
-    }
-    free(edges);
+    RegionSpans spans = {NULL, 0, 0};
+    BOOL ok = shape && contours && region;
+    for (size_t i = 0; ok && i < total; i++)
+        shape[i] = (PmScanPoint){(LONG)lx_guest_load_u32((uint8 *)points + i * 8),
+                                 (LONG)lx_guest_load_u32((uint8 *)points + i * 8 + 4)};
+    for (LONG p = 0; ok && p < polygons; p++)
+        contours[p] = lx_guest_load_u32((uint8 *)counts + p * 4);
+    if (ok)
+        ok = lx_pm_scan_polygons(shape, contours, (size_t)polygons,
+                                 mode == WINDING ? LX_PM_SCAN_WINDING : LX_PM_SCAN_ALTERNATE,
+                                 INT32_MIN, INT32_MAX, region_span, &spans);
+    free(shape);
+    free(contours);
     if (ok)
     {
         PmRegion raw = {0};
-        raw.rects = spans;
-        raw.count = used;
+        raw.rects = spans.rects;
+        raw.count = spans.count;
         ok = regionBoolean(region, &raw, NULL, 2);
     }
-    free(spans);
+    free(spans.rects);
     if (!ok)
     {
         if (region)

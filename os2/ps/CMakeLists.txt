@@ -42,6 +42,7 @@ twoine_os2_dll(
     pmmerge/pmwin/timers.c
     pmmerge/pmwin/graphics.c
     pmmerge/pmgre/raster.c
+    pmmerge/pmgre/rasterize.c
     pmmerge/pmgre/32xform.c
     pmmerge/pmwin/device_context.c
     pmmerge/pmwin/winprint.c

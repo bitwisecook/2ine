@@ -10,6 +10,7 @@
 #include "host/sync.h"
 #include "host/clock.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 
 enum
 {
@@ -92,27 +93,15 @@ static void drag_pixel(DragCanvas *c, LONG x, LONG y, uint32_t rgb)
     c->hole[(size_t)cy * c->width + cx] = 0;
 }
 
+static BOOL drag_outline_pel(void *context, LONG x, LONG y)
+{
+    drag_pixel(context, x, y, 0);
+    return TRUE;
+}
+
 static void drag_line(DragCanvas *c, POINTL from, POINTL to)
 {
-    LONG dx = labs(to.x - from.x), dy = labs(to.y - from.y), error = dx - dy;
-    LONG sx = from.x < to.x ? 1 : -1, sy = from.y < to.y ? 1 : -1;
-    for (;;)
-    {
-        drag_pixel(c, from.x, from.y, 0);
-        if (from.x == to.x && from.y == to.y)
-            return;
-        LONG twice = error * 2;
-        if (twice > -dy)
-        {
-            error -= dy;
-            from.x += sx;
-        }
-        if (twice < dx)
-        {
-            error += dx;
-            from.y += sy;
-        }
-    }
+    lx_pm_walk_line(from.x, from.y, to.x, to.y, TRUE, drag_outline_pel, c);
 }
 
 /* Icon AND masks occupy the first half of the mask bit map; set bits are transparent. */

@@ -4,6 +4,7 @@
 #include "os2/include/pmgpi.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include <math.h>
 
 static PmPath *find_path(PresentationSpace *p, LONG id)
@@ -97,116 +98,75 @@ BOOL GpiBeginArea(HPS h, ULONG options)
     return TRUE;
 }
 
-typedef struct Edge
+typedef struct PathSpans
 {
-    double x;
-    int winding;
-} Edge;
+    HPS ps;
+    BOOL region;
+    unsigned primitive;
+    RECTL *rects;
+    size_t count, capacity;
+} PathSpans;
 
-static int compare_edge(const void *a, const void *b)
+static BOOL path_span(void *context, LONG y, LONG left, LONG right)
 {
-    double x = ((const Edge *)a)->x, y = ((const Edge *)b)->x;
-    return x < y ? -1 : x > y;
-}
-
-static BOOL add_span(RECTL **rects, size_t *count, size_t *capacity, LONG left, LONG right, LONG y)
-{
-    if (left >= right)
-        return TRUE;
-    if (*count == *capacity)
+    PathSpans *spans = context;
+    if (!spans->region)
+        return lx_pm_fill_span(spans->ps, left, y, right - left, spans->primitive);
+    if (spans->count == spans->capacity)
     {
-        size_t n = *capacity ? *capacity * 2 : 256;
+        size_t n = spans->capacity ? spans->capacity * 2 : 256;
         if (n > 1048576)
             return FALSE;
-        RECTL *r = realloc(*rects, n * sizeof *r);
+        RECTL *r = realloc(spans->rects, n * sizeof *r);
         if (!r)
             return FALSE;
-        *rects = r;
-        *capacity = n;
+        spans->rects = r;
+        spans->capacity = n;
     }
-    (*rects)[(*count)++] = (RECTL){left, y, right, y + 1};
+    spans->rects[spans->count++] = (RECTL){left, y, right, y + 1};
     return TRUE;
 }
 
+/* Fills (or converts to a region) the path's figures as bound in device space. */
 static LONG raster_path(HPS h, PmPath *path, LONG options, BOOL region, unsigned primitive)
 {
     PresentationSpace *p = lx_pm_font_space(h);
-    if (!p || !path || p->record_path || (options & ~0xau))
-        return region ? 0 : 0;
+    if (!p || !path || p->record_path || (options & ~(FPATH_WINDING | FPATH_EXCL)))
+        return 0;
     if (!path->count)
         return region ? (LONG)lx_pm_region_create(h, 0, NULL) : 1;
-    /* Inclusive fills also cover the top scan line and each span's right edge. */
-    BOOL inclusive = !(options & 8);
-    PmPathPoint *v = malloc(path->count * sizeof *v);
-    Edge *edges = malloc(path->count * sizeof *edges);
-    if (!v || !edges)
+    PmScanPoint *points = malloc(path->count * sizeof *points);
+    size_t *counts = malloc(path->count * sizeof *counts), contours = 0;
+    if (!points || !counts)
     {
-        free(v);
-        free(edges);
+        free(points);
+        free(counts);
         return 0;
     }
     LONG bottom = INT32_MAX, top = INT32_MIN;
-    BOOL ok = TRUE;
     for (size_t i = 0; i < path->count; i++)
     {
-        v[i] = path->points[i];
-        v[i].point = path->points[i].device;
-        if (v[i].point.y < bottom)
-            bottom = v[i].point.y;
-        if (v[i].point.y > top)
-            top = v[i].point.y;
+        POINTL device = path->points[i].device;
+        points[i] = (PmScanPoint){device.x, device.y};
+        if (!contours || path->points[i].move)
+            counts[contours++] = 0;
+        counts[contours - 1]++;
+        if (device.y < bottom)
+            bottom = device.y;
+        if (device.y > top)
+            top = device.y;
     }
-    if ((int64_t)top - bottom > 65536 || top == INT32_MAX)
-        ok = FALSE;
-    RECTL *rects = NULL;
-    size_t count = 0, capacity = 0;
-    for (LONG y = bottom; ok && y < top + (inclusive ? 1 : 0); y++)
-    {
-        size_t n = 0, start = 0;
-        double sample = y < top ? y + 0.5 : y - 0.5;
-        for (size_t i = 0; i < path->count; i++)
-        {
-            if (v[i].move)
-                start = i;
-            size_t end = (i + 1 == path->count || v[i + 1].move) ? start : i + 1;
-            POINTL a = v[i].point, b = v[end].point;
-            if (a.y == b.y || sample < (a.y < b.y ? a.y : b.y) || sample >= (a.y > b.y ? a.y : b.y))
-                continue;
-            edges[n++] = (Edge){a.x + ((sample - a.y) * (b.x - (double)a.x)) / (b.y - (double)a.y),
-                                b.y > a.y ? 1 : -1};
-        }
-        qsort(edges, n, sizeof *edges, compare_edge);
-        int winding = 0;
-        double left = 0;
-        for (size_t j = 0; j < n; j++)
-        {
-            BOOL before = (options & 2) ? winding != 0 : (winding & 1) != 0;
-            winding += (options & 2) ? edges[j].winding : 1;
-            BOOL after = (options & 2) ? winding != 0 : (winding & 1) != 0;
-            if (!before && after)
-                left = edges[j].x;
-            if (before && !after)
-            {
-                double right = edges[j].x;
-                if (left < INT32_MIN || right >= INT32_MAX)
-                {
-                    ok = FALSE;
-                    break;
-                }
-                LONG l = (LONG)ceil(left - 0.5), r = (LONG)ceil(right - 0.5) + (inclusive ? 1 : 0);
-                if (region)
-                    ok = add_span(&rects, &count, &capacity, l, r, y);
-                else if (r > l)
-                    ok = lx_pm_fill_span(h, l, y, r - l, primitive);
-                if (!ok)
-                    break;
-            }
-        }
-    }
-    LONG result = ok ? (region ? (LONG)lx_pm_region_create(h, count, rects) : lx_pm_hits(p)) : 0;
-    free(rects);
-    free(v);
-    free(edges);
+    PathSpans spans = {h, region, primitive, NULL, 0, 0};
+    unsigned rule = (options & FPATH_WINDING ? LX_PM_SCAN_WINDING : LX_PM_SCAN_ALTERNATE) |
+                    (options & FPATH_EXCL ? 0 : LX_PM_SCAN_INCLUSIVE);
+    BOOL ok = (int64_t)top - bottom <= 65536 && top != INT32_MAX &&
+              lx_pm_scan_polygons(points, counts, contours, rule, INT32_MIN, INT32_MAX, path_span,
+                                  &spans);
+    LONG result =
+        ok ? (region ? (LONG)lx_pm_region_create(h, spans.count, spans.rects) : lx_pm_hits(p)) : 0;
+    free(spans.rects);
+    free(points);
+    free(counts);
     return result;
 }
 
@@ -428,7 +388,7 @@ LONG GpiStrokePath(HPS h, LONG id, ULONG options)
     }
     p->record_path = NULL;
     /* Rounded outline vertices already reach the envelope, so fill exclusively. */
-    LONG result = ok ? raster_path(h, &outline, 2 | 8, FALSE, 3) : 0;
+    LONG result = ok ? raster_path(h, &outline, FPATH_WINDING | FPATH_EXCL, FALSE, 3) : 0;
     free(outline.points);
     if (result)
         delete_path(p, id);
@@ -444,7 +404,7 @@ LONG GpiEndArea(HPS h)
     PmPath *path = p->record_path;
     p->record_path = NULL;
     p->area_recording = FALSE;
-    LONG result = raster_path(h, path, options & 0xa, FALSE, 3);
+    LONG result = raster_path(h, path, options & (BA_WINDING | BA_EXCL), FALSE, 3);
     if (result && (options & 1))
     {
         LONG boundary = trace_path(h, p, path, TRUE);

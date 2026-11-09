@@ -4,6 +4,84 @@
 #define _INCL_OS2WIN_H_
 #include "os2/include/os2def.h"
 typedef LONG(OS2API *PFNWINMAIN)(ULONG instance, ULONG previous, PSZ command, LONG show);
+
+/* GDI values, with the Win32 names Open32's os2win.h uses. */
+enum
+{
+    /* Binary raster operations (SetROP2). */
+    R2_BLACK = 1,
+    R2_NOTMERGEPEN = 2,
+    R2_MASKNOTPEN = 3,
+    R2_NOTCOPYPEN = 4,
+    R2_MASKPENNOT = 5,
+    R2_NOT = 6,
+    R2_XORPEN = 7,
+    R2_NOTMASKPEN = 8,
+    R2_MASKPEN = 9,
+    R2_NOTXORPEN = 10,
+    R2_NOP = 11,
+    R2_MERGENOTPEN = 12,
+    R2_COPYPEN = 13,
+    R2_MERGEPENNOT = 14,
+    R2_MERGEPEN = 15,
+    R2_WHITE = 16,
+    /* Ternary raster operations: the operation index in bits 16-23, the RPN code below. */
+    SRCCOPY = 0x00cc0020,
+    SRCPAINT = 0x00ee0086,
+    SRCAND = 0x008800c6,
+    SRCINVERT = 0x00660046,
+    SRCERASE = 0x00440328,
+    NOTSRCCOPY = 0x00330008,
+    NOTSRCERASE = 0x001100a6,
+    MERGECOPY = 0x00c000ca,
+    MERGEPAINT = 0x00bb0226,
+    PATCOPY = 0x00f00021,
+    PATPAINT = 0x00fb0a09,
+    PATINVERT = 0x005a0049,
+    DSTINVERT = 0x00550009,
+    BLACKNESS = 0x00000042,
+    WHITENESS = 0x00ff0062,
+    /* Pen styles. */
+    PS_SOLID = 0,
+    PS_DASH = 1,
+    PS_DOT = 2,
+    PS_DASHDOT = 3,
+    PS_DASHDOTDOT = 4,
+    PS_NULL = 5,
+    PS_INSIDEFRAME = 6,
+    PS_USERSTYLE = 7,
+    PS_ALTERNATE = 8,
+    PS_STYLE_MASK = 0x0000000f,
+    PS_ENDCAP_ROUND = 0x00000000,
+    PS_ENDCAP_SQUARE = 0x00000100,
+    PS_ENDCAP_FLAT = 0x00000200,
+    PS_JOIN_ROUND = 0x00000000,
+    PS_JOIN_BEVEL = 0x00001000,
+    PS_JOIN_MITER = 0x00002000,
+    PS_COSMETIC = 0x00000000,
+    PS_GEOMETRIC = 0x00010000,
+    /* Brush styles and hatches. */
+    BS_SOLID = 0,
+    BS_NULL = 1,
+    BS_HATCHED = 2,
+    BS_PATTERN = 3,
+    BS_DIBPATTERN = 5,
+    HS_HORIZONTAL = 0,
+    HS_VERTICAL = 1,
+    HS_FDIAGONAL = 2,
+    HS_BDIAGONAL = 3,
+    HS_CROSS = 4,
+    HS_DIAGCROSS = 5,
+    /* Polygon fill modes, background modes and stretching modes. */
+    ALTERNATE = 1,
+    WINDING = 2,
+    TRANSPARENT = 1,
+    OPAQUE = 2,
+    BLACKONWHITE = 1,
+    WHITEONBLACK = 2,
+    COLORONCOLOR = 3,
+    HALFTONE = 4
+};
 #ifdef __cplusplus
 extern "C"
 {

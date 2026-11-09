@@ -2,6 +2,7 @@
 /* Raster primitives share clipping, logical colors, pattern tiles and Boolean mixes. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include <math.h>
 
 uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix)
@@ -9,52 +10,52 @@ uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix)
     uint32_t result;
     switch (mix)
     {
-        case 1:
+        case FM_OR:
             result = source | destination;
             break;
-        case 2:
+        case FM_OVERPAINT:
             result = source;
             break;
-        case 4:
+        case FM_XOR:
             result = source ^ destination;
             break;
-        case 5:
+        case FM_LEAVEALONE:
             result = destination;
             break;
-        case 6:
+        case FM_AND:
             result = source & destination;
             break;
-        case 7:
+        case FM_SUBTRACT:
             result = ~source & destination;
             break;
-        case 8:
+        case FM_MASKSRCNOT:
             result = source & ~destination;
             break;
-        case 9:
+        case FM_ZERO:
             result = 0;
             break;
-        case 10:
+        case FM_NOTMERGESRC:
             result = ~(source | destination);
             break;
-        case 11:
+        case FM_NOTXORSRC:
             result = ~(source ^ destination);
             break;
-        case 12:
+        case FM_INVERT:
             result = ~destination;
             break;
-        case 13:
+        case FM_MERGESRCNOT:
             result = source | ~destination;
             break;
-        case 14:
+        case FM_NOTCOPYSRC:
             result = ~source;
             break;
-        case 15:
+        case FM_MERGENOTSRC:
             result = ~source | destination;
             break;
-        case 16:
+        case FM_NOTMASKSRC:
             result = ~(source & destination);
             break;
-        case 17:
+        case FM_ONE:
             result = 0xffffff;
             break;
         default:
@@ -97,9 +98,9 @@ BOOL lx_pm_pattern_pixel(HPS handle, LONG x, LONG y, uint32_t *rgb, BOOL *foregr
             return TRUE;
         *foreground = *rgb != 0;
     }
-    else if (ps->pattern == 15 || ps->pattern == 64)
+    else if (ps->pattern == PATSYM_NOSHADE || ps->pattern == PATSYM_BLANK)
         *foreground = FALSE;
-    else if (ps->pattern != 16)
+    else if (ps->pattern != PATSYM_SOLID)
         return FALSE;
     LONG color =
         lx_pm_resolve_color(handle, *foreground ? ps->primitive_color[3] : ps->primitive_back[3]);
@@ -142,6 +143,26 @@ BOOL lx_pm_fill_span(HPS handle, LONG x, LONG y, LONG count, unsigned primitive)
     return ok;
 }
 
+typedef struct LinePels
+{
+    HPS handle;
+    PresentationSpace *ps;
+    LONG width, height;
+    uint32_t rgb;
+} LinePels;
+
+static BOOL line_pel(void *context, LONG x, LONG y)
+{
+    LinePels *line = context;
+    if (x < 0 || y < 0 || x >= line->width || y >= line->height)
+        return TRUE;
+    uint32_t pixel;
+    if (!lx_pm_raster_read(line->handle, x, y, 1, 1, &pixel))
+        return FALSE;
+    pixel = lx_pm_mix_pixel(line->rgb, pixel, line->ps->primitive_mix[0]);
+    return lx_pm_raster_write(line->handle, x, y, 1, 1, &pixel);
+}
+
 LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -170,13 +191,13 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
     lx_pm_pick_line(ps, &from, &end);
     if (ps->gpi.initialized && !ps->gpi.display_enabled)
         return lx_pm_hits(ps);
-    if (ps->line_type == 8 || ps->primitive_mix[0] == 5)
+    if (ps->line_type == LINETYPE_INVISIBLE || ps->primitive_mix[0] == FM_LEAVEALONE)
         return lx_pm_hits(ps);
     LONG rgb = lx_pm_resolve_color(handle, ps->primitive_color[0]);
     if (rgb < 0)
         return 0;
     if (ps->window && ps->window->heavy.window && !ps->clip_lease.resource &&
-        ps->primitive_mix[0] == 2 && ps->line_type == 7)
+        ps->primitive_mix[0] == FM_OVERPAINT && ps->line_type == LINETYPE_SOLID)
     {
         LxHostRect origin;
         calcHeavyweightRect(ps->window, &origin);
@@ -195,37 +216,10 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
         free(visible.rects);
         return ok ? lx_pm_hits(ps) : 0;
     }
-    int64_t dx = llabs((int64_t)point->x - from.x), dy = llabs((int64_t)point->y - from.y);
-    if (dx > 65536 || dy > 65536)
+    if (llabs((int64_t)point->x - from.x) > 65536 || llabs((int64_t)point->y - from.y) > 65536)
         return 0;
-    LONG x = from.x, y = from.y, sx = x < point->x ? 1 : -1, sy = y < point->y ? 1 : -1;
-    int64_t error = dx - dy;
-    BOOL ok = TRUE;
-    while (ok)
-    {
-        if (x >= 0 && y >= 0 && x < width && y < height)
-        {
-            uint32_t pixel;
-            ok = lx_pm_raster_read(handle, x, y, 1, 1, &pixel);
-            if (ok)
-            {
-                pixel = lx_pm_mix_pixel(rgb, pixel, ps->primitive_mix[0]);
-                ok = lx_pm_raster_write(handle, x, y, 1, 1, &pixel);
-            }
-        }
-        if (x == point->x && y == point->y)
-            break;
-        int64_t twice = error * 2;
-        if (twice > -dy)
-        {
-            error -= dy;
-            x += sx;
-        }
-        if (twice < dx)
-        {
-            error += dx;
-            y += sy;
-        }
-    }
-    return ok ? lx_pm_hits(ps) : 0;
+    LinePels line = {handle, ps, width, height, (uint32_t)rgb};
+    return lx_pm_walk_line(from.x, from.y, point->x, point->y, TRUE, line_pel, &line)
+               ? lx_pm_hits(ps)
+               : 0;
 }
