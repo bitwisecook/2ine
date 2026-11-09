@@ -40,21 +40,30 @@ OS2EXPORT void lxNativeModuleDeinit(void)
     lxTcpipGeneratedDeinit();
 }
 
+enum
+{
+    EXPORT_NAME_LIMIT = 128,
+    EXPORT_NAME_SIZE = 64,
+    /* TCPIP32 exports the _ress resolver state at this ordinal. */
+    RESS_ORDINAL = 143
+};
+
 OS2EXPORT const LxExport *lxNativeModuleInit(uint32 *count)
 {
-    static LxExport exports[256];
-    static char uppercase[128][64];
+    /* Each export may gain an upper-case alias, so the table holds twice the names. */
+    static LxExport exports[2 * EXPORT_NAME_LIMIT];
+    static char uppercase[EXPORT_NAME_LIMIT][EXPORT_NAME_SIZE];
     uint32 n = 0;
     const LxExport *generated = lxTcpipGeneratedInit(&n);
-    if (!generated || n >= 128 || !lx_tcpip_resolver_initialize())
+    if (!generated || n >= EXPORT_NAME_LIMIT || !lx_tcpip_resolver_initialize())
         return NULL;
     memcpy(exports, generated, n * sizeof *exports);
-    exports[n++] = (LxExport){143, "_ress", (void *)(uintptr_t)lx_tcpip_resolver_address(), NULL,
-                              LX_EXPORT_ABSOLUTE};
+    exports[n++] = (LxExport){RESS_ORDINAL, "_ress", (void *)(uintptr_t)lx_tcpip_resolver_address(),
+                              NULL, LX_EXPORT_ABSOLUTE};
     unsigned original = n;
     for (unsigned i = 0; i < original; i++)
     {
-        if (!exports[i].name || strlen(exports[i].name) >= 64)
+        if (!exports[i].name || strlen(exports[i].name) >= EXPORT_NAME_SIZE)
             continue;
         size_t j;
         for (j = 0; exports[i].name[j]; j++)

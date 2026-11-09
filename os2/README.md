@@ -83,7 +83,7 @@ socket headers apart from the host's.
 | `os2me.h` (+ `os2medef.h`, `meerror.h`, `mcios2.h`, `mmioos2.h`) | MCI messages, flags and errors, mci* and mmio* (MMPM; forwarded by MDM, MMIO) |
 | `dive.h` | Dive* (DIVE) |
 | `som/som.h` | SOM |
-| `sys/*.h`, `netinet/in.h`, `arpa/inet.h`, `netdb.h`, `nerrno.h`, `resolv.h`, `unistd.h` | 32-bit sockets and socket errors (TCPIP32) |
+| `sys/*.h`, `net/*.h`, `netinet/in.h`, `arpa/inet.h`, `netdb.h`, `nerrno.h`, `resolv.h`, `unistd.h` | 32-bit sockets and socket errors (TCPIP32) |
 | `stack16/sys/socket.h`, `stack16/netdb.h` | 16-bit-stack socket and database sets (SO32DLL, TCP32DLL) |
 
 `include/private/` holds the DDK-style private companions: `bsep.h` (DOSCALLS

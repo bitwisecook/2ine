@@ -20,6 +20,12 @@ extern "C"
 
     /* Internet addresses */
 
+#define OS2_IPPROTO_IP 0
+
+#define OS2_IPPROTO_TCP 6
+
+#define OS2_IPPROTO_UDP 17
+
 #pragma pack(push, 1)
 
     typedef struct OS2_in_addr

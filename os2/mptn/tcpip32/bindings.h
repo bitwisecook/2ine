@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* TCPIP32 flat 32-bit ABI: socket, select, ioctl and resolver bridges. */
 static int tcpip_borrow(LxExecution *execution, uint32 address, size_t size, unsigned flags,
                         LxGuestBorrow *borrow)
 {

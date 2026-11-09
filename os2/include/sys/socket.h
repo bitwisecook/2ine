@@ -41,6 +41,16 @@ extern "C"
 
 #define OS2_AF_INET 2
 
+#define OS2_AF_LINK 18
+
+#define OS2_AF_ROUTE 39
+
+#define OS2_NET_RT_DUMP 1
+
+#define OS2_NET_RT_FLAGS 2
+
+#define OS2_NET_RT_IFLIST 3
+
 #define OS2_SOCK_STREAM 1
 
 #define OS2_SOCK_DGRAM 2
