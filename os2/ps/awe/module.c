@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/windows.h"
-#include "os2/ps/awe/input.h"
+#include "os2/ps/awe/user/windows/windows.h"
+#include "os2/ps/awe/user/input/keyboard.h"
 #include "host/clock.h"
 #include "host/window.h"
 #include "os2/include/pmshl.h"

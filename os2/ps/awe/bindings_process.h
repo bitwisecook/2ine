@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "emulator/arguments.h"
-#include "os2/ps/awe/process.h"
+#include "os2/ps/awe/kernel/processes.h"
 
 enum
 {

@@ -3849,6 +3849,6 @@ static uint32 bridge32_TranslateAccelerator(uint8 *a)
     return (uint32)TranslateAccelerator(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), message);
 }
 
-#include "os2/ps/awe/bindings_graphics.h"
+#include "os2/ps/awe/bindings_gdi.h"
 #include "os2/ps/awe/bindings_services.h"
 #include "os2/ps/awe/bindings_process.h"
