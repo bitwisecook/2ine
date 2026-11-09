@@ -160,6 +160,24 @@ int tb_ball_create(TbBall *c, const char *path);
 /* Balls in the default library, $XDG_DATA_HOME/2ine/ball. */
 cJSON *tb_ball_discover(TbBall *c);
 
+/* References: the images, folders and installation media outside the ball,
+   mirrored from the drive table into the manifest's "references" object. */
+int tb_ball_sync_references(TbBall *c);
+/* Records remembered installation media as media-1, media-2, ... */
+int tb_ball_set_media_references(TbBall *c, const cJSON *sources);
+/* States: available, missing, unreadable, mismatch, foreign, ejected and
+   relocation-candidate (with the candidate path). Never changes a reference. */
+cJSON *tb_ball_reference_status(TbBall *c, const cJSON *request);
+int tb_ball_relink_reference(TbBall *c, const cJSON *request);
+int tb_ball_bundle_reference(TbBall *c, const cJSON *request);
+int tb_ball_unbundle_reference(TbBall *c, const cJSON *request);
+int tb_ball_set_reference_host_data(TbBall *c, const cJSON *request);
+/* Host data is per host and never leaves it in a package. */
+void tb_ball_strip_reference_host_data(cJSON *manifest);
+/* The per-host table of moved folders (old prefix -> new prefix) consulted
+   when a reference is missing. */
+cJSON *tb_ball_reference_remaps(TbBall *c, const cJSON *request);
+
 /* Settings outside the commands. */
 int tb_ball_set_working_directory(TbBall *c, const char *path);
 /* A NULL build forgets the runtime reference. */

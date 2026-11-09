@@ -81,9 +81,35 @@ cJSON *remember_os2_media(TbBall *c, const cJSON *request)
     os2_preserve_media_selection(c, media);
     cJSON_AddItemToObject(media, "sources", cJSON_Duplicate(sources, 1));
     cJSON_AddStringToObject(media, "recorded", tb_ball_now(c));
-    int ok = tb_ball_write_json(c, tb_ball_join(c, c->ball, "os2-media.json"), media);
+    int ok = tb_ball_write_json(c, tb_ball_join(c, c->ball, "os2-media.json"), media) &&
+             tb_ball_set_media_references(c, sources) && tb_ball_save_manifest(c);
     cJSON_Delete(media);
     return ok ? os2_support(c) : NULL;
+}
+
+int os2_media_follow_references(TbBall *c)
+{
+    size_t length = 0;
+    char *path = tb_ball_join(c, c->ball, "os2-media.json");
+    char *bytes = path ? tb_ball_read_file(c, path, &length, 1) : NULL;
+    cJSON *media = bytes && length ? cJSON_ParseWithLength(bytes, length) : NULL;
+    if (!cJSON_IsObject(media))
+    {
+        cJSON_Delete(media);
+        media = cJSON_CreateObject();
+    }
+    cJSON *sources = cJSON_CreateArray();
+    const cJSON *id;
+    cJSON_ArrayForEach(id, get(c->manifest, "media"))
+    {
+        const cJSON *record = get(get(c->manifest, "references"), str(id) ? str(id) : "");
+        if (field(record, "path"))
+            cJSON_AddItemToArray(sources, cJSON_CreateString(field(record, "path")));
+    }
+    put(media, "sources", sources);
+    int ok = path && tb_ball_write_json(c, path, media);
+    cJSON_Delete(media);
+    return ok;
 }
 
 int media_candidate(const char *name)
@@ -470,7 +496,11 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
         cJSON *media = cJSON_CreateObject();
         cJSON_AddItemToObject(media, "sources", cJSON_Duplicate(sources, 1));
         cJSON_AddStringToObject(media, "recorded", tb_ball_now(c));
-        tb_ball_write_json(c, tb_ball_join(c, c->ball, "os2-media.json"), media);
+        if (tb_ball_write_json(c, tb_ball_join(c, c->ball, "os2-media.json"), media))
+        {
+            if (tb_ball_set_media_references(c, sources))
+                tb_ball_save_manifest(c);
+        }
         cJSON_Delete(media);
     }
     if (c->error)

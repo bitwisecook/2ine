@@ -349,6 +349,7 @@ cJSON *tb_ball_export(TbBall *c, const cJSON *request)
         cJSON_Delete(manifest);
         return NULL;
     }
+    tb_ball_strip_reference_host_data(manifest);
     cJSON *sources = cJSON_CreateArray(), *members = cJSON_CreateArray();
     cJSON *entry;
     cJSON_ArrayForEach(entry, get(manifest, "drives"))
@@ -369,12 +370,10 @@ cJSON *tb_ball_export(TbBall *c, const cJSON *request)
             cJSON_AddItemToArray(members, cJSON_CreateString(member));
             put(entry, "image", cJSON_CreateString(member));
         }
-        else
-        {
-            if (!field(entry, "device"))
-                put(entry, "device", cJSON_CreateString("cdrom"));
-            cJSON_DeleteItemFromObjectCaseSensitive(entry, "image");
-        }
+        /* An image left out stays as a reconnect hint: the receiver sees the
+           drive as unavailable until the image is attached or relinked. */
+        else if (!field(entry, "device"))
+            put(entry, "device", cJSON_CreateString("cdrom"));
     }
     char *text = cJSON_Print(manifest);
     cJSON *info = archive_build_info(c, request, images);
@@ -544,7 +543,8 @@ cJSON *tb_ball_import(TbBall *c, const cJSON *request)
             char *cache = tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/DLL/2INE");
             if (cache && tb_is_dir(cache) && !tb_remove_tree(cache))
                 tb_ball_fail(c, "Cannot reset imported runtime snapshots");
-            if (!c->error && tb_ball_regenerate(c))
+            /* Bundled images now live in the ball; their references follow. */
+            if (!c->error && tb_ball_save_manifest(c) && tb_ball_regenerate(c))
                 result = tb_ball_client_snapshot(c);
         }
         cJSON_Delete(manifest);

@@ -153,7 +153,11 @@ class OS2SupportTests(unittest.TestCase):
         )
         self.assertEqual((self.ball / "drive_c/OS2/CMD.EXE").read_bytes(), CMD)
         self.assertEqual((self.ball / "drive_c/OS2/SYSTEM/OSO001.MSG").read_bytes(), MESSAGE)
-        self.assertEqual((self.ball / "ball.json").read_bytes(), manifest)
+        # Only the remembered media references are added to the manifest.
+        saved = json.loads((self.ball / "ball.json").read_text())
+        self.assertEqual(saved.pop("media"), ["media-1"])
+        self.assertEqual(saved.pop("references")["media-1"]["path"], media)
+        self.assertEqual(saved, json.loads(manifest))
         self.assertEqual(self.request("import-os2-support", sources=[media])["imported"], [])
 
     def test_media_and_guest_browsers_report_member_sizes_and_dates(self):

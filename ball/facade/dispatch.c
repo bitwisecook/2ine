@@ -122,6 +122,8 @@ static cJSON *dispatch(TbBall *c, const cJSON *request)
         return runtime_sync_request(c, request);
     if (!strcmp(action, "discover"))
         return tb_ball_discover(c);
+    if (!strcmp(action, "reference-remaps"))
+        return tb_ball_reference_remaps(c, request);
     if (!strcmp(action, "import-ball"))
         return tb_ball_import(c, request);
     if (!strcmp(action, "rename-ball"))
@@ -203,6 +205,31 @@ static cJSON *dispatch(TbBall *c, const cJSON *request)
     }
     if (!strcmp(action, "cancel-os2-component-operation"))
         return cancel_os2_component_operation(c, request);
+    if (!strcmp(action, "reference-status") || !strcmp(action, "search-references"))
+    {
+        if (!strcmp(action, "search-references") && !cJSON_IsArray(get(request, "searchRoots")))
+        {
+            tb_ball_fail(c, "Choose folders to search");
+            return NULL;
+        }
+        return tb_ball_reference_status(c, request);
+    }
+    if (!strcmp(action, "relink-reference"))
+    {
+        const char *id = field(request, "id");
+        if (!tb_ball_relink_reference(c, request))
+            return NULL;
+        if (id && !strncmp(id, "media-", 6) && !os2_media_follow_references(c))
+            return NULL;
+        return facade_snapshot(c);
+    }
+    if (!strcmp(action, "bundle-reference"))
+        return tb_ball_bundle_reference(c, request) ? facade_snapshot(c) : NULL;
+    if (!strcmp(action, "unbundle-reference"))
+        return tb_ball_unbundle_reference(c, request) ? facade_snapshot(c) : NULL;
+    if (!strcmp(action, "set-reference-host-data"))
+        return tb_ball_set_reference_host_data(c, request) ? tb_ball_reference_status(c, request)
+                                                           : NULL;
     if (!strcmp(action, "snapshot"))
         return facade_snapshot(c);
     if (!strcmp(action, "browse"))

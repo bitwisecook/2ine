@@ -526,6 +526,44 @@ class BallContractTests(unittest.TestCase):
         run("record-install invalid", "record-install", ball=b)
         s.files("files after launch", ball)
 
+        # References to images, folders and media outside the ball.
+        run("reference-status", "reference-status", ball=b)
+        run("reference-status one", "reference-status", ball=b, id="drive-D", verify=True)
+        run("reference-status unknown", "reference-status", ball=b, id="drive-Q")
+        run("search-references", "search-references", ball=b, searchRoots=[str(media)])
+        run("search-references without roots", "search-references", ball=b)
+        run(
+            "set-reference-host-data",
+            "set-reference-host-data",
+            ball=b,
+            id="drive-E",
+            host="contract-host",
+            data={"bookmark": "AAAA"},
+        )
+        run("relink-reference unknown", "relink-reference", ball=b, id="drive-Q", path=str(iso))
+        run(
+            "relink-reference media",
+            "relink-reference",
+            ball=b,
+            id="media-1",
+            path=str(iso),
+            hash=True,
+        )
+        run("bundle-reference folder", "bundle-reference", ball=b, id="drive-E")
+        run("unbundle-reference external", "unbundle-reference", ball=b, id="drive-D", path="x")
+        run("reference-remaps", "reference-remaps")
+        run(
+            "reference-remaps add",
+            "reference-remaps",
+            **{"from": str(root / "old-media"), "to": str(media)},
+        )
+        run(
+            "reference-remaps remove",
+            "reference-remaps",
+            **{"from": str(root / "old-media"), "remove": True},
+        )
+        run("reference-remaps relative", "reference-remaps", **{"from": "x", "to": "y"})
+
         # Packages: export, import and rename.
         package = root / "Contract.zip"
         run("export-ball", "export-ball", ball=b, path=str(package), build=str(build))

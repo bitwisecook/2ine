@@ -73,6 +73,7 @@ set(TWOINE_BALL_SOURCES
     guest_environment.c
     manifest.c
     paths.c
+    references.c
     settings.c
     snapshot.c
     platform.c

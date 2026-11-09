@@ -5,6 +5,8 @@
 
 int tb_ball_save_manifest(TbBall *c)
 {
+    if (!tb_ball_sync_references(c))
+        return 0;
     return tb_ball_write_json(c, tb_ball_join(c, c->ball, "ball.json"), c->manifest);
 }
 

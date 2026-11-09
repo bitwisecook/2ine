@@ -55,12 +55,17 @@ class ArchiveTests(unittest.TestCase):
             self.assertFalse(
                 any(name.startswith(("devices/", "ipc/")) for name in archive.namelist())
             )
+        # An image left out of the package stays as a reconnect hint.
+        hint = str(self.image)
+        self.image.unlink()
         result = self.import_ball()
         self.assertEqual(
             (self.destination / "drive_c/document.txt").read_bytes(), self.document.read_bytes()
         )
-        self.assertNotIn("image", result["manifest"]["drives"]["A"])
+        self.assertEqual(result["manifest"]["drives"]["A"]["image"], hint)
         self.assertEqual(result["manifest"]["drives"]["A"]["device"], "floppy")
+        self.assertEqual(result["unavailableDrives"]["A"], hint)
+        self.assertEqual(result["manifest"]["references"]["drive-A"]["path"], hint)
         self.assertEqual(result["manifest"]["custom"], data["custom"])
         self.assertEqual(result["roots"]["C"], str(self.destination / "drive_c"))
 

@@ -1339,6 +1339,17 @@
      "E": "<ROOT>/shared"
     },
     "environment": {},
+    "references": {
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -1468,6 +1479,29 @@
      "E": "<ROOT>/shared"
     },
     "environment": {},
+    "references": {
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -1601,6 +1635,41 @@
      "E": "<ROOT>/shared"
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -1746,6 +1815,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -1897,6 +2013,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -2059,6 +2222,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -2213,6 +2423,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -2364,6 +2621,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -2519,6 +2823,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -2672,6 +3023,62 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-G": {
+      "base": "ball",
+      "hint": {
+       "name": "relative-folder"
+      },
+      "kind": "folder",
+      "path": "relative-folder",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -2830,6 +3237,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -2984,6 +3438,53 @@
     "environment": {
      "GREETING": "hello %LANG%"
     },
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {},
     "system": {},
     "version": 1
@@ -3137,6 +3638,53 @@
     },
     "environment": {
      "GREETING": "hello %LANG%"
+    },
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
     },
     "runtime": {},
     "system": {
@@ -3297,6 +3845,53 @@
     },
     "environment": {
      "GREETING": "hello %LANG%"
+    },
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
     },
     "runtime": {
      "backend": "unicorn"
@@ -3461,6 +4056,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -3667,6 +4309,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -3882,6 +4571,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -4092,6 +4828,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -4280,6 +5063,53 @@
     }
    },
    "environment": {},
+   "references": {
+    "drive-A": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "new.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/new.img",
+     "readonly": false
+    },
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false
+    },
+    "drive-H": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "hpfs.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/hpfs.img",
+     "readonly": false
+    }
+   },
    "runtime": {
     "backend": "unicorn"
    },
@@ -4423,6 +5253,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -4629,6 +5506,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -4844,6 +5768,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -5414,6 +6385,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -5633,6 +6651,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -5872,6 +6937,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -6099,6 +7211,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn",
      "build": "<ROOT>/runtime"
@@ -6327,6 +7486,53 @@
      }
     },
     "environment": {},
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     }
+    },
     "runtime": {
      "backend": "unicorn",
      "build": "<ROOT>/runtime"
@@ -11406,6 +12612,67 @@
      }
     },
     "environment": {},
+    "media": [
+     "media-1"
+    ],
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     },
+     "media-1": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344
+      },
+      "kind": "media",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     }
+    },
     "runtime": {
      "backend": "unicorn",
      "build": "<ROOT>/runtime"
@@ -11761,6 +13028,67 @@
     }
    },
    "environment": {},
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-A": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "new.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/new.img",
+     "readonly": false
+    },
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false
+    },
+    "drive-H": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "hpfs.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/hpfs.img",
+     "readonly": false
+    },
+    "media-1": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344
+     },
+     "kind": "media",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    }
+   },
    "runtime": {
     "backend": "unicorn",
     "build": "<ROOT>/runtime"
@@ -11854,6 +13182,700 @@
    "soundfonts/cd1ccc9aacfda072ebeece46ca8141051179a590709cca04d3a4db7d4636c573",
    "soundfonts/cd1ccc9aacfda072ebeece46ca8141051179a590709cca04d3a4db7d4636c573/piano.sf2"
   ]
+ },
+ {
+  "result": {
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-A": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "new.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/new.img",
+     "readonly": false,
+     "resolved": "<ROOT>/media/new.img",
+     "state": "available"
+    },
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true,
+     "resolved": "<ROOT>/media/install.iso",
+     "state": "available"
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false,
+     "resolved": "<ROOT>/shared",
+     "state": "available"
+    },
+    "drive-F": {
+     "kind": "image",
+     "state": "ejected"
+    },
+    "drive-H": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "hpfs.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/hpfs.img",
+     "readonly": false,
+     "resolved": "<ROOT>/media/hpfs.img",
+     "state": "available"
+    },
+    "media-1": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344
+     },
+     "kind": "media",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true,
+     "resolved": "<ROOT>/media/install.iso",
+     "state": "available"
+    }
+   }
+  },
+  "step": "reference-status"
+ },
+ {
+  "result": {
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true,
+     "resolved": "<ROOT>/media/install.iso",
+     "state": "available"
+    }
+   }
+  },
+  "step": "reference-status one"
+ },
+ {
+  "error": "Unknown reference: drive-Q",
+  "step": "reference-status unknown"
+ },
+ {
+  "result": {
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-A": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "new.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/new.img",
+     "readonly": false,
+     "resolved": "<ROOT>/media/new.img",
+     "state": "available"
+    },
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true,
+     "resolved": "<ROOT>/media/install.iso",
+     "state": "available"
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false,
+     "resolved": "<ROOT>/shared",
+     "state": "available"
+    },
+    "drive-F": {
+     "kind": "image",
+     "state": "ejected"
+    },
+    "drive-H": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "hpfs.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/hpfs.img",
+     "readonly": false,
+     "resolved": "<ROOT>/media/hpfs.img",
+     "state": "available"
+    },
+    "media-1": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344
+     },
+     "kind": "media",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true,
+     "resolved": "<ROOT>/media/install.iso",
+     "state": "available"
+    }
+   }
+  },
+  "step": "search-references"
+ },
+ {
+  "error": "Choose folders to search",
+  "step": "search-references without roots"
+ },
+ {
+  "result": {
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false,
+     "resolved": "<ROOT>/shared",
+     "state": "available"
+    }
+   }
+  },
+  "step": "set-reference-host-data"
+ },
+ {
+  "error": "Unknown reference: drive-Q",
+  "step": "relink-reference unknown"
+ },
+ {
+  "result": {
+   "applicationRecords": {
+    "App": "{\"program\":\"C:\\\\APP\\\\APP.EXE\",\"arguments\":[\"-x\"],\"cwd\":\"C:\\\\APP\"}",
+    "Renamed": "{\"workingDirectories\":{\"E\":\"E:\\\\sub\"},\"environment\":{\"MODE\":\"1\"},\"program\":\"C:\\\\APP\\\\APP.EXE\",\"arguments\":[],\"icon\":\"icons/c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77.image\"}"
+   },
+   "configSys": "SET ONLY=1\r\n",
+   "currentDrive": "E",
+   "dependencyAudit": {
+    "automaticRecovery": true,
+    "cached": true,
+    "complete": false,
+    "componentFiles": [],
+    "componentGroups": [],
+    "disabled": [],
+    "fingerprint": "<volatile>",
+    "imported": [],
+    "jsonPath": "<ROOT>/data/2ine/ball/Contract.2ineball/logs/dependency-audit-<time>/audit.json",
+    "logPath": "<ROOT>/data/2ine/ball/Contract.2ineball/logs/dependency-audit-<time>/audit.txt",
+    "media": [
+     {
+      "path": "<ROOT>/media/install.iso",
+      "remembered": true,
+      "status": "not-inspected"
+     },
+     {
+      "path": "<ROOT>/shared",
+      "remembered": false,
+      "status": "not-inspected"
+     },
+     {
+      "path": "<ROOT>/media/new.img",
+      "remembered": false,
+      "status": "not-inspected"
+     },
+     {
+      "path": "<ROOT>/media/hpfs.img",
+      "remembered": false,
+      "status": "not-inspected"
+     }
+    ],
+    "missing": [],
+    "runtimeBuild": "<ROOT>/runtime",
+    "scannedBinaries": 2,
+    "scope": "ball",
+    "stale": false,
+    "staticOnly": true,
+    "summary": "Scanned 2 binaries; recovered 0 files; 0 missing libraries, 0 unreachable imports, 0 disabled libraries, 0 missing package files and 1 audit errors.",
+    "unreachable": []
+   },
+   "driveRecords": {
+    "A": "{\"device\":\"floppy\",\"image\":\"<ROOT>/media/new.img\",\"readonly\":true}",
+    "C": "\"drive_c\"",
+    "D": "{\"device\":\"cdrom\",\"image\":\"<ROOT>/media/install.iso\",\"locked\":false}",
+    "E": "\"<ROOT>/shared\"",
+    "F": "{\"device\":\"cdrom\"}",
+    "H": "{\"device\":\"disk\",\"image\":\"<ROOT>/media/hpfs.img\"}"
+   },
+   "environmentDefaults": {
+    "DPATH": "C:\\OS2;C:\\OS2\\SYSTEM",
+    "HELP": "C:\\OS2\\HELP",
+    "LANG": "en_US",
+    "LIBPATH": "C:\\OS2\\DLL",
+    "ONLY": "1",
+    "PATH": "C:\\OS2;C:\\OS2\\SYSTEM",
+    "SYSTEM_INI": "C:\\OS2\\OS2SYS.INI",
+    "TEMP": "C:\\TEMP",
+    "TMP": "C:\\TEMP",
+    "USER_INI": "C:\\OS2\\OS2.INI"
+   },
+   "imageSources": {
+    "A": "<ROOT>/media/new.img",
+    "D": "<ROOT>/media/install.iso",
+    "H": "<ROOT>/media/hpfs.img"
+   },
+   "manifest": {
+    "applications": {
+     "App": {
+      "arguments": [
+       "-x"
+      ],
+      "cwd": "C:\\APP",
+      "program": "C:\\APP\\APP.EXE"
+     },
+     "Renamed": {
+      "arguments": [],
+      "environment": {
+       "MODE": "1"
+      },
+      "icon": "icons/c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77.image",
+      "program": "C:\\APP\\APP.EXE",
+      "workingDirectories": {
+       "E": "E:\\sub"
+      }
+     }
+    },
+    "audio": {
+     "bank": "default",
+     "channels": [
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 1
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 2
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 3
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 4
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 5
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 6
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 7
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 8
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 9
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 10
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 11
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 12
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 13
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 14
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 15
+      },
+      {
+       "bank": "",
+       "bankNumber": -1,
+       "muted": false,
+       "percussion": -1,
+       "program": -1,
+       "target": 16
+      }
+     ],
+     "profile": "gs"
+    },
+    "currentDrive": "E",
+    "drives": {
+     "A": {
+      "device": "floppy",
+      "image": "<ROOT>/media/new.img",
+      "readonly": true
+     },
+     "C": "drive_c",
+     "D": {
+      "device": "cdrom",
+      "image": "<ROOT>/media/install.iso",
+      "locked": false
+     },
+     "E": "<ROOT>/shared",
+     "F": {
+      "device": "cdrom"
+     },
+     "H": {
+      "device": "disk",
+      "image": "<ROOT>/media/hpfs.img"
+     }
+    },
+    "environment": {},
+    "media": [
+     "media-1"
+    ],
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "host": {
+       "contract-host": {
+        "bookmark": "AAAA"
+       }
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     },
+     "media-1": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+       "size": 57344
+      },
+      "kind": "media",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     }
+    },
+    "runtime": {
+     "backend": "unicorn",
+     "build": "<ROOT>/runtime"
+    },
+    "soundBanks": [
+     {
+      "contentSHA256": "cd1ccc9aacfda072ebeece46ca8141051179a590709cca04d3a4db7d4636c573",
+      "file": "soundfonts/cd1ccc9aacfda072ebeece46ca8141051179a590709cca04d3a4db7d4636c573/piano.sf2",
+      "format": "sf2",
+      "id": "cd1ccc9aacfda072ebeece46ca8141051179a590709cca04d3a4db7d4636c573",
+      "license": "User supplied; retains its original license",
+      "name": "piano.sf2",
+      "sha256": "cd1ccc9aacfda072ebeece46ca8141051179a590709cca04d3a4db7d4636c573"
+     }
+    ],
+    "system": {
+     "display_dpi": "120"
+    },
+    "version": 1,
+    "workingDirectories": {
+     "E": "E:\\sub"
+    }
+   },
+   "os2Support": {
+    "complete": false,
+    "files": [
+     {
+      "name": "CMD.EXE",
+      "path": "C:\\OS2\\CMD.EXE",
+      "present": false,
+      "required": true
+     },
+     {
+      "name": "SYSLEVEL.OS2",
+      "path": "C:\\OS2\\SYSLEVEL.OS2",
+      "present": false,
+      "required": true
+     },
+     {
+      "name": "OSO001.MSG",
+      "path": "C:\\OS2\\SYSTEM\\OSO001.MSG",
+      "present": false,
+      "required": true
+     },
+     {
+      "name": "REXX.DLL",
+      "path": "C:\\OS2\\DLL\\REXX.DLL",
+      "present": false,
+      "required": false
+     },
+     {
+      "name": "REXXAPI.DLL",
+      "path": "C:\\OS2\\DLL\\REXXAPI.DLL",
+      "present": false,
+      "required": false
+     },
+     {
+      "name": "REXXUTIL.DLL",
+      "path": "C:\\OS2\\DLL\\REXXUTIL.DLL",
+      "present": false,
+      "required": false
+     },
+     {
+      "name": "REXXINIT.DLL",
+      "path": "C:\\OS2\\DLL\\REXXINIT.DLL",
+      "present": false,
+      "required": false
+     },
+     {
+      "name": "REX.MSG",
+      "path": "C:\\OS2\\SYSTEM\\REX.MSG",
+      "present": false,
+      "required": false
+     },
+     {
+      "name": "REXH.MSG",
+      "path": "C:\\OS2\\SYSTEM\\REXH.MSG",
+      "present": false,
+      "required": false
+     },
+     {
+      "name": "RXQUEUE.EXE",
+      "path": "C:\\OS2\\RXQUEUE.EXE",
+      "present": false,
+      "required": false
+     },
+     {
+      "name": "RXSUBCOM.EXE",
+      "path": "C:\\OS2\\RXSUBCOM.EXE",
+      "present": false,
+      "required": false
+     }
+    ],
+    "mediaSources": [
+     "<ROOT>/media/install.iso"
+    ],
+    "rexxComplete": false,
+    "selectedCategories": []
+   },
+   "roots": {
+    "A": "/@2ine-device/{<ROOT>/data/2ine/ball/Contract.2ineball/devices/A.media}",
+    "C": "<ROOT>/data/2ine/ball/Contract.2ineball/drive_c",
+    "D": "/@2ine-device/{<ROOT>/data/2ine/ball/Contract.2ineball/devices/D.media}",
+    "E": "<ROOT>/shared",
+    "F": "/@2ine-device/{<ROOT>/data/2ine/ball/Contract.2ineball/devices/F.media}",
+    "H": "/@2ine-device/{<ROOT>/data/2ine/ball/Contract.2ineball/devices/H.media}"
+   },
+   "unavailableDrives": {},
+   "workingDirectories": {
+    "A": "A:\\",
+    "C": "C:\\",
+    "D": "D:\\",
+    "E": "E:\\sub",
+    "F": "F:\\",
+    "H": "H:\\"
+   }
+  },
+  "step": "relink-reference media"
+ },
+ {
+  "error": "Only an attached drive image can be bundled",
+  "step": "bundle-reference folder"
+ },
+ {
+  "error": "This image is not inside the ball",
+  "step": "unbundle-reference external"
+ },
+ {
+  "result": {
+   "path": "<ROOT>/config/2ine/remap.json",
+   "remaps": []
+  },
+  "step": "reference-remaps"
+ },
+ {
+  "result": {
+   "path": "<ROOT>/config/2ine/remap.json",
+   "remaps": [
+    {
+     "from": "<ROOT>/old-media",
+     "to": "<ROOT>/media"
+    }
+   ]
+  },
+  "step": "reference-remaps add"
+ },
+ {
+  "result": {
+   "path": "<ROOT>/config/2ine/remap.json",
+   "remaps": []
+  },
+  "step": "reference-remaps remove"
+ },
+ {
+  "error": "A remap needs absolute old and new folder paths",
+  "step": "reference-remaps relative"
  },
  {
   "result": "<ROOT>/Contract.zip",
@@ -12019,11 +14041,13 @@
    "drives": {
     "A": {
      "device": "floppy",
+     "image": "<ROOT>/media/new.img",
      "readonly": true
     },
     "C": "drive_c",
     "D": {
      "device": "cdrom",
+     "image": "<ROOT>/media/install.iso",
      "locked": false
     },
     "E": "<ROOT>/shared",
@@ -12031,10 +14055,73 @@
      "device": "cdrom"
     },
     "H": {
-     "device": "disk"
+     "device": "disk",
+     "image": "<ROOT>/media/hpfs.img"
     }
    },
    "environment": {},
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-A": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "new.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/new.img",
+     "readonly": false
+    },
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false
+    },
+    "drive-H": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "hpfs.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/hpfs.img",
+     "readonly": false
+    },
+    "media-1": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+      "size": 57344
+     },
+     "kind": "media",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    }
+   },
    "runtime": {
     "backend": "unicorn"
    },
@@ -12179,12 +14266,12 @@
     "unreachable": []
    },
    "driveRecords": {
-    "A": "{\"device\":\"floppy\",\"readonly\":true}",
+    "A": "{\"device\":\"floppy\",\"image\":\"<ROOT>/media/new.img\",\"readonly\":true}",
     "C": "\"drive_c\"",
-    "D": "{\"device\":\"cdrom\",\"locked\":false}",
+    "D": "{\"device\":\"cdrom\",\"image\":\"<ROOT>/media/install.iso\",\"locked\":false}",
     "E": "\"<ROOT>/shared\"",
     "F": "{\"device\":\"cdrom\"}",
-    "H": "{\"device\":\"disk\"}"
+    "H": "{\"device\":\"disk\",\"image\":\"<ROOT>/media/hpfs.img\"}"
    },
    "environmentDefaults": {
     "DPATH": "C:\\OS2;C:\\OS2\\SYSTEM",
@@ -12198,7 +14285,11 @@
     "TMP": "C:\\TEMP",
     "USER_INI": "C:\\OS2\\OS2.INI"
    },
-   "imageSources": {},
+   "imageSources": {
+    "A": "<ROOT>/media/new.img",
+    "D": "<ROOT>/media/install.iso",
+    "H": "<ROOT>/media/hpfs.img"
+   },
    "manifest": {
     "applications": {
      "App": {
@@ -12358,11 +14449,13 @@
     "drives": {
      "A": {
       "device": "floppy",
+      "image": "<ROOT>/media/new.img",
       "readonly": true
      },
      "C": "drive_c",
      "D": {
       "device": "cdrom",
+      "image": "<ROOT>/media/install.iso",
       "locked": false
      },
      "E": "<ROOT>/shared",
@@ -12370,10 +14463,73 @@
       "device": "cdrom"
      },
      "H": {
-      "device": "disk"
+      "device": "disk",
+      "image": "<ROOT>/media/hpfs.img"
      }
     },
     "environment": {},
+    "media": [
+     "media-1"
+    ],
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     },
+     "media-1": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+       "size": 57344
+      },
+      "kind": "media",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -12749,6 +14905,68 @@
      }
     },
     "environment": {},
+    "media": [
+     "media-1"
+    ],
+    "references": {
+     "drive-A": {
+      "base": "ball",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "A.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "bundled-media/A.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "ball",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "D.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "bundled-media/D.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "ball",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "H.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "bundled-media/H.img",
+      "readonly": false
+     },
+     "media-1": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+       "size": 57344
+      },
+      "kind": "media",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     }
+    },
     "runtime": {
      "backend": "unicorn"
     },
@@ -13099,6 +15317,68 @@
     }
    },
    "environment": {},
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-A": {
+     "base": "ball",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "A.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "bundled-media/A.img",
+     "readonly": false
+    },
+    "drive-D": {
+     "base": "ball",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "D.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "bundled-media/D.iso",
+     "readonly": true
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false
+    },
+    "drive-H": {
+     "base": "ball",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "H.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "bundled-media/H.img",
+     "readonly": false
+    },
+    "media-1": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+      "size": 57344
+     },
+     "kind": "media",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    }
+   },
    "runtime": {
     "backend": "unicorn"
    },
@@ -13228,13 +15508,13 @@
   "devices/A.media": {
    "kind": 2,
    "magic": "2INEMED1",
-   "path": "",
+   "path": "<ROOT>/media/new.img",
    "readonly": 1
   },
   "devices/D.media": {
    "kind": 1,
    "magic": "2INEMED1",
-   "path": "",
+   "path": "<ROOT>/media/install.iso",
    "readonly": 1
   },
   "devices/F.media": {
@@ -13246,7 +15526,7 @@
   "devices/H.media": {
    "kind": 3,
    "magic": "2INEMED1",
-   "path": "",
+   "path": "<ROOT>/media/hpfs.img",
    "readonly": 0
   },
   "manifest": {
@@ -13408,11 +15688,13 @@
    "drives": {
     "A": {
      "device": "floppy",
+     "image": "<ROOT>/media/new.img",
      "readonly": true
     },
     "C": "drive_c",
     "D": {
      "device": "cdrom",
+     "image": "<ROOT>/media/install.iso",
      "locked": false
     },
     "E": "<ROOT>/shared",
@@ -13420,10 +15702,73 @@
      "device": "cdrom"
     },
     "H": {
-     "device": "disk"
+     "device": "disk",
+     "image": "<ROOT>/media/hpfs.img"
     }
    },
    "environment": {},
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-A": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "new.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/new.img",
+     "readonly": false
+    },
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false
+    },
+    "drive-H": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "hpfs.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/hpfs.img",
+     "readonly": false
+    },
+    "media-1": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+      "size": 57344
+     },
+     "kind": "media",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    }
+   },
    "runtime": {
     "backend": "unicorn"
    },
@@ -13768,6 +16113,73 @@
      }
     },
     "environment": {},
+    "media": [
+     "media-1"
+    ],
+    "references": {
+     "drive-A": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "new.img",
+       "size": 1474560,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/new.img",
+      "readonly": false
+     },
+     "drive-D": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "size": 57344,
+       "volumeLabel": "TEST_MEDIA"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     },
+     "drive-E": {
+      "base": "absolute",
+      "hint": {
+       "name": "shared"
+      },
+      "host": {
+       "contract-host": {
+        "bookmark": "AAAA"
+       }
+      },
+      "kind": "folder",
+      "path": "<ROOT>/shared",
+      "readonly": false
+     },
+     "drive-H": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "hpfs.img",
+       "size": 8388608,
+       "volumeLabel": "NO NAME"
+      },
+      "kind": "image",
+      "path": "<ROOT>/media/hpfs.img",
+      "readonly": false
+     },
+     "media-1": {
+      "base": "absolute",
+      "hint": {
+       "mtime": "<volatile>",
+       "name": "install.iso",
+       "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+       "size": 57344
+      },
+      "kind": "media",
+      "path": "<ROOT>/media/install.iso",
+      "readonly": true
+     }
+    },
     "runtime": {
      "backend": "unicorn",
      "build": "<ROOT>/runtime"
@@ -14148,6 +16560,73 @@
       }
      },
      "environment": {},
+     "media": [
+      "media-1"
+     ],
+     "references": {
+      "drive-A": {
+       "base": "absolute",
+       "hint": {
+        "mtime": "<volatile>",
+        "name": "new.img",
+        "size": 1474560,
+        "volumeLabel": "NO NAME"
+       },
+       "kind": "image",
+       "path": "<ROOT>/media/new.img",
+       "readonly": false
+      },
+      "drive-D": {
+       "base": "absolute",
+       "hint": {
+        "mtime": "<volatile>",
+        "name": "install.iso",
+        "size": 57344,
+        "volumeLabel": "TEST_MEDIA"
+       },
+       "kind": "image",
+       "path": "<ROOT>/media/install.iso",
+       "readonly": true
+      },
+      "drive-E": {
+       "base": "absolute",
+       "hint": {
+        "name": "shared"
+       },
+       "host": {
+        "contract-host": {
+         "bookmark": "AAAA"
+        }
+       },
+       "kind": "folder",
+       "path": "<ROOT>/shared",
+       "readonly": false
+      },
+      "drive-H": {
+       "base": "absolute",
+       "hint": {
+        "mtime": "<volatile>",
+        "name": "hpfs.img",
+        "size": 8388608,
+        "volumeLabel": "NO NAME"
+       },
+       "kind": "image",
+       "path": "<ROOT>/media/hpfs.img",
+       "readonly": false
+      },
+      "media-1": {
+       "base": "absolute",
+       "hint": {
+        "mtime": "<volatile>",
+        "name": "install.iso",
+        "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+        "size": 57344
+       },
+       "kind": "media",
+       "path": "<ROOT>/media/install.iso",
+       "readonly": true
+      }
+     },
      "runtime": {
       "backend": "unicorn",
       "build": "<ROOT>/runtime"
@@ -14504,6 +16983,73 @@
     }
    },
    "environment": {},
+   "media": [
+    "media-1"
+   ],
+   "references": {
+    "drive-A": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "new.img",
+      "size": 1474560,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/new.img",
+     "readonly": false
+    },
+    "drive-D": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "size": 57344,
+      "volumeLabel": "TEST_MEDIA"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    },
+    "drive-E": {
+     "base": "absolute",
+     "hint": {
+      "name": "shared"
+     },
+     "host": {
+      "contract-host": {
+       "bookmark": "AAAA"
+      }
+     },
+     "kind": "folder",
+     "path": "<ROOT>/shared",
+     "readonly": false
+    },
+    "drive-H": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "hpfs.img",
+      "size": 8388608,
+      "volumeLabel": "NO NAME"
+     },
+     "kind": "image",
+     "path": "<ROOT>/media/hpfs.img",
+     "readonly": false
+    },
+    "media-1": {
+     "base": "absolute",
+     "hint": {
+      "mtime": "<volatile>",
+      "name": "install.iso",
+      "sha256": "e41df9887db699370769b15a0ffd5dd11e3c9941dd222f9d865a2039152e944f",
+      "size": 57344
+     },
+     "kind": "media",
+     "path": "<ROOT>/media/install.iso",
+     "readonly": true
+    }
+   },
    "runtime": {
     "backend": "unicorn",
     "build": "<ROOT>/runtime"
