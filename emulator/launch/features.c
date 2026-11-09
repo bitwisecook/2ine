@@ -2,8 +2,8 @@
 /* Receiving-host capability resolution is read-only; saved preferences stay portable. */
 #include "ball/store.h"
 #include "environment/dependencies/audit.h"
-#include "ball/runtime_features.h"
-#include "ball/settings_schema.h"
+#include "emulator/launch/features.h"
+#include "emulator/launch/settings_schema.h"
 
 static int runtime_feature_bool(const cJSON *value, int fallback)
 {

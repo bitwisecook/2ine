@@ -55,7 +55,7 @@ FORBIDDEN_INCLUDES = {
 STORE_CLIENT_BALL_INCLUDES = r"ball/(?!store\.h|platform\.h|vendor/)"
 LAYERED_INCLUDES = {
     "ball/facade/": (r"host/", r"apps/", r"emulator/(?!launch/)", r"os2/(?!config/)"),
-    "ball/": (r"emulator/", r"host/", r"apps/", r"os2/(?!config/)"),
+    "ball/": (r"environment/", r"emulator/", r"host/", r"apps/", r"os2/(?!config/)"),
     "environment/": (
         r"emulator/",
         r"host/",

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Launcher icons and the desktop identity of a launch. */
 #include "ball/store.h"
-#include "ball/application_icon.h"
+#include "emulator/launch/desktop_identity.h"
 #include "formats/encoding/base64.h"
 #include "formats/executable/os2_executable.h"
 #include "formats/resources/icon.h"

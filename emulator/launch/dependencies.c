@@ -3,8 +3,8 @@
    enumeration, media inspection, recovery, or database writes happen here. */
 #include "ball/store.h"
 #include "environment/dependencies/database.h"
-#include "ball/launch_dependencies.h"
-#include "ball/launch_prerequisites.h"
+#include "emulator/launch/dependencies.h"
+#include "emulator/launch/prerequisites.h"
 #include "environment/components/store.h"
 #include "environment/dependencies/audit.h"
 #include "environment/media/extract.h"

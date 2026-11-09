@@ -3,11 +3,11 @@
    files, settings validation, shell registrations and the client snapshot. */
 #include "ball/ball_internal.h"
 #include "ball/facade/facade.h"
-#include "ball/host_environment.h"
+#include "emulator/launch/host_environment.h"
 #include "environment/dependencies/audit.h"
 #include "environment/media/support.h"
-#include "ball/runtime.h"
-#include "ball/runtime_config.h"
+#include "emulator/launch/runtime.h"
+#include "emulator/launch/runtime_config.h"
 #include "environment/wps_sync.h"
 
 static int facade_regenerate(TbBall *c)

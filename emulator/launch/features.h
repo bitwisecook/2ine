@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Receiving-host capability resolution is read-only; saved preferences stay portable. */
-#ifndef TB_BALL_RUNTIME_FEATURES_H
-#define TB_BALL_RUNTIME_FEATURES_H
+#ifndef TB_EMULATOR_LAUNCH_FEATURES_H
+#define TB_EMULATOR_LAUNCH_FEATURES_H
 #include "ball/store.h"
 
 cJSON *runtime_feature_metadata(TbBall *c, const char *build);

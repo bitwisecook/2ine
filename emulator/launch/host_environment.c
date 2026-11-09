@@ -1,10 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The host environment for the loader of a launch. */
 #include "ball/store.h"
-#include "environment/audio.h"
-#include "ball/host_environment.h"
-#include "ball/runtime.h"
-#include "ball/settings_schema.h"
+#include "emulator/launch/audio_config.h"
+#include "emulator/launch/host_environment.h"
+#include "emulator/launch/runtime.h"
+#include "emulator/launch/settings_schema.h"
 
 const char *launch_unset_environment_keys[] = {"IS_2INE",
                                                "TWOINE_DESKTOP_AUXILIARY",

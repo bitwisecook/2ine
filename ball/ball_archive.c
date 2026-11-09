@@ -1,8 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Internal ZIP operations; included after the ball context and manifest helpers. */
 #include "ball/ball_internal.h"
-#include "ball/runtime.h"
-#include "ball/runtime_config.h"
 #include "storage/vendor/libarchive/archive.h"
 #include "storage/vendor/libarchive/archive_entry.h"
 #include "ball/include/twoine_ball.h"

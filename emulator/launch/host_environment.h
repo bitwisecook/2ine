@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The host environment for the loader of a launch. */
-#ifndef TB_BALL_HOST_ENVIRONMENT_H
-#define TB_BALL_HOST_ENVIRONMENT_H
+#ifndef TB_EMULATOR_LAUNCH_HOST_ENVIRONMENT_H
+#define TB_EMULATOR_LAUNCH_HOST_ENVIRONMENT_H
 #include "ball/store.h"
 
 extern const char *launch_unset_environment_keys[];

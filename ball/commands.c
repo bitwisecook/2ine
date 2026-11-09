@@ -1,8 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Ball commands: drive mappings, settings and launcher records. */
 #include "ball/ball_internal.h"
-#include "ball/host_environment.h"
-#include "ball/runtime_config.h"
 #include "storage/volume.h"
 
 int tb_ball_command(TbBall *c, const cJSON *request)

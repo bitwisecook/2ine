@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Runtime build identity and the per-ball runtime snapshot. */
-#ifndef TB_BALL_RUNTIME_H
-#define TB_BALL_RUNTIME_H
+#ifndef TB_EMULATOR_LAUNCH_RUNTIME_H
+#define TB_EMULATOR_LAUNCH_RUNTIME_H
 #include "ball/store.h"
 
 const char *runtime_loader_name(TbBall *c, const char *build);

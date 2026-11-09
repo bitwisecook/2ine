@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Runtime build identity and the per-ball runtime snapshot. */
 #include "ball/store.h"
-#include "ball/runtime.h"
+#include "emulator/launch/runtime.h"
 #include "ball/vendor/sha256/sha256.h"
 
 static int runtime_name(const char *s)

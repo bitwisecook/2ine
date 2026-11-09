@@ -1,7 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Package moves stage manifest changes and never replace another host item. */
 #include "ball/ball_internal.h"
-#include "ball/host_environment.h"
 #ifdef _WIN32
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp

@@ -50,11 +50,13 @@ endif()
 if(NOT TARGET twoine_storage)
     add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/storage" storage)
 endif()
+if(NOT TARGET twoine_launch)
+    add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/emulator/launch" emulator/launch)
+endif()
 if(NOT TARGET twoine_environment)
     add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/environment" environment)
 endif()
 set(TWOINE_BALL_SOURCES
-    application_icon.c
     applications.c
     ball_archive.c
     ball_rename.c
@@ -66,22 +68,13 @@ set(TWOINE_BALL_SOURCES
     drives.c
     files.c
     guest_environment.c
-    host_environment.c
-    interpreter.c
-    launch_dependencies.c
-    launch_prerequisites.c
     manifest.c
     paths.c
-    prepare.c
-    runtime.c
-    runtime_config.c
-    runtime_features.c
-    runtime_selection.c
-    settings_schema.c
     snapshot.c
     platform.c
     vendor/cjson/cJSON.c
     vendor/sha256/sha256.c
+    $<TARGET_OBJECTS:twoine_launch>
     $<TARGET_OBJECTS:twoine_environment>
 )
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})

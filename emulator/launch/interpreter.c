@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Locating the original OS/2 command interpreter. */
 #include "ball/store.h"
-#include "ball/interpreter.h"
+#include "emulator/launch/interpreter.h"
 
 char *launch_find_command_interpreter(TbBall *c)
 {

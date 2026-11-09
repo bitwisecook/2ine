@@ -59,8 +59,12 @@ let package = Package(
             path: "Sources/TwoineEnvironment", exclude: ["CMakeLists.txt"],
             cSettings: [.unsafeFlags(["-I", projectRoot]), .define("CJSON_HIDE_SYMBOLS")]),
         .target(
+            name: "TwoineLaunch", dependencies: ["TwoineFormats", "TwoineStorage"],
+            path: "Sources/TwoineLaunch", exclude: ["CMakeLists.txt"],
+            cSettings: [.unsafeFlags(["-I", projectRoot]), .define("CJSON_HIDE_SYMBOLS")]),
+        .target(
             name: "BallEngine",
-            dependencies: ["TwoineFormats", "TwoineStorage", "TwoineEnvironment"],
+            dependencies: ["TwoineFormats", "TwoineStorage", "TwoineEnvironment", "TwoineLaunch"],
             path: "Sources/BallEngine",
             exclude: [
                 "CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md",

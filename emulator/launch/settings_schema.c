@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Validation of the runtime's system.* settings. */
 #include "ball/store.h"
-#include "ball/settings_schema.h"
+#include "emulator/launch/settings_schema.h"
 #include <math.h>
 
 const char *launch_setting_text(TbBall *c, const cJSON *v)

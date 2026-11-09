@@ -1,7 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Opening, creating and saving a ball's manifest. */
 #include "ball/ball_internal.h"
-#include "ball/runtime_config.h"
 
 int tb_ball_save_manifest(TbBall *c)
 {

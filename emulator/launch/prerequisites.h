@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read-only bootstrap requirements and existing-ball navigation facts. */
-#ifndef TB_BALL_LAUNCH_PREREQUISITES_H
-#define TB_BALL_LAUNCH_PREREQUISITES_H
+#ifndef TB_EMULATOR_LAUNCH_PREREQUISITES_H
+#define TB_EMULATOR_LAUNCH_PREREQUISITES_H
 #include "ball/store.h"
 
 int installer_support_required(TbBall *c, const char *host);

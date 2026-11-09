@@ -13,7 +13,7 @@ static const char *audio_profiles[][2] = {{"gm", "General MIDI"},
                                           {"mt32", "Roland MT-32 channel layout"},
                                           {NULL, NULL}};
 
-static cJSON *audio_defaults(void)
+cJSON *audio_defaults(void)
 {
     cJSON *settings = cJSON_CreateObject();
     cJSON_AddStringToObject(settings, "profile", "gm");
@@ -78,7 +78,7 @@ static const cJSON *audio_bank(TbBall *c, const char *id)
     return NULL;
 }
 
-static char *audio_bank_path(TbBall *c, const char *id, const char *build)
+char *audio_bank_path(TbBall *c, const char *id, const char *build)
 {
     if (!id || !*id || !strcmp(id, "default"))
         return tb_ball_join(c, build, "soundfonts/FluidR3_GM.sf2");
@@ -105,8 +105,6 @@ static char *audio_bank_path(TbBall *c, const char *id, const char *build)
     }
     return tb_ball_join(c, c->ball, relative);
 }
-
-static int audio_validate(TbBall *c, const cJSON *settings);
 
 cJSON *audio_snapshot(TbBall *c)
 {
@@ -165,7 +163,7 @@ static int audio_number(TbBall *c, const cJSON *object, const char *key, int min
     return 1;
 }
 
-static int audio_validate(TbBall *c, const cJSON *settings)
+int audio_validate(TbBall *c, const cJSON *settings)
 {
     const char *profile = field(settings, "profile"), *bank = field(settings, "bank");
     int known = 0;
@@ -218,50 +216,6 @@ cJSON *audio_save(TbBall *c, const cJSON *request)
     put(merged, "channels", channels);
     put(c->manifest, "audio", merged);
     return tb_ball_save_manifest(c) ? audio_snapshot(c) : NULL;
-}
-
-int audio_config(TbBall *c, const char *build, cJSON *env)
-{
-    cJSON *defaults = NULL;
-    const cJSON *settings = get(c->manifest, "audio");
-    if (!settings)
-        settings = defaults = audio_defaults();
-    if (!audio_validate(c, settings))
-    {
-        cJSON_Delete(defaults);
-        return 0;
-    }
-    char *bank = audio_bank_path(c, field(settings, "bank"), build);
-    if (bank && strpbrk(bank, "\r\n"))
-        tb_ball_fail(c, "A sound-bank path must fit on one line");
-    char *text = bank ? tb_ball_format(c, "schema=2\nsoundfont=%s\nmidi_profile=%s\n", bank,
-                                       field(settings, "profile"))
-                      : NULL;
-    const cJSON *channels = get(settings, "channels");
-    for (int i = 0; text && i < 16; i++)
-    {
-        const cJSON *channel = cJSON_GetArrayItem(channels, i);
-        const char *id = field(channel, "bank");
-        char *path = *id ? audio_bank_path(c, id, build) : bank;
-        if (!path || strpbrk(path, "\r\n"))
-        {
-            if (!c->error)
-                tb_ball_fail(c, "A sound-bank path must fit on one line");
-            break;
-        }
-        text = tb_ball_format(
-            c, "%schannel_%d=%d,%d,%d,%d,%d\nchannel_%d_soundfont=%s\n", text, i + 1,
-            get(channel, "target")->valueint, get(channel, "program")->valueint,
-            get(channel, "bankNumber")->valueint, get(channel, "percussion")->valueint,
-            cJSON_IsTrue(get(channel, "muted")), i + 1, path);
-    }
-    cJSON_Delete(defaults);
-    char *path = tb_ball_join(c, c->ball, "audio.conf");
-    if (c->error || !text || !tb_atomic_write(path, text, strlen(text)))
-        return c->error ? 0 : tb_ball_fail(c, "Cannot write ball audio configuration");
-    put(env, "TWOINE_AUDIO_CONFIG", cJSON_CreateString(path));
-    put(env, "TWOINE_SOUNDFONT", cJSON_CreateString(bank));
-    return 1;
 }
 
 static int audio_tree_hash(TbBall *c, const char *path, const char *relative, SHA256_CTX *state,

@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The 2ine.cfg projection of the drive table and system settings. */
 #include "ball/store.h"
-#include "ball/runtime_config.h"
-#include "ball/settings_schema.h"
+#include "emulator/launch/runtime_config.h"
+#include "emulator/launch/settings_schema.h"
 
 int launch_write_runtime_config(TbBall *c)
 {
