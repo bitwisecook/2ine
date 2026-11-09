@@ -2,6 +2,7 @@
 /* LDT descriptors, selectors, 16:16 conversion, stack segments and the TIB. */
 #define _GNU_SOURCE 1
 #include "emulator/execution/native_i386/internal.h"
+#include "emulator/execution/core/x86/x86.h"
 
 int nativeLdt(uint16_t index, uint32_t base, uint32_t limit_pages, int code, int bits, int present)
 {
@@ -45,12 +46,18 @@ static int allocateSelector(const uint16 selector, const int pages, const uint32
 }
 
 #define LX_NEAR16_SENTINEL_SELECTOR 0x1FFF
+/* Below this address a selector index is the address's 64 KiB tile number. */
+#define TILED_LIMIT (512u * 1024 * 1024)
+/* USE16 segments are allocated from here up to TILED_LIMIT. */
+#define SEGMENT_ARENA_START (136u * 1024 * 1024)
+#define NO_SELECTOR 0xFFFF
 
 static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint16 *outoffset,
                                   int iscode)
 {
     uint32 addr = _addr;
-    if (addr < 4096)
+    /* The null page never has a selector. */
+    if (addr < X86_PAGE_SIZE)
         return 0;
 
     const uint32 *ldt = Native->ldt;
@@ -59,7 +66,7 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
     int preferred = -1;
 
     /* Tiled selectors encode a 64-KiB-aligned base directly. */
-    if (addr < (1024 * 1024 * 512))
+    if (addr < TILED_LIMIT)
     {
         const uint16 idx = (uint16)(addr >> 16);
         const uint32 tile = ldt[idx];
@@ -68,7 +75,7 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
             preferred = available = idx;
         }
         else if ((tile != 0) && (idx != LX_NEAR16_SENTINEL_SELECTOR) && (tile <= addr) &&
-                 ((tile + 0x10000) > addr))
+                 ((tile + X86_SEGMENT_SIZE) > addr))
         {
             *outselector = idx;
             *outoffset = (uint16)(addr - tile);
@@ -87,7 +94,7 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
             const uint32 tile = ldt[i];
             if (tile == 0)
                 available = i;
-            else if ((tile <= addr) && ((tile + 0x10000) > addr))
+            else if ((tile <= addr) && ((tile + X86_SEGMENT_SIZE) > addr))
             {
                 *outselector = (uint16)i;
                 *outoffset = (uint16)(addr - tile);
@@ -112,7 +119,7 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
         iscode = 0;
     }
 
-    const uint32 diff = addr % 0x10000;
+    const uint32 diff = addr % X86_SEGMENT_SIZE;
     addr -= diff;
 
     const uint16 selector = (uint16)(preferred != -1) ? preferred : available;
@@ -165,12 +172,11 @@ void *nativeConvert1616to32(const uint32 addr1616)
     if (addr1616 == 0)
         return NULL;
 
-    const uint16 selector =
-        (uint16)(addr1616 >> 19); // slide segment down, and shift out control bits.
-    const uint16 offset =
-        (uint16)(addr1616 %
-                 0x10000); /* LDT bases are 64-KiB aligned; selector 0xFFFF means the Microsoft runtime DS base. */
-    if ((selector == 0x1FFF) && Native->near16_base)
+    /* The selector's index sits above its table-indicator and RPL bits in the high word. */
+    const uint16 selector = (uint16)(addr1616 >> (16 + X86_SELECTOR_INDEX_SHIFT));
+    const uint16 offset = (uint16)(addr1616 % X86_SEGMENT_SIZE);
+    /* Selector 0xFFFF addresses the Microsoft runtime's near data base. */
+    if ((selector == LX_NEAR16_SENTINEL_SELECTOR) && Native->near16_base)
         return (void *)(size_t)(Native->near16_base + offset);
 
     if (!Native->ldt[selector])
@@ -202,13 +208,13 @@ static inline void *lxConvertSegmentOffsetto32(const uint16 seg, const uint16 of
 static void initOs2StackSegmentsUnlocked(uint32 addr, uint32 stacklen, const int deinit)
 {
 
-    const uint32 diff = addr % 0x10000;
+    const uint32 diff = addr % X86_SEGMENT_SIZE;
     addr -= diff;
     stacklen += diff;
 
     /* EMX expects every stack tile to have an LDT descriptor. */
-    if (stacklen % 0x10000)
-        stacklen += 0x10000 - (stacklen % 0x10000);
+    if (stacklen % X86_SEGMENT_SIZE)
+        stacklen += X86_SEGMENT_SIZE - (stacklen % X86_SEGMENT_SIZE);
 
     while (stacklen)
     {
@@ -224,8 +230,8 @@ static void initOs2StackSegmentsUnlocked(uint32 addr, uint32 stacklen, const int
                 FIXME("uhoh, couldn't set up an LDT entry for a stack segment! Might crash later!");
             }
         }
-        stacklen -= 0x10000;
-        addr += 0x10000;
+        stacklen -= X86_SEGMENT_SIZE;
+        addr += X86_SEGMENT_SIZE;
     }
 }
 
@@ -243,20 +249,20 @@ uint16 nativeSetTib(uint8 *tibspace)
         abort();
     if (NativePreviousSignalStack.ss_flags & SS_DISABLE)
     {
-        size_t size = SIGSTKSZ > 65536 ? SIGSTKSZ : 65536;
+        size_t size = SIGSTKSZ > NATIVE_HOST_STACK_SIZE ? SIGSTKSZ : NATIVE_HOST_STACK_SIZE;
         NativeSignalAllocation = malloc(size);
         stack_t signals = {.ss_sp = NativeSignalAllocation, .ss_size = size};
         if (!NativeSignalAllocation || sigaltstack(&signals, NULL))
             abort();
     }
-    void *stack = malloc(65536);
+    void *stack = malloc(NATIVE_HOST_STACK_SIZE);
     if (!stack)
     {
         fprintf(stderr, "Could not allocate native bridge stack\n");
         abort();
     }
     NativeHostAllocation = stack;
-    NativeHostStack = (uint8 *)stack + 65536;
+    NativeHostStack = (uint8 *)stack + NATIVE_HOST_STACK_SIZE;
     NativeTib = tibspace;
     struct user_desc entry = {0};
     /* Linux copies the parent's three GDT TLS descriptors into each child.
@@ -327,7 +333,7 @@ void nativeDeinitTib(const uint16 selector)
 
 static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
 {
-    const uint32 base = Native->ldt[selDS >> 3];
+    const uint32 base = Native->ldt[selDS >> X86_SELECTOR_INDEX_SHIFT];
     if (!base)
         return 0;
 
@@ -354,7 +360,7 @@ static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
         return 0;
     }
 
-    *outselector = (uint16)((slot << 3) | 7);
+    *outselector = (uint16)((slot << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3);
     return 1;
 }
 
@@ -369,20 +375,21 @@ int nativeCreateCodeAlias(const uint16 selector, uint16 *output)
 void *nativeAllocSegment(uint16 *selector, const int iscode)
 {
     /* Keep USE16 allocations below 512 MiB so tiled selectors convert directly to linear addresses. */
-    static size_t baseaddr = 136 * 1024 * 1024;
-    const uint32 segmentsize = 0x10000;
-    *selector = 0xFFFF;
+    static size_t baseaddr = SEGMENT_ARENA_START;
+    const uint32 segmentsize = X86_SEGMENT_SIZE;
+    *selector = NO_SELECTOR;
     pthread_mutex_lock(&NativeSegmentMutex);
-    while (baseaddr < 512 * 1024 * 1024)
+    while (baseaddr < TILED_LIMIT)
     {
         const size_t candidate = baseaddr;
         baseaddr += segmentsize;
         LxGuestMapping *mapping =
-            lx_execution_map(Native->execution, (uint32)candidate, segmentsize, 7, 1);
+            lx_execution_map(Native->execution, (uint32)candidate, segmentsize,
+                             LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 1);
         if (!mapping)
             continue;
         void *segment = lx_execution_mapping_host(mapping);
-        uint16 offset = 0xFFFF;
+        uint16 offset = NO_SELECTOR;
         if (nativeFindSelector((uint32)segment, selector, &offset, iscode) && offset == 0)
         {
             Native->segments[*selector] = mapping;

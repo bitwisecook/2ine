@@ -2,6 +2,42 @@
 /* Guest faults the backend emulates: thread-local FS accesses, flat selector loads and fatal SIGSEGV reports. */
 #define _GNU_SOURCE 1
 #include "emulator/execution/native_i386/internal.h"
+#include "emulator/execution/core/x86/x86.h"
+
+enum
+{
+    /* OS/2 TLS: 32 words after the TIB. */
+    TLS_SLOTS = 32,
+    /* OS/2's fixed flat data and TIB GDT selectors. */
+    OS2_FLAT_DATA_SELECTOR = 0x53,
+    OS2_TIB_SELECTOR = 0x150b,
+    X86_VECTOR_GENERAL_PROTECTION = 13,
+    /* OF, SF, ZF, AF, PF and CF. */
+    X86_EFLAGS_ARITHMETIC = 0x8D5,
+
+    /* ModRM fields */
+    MODRM_MOD_MASK = 0xC0,
+    MODRM_MOD_REGISTER = 0xC0,
+    MODRM_REG_MASK = 0x38,
+    MODRM_REG_SHIFT = 3,
+    MODRM_RM_MASK = 7,
+    MODRM_RM_SIB = 4,
+    MODRM_RM_DISP32 = 5,
+    /* The /7 extension of the 0x81 and 0x83 groups is CMP. */
+    MODRM_REG_CMP = 0x38,
+
+    OPCODE_MOV_STORE_IMM32 = 0xC7,
+    OPCODE_MOV_STORE = 0x89,
+    OPCODE_MOV_LOAD = 0x8B,
+    OPCODE_GROUP1_IMM32 = 0x81,
+    OPCODE_GROUP1_IMM8 = 0x83,
+    OPCODE_POP_ES = 0x07,
+    OPCODE_POP_DS = 0x1f,
+    OPCODE_MOV_SREG = 0x8e,
+    SREG_ES = 0,
+    SREG_DS = 3,
+    SREG_FS = 4
+};
 
 static void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
 {
@@ -27,15 +63,17 @@ static void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
     int handled = 1;
     uint8 *eip = (void *)(size_t)gregs[REG_EIP];
     const uint8 operand = eip[1];
-    if ((operand & 0xC0) || ((operand & 7) == 4) || ((operand & 7) == 5))
+    /* Only a plain [reg] operand can address the faulting TLS word directly. */
+    if ((operand & MODRM_MOD_MASK) || ((operand & MODRM_RM_MASK) == MODRM_RM_SIB) ||
+        ((operand & MODRM_RM_MASK) == MODRM_RM_DISP32))
     {
         fprintf(stderr, "Unsupported TLS memory addressing at %p\n", eip);
         abort();
     }
     switch (eip[0])
     {
-        case 0xC7: /* MOV immediate to TLS memory. */
-            if (operand & 0x38)
+        case OPCODE_MOV_STORE_IMM32: /* MOV immediate to TLS memory. */
+            if (operand & MODRM_REG_MASK)
             {
                 handled = 0;
                 break;
@@ -44,26 +82,28 @@ static void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
             gregs[REG_EIP] += 6;
             break;
 
-        case 0x89: /* MOV register to TLS memory. */
-            *tls = (uint32)gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]];
+        case OPCODE_MOV_STORE: /* MOV register to TLS memory. */
+            *tls = (uint32)
+                gregs[x86RegisterToUContextEnum[(operand & MODRM_REG_MASK) >> MODRM_REG_SHIFT]];
             gregs[REG_EIP] += 2;
             break;
 
-        case 0x8B: /* MOV TLS memory to register. */
-            gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]] = (greg_t)*tls;
+        case OPCODE_MOV_LOAD: /* MOV TLS memory to register. */
+            gregs[x86RegisterToUContextEnum[(operand & MODRM_REG_MASK) >> MODRM_REG_SHIFT]] =
+                (greg_t)*tls;
             gregs[REG_EIP] += 2;
             break;
 
-        case 0x81:
-        case 0x83: /* CMP TLS memory with a full or sign-extended immediate. */
+        case OPCODE_GROUP1_IMM32:
+        case OPCODE_GROUP1_IMM8: /* CMP TLS memory with a full or sign-extended immediate. */
         {
-            if ((operand & 0x38) != 0x38)
+            if ((operand & MODRM_REG_MASK) != MODRM_REG_CMP)
             {
                 handled = 0;
                 break;
             }
             uint32 immediate, flags;
-            if (*eip == 0x83)
+            if (*eip == OPCODE_GROUP1_IMM8)
                 immediate = (uint32)(int32_t)(int8_t)eip[2];
             else
                 memcpy(&immediate, eip + 2, 4);
@@ -72,8 +112,9 @@ static void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
                                  : "r"(*tls), "r"(immediate)
                                  : "cc");
             /* CMP changes OF, SF, ZF, AF, PF and CF; preserve all control flags. */
-            gregs[REG_EFL] = (gregs[REG_EFL] & ~0x8D5) | (flags & 0x8D5);
-            gregs[REG_EIP] += *eip == 0x83 ? 3 : 6;
+            gregs[REG_EFL] =
+                (gregs[REG_EFL] & ~X86_EFLAGS_ARITHMETIC) | (flags & X86_EFLAGS_ARITHMETIC);
+            gregs[REG_EIP] += *eip == OPCODE_GROUP1_IMM8 ? 3 : 6;
             break;
         }
 
@@ -114,12 +155,12 @@ static int describeModuleAddress(const void *ptr, char *buffer, size_t size)
 static int handleFlatDataSelector(ucontext_t *context)
 {
     greg_t *registers = context->uc_mcontext.gregs;
-    if (registers[REG_TRAPNO] != 13)
+    if (registers[REG_TRAPNO] != X86_VECTOR_GENERAL_PROTECTION)
         return 0;
     uint16_t cs = registers[REG_CS], ss = registers[REG_SS];
-    int code16 = (cs & 4) != 0, stack16 = (ss & 4) != 0;
-    uint32_t code_base = code16 ? Native->ldt[cs >> 3] : 0;
-    uint32_t stack_base = stack16 ? Native->ldt[ss >> 3] : 0;
+    int code16 = (cs & X86_SELECTOR_LDT) != 0, stack16 = (ss & X86_SELECTOR_LDT) != 0;
+    uint32_t code_base = code16 ? Native->ldt[cs >> X86_SELECTOR_INDEX_SHIFT] : 0;
+    uint32_t stack_base = stack16 ? Native->ldt[ss >> X86_SELECTOR_INDEX_SHIFT] : 0;
     if ((code16 && !code_base) || (stack16 && !stack_base) ||
         (!code16 && cs != Native->original_cs))
         return 0;
@@ -127,7 +168,7 @@ static int handleFlatDataSelector(ucontext_t *context)
     const uint8_t *instruction = (const uint8_t *)(uintptr_t)(code_base + ip);
     uint32_t bytes = 1, selector;
     int destination;
-    if (*instruction == 0x1f || *instruction == 0x07) /* POP DS / ES */
+    if (*instruction == OPCODE_POP_DS || *instruction == OPCODE_POP_ES)
     {
         uint32_t sp = stack16 ? (uint16_t)registers[REG_ESP] : registers[REG_ESP];
         if (stack16 && sp > 0xfffe)
@@ -135,30 +176,33 @@ static int handleFlatDataSelector(ucontext_t *context)
         uint16_t word;
         memcpy(&word, (const void *)(uintptr_t)(stack_base + sp), sizeof word);
         selector = word;
-        destination = *instruction == 0x1f ? REG_DS : REG_ES;
-        if (selector != 0x53)
+        destination = *instruction == OPCODE_POP_DS ? REG_DS : REG_ES;
+        if (selector != OS2_FLAT_DATA_SELECTOR)
             return 0;
         uint32_t step = code16 ? 2 : 4;
         registers[REG_ESP] =
             stack16 ? (registers[REG_ESP] & ~0xffffu) | (uint16_t)(sp + step) : sp + step;
     }
-    else if (*instruction == 0x8e && (instruction[1] & 0xc0) == 0xc0)
+    else if (*instruction == OPCODE_MOV_SREG &&
+             (instruction[1] & MODRM_MOD_MASK) == MODRM_MOD_REGISTER)
     {
-        unsigned segment = (instruction[1] >> 3) & 7;
-        if (segment != 0 && segment != 3 && segment != 4)
+        unsigned segment = (instruction[1] & MODRM_REG_MASK) >> MODRM_REG_SHIFT;
+        if (segment != SREG_ES && segment != SREG_DS && segment != SREG_FS)
             return 0;
         static const int source[] = {REG_EAX, REG_ECX, REG_EDX, REG_EBX,
                                      REG_ESP, REG_EBP, REG_ESI, REG_EDI};
-        selector = (uint16_t)registers[source[instruction[1] & 7]];
-        if (selector != (segment == 4 ? 0x150b : 0x53))
+        selector = (uint16_t)registers[source[instruction[1] & MODRM_RM_MASK]];
+        if (selector != (segment == SREG_FS ? OS2_TIB_SELECTOR : OS2_FLAT_DATA_SELECTOR))
             return 0;
-        destination = segment == 4 ? REG_FS : segment == 3 ? REG_DS : REG_ES;
+        destination = segment == SREG_FS ? REG_FS : segment == SREG_DS ? REG_DS : REG_ES;
         bytes = 2;
     }
     else
         return 0;
     registers[destination] =
-        destination == REG_FS ? (Native->tib_gdt_entry << 3) | 3 : Native->original_ds;
+        destination == REG_FS
+            ? (Native->tib_gdt_entry << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_RPL_MASK
+            : Native->original_ds;
     registers[REG_EIP] = code16 ? (uint16_t)(ip + bytes) : ip + bytes;
     return 1;
 }
@@ -176,7 +220,7 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
     {
         // was the app accessing one of the OS/2 TLS slots?
         const int slot = (int)(addr - tlspage);
-        if (slot < 32)
+        if (slot < TLS_SLOTS)
         {
             handleThreadLocalStorageAccess(slot, uctx);
             return;

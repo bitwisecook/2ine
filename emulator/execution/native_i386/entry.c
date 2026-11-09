@@ -3,6 +3,19 @@
 #define _GNU_SOURCE 1
 #include "emulator/execution/native_i386/internal.h"
 
+enum
+{
+    /* Room reserved per missing-import trampoline. */
+    TRAMPOLINE32_SLOT = 32,
+    TRAMPOLINE16_SLOT = 64,
+    TRAMPOLINE_ALIGNMENT = 4,
+    NO_SELECTOR = 0xFFFF,
+    /* OS/2's flat code GDT selector, as found in JMP FAR operands of linear code. */
+    OS2_FLAT_CODE_SELECTOR = 0x5B,
+    /* JMP FAR ptr16:32: opcode, 32-bit offset, 16-bit selector. */
+    JMP_FAR32_BYTES = 7
+};
+
 static __attribute__((noreturn, used)) void endLxProcess(uint32 result)
 {
     Native->services.program_returned(Native->services.userdata, result);
@@ -28,7 +41,7 @@ void *nativeMissingTrampoline(const char *_module, const char *_entry)
     if (pagesize == 0)
         pagesize = lx_host_page_size();
 
-    if ((!page) || ((pagesize - pageused) < 32))
+    if ((!page) || ((pagesize - pageused) < TRAMPOLINE32_SLOT))
     {
         if (page)
             nativeProtect(page, pagesize, LX_HOST_READ | LX_HOST_EXECUTE);
@@ -58,11 +71,11 @@ void *nativeMissingTrampoline(const char *_module, const char *_entry)
     *(ptr++) = 0xD0;
 
     const uint32 trampoline_len = (uint32)(ptr - ((char *)trampoline));
-    assert(trampoline_len <= 32);
+    assert(trampoline_len <= TRAMPOLINE32_SLOT);
     pageused += trampoline_len;
 
-    if (pageused % 4) // keep these aligned to 32 bits.
-        pageused += (4 - (pageused % 4));
+    if (pageused % TRAMPOLINE_ALIGNMENT)
+        pageused += (TRAMPOLINE_ALIGNMENT - (pageused % TRAMPOLINE_ALIGNMENT));
 
     return trampoline;
 }
@@ -71,16 +84,16 @@ void *nativeMissingTrampoline16(const char *_module, const char *_entry, LxExecu
 {
     static void *segment = NULL;
     static uint32 segmentused = 0;
-    const uint32 segmentsize = 0x10000;
-    static uint16 selector = 0xFFFF;
+    const uint32 segmentsize = X86_SEGMENT_SIZE;
+    static uint16 selector = NO_SELECTOR;
 
-    if ((!segment) || ((segmentsize - segmentused) < 64))
+    if ((!segment) || ((segmentsize - segmentused) < TRAMPOLINE16_SLOT))
     {
         if (segment)
             nativeProtect(segment, segmentsize, LX_HOST_READ | LX_HOST_EXECUTE);
         segment = nativeAllocSegment(&selector, 1);
         assert(segment != NULL);
-        assert(selector != 0xFFFF);
+        assert(selector != NO_SELECTOR);
         segmentused = 0;
     }
 
@@ -160,16 +173,16 @@ void *nativeMissingTrampoline16(const char *_module, const char *_entry, LxExecu
     *(ptr++) = 0xD0;
 
     const uint32 trampoline_len = (uint32)(ptr - ((char *)trampoline));
-    assert(trampoline_len <= 64);
+    assert(trampoline_len <= TRAMPOLINE16_SLOT);
     segmentused += trampoline_len;
 
-    if (segmentused % 4) // keep these aligned to 32 bits.
-        segmentused += (4 - (segmentused % 4));
+    if (segmentused % TRAMPOLINE_ALIGNMENT)
+        segmentused += (TRAMPOLINE_ALIGNMENT - (segmentused % TRAMPOLINE_ALIGNMENT));
 
     binding->host = trampoline;
     binding->address = (uint32)(uintptr_t)trampoline;
     binding->segment_base = (uint32)(uintptr_t)segment;
-    binding->size = 0x10000;
+    binding->size = X86_SEGMENT_SIZE;
     binding->selector_index = selector;
 
     return trampoline;
@@ -234,10 +247,10 @@ __attribute__((noreturn)) void nativeRunNeModule(const LxExecutionEntry *entry)
     stack -= 2;
     *((uint16 *)stack) = ss; // bottom of stack
 
-    uint16 selector = 0xFFFF;
+    uint16 selector = NO_SELECTOR;
     void *segment = nativeAllocSegment(&selector, 1);
     assert(segment != NULL);
-    assert(selector != 0xFFFF);
+    assert(selector != NO_SELECTOR);
     char *ptr = (char *)segment;
 
     /* NE startup stack (low addresses first):
@@ -348,12 +361,14 @@ void nativeRunLibraryInitOrTerm(const LxExecutionEntry *entry, const int isTermi
 void nativeFixupLinearCodeSegments(uint8 *addr, size_t size)
 {
 
-    while (size >= 7)
+    /* A Linux task cannot install OS/2's flat code selector, so far jumps to it are
+       rewritten to the host's code selector. */
+    while (size >= JMP_FAR32_BYTES)
     {
         size--;
         if (*(addr++) == 0xEA)
         {
-            if ((addr[4] == 0x5B) && (addr[5] == 0x00))
+            if ((addr[4] == OS2_FLAT_CODE_SELECTOR) && (addr[5] == 0x00))
             {
 
                 memcpy(&addr[4], &Native->original_cs, 2);

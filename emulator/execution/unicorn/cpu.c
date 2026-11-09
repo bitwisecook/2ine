@@ -1,10 +1,14 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest-address ownership and execution-backend dispatch. */
 #include "emulator/execution/unicorn/cpu_internal.h"
+#include "emulator/execution/core/x86/x86.h"
 #include "host/memory.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#define LX_MEM_ALL (LX_MEM_READ | LX_MEM_WRITE | LX_MEM_EXECUTE)
+#define GUEST_ADDRESS_LIMIT UINT64_C(0x100000000)
 
 struct LxCpuContext
 {
@@ -99,7 +103,7 @@ static int aligned_range(LxCpu *cpu, uint32_t address, size_t size)
 static int map_memory(LxCpu *cpu, uint32_t address, size_t size, unsigned permissions,
                       void *backing, int owns_host)
 {
-    if (!aligned_range(cpu, address, size) || !permissions || (permissions & ~7u))
+    if (!aligned_range(cpu, address, size) || !permissions || (permissions & ~(unsigned)LX_MEM_ALL))
         return lx_cpu_fail(cpu, "Invalid guest mapping");
     for (LxMemoryRegion *r = cpu->memory; r; r = r->next)
     {
@@ -176,7 +180,7 @@ int lx_cpu_unmap(LxCpu *cpu, uint32_t address, size_t size)
 int lx_cpu_protect(LxCpu *cpu, uint32_t address, size_t size, unsigned permissions)
 {
     LxMemoryRegion **link = whole_region(cpu, address, size);
-    if (!link || (permissions & ~7u))
+    if (!link || (permissions & ~(unsigned)LX_MEM_ALL))
         return lx_cpu_fail(cpu, "Invalid guest protection range");
     if (!cpu->ops->protect(cpu, address, size, permissions))
         return 0;
@@ -186,7 +190,7 @@ int lx_cpu_protect(LxCpu *cpu, uint32_t address, size_t size, unsigned permissio
 
 void *lx_cpu_translate(LxCpu *cpu, uint32_t address, size_t size, unsigned permissions)
 {
-    if ((uint64_t)size > UINT64_C(0x100000000) - address || (permissions & ~7u))
+    if ((uint64_t)size > GUEST_ADDRESS_LIMIT - address || (permissions & ~(unsigned)LX_MEM_ALL))
     {
         lx_cpu_fail(cpu, "Guest pointer range overflows");
         return NULL;
@@ -227,12 +231,13 @@ int lx_cpu_write(LxCpu *cpu, uint32_t address, const void *in, size_t size)
 
 int lx_cpu_set_segment(LxCpu *cpu, const LxSegment *s)
 {
-    if (!s || !(s->selector & ~3u) || (s->bits != 16 && s->bits != 32) ||
-        ((uint64_t)s->base + s->limit >= UINT64_C(0x100000000)))
+    if (!s || !(s->selector & ~(unsigned)X86_SELECTOR_RPL_MASK) ||
+        (s->bits != 16 && s->bits != 32) || ((uint64_t)s->base + s->limit >= GUEST_ADDRESS_LIMIT))
         return lx_cpu_fail(cpu, "Invalid x86 segment descriptor");
     LxCpuSegment *entry;
     for (entry = cpu->segments; entry; entry = entry->next)
-        if ((entry->definition.selector & ~3u) == (s->selector & ~3u))
+        if ((entry->definition.selector & ~(unsigned)X86_SELECTOR_RPL_MASK) ==
+            (s->selector & ~(unsigned)X86_SELECTOR_RPL_MASK))
             break;
     if (entry)
     {
@@ -261,7 +266,8 @@ void *lx_cpu_translate_far(LxCpu *cpu, uint16_t selector, uint32_t offset, size_
     for (LxCpuSegment *entry = cpu->segments; entry; entry = entry->next)
     {
         const LxSegment *s = &entry->definition;
-        if ((s->selector & ~3u) != (selector & ~3u))
+        if ((s->selector & ~(unsigned)X86_SELECTOR_RPL_MASK) !=
+            (selector & ~(unsigned)X86_SELECTOR_RPL_MASK))
             continue;
         if (offset > s->limit || size > (uint64_t)s->limit + 1 - offset)
         {

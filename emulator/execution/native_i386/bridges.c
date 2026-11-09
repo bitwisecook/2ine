@@ -2,6 +2,15 @@
 /* 16/32-bit API bridges, guest threads, callbacks and 16-bit calls. */
 #define _GNU_SOURCE 1
 #include "emulator/execution/native_i386/internal.h"
+#include "emulator/execution/core/x86/x86.h"
+
+enum
+{
+    /* Upper bound on one emitted 16-bit API bridge. */
+    BRIDGE16_CAPACITY = 256,
+    /* Thread trampolines keep the saved host ESP after their code. */
+    SAVED_HOST_SP_OFFSET = 0x100
+};
 
 typedef struct NativeBridgeFrame
 {
@@ -29,7 +38,7 @@ size_t nativeEmitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_bas
                           uint16_t selector_index, LxExecutionApi16 callback,
                           uint16_t argument_bytes)
 {
-    if (capacity < 256)
+    if (capacity < BRIDGE16_CAPACITY)
         return 0;
     uint8 *ptr = output;
 
@@ -113,25 +122,25 @@ size_t nativeEmitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_bas
     *(ptr++) = 0x8E; /* mov es,ecx... */
     *(ptr++) = 0xC1;
     /* Keep guest continuation outside the host stack; padding aligns three C arguments. */
-    *ptr++ = 0x83;
+    *ptr++ = 0x83; /* sub esp,8 */
     *ptr++ = 0xec;
     *ptr++ = 8;
     *ptr++ = 0x8d;
     *ptr++ = 0x50;
     *ptr++ = 0xf0; /* lea edx,[eax-16] */
     *ptr++ = 0x52; /* guest stack below the saved USE16 registers */
-    *ptr++ = 0x68;
+    *ptr++ = 0x68; /* push callback */
     const uint32 callback_address = (uint32)(uintptr_t)callback;
     memcpy(ptr, &callback_address, 4);
     ptr += 4;
     *ptr++ = 0x50; /* argument-frame pointer */
-    *ptr++ = 0xb8;
+    *ptr++ = 0xb8; /* mov eax,dispatchApi16 */
     const uint32 dispatcher = (uint32)(uintptr_t)dispatchApi16;
     memcpy(ptr, &dispatcher, 4);
     ptr += 4;
-    *ptr++ = 0xff;
+    *ptr++ = 0xff; /* call eax */
     *ptr++ = 0xd0;
-    *ptr++ = 0x83;
+    *ptr++ = 0x83; /* add esp,20: three arguments and the padding */
     *ptr++ = 0xc4;
     *ptr++ = 20;
     *(ptr++) = 0x07; /* pop es */
@@ -145,7 +154,8 @@ size_t nativeEmitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_bas
     const uint16 jmp16offset = (uint16)((((uint32)ptr) - ((uint32)segment_base)) + 4);
     memcpy(ptr, &jmp16offset, 2);
     ptr += 2;
-    const uint16 jmp16segment = (selector_index << 3) | 7;
+    const uint16 jmp16segment =
+        (selector_index << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3;
     memcpy(ptr, &jmp16segment, 2);
     ptr += 2;
 
@@ -190,64 +200,64 @@ void *nativePrepareThread16(uint32_t entry, uint32_t stack)
     uint8 *p = code;
     const uint16 guest_ss = stack >> 16, guest_sp = stack & 0xffff;
     const uint16 guest_cs = entry >> 16, guest_ip = entry & 0xffff;
-    const uint16 code_selector = (selector << 3) | 7;
-    const uint32 saved_sp = (uint32)(code + 0x100);
+    const uint16 code_selector = (selector << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3;
+    const uint32 saved_sp = (uint32)(code + SAVED_HOST_SP_OFFSET);
     /* Save the host frame, switch to the guest stack and call its far entry. */
-    *p++ = 0x60;
-    *p++ = 0x89;
+    *p++ = 0x60; /* pushad */
+    *p++ = 0x89; /* mov [saved_sp],esp */
     *p++ = 0x25;
     memcpy(p, &saved_sp, 4);
     p += 4;
-    *p++ = 0x66;
+    *p++ = 0x66; /* jmp far code_selector:next, entering USE16 */
     *p++ = 0xea;
     uint16 off = (uint16)((p - code) + 4);
     memcpy(p, &off, 2);
     p += 2;
     memcpy(p, &code_selector, 2);
     p += 2;
-    *p++ = 0xb8;
+    *p++ = 0xb8; /* mov ax,guest_ss */
     memcpy(p, &guest_ss, 2);
     p += 2;
-    *p++ = 0x8e;
+    *p++ = 0x8e; /* mov ss,ax */
     *p++ = 0xd0;
-    *p++ = 0xbc;
+    *p++ = 0xbc; /* mov sp,guest_sp */
     memcpy(p, &guest_sp, 2);
     p += 2;
-    *p++ = 0x8e;
+    *p++ = 0x8e; /* mov ds,ax */
     *p++ = 0xd8;
-    *p++ = 0x8e;
+    *p++ = 0x8e; /* mov es,ax */
     *p++ = 0xc0;
-    *p++ = 0x9a;
+    *p++ = 0x9a; /* call far guest_cs:guest_ip */
     memcpy(p, &guest_ip, 2);
     p += 2;
     memcpy(p, &guest_cs, 2);
     p += 2;
-    *p++ = 0x66;
+    *p++ = 0x66; /* jmp far original_cs:flat, back to USE32 */
     *p++ = 0xea;
     const uint32 flat = (uint32)(p + 6);
     memcpy(p, &flat, 4);
     p += 4;
     memcpy(p, &Native->original_cs, 2);
     p += 2;
-    *p++ = 0x66;
+    *p++ = 0x66; /* mov ax,original_ss; mov ss,ax */
     *p++ = 0xb8;
     memcpy(p, &Native->original_ss, 2);
     p += 2;
     *p++ = 0x8e;
     *p++ = 0xd0;
-    *p++ = 0x66;
+    *p++ = 0x66; /* mov ax,original_ds; mov ds,ax */
     *p++ = 0xb8;
     memcpy(p, &Native->original_ds, 2);
     p += 2;
     *p++ = 0x8e;
     *p++ = 0xd8;
-    *p++ = 0x66;
+    *p++ = 0x66; /* mov ax,original_es; mov es,ax */
     *p++ = 0xb8;
     memcpy(p, &Native->original_es, 2);
     p += 2;
     *p++ = 0x8e;
     *p++ = 0xc0;
-    *p++ = 0x8b;
+    *p++ = 0x8b; /* mov esp,[saved_sp] */
     *p++ = 0x25;
     memcpy(p, &saved_sp, 4);
     p += 4;
@@ -290,12 +300,12 @@ uint32_t nativeCallback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, uin
     uintptr_t sp;
     __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
     uintptr_t base = (uintptr_t)NativeHostAllocation;
-    int suspended = NativeBridge && sp >= base && sp < base + 65536;
+    int suspended = NativeBridge && sp >= base && sp < base + NATIVE_HOST_STACK_SIZE;
     uint32_t words[4] = {a, b, c, d}, value;
     void *previous = NativeHostStack;
     if (suspended)
-        NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
-    uint32_t stack = suspended ? NativeBridge->guest_stack : (uint32_t)(sp - 128);
+        NativeHostStack = (void *)((sp - NATIVE_STACK_RED_ZONE) & ~NATIVE_STACK_ALIGN_MASK);
+    uint32_t stack = suspended ? NativeBridge->guest_stack : (uint32_t)(sp - NATIVE_STACK_RED_ZONE);
     /* ESI retains the saved host frame across the guest procedure and nested imports. */
     __asm__ __volatile__("pushfl\n\tpushal\n\tmovl %%esp,%%esi\n\t"
                          "movl %%eax,%%esp\n\tandl $-16,%%esp\n\t"
@@ -313,14 +323,14 @@ void nativeCallback32(uint32_t entry, uint32_t argument)
     uintptr_t sp;
     __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
     const uintptr_t base = (uintptr_t)NativeHostAllocation;
-    if (!NativeBridge || sp < base || sp >= base + 65536)
+    if (!NativeBridge || sp < base || sp >= base + NATIVE_HOST_STACK_SIZE)
     {
         ((void (*)(uint32_t))(uintptr_t)entry)(argument);
         return;
     }
     void *previous = NativeHostStack;
     /* Nested imports use host stack space below this frame; callbacks use the suspended guest stack. */
-    NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
+    NativeHostStack = (void *)((sp - NATIVE_STACK_RED_ZONE) & ~NATIVE_STACK_ALIGN_MASK);
     const uint32_t stack = NativeBridge->guest_stack;
     __asm__ __volatile__("pushfl\n\t"
                          "pushal\n\t"
@@ -351,31 +361,32 @@ void *nativePrepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
     NativeThread32 *thread = calloc(1, sizeof *thread);
     if (!thread)
         return NULL;
-    thread->mapping = lx_execution_map(Native->execution, 0, 4096, 7, 0);
+    thread->mapping = lx_execution_map(Native->execution, 0, X86_PAGE_SIZE,
+                                       LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 0);
     if (!thread->mapping)
     {
         free(thread);
         return NULL;
     }
     uint8_t *code = lx_execution_mapping_host(thread->mapping), *p = code;
-    uint32_t saved = lx_execution_mapping_address(thread->mapping) + 0x100;
+    uint32_t saved = lx_execution_mapping_address(thread->mapping) + SAVED_HOST_SP_OFFSET;
     *p++ = 0x60; /* pushad: host callee-saved registers */
-    *p++ = 0x89;
+    *p++ = 0x89; /* mov [saved],esp */
     *p++ = 0x25;
     memcpy(p, &saved, 4);
     p += 4;
-    *p++ = 0xbc;
+    *p++ = 0xbc; /* mov esp,stack */
     memcpy(p, &stack, 4);
     p += 4;
-    *p++ = 0x68;
+    *p++ = 0x68; /* push argument */
     memcpy(p, &argument, 4);
     p += 4;
-    *p++ = 0xb8;
+    *p++ = 0xb8; /* mov eax,entry */
     memcpy(p, &entry, 4);
     p += 4;
     *p++ = 0xff;
-    *p++ = 0xd0; /* call guest entry */
-    *p++ = 0x8b;
+    *p++ = 0xd0; /* call eax: the guest entry */
+    *p++ = 0x8b; /* mov esp,[saved] */
     *p++ = 0x25;
     memcpy(p, &saved, 4);
     p += 4;
@@ -530,7 +541,7 @@ uint32_t nativeGuestStack(void)
     uintptr_t sp;
     __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
     const uintptr_t base = (uintptr_t)NativeHostAllocation;
-    if (NativeBridge && sp >= base && sp < base + 65536)
+    if (NativeBridge && sp >= base && sp < base + NATIVE_HOST_STACK_SIZE)
         return NativeBridge->guest_stack;
     return (uint32_t)(sp - CALL16_STACK_MARGIN);
 }
@@ -550,7 +561,8 @@ static uint16_t call16Return(void)
         {
             code[0] = 0x66;
             code[1] = 0xcb;
-            Native->call16_return = (uint16_t)((selector << 3) | 7);
+            Native->call16_return =
+                (uint16_t)((selector << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3);
         }
     }
     const uint16_t selector = Native->call16_return;
@@ -568,7 +580,7 @@ int nativeCall16(uint32_t target, uint16_t ss, uint16_t top, const void *argumen
     const uint32_t sp0 = stack - frame;
     /* Frame, low to high: target far pointer, its return far pointer, arguments,
        flat continuation EIP and CS, saved flat ESP and SS. */
-    uint8_t *p = (uint8_t *)(uintptr_t)(Native->ldt[ss >> 3] + sp0);
+    uint8_t *p = (uint8_t *)(uintptr_t)(Native->ldt[ss >> X86_SELECTOR_INDEX_SHIFT] + sp0);
     memset(p, 0, frame);
     const uint16_t pointers[4] = {(uint16_t)target, (uint16_t)(target >> 16), 0, return_selector};
     memcpy(p, pointers, sizeof pointers);
@@ -579,8 +591,8 @@ int nativeCall16(uint32_t target, uint16_t ss, uint16_t top, const void *argumen
     __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
     const uintptr_t base = (uintptr_t)NativeHostAllocation;
     void *previous = NativeHostStack;
-    if (NativeBridge && sp >= base && sp < base + 65536)
-        NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
+    if (NativeBridge && sp >= base && sp < base + NATIVE_HOST_STACK_SIZE)
+        NativeHostStack = (void *)((sp - NATIVE_STACK_RED_ZONE) & ~NATIVE_STACK_ALIGN_MASK);
     uint32_t ax = ss, dx = sp0;
     /* The frame, not a host register, carries the way back: the target owns every
        register, and the return path reloads SS:ESP as the original thunk does. */
