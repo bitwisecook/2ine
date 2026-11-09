@@ -653,19 +653,7 @@ int OS2_gethostname(char *name, int length)
 
 uint32_t OS2_gethostid(void)
 {
-    LxHostNetwork network;
-    if (lx_host_network_snapshot(&network))
-        return 0;
-    uint32_t result = 0;
-    for (size_t i = 0; i < network.interface_count; i++)
-        if ((network.interfaces[i].flags & LX_IFF_UP) &&
-            !(network.interfaces[i].flags & LX_IFF_LOOPBACK))
-        {
-            result = network.interfaces[i].address;
-            break;
-        }
-    lx_host_network_destroy(&network);
-    return result;
+    return lx_os2_network_host_id();
 }
 
 uint32_t OS2_htonl(uint32_t value)

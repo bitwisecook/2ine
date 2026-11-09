@@ -336,3 +336,21 @@ int lx_os2_network_sysctl(const int *name, unsigned count, void *buffer, size_t 
     lx_host_network_destroy(&s);
     return 0;
 }
+
+/* The address of the first interface that is up and not loopback, or 0. */
+uint32_t lx_os2_network_host_id(void)
+{
+    LxHostNetwork network;
+    if (lx_host_network_snapshot(&network))
+        return 0;
+    uint32_t address = 0;
+    for (size_t i = 0; i < network.interface_count; i++)
+        if ((network.interfaces[i].flags & LX_IFF_UP) &&
+            !(network.interfaces[i].flags & LX_IFF_LOOPBACK))
+        {
+            address = network.interfaces[i].address;
+            break;
+        }
+    lx_host_network_destroy(&network);
+    return address;
+}

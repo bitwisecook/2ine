@@ -3,7 +3,6 @@
 #include "os2/include/private/export.h"
 #include "os2/include/stack16/sys/socket.h"
 #include "host/socket.h"
-#include "host/network.h"
 #include "os2/mptn/common/network.h"
 #include "os2/mptn/common/socket_errors.h"
 static int socket_result(int result);
@@ -12,19 +11,7 @@ static LX_HOST_THREAD_LOCAL int socket_error;
 
 uint32_t Os2LegacyGetHostId(void)
 {
-    LxHostNetwork network;
-    if (lx_host_network_snapshot(&network))
-        return 0;
-    uint32_t address = 0;
-    for (size_t i = 0; i < network.interface_count; i++)
-        if ((network.interfaces[i].flags & LX_IFF_UP) &&
-            !(network.interfaces[i].flags & LX_IFF_LOOPBACK))
-        {
-            address = network.interfaces[i].address;
-            break;
-        }
-    lx_host_network_destroy(&network);
-    return address;
+    return lx_os2_network_host_id();
 }
 
 enum

@@ -7,4 +7,6 @@
 int lx_os2_network_ioctl(unsigned command, void *argument, size_t length, int bsd_address);
 int lx_os2_network_ifconf(void *buffer, size_t capacity, size_t *used, int bsd_address);
 int lx_os2_network_sysctl(const int *name, unsigned count, void *buffer, size_t *length);
+/* gethostid: the first non-loopback interface address that is up, or 0. */
+uint32_t lx_os2_network_host_id(void);
 #endif

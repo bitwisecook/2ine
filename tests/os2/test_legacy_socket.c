@@ -3,6 +3,7 @@
 #include "os2/include/stack16/sys/socket.h"
 #include "os2/include/stack16/netdb.h"
 #include "os2/include/netdb.h"
+#include "os2/include/unistd.h"
 #include "host/socket.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,6 +70,7 @@ int main(void)
     CHECK(!Os2LegacyGetHostByAddress(NULL, 4, 2) && *Os2LegacyResolverError() == 3);
     CHECK(!OS2_gethostbyaddr(&loopback, 16, 2) && *OS2_tcp_h_errno1() == 3);
     CHECK(OS2_gethostbyname("localhost") && *OS2_tcp_h_errno1() != 3);
+    CHECK(Os2LegacyGetHostId() == OS2_gethostid());
     puts("legacy socket UDP, errors, byte order and resolver checks passed");
     return 0;
 }
