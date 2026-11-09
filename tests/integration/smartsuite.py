@@ -301,7 +301,7 @@ def main():
     args.initial_profiles_sha256 = {}
     if args.ball:
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-        from tools import ball as ball_api
+        from tools.ball import engine as ball_api
 
         args.ball = args.ball.resolve()
         data = ball_api.load(args.ball)

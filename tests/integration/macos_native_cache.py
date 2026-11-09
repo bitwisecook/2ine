@@ -18,7 +18,7 @@ from images import FlatGuest, linear_image
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from tools import macos_bundle  # noqa: E402
+from tools.macos import macos_bundle  # noqa: E402
 
 
 def main():

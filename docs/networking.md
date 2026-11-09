@@ -89,8 +89,8 @@ explicit preference. Change it in Settings → General → Network Security in
 either desktop front end, or save it through the CLI:
 
 ```sh
-python3 tools/ball.py --ball /path/to/Example.2ineball config system.tls_upgrade true
-python3 tools/ball.py --ball /path/to/Example.2ineball config system.tls_upgrade false
+python3 tools/ball/engine.py --ball /path/to/Example.2ineball config system.tls_upgrade true
+python3 tools/ball/engine.py --ball /path/to/Example.2ineball config system.tls_upgrade false
 ```
 
 The resulting runtime configuration is `system.tls_upgrade=true` or `false`.

@@ -22,7 +22,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="2ine-gtk-management-") as temporary:
         root = Path(temporary).resolve()
         os.environ.update(XDG_DATA_HOME=str(root / "data"), XDG_CONFIG_HOME=str(root / "config"))
-        from tools import ball as api
+        from tools.ball import engine as api
 
         if TYPE_CHECKING:
             from tools import gnome_ball as gui

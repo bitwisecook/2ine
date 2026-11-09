@@ -9,7 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools import cvtasm, extract_warp_fonts, lxapigen, os2imports, unimplemented
+from tools.binary import extract_warp_fonts, os2imports, unimplemented
+from tools.codegen import cvtasm, lxapigen
 
 
 class AssemblerTests(unittest.TestCase):
@@ -58,7 +59,7 @@ Import ordinal: 5
 
     def test_catalogue_types_and_symbols(self) -> None:
         root = Path(__file__).resolve().parents[2]
-        catalogue = os2imports.load_catalogue(root / "tools/data/os2imports.json")
+        catalogue = os2imports.load_catalogue(root / "tools/binary/data/os2imports.json")
         self.assertEqual(catalogue["DOSCALLS"][5], "Dos16Exit")
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.json"

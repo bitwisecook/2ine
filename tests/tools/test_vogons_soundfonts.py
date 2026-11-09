@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from tests.tools.test_soundfonts import soundfont
-from tools import vogons_soundfonts as forum
+from tools.soundfonts import vogons_soundfonts as forum
 
 TOPIC = "https://www.vogons.org/viewtopic.php?t=88648"
 DRIVE = "https://drive.google.com/file/d/selected123/view?usp=sharing"

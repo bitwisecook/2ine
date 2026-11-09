@@ -7,7 +7,7 @@ from pathlib import Path
 from tests.tools import test_os2_dependencies as binaries
 from tests.tools import test_os2_support as support
 from tests.tools import test_os2_tree as tree
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 class LaunchPrerequisiteTests(unittest.TestCase):

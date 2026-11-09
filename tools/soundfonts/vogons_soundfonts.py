@@ -27,15 +27,13 @@ from dataclasses import dataclass, field
 from email.message import Message
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from tools import fetch_soundfonts as sf
-else:
-    try:
-        from tools import fetch_soundfonts as sf
-    except ModuleNotFoundError:
-        import fetch_soundfonts as sf
+# Run as a script, this file's directory is first on sys.path; the project
+# root makes the tools package importable.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from tools.soundfonts import fetch_soundfonts as sf  # noqa: E402
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36"
 PAGE_LIMIT = 4 * 1024 * 1024

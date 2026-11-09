@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
         blob = data.read_bytes()
     lines = [
         "/* Public domain. No rights reserved. Wholly AI-authored. */",
-        "/* Generated from unithunk.s by tools/gen_unithunk.py. */",
+        "/* Generated from unithunk.s by tools/codegen/gen_unithunk.py. */",
         "/* clang-format off */",
         "static const unsigned char UniversalThunk[] = {",
     ]

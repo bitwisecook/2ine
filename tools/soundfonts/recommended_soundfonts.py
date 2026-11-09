@@ -12,18 +12,14 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from tools import fetch_soundfonts as sf
-    from tools import vogons_soundfonts as external
-else:
-    try:
-        from tools import fetch_soundfonts as sf
-        from tools import vogons_soundfonts as external
-    except ModuleNotFoundError:
-        import fetch_soundfonts as sf
-        import vogons_soundfonts as external
+# Run as a script, this file's directory is first on sys.path; the project
+# root makes the tools package importable.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from tools.soundfonts import fetch_soundfonts as sf  # noqa: E402
+from tools.soundfonts import vogons_soundfonts as external  # noqa: E402
 
 INDEX = Path(__file__).with_name("data") / "recommended-soundfonts.json"
 

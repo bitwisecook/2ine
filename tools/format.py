@@ -4,7 +4,7 @@
 
 Each language has one formatter and one configuration file at the repository root:
 
-    C, C++, Objective-C   clang-format (tools/format-c.py, .clang-format)
+    C, C++, Objective-C   clang-format (tools/dev/format-c.py, .clang-format)
     Python                ruff format and ruff check (pyproject.toml)
     Swift                 swift-format (.swift-format)
     CMake                 gersemi (.gersemirc)
@@ -53,7 +53,7 @@ def uvx(package: str, *arguments: str) -> list[str]:
 
 def commands(language: str, check: bool) -> list[list[str]]:
     if language == "c":
-        return [[sys.executable, "tools/format-c.py", "--check" if check else "--write"]]
+        return [[sys.executable, "tools/dev/format-c.py", "--check" if check else "--write"]]
     if language == "python":
         lint = ["check", "."] if check else ["check", "--fix", "."]
         layout = ["format", "--check", "."] if check else ["format", "."]

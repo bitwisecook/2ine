@@ -103,7 +103,7 @@ else()
         target_link_options(twoine_video_config INTERFACE "LINKER:--exclude-libs,ALL")
     endif()
 endif() # source provider
-add_executable(twoine_ffmpeg_info "${PROJECT_SOURCE_DIR}/tools/ffmpeg_build_info.c")
+add_executable(twoine_ffmpeg_info "${PROJECT_SOURCE_DIR}/cmake/helpers/ffmpeg_build_info.c")
 twoine_application_target(twoine_ffmpeg_info)
 target_link_libraries(twoine_ffmpeg_info PRIVATE twoine_video_config)
 add_custom_command(

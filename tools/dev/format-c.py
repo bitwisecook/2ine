@@ -12,11 +12,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def formatter() -> str:
-    version = (ROOT / "tools/clang-format-version").read_text().strip()
+    version = (ROOT / "tools/dev/clang-format-version").read_text().strip()
     override = os.environ.get("CLANG_FORMAT")
     candidates = (
         [override] if override else [f"clang-format-{version.split('.')[0]}", "clang-format"]

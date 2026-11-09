@@ -10,7 +10,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install pinned clang-format and uv
-        run: python -m pip install "clang-format==$(cat tools/clang-format-version)" uv
+        run: python -m pip install "clang-format==$(cat tools/dev/clang-format-version)" uv
       - name: Check C, Objective-C, Python and CMake
         run: python tools/format.py --check c python cmake
   swift-formatting:

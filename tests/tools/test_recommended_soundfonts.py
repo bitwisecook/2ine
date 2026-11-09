@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools import recommended_soundfonts as rec
+from tools.soundfonts import recommended_soundfonts as rec
 
 
 class RecommendedTests(unittest.TestCase):

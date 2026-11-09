@@ -2,7 +2,7 @@
 
 # External VOGONS SoundFont collections
 
-`tools/vogons_soundfonts.py` inventories a public VOGONS topic and downloads one
+`tools/soundfonts/vogons_soundfonts.py` inventories a public VOGONS topic and downloads one
 selected link. Discovery retains post authors, dates, text, source URLs, links,
 attachment claims, page hashes and pagination status. It follows pages only
 within the chosen topic, with a configurable page cap. It does not download
@@ -11,10 +11,10 @@ linked banks during discovery.
 For [zz_denis's SC55 topic](https://www.vogons.org/viewtopic.php?t=88648):
 
 ```sh
-python3 tools/vogons_soundfonts.py discover \
+python3 tools/soundfonts/vogons_soundfonts.py discover \
   'https://www.vogons.org/viewtopic.php?t=88648' --out ./forum-topic
-python3 tools/vogons_soundfonts.py list ./forum-topic/inventory.json
-python3 tools/vogons_soundfonts.py fetch ./forum-topic/inventory.json \
+python3 tools/soundfonts/vogons_soundfonts.py list ./forum-topic/inventory.json
+python3 tools/soundfonts/vogons_soundfonts.py fetch ./forum-topic/inventory.json \
   cf041549c96f83c7 --cache ./forum-downloads
 ```
 

@@ -13,7 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests.integration.disk_images import iso_image
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 def linear(imports=()):

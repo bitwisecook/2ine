@@ -27,7 +27,7 @@ The `dmos219s.zip` archive contains the freely distributed shareware
 From this repository:
 
 ```sh
-python3 tools/build_doom.py --source-zip /path/os2doom110-src.zip \
+python3 tools/ports/build_doom.py --source-zip /path/os2doom110-src.zip \
   --sdk /path/os2tk45 --watcom /path/open-watcom-1.9/c-cpp \
   --output /path/doom-build
 ```

@@ -9,13 +9,13 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING or __package__:
-    from tools.project_sources import installed_catalogue
-else:
-    from project_sources import installed_catalogue
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.codegen.project_sources import installed_catalogue  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_ID = "io.github.bitwisecook.Twoine.Ball"
@@ -72,9 +72,10 @@ def stage(build, destination):
         "gnome_lazy_folders.py",
         "gnome_navigation_state.py",
         "gnome_configuration.py",
-        "ball.py",
     ):
         copy(ROOT / "tools" / name, app / "tools" / name)
+    for name in ("__init__.py", "engine.py"):
+        copy(ROOT / "tools/ball" / name, app / "tools/ball" / name)
     for name in ("window.ui", APP_ID + ".svg", APP_ID + "-symbolic.svg"):
         copy(ROOT / "tools/gnome" / name, app / "tools/gnome" / name)
     for directory in ("fonts", "soundfonts"):
@@ -100,7 +101,7 @@ def stage(build, destination):
             destination / f"usr/share/icons/hicolor/{size}/apps" / (APP_ID + suffix),
         )
     copy(
-        ROOT / "tools/icons/TwoineBall.svg",
+        ROOT / "apps/common/icons/TwoineBall.svg",
         destination / "usr/share/icons/hicolor/scalable/mimetypes/application-x-2ine-ball.svg",
     )
     licenses = destination / "usr/share/doc/2ine-ball"

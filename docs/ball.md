@@ -72,9 +72,9 @@ Build the shared engine first with `cmake -S ball -B build-ball-engine` and
 Create a ball and map extracted installation media:
 
 ```sh
-python3 tools/ball.py --ball "$PWD/Office.2ineball" init
-python3 tools/ball.py --ball "$PWD/Office.2ineball" map D /path/to/media
-python3 tools/ball.py --ball "$PWD/Office.2ineball" --build "$PWD/build" install 'D:\ENGLISH\INSTALL.EXE'
+python3 tools/ball/engine.py --ball "$PWD/Office.2ineball" init
+python3 tools/ball/engine.py --ball "$PWD/Office.2ineball" map D /path/to/media
+python3 tools/ball/engine.py --ball "$PWD/Office.2ineball" --build "$PWD/build" install 'D:\ENGLISH\INSTALL.EXE'
 ```
 
 The installer is an original guest executable. `install` runs it and records its
@@ -155,16 +155,16 @@ ball remains a directory; metadata support depends on the desktop/session.
 Configure settings and register an installed application:
 
 ```sh
-python3 tools/ball.py --ball Office.2ineball config system.beep_volume 0.03
-python3 tools/ball.py --ball Office.2ineball config runtime.backend unicorn
-python3 tools/ball.py --ball Office.2ineball config env.LANG en_US
-python3 tools/ball.py --ball Office.2ineball unset env.LANG
-python3 tools/ball.py --ball Office.2ineball add-app WordPro 'C:\LOTUSW4\WORDPRO\WORDPRO.EXE'
-python3 tools/ball.py --ball Office.2ineball --build build launch WordPro
-python3 tools/ball.py --ball Office.2ineball apps
-python3 tools/ball.py --ball Office.2ineball remove-app WordPro
-python3 tools/ball.py --ball Office.2ineball show
-python3 tools/ball.py --ball Office.2ineball unmap D
+python3 tools/ball/engine.py --ball Office.2ineball config system.beep_volume 0.03
+python3 tools/ball/engine.py --ball Office.2ineball config runtime.backend unicorn
+python3 tools/ball/engine.py --ball Office.2ineball config env.LANG en_US
+python3 tools/ball/engine.py --ball Office.2ineball unset env.LANG
+python3 tools/ball/engine.py --ball Office.2ineball add-app WordPro 'C:\LOTUSW4\WORDPRO\WORDPRO.EXE'
+python3 tools/ball/engine.py --ball Office.2ineball --build build launch WordPro
+python3 tools/ball/engine.py --ball Office.2ineball apps
+python3 tools/ball/engine.py --ball Office.2ineball remove-app WordPro
+python3 tools/ball/engine.py --ball Office.2ineball show
+python3 tools/ball/engine.py --ball Office.2ineball unmap D
 ```
 
 `system.trace_native`, `system.trace_events` and `system.beep_volume` are loader
@@ -318,7 +318,7 @@ COMP = DocOnline for OS/2
 Run the original installer from a graphical session:
 
 ```sh
-python3 tools/ball.py --ball Office.2ineball --build build-portable --backend unicorn \
+python3 tools/ball/engine.py --ball Office.2ineball --build build-portable --backend unicorn \
   install 'D:\ENGLISH\INSTALL.EXE' /a:I '/l1:C:\suite.log' \
   '/p:Lotus SmartSuite W4 English Standard Version' '/s:D:\ENGLISH' /x '/r:C:\suite.rsp'
 ```
@@ -395,10 +395,10 @@ supported; mounting media does not boot OS/2 or qualify every installer.
 Use Import Ball and Export Ball in the native manager, or the CLI:
 
 ```sh
-python3 tools/ball.py --ball Office.2ineball export office.zip
-python3 tools/ball.py --ball Office.2ineball export office-with-media.zip --include-images
-python3 tools/ball.py --ball ImportedOffice.2ineball import office.zip
-python3 tools/ball.py --ball ImportedOffice.2ineball map E /path/to/replacement-folder
+python3 tools/ball/engine.py --ball Office.2ineball export office.zip
+python3 tools/ball/engine.py --ball Office.2ineball export office-with-media.zip --include-images
+python3 tools/ball/engine.py --ball ImportedOffice.2ineball import office.zip
+python3 tools/ball/engine.py --ball ImportedOffice.2ineball map E /path/to/replacement-folder
 ```
 
 Export includes installed files, settings, launchers and `2ine-export.json`

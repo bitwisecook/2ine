@@ -20,7 +20,7 @@ flowchart LR
 `os2/` contains OS/2 DLL implementations shared by native and emulated
 execution. Host services use shared POSIX and [platform adapters](host.md).
 `*-lx.h` files are generated; edit their module definitions, headers or binding policies, then run
-`python3 tools/lxapigen.py`.
+`python3 tools/codegen/lxapigen.py`.
 
 Native entry needs Linux, a 32-bit x86 worker and `CONFIG_X86_16BIT=y` with LDT
 access. Intel macOS uses emulation. [Build](build.md).

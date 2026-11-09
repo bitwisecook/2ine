@@ -55,7 +55,7 @@ def sha256(path):
 
 
 def extract(iso, destination, seven_zip, deark):
-    checkout = Path(__file__).resolve().parents[1]
+    checkout = Path(__file__).resolve().parents[2]
     destination = destination.resolve()
     if destination.is_relative_to(checkout):
         raise ValueError("choose a private font directory outside the 2ine checkout")

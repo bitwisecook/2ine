@@ -20,7 +20,7 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-PORT = Path(__file__).resolve().parents[1] / "ports/doom"
+PORT = Path(__file__).resolve().parents[2] / "ports/doom"
 # The supported source release and the patches applied to it, in order.
 MANIFEST = json.loads((PORT / "upstream.json").read_text())
 SOURCE_SHA256 = MANIFEST["sha256"]

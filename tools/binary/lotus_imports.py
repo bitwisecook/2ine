@@ -2,7 +2,7 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Read-only LX/NE import census, static closures, and source export evidence.
 
-Fixup layouts follow tools/lx_dump.c, emulator/loader/load_lx.c, emulator/loader/load_ne.c and
+Fixup layouts follow tools/binary/lx_dump.c, emulator/loader/load_lx.c, emulator/loader/load_ne.c and
 formats/{lx,ne}.h. --lx-dump optionally cross-checks their existing text parser.
 No guest code or native API module is loaded or executed.
 """
@@ -23,11 +23,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+# Run as a script, this file's directory is first on sys.path; the project
+# root makes the tools package importable.
 if not __package__:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tools.os2binary import inspect_file, module_name  # noqa: E402
-from tools.os2binary import parse_image as parse_image  # noqa: E402
+from tools.binary.os2binary import inspect_file, module_name  # noqa: E402
+from tools.binary.os2binary import parse_image as parse_image  # noqa: E402
 
 APPS = {
     "approach": r"C:\LOTUSW4\APPROACH\APPROACH.EXE",
@@ -335,7 +337,7 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
     parsed = {}
     exports = export_inventory(source)
     env = config_environment(ball, manifest)
-    catalogue = json.loads((source / "tools/data/os2imports.json").read_text())
+    catalogue = json.loads((source / "tools/binary/data/os2imports.json").read_text())
     provided = builtin_modules(source)
     provided |= (
         {"OPENGL", "PGL"} if manifest.get("system", {}).get("opengl", "mesa") == "mesa" else set()
@@ -548,9 +550,9 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
         "parserSourceHashes": {
             name: hashlib.sha256((source / name).read_bytes()).hexdigest()
             for name in (
-                "tools/lotus_imports.py",
-                "tools/os2binary.py",
-                "tools/lx_dump.c",
+                "tools/binary/lotus_imports.py",
+                "tools/binary/os2binary.py",
+                "tools/binary/lx_dump.c",
                 "emulator/loader/load_lx.c",
                 "emulator/loader/load_ne.c",
                 "formats/executable/lx.h",
@@ -559,7 +561,7 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
             )
         },
         "parserOrigins": [
-            "tools/lx_dump.c",
+            "tools/binary/lx_dump.c",
             "emulator/loader/load_lx.c",
             "emulator/loader/load_ne.c",
             "formats/executable/lx.h",
@@ -816,7 +818,7 @@ def main() -> int:
     parser.add_argument(
         "--binary", type=Path, help="inspect one NE/LX/LE file, printing inline-reference JSON"
     )
-    parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--output", type=Path, default=Path("build/lotus-import-inventory"))
     parser.add_argument("--lx-dump", type=Path)
     parser.add_argument("--inline-references", action="store_true")

@@ -9,8 +9,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from tools import ball as ball_api
-from tools import project_sources
+from tools.ball import engine as ball_api
+from tools.codegen import project_sources
 
 
 class AudioLibraryTests(unittest.TestCase):

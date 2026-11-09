@@ -9,10 +9,10 @@
 List the named upstream choices with:
 
 ```sh
-python3 tools/recommended_soundfonts.py list
-python3 tools/recommended_soundfonts.py list --category sc55
-python3 tools/recommended_soundfonts.py details generaluser-gs
-python3 tools/recommended_soundfonts.py fetch generaluser-gs --cache ./soundfonts --use --config ./audio.conf
+python3 tools/soundfonts/recommended_soundfonts.py list
+python3 tools/soundfonts/recommended_soundfonts.py list --category sc55
+python3 tools/soundfonts/recommended_soundfonts.py details generaluser-gs
+python3 tools/soundfonts/recommended_soundfonts.py fetch generaluser-gs --cache ./soundfonts --use --config ./audio.conf
 ```
 
 In the OS/2 workspace, `scripts/2ine-soundfonts recommended` exposes the same

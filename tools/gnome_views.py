@@ -17,16 +17,15 @@ except (ImportError, ValueError) as error:
 
 
 if __package__:
-    from .ball import dependency_advice
+    from .ball.engine import dependency_advice
     from .gnome_files import FileList, display_path
     from .gnome_lazy_folders import FolderChildren
     from .gnome_program_choice import ProgramChoice, installer_candidates
 else:
+    from ball.engine import dependency_advice
     from gnome_files import FileList, display_path
     from gnome_lazy_folders import FolderChildren
     from gnome_program_choice import ProgramChoice, installer_candidates
-
-    from ball import dependency_advice
 
 
 def action_button(label, callback, icon=None):

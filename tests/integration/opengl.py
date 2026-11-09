@@ -13,7 +13,7 @@ from pathlib import Path
 from images import FlatGuest, linear_image
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads((ROOT / "tools/data/opengl.json").read_text())
+SCHEMA = json.loads((ROOT / "tools/codegen/data/opengl.json").read_text())
 SIGNATURES = {f["name"]: f["arguments"] for f in SCHEMA["functions"]}
 C = SCHEMA["constants"]
 

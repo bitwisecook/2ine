@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools import macos_build_number
+from tools.macos import macos_build_number
 
 
 @unittest.skipUnless(os.name == "posix", "macOS build counters use POSIX file locks")

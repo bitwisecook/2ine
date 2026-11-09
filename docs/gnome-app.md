@@ -217,7 +217,7 @@ loose end. Both are installed into the hicolor icon theme.
 
 ```sh
 python3 -m unittest discover -s tests/tools
-python3 tools/lxapigen.py --check
+python3 tools/codegen/lxapigen.py --check
 desktop-file-validate tools/gnome/*.desktop
 appstreamcli validate --no-net tools/gnome/*.metainfo.xml
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_ball.py --build build-portable

@@ -43,7 +43,7 @@ def main():
     shutil.copyfile(ROOT / "tools/gnome" / symbolic.name, symbolic)
     document_icon = data / "icons/hicolor/scalable/mimetypes/application-x-2ine-ball.svg"
     document_icon.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/icons/TwoineBall.svg", document_icon)
+    shutil.copyfile(ROOT / "apps/common/icons/TwoineBall.svg", document_icon)
     mime = data / "mime/packages" / (APP_ID + ".xml")
     mime.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / "tools/gnome" / (APP_ID + ".mime.xml"), mime)

@@ -15,7 +15,7 @@ import wave
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 def chunk(kind, data):

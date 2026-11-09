@@ -6,14 +6,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools import build_mesa_macos, gen_opengl
+from tools.codegen import gen_opengl
+from tools.macos import build_mesa_macos
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class OpenGLGeneratorTests(unittest.TestCase):
     def setUp(self):
-        self.schema = json.loads((ROOT / "tools/data/opengl.json").read_text())
+        self.schema = json.loads((ROOT / "tools/codegen/data/opengl.json").read_text())
         self.output = gen_opengl.render(self.schema)
 
     def test_distinct_ordinal_profiles_and_double_stack_width(self):

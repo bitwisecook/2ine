@@ -37,7 +37,7 @@
           "log-environment-variables": false,
           "input-paths": [
             "$(SRCROOT)/Info.plist",
-            "$(SRCROOT)/../../../tools/macos_build_number.py",
+            "$(SRCROOT)/../../../tools/macos/macos_build_number.py",
           ],
           "output-paths": [
             "$(DERIVED_FILE_DIR)/Twoine-Info.plist",
@@ -45,7 +45,7 @@
           ],
           "run-on-every-build": true,
           "shell": "/bin/sh",
-          "script": "set -eu\npython3 \"$SRCROOT/../../../tools/macos_build_number.py\" --template \"$SRCROOT/Info.plist\" --plist \"$DERIVED_FILE_DIR/Twoine-Info.plist\"\n",
+          "script": "set -eu\npython3 \"$SRCROOT/../../../tools/macos/macos_build_number.py\" --template \"$SRCROOT/Info.plist\" --plist \"$DERIVED_FILE_DIR/Twoine-Info.plist\"\n",
         },
         "compile-sources",
         "frameworks",

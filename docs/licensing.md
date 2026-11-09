@@ -46,7 +46,7 @@ from the forum's own post license. Fetched/user-imported banks stay in the
 user's cache with receipts; the downloader does not change their licenses.
 
 The [project source and credit catalogue](project-sources.md) is generated from
-`tools/data/project-sources.json` and shared by both native About views. Packaged
+`tools/codegen/data/project-sources.json` and shared by both native About views. Packaged
 inventories record actual host dependency versions. Source/download links and
 license texts do not by themselves replace the complete corresponding-source
 distribution required for GPL/LGPL binary releases.

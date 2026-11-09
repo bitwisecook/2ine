@@ -97,7 +97,7 @@ Watcom 1.9 and the OS/2 Toolkit 4.5. The builder verifies the engine source
 hashes before making a staged copy. It preserves the upstream GPL notices.
 
 ```sh
-python3 tools/build_glquake.py \
+python3 tools/ports/build_glquake.py \
   --source /path/to/Quake \
   --watcom /path/to/watcom \
   --sdk /path/to/os2tk45 \
@@ -111,7 +111,7 @@ of the host filesystem root:
 ```sh
 TWOINE_BACKEND=native TWOINE_LIBPATH=/path/to/2ine-build \
 LD_LIBRARY_PATH=/path/to/2ine-build \
-python3 tools/build_glquake.py \
+python3 tools/ports/build_glquake.py \
   --source /path/to/Quake --watcom /path/to/watcom2 \
   --sdk /path/to/os2tk45 --output /path/to/glquake-build \
   --os2-runner /path/to/2ine-build/lx_loader

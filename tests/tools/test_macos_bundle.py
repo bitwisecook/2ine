@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools import macos_bundle
+from tools.macos import macos_bundle
 
 
 class DependencyTests(unittest.TestCase):

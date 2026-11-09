@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 class BallTests(unittest.TestCase):

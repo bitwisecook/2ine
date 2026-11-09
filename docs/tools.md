@@ -10,20 +10,20 @@ Python 3.11+. No runtime dependencies outside the standard library.
 
 | Tool | Input → output |
 |---|---|
-| `tools/lxapigen.py` | Module definitions + API headers + binding policies → `os2/**/generated/*-lx.h` |
-| `tools/cvtasm.py` | ndisasm text → C byte emissions |
-| `tools/os2imports.py` | lx_dump text → named NE/LX imports |
-| `tools/unimplemented.py` | Named imports → services absent from export tables |
-| `tools/lotus_imports.py` | Lotus ball → static closures, optional DLL corpus and native-interface gap reports |
+| `tools/codegen/lxapigen.py` | Module definitions + API headers + binding policies → `os2/**/generated/*-lx.h` |
+| `tools/codegen/cvtasm.py` | ndisasm text → C byte emissions |
+| `tools/binary/os2imports.py` | lx_dump text → named NE/LX imports |
+| `tools/binary/unimplemented.py` | Named imports → services absent from export tables |
+| `tools/binary/lotus_imports.py` | Lotus ball → static closures, optional DLL corpus and native-interface gap reports |
 
 ```sh
-python3 tools/lxapigen.py          # regenerate changed headers
-python3 tools/lxapigen.py --check  # check without writing
-build/lx_dump program.exe | python3 tools/os2imports.py | python3 tools/unimplemented.py
-ndisasm -b32 code.bin | python3 tools/cvtasm.py
+python3 tools/codegen/lxapigen.py          # regenerate changed headers
+python3 tools/codegen/lxapigen.py --check  # check without writing
+build/lx_dump program.exe | python3 tools/binary/os2imports.py | python3 tools/binary/unimplemented.py
+ndisasm -b32 code.bin | python3 tools/codegen/cvtasm.py
 ```
 
-The import catalogue is `tools/data/os2imports.json`. `cvtasm.py` and `os2imports.py` accept
+The import catalogue is `tools/binary/data/os2imports.json`. `cvtasm.py` and `os2imports.py` accept
 files as arguments or read stdin. `unimplemented.py` reads stdin.
 
 The `PMWINX` catalogue records 795 named Open32 exports from the Warp 4.52
@@ -35,7 +35,7 @@ An exported name does not establish complete API behaviour.
 For an installed Lotus suite, generate a conservative preflight worklist:
 
 ```sh
-python3 tools/lotus_imports.py --ball /path/to/Lotus.2ineball --output build/lotus-api-audit
+python3 tools/binary/lotus_imports.py --ball /path/to/Lotus.2ineball --output build/lotus-api-audit
 ```
 
 `missing-native.csv` lists absent exports of providers selected as native 2ine

@@ -58,7 +58,7 @@ with `--vulkan-loader /path/to/libvulkan.1.dylib`. Its directory is recorded in
 Mesa's runtime search paths: Zink loads Vulkan from its own driver library.
 
 ```sh
-python3 tools/build_mesa_macos.py --source /path/to/mesa \
+python3 tools/macos/build_mesa_macos.py --source /path/to/mesa \
   --build "$PWD/build/mesa" --prefix "$PWD/build/mesa-install"
 cmake -S . -B build/gl-macos -DTWOINE_PORTABLE_LOADER=ON \
   -DTWOINE_OPENGL=ON -DTWOINE_OPENGL_BACKEND=kosmickrisp \
@@ -149,5 +149,5 @@ SDK executable or original AUX/TK DLLs. Archive inputs remain unchanged; the
 runner stages executable host-tool copies when needed. Linux archived Watcom
 host binaries are required by this fixture build command.
 
-Regenerate the GL interface with `python3 tools/gen_opengl.py`; `--check` detects
+Regenerate the GL interface with `python3 tools/codegen/gen_opengl.py`; `--check` detects
 stale generated files. Generic OS/2 export generation remains independent.

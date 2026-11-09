@@ -37,12 +37,12 @@ requires compatible music and supplied ROM files.
 From the checkout:
 
 ```sh
-python3 tools/fetch_soundfonts.py list
-python3 tools/fetch_soundfonts.py details fluidr3-gm
-python3 tools/fetch_soundfonts.py fetch fluidr3-gm
-python3 tools/fetch_soundfonts.py use fluidr3-gm
-python3 tools/fetch_soundfonts.py use timgm6mb
-python3 tools/fetch_soundfonts.py use-file /path/to/your/SC-55.sf2
+python3 tools/soundfonts/fetch_soundfonts.py list
+python3 tools/soundfonts/fetch_soundfonts.py details fluidr3-gm
+python3 tools/soundfonts/fetch_soundfonts.py fetch fluidr3-gm
+python3 tools/soundfonts/fetch_soundfonts.py use fluidr3-gm
+python3 tools/soundfonts/fetch_soundfonts.py use timgm6mb
+python3 tools/soundfonts/fetch_soundfonts.py use-file /path/to/your/SC-55.sf2
 ```
 
 `fetch` downloads only the selected catalog bank and its license, verifies
@@ -60,7 +60,7 @@ The default cache is `$XDG_CACHE_HOME/2ine/soundfonts`, falling back to
 For an isolated application setup:
 
 ```sh
-python3 tools/fetch_soundfonts.py use-file /path/to/bank.sf2 \
+python3 tools/soundfonts/fetch_soundfonts.py use-file /path/to/bank.sf2 \
   --cache ./soundfonts-cache --config ./audio.conf
 TWOINE_AUDIO_CONFIG="$PWD/audio.conf" path/to/lx_loader application.exe
 ```

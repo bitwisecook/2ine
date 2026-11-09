@@ -21,8 +21,8 @@ if os.environ.get("TWOINE_GNOME_FRONTEND"):
 
     ball_api = gnome_ball.ball_api
 else:
-    from tools import ball as ball_api
     from tools import gnome_ball
+    from tools.ball import engine as ball_api
 
 
 def main():

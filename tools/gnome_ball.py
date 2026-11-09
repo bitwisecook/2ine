@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 if __package__:
-    from . import ball as ball_api
     from . import (
         gnome_applications,
         gnome_audio,
@@ -27,6 +26,7 @@ if __package__:
         gnome_sessions,
         gnome_views,
     )
+    from .ball import engine as ball_api
 else:
     import gnome_applications
     import gnome_audio
@@ -40,7 +40,7 @@ else:
     import gnome_sessions
     import gnome_views
 
-    import ball as ball_api
+    from ball import engine as ball_api
 
 try:
     import gi

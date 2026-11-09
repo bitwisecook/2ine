@@ -11,7 +11,7 @@ import zlib
 from pathlib import Path
 
 from tests.tools import test_os2_support as support
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 def implode_zip(

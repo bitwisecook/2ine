@@ -9,16 +9,18 @@ import platform
 import plistlib
 import shutil
 import subprocess
+import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING or __package__:
-    from tools import macos_build_number, macos_bundle
-else:
-    import macos_build_number
-    import macos_bundle
+# Run as a script, this file's directory is first on sys.path; the project
+# root makes the tools package importable.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-ROOT = Path(__file__).resolve().parents[1]
+from tools.codegen.project_sources import installed_catalogue  # noqa: E402
+from tools.macos import macos_build_number, macos_bundle  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def command(argv, **kwargs):
@@ -72,8 +74,8 @@ def build_document_icon(output, resources, environment):
             "swift",
             "-module-cache-path",
             output / "clang-cache",
-            ROOT / "tools/render_svg.swift",
-            ROOT / "tools/icons/TwoineBall.svg",
+            ROOT / "tools/macos/render_svg.swift",
+            ROOT / "apps/common/icons/TwoineBall.svg",
             png,
         ],
         env=environment,
@@ -155,10 +157,6 @@ def main():
         args.mesa_prefix.resolve(),
         args.vulkan_loader.resolve(),
     )
-    if TYPE_CHECKING or __package__:
-        from tools.project_sources import installed_catalogue
-    else:
-        from project_sources import installed_catalogue
     catalogue = installed_catalogue(copied.keys())
     swift_version = command(
         ["swift", "--version"], capture_output=True, text=True

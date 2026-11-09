@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from disk_images import PAYLOAD, fat_image, iso_image
 
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 def image_hash(path):

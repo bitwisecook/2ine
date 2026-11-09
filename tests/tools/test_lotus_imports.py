@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from tests.integration.images import linear_image
-from tools import lotus_imports as inventory
+from tools.binary import lotus_imports as inventory
 
 
 def segmented(named=False, size=8, iterated=False):
@@ -266,7 +266,7 @@ def omf_object(name="TEST"):
 
 class AdditionalBinaryFormatsTests(unittest.TestCase):
     def test_pe32_pe64_delay_and_forwarded_exports(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         for wide, old_delay in ((False, False), (True, False), (False, True)):
             with self.subTest(wide=wide, old_delay=old_delay):
@@ -282,7 +282,7 @@ class AdditionalBinaryFormatsTests(unittest.TestCase):
                 self.assertEqual(result["exports"][1]["forwarder"]["ordinal"], 282)
 
     def test_omf_imports_exports_and_aligned_library_members(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         obj = omf_object()
         parsed = os2binary.parse_image(obj)
@@ -306,7 +306,7 @@ class AdditionalBinaryFormatsTests(unittest.TestCase):
         self.assertEqual(len(parsed["exports"]), 2)
 
     def test_coff_import_library_members_and_offline_annotations(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         strings = b"_DoThing@4\0DOSCALLS.dll\0"
         obj = struct.pack("<HHHHIIHH", 0, 65535, 0, 0x14C, 0, len(strings), 0, 3 << 2) + strings
@@ -339,7 +339,7 @@ class AdditionalBinaryFormatsTests(unittest.TestCase):
             )
 
     def test_ne_and_lx_exports_include_names_and_unnamed_entries(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         lx = linear_image(b"\xc3", [], [], "OWN", exports=[0, 1], export_names=[(1, "Named")])
         parsed = os2binary.parse_image(lx)
@@ -360,7 +360,7 @@ class AdditionalBinaryFormatsTests(unittest.TestCase):
 
 class PortableScannerTests(unittest.TestCase):
     def test_internal_entry_fixup_does_not_hide_later_imports(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         internal = struct.pack("<BBhB", 7, 3, 2, 1)
         external = struct.pack("<BBhBH", 7, 1, 4, 1, 282)
@@ -379,7 +379,7 @@ class PortableScannerTests(unittest.TestCase):
         self.assertEqual(result["internalReferences"][0]["targetExport"]["names"][0]["name"], "Own")
 
     def test_exports_only_and_opaque_parameter_metadata(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         entries = b"\x01\x83\x01\0\x01\0\0\0\0\0"
         image = linear_image(
@@ -398,7 +398,7 @@ class PortableScannerTests(unittest.TestCase):
         self.assertFalse(result["exports"][0]["parameterTypesDecoded"])
 
     def test_f3_indexed_members_and_omf_public_symbols(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         public = omf_record(
             0x91, b"\x01\x02" + counted("DriverEntry") + struct.pack("<I", 0x12345678) + b"\0"
@@ -421,7 +421,7 @@ class PortableScannerTests(unittest.TestCase):
         self.assertIn("opaque", result["warnings"][-1])
 
     def test_catalogue_ambiguity_and_unnamed_ordinal_remain_explicit(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         catalogue = {
             "schema": 1,
@@ -463,7 +463,7 @@ class PortableScannerTests(unittest.TestCase):
         import subprocess
         import sys
 
-        from tools import os2binary
+        from tools.binary import os2binary
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -514,7 +514,7 @@ class PortableScannerTests(unittest.TestCase):
 
 class EvidenceOutputTests(unittest.TestCase):
     def test_ne_exports_only_preserves_non_os2_domain(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         image = segmented()
         image[64 + 54] = 2
@@ -529,7 +529,7 @@ class EvidenceOutputTests(unittest.TestCase):
         self.assertEqual(result["exports"][0]["offset"], 2)
 
     def test_foreign_ne_imports_decode_without_cross_domain_binding(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         image = segmented()
         image[64 + 54] = 2
@@ -566,7 +566,7 @@ class EvidenceOutputTests(unittest.TestCase):
         self.assertEqual(os2binary.parse_image(lx, allow_foreign=True)["domain"], "linear-target-4")
 
     def test_nested_foreign_members_and_explicit_catalogue_mismatch_stay_unbound(self):
-        from tools import os2binary
+        from tools.binary import os2binary
 
         image = segmented()
         image[64 + 54] = 2

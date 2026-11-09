@@ -11,7 +11,7 @@ from pathlib import Path
 from tests.tools import test_os2_dependencies as dependency_fixtures
 from tests.tools import test_os2_support as fixtures
 from tests.tools import test_os2_tree as tree_fixtures
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 class ComponentOperationTests(unittest.TestCase):

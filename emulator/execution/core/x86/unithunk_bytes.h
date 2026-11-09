@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Generated from unithunk.s by tools/gen_unithunk.py. */
+/* Generated from unithunk.s by tools/codegen/gen_unithunk.py. */
 /* clang-format off */
 static const unsigned char UniversalThunk[] = {
     0x66, 0x55, 0x66, 0x0f, 0xb7, 0xec, 0x16, 0x1e, 0x06, 0x0f, 0xa0, 0x66,

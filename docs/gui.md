@@ -175,7 +175,7 @@ faces using external [7-Zip](https://www.7-zip.org/) and
 [Deark](https://entropymine.com/deark/):
 
 ```sh
-python3 tools/extract_warp_fonts.py --iso /private/warp452-install.iso \
+python3 tools/binary/extract_warp_fonts.py --iso /private/warp452-install.iso \
   --destination /private/warp-fonts --deark /path/to/deark
 TWOINE_WARP_FONT_DIRECTORY=/private/warp-fonts build/lx_loader WORDPRO.EXE
 ```

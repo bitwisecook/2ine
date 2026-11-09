@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from tests.tools.test_configuration import profile
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 class ConfigurationFileTests(unittest.TestCase):

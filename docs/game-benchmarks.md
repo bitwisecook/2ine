@@ -7,11 +7,11 @@ settings and renderer. A window resize changes the workload.
 From the checkout root, with the locally prepared applications:
 
 ```sh
-python3 tools/benchmark_games.py glquake \
+python3 tools/ports/benchmark_games.py glquake \
   --build build-portable --program build-apps/glquake/glquake.exe \
   --data build-apps/glquake/id1/pak0.pak --work build-perf/quake-run1
 
-python3 tools/benchmark_games.py doom \
+python3 tools/ports/benchmark_games.py doom \
   --build build-portable --program build-apps/doom/os2doom.exe \
   --data build-apps/doom/doom1.wad --config build-apps/doom/default.cfg \
   --work build-perf/doom-run1

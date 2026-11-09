@@ -7,11 +7,11 @@ They point to existing publishers, repositories and collections. The tool downlo
 selected external files; it does not build another SoundFont.
 
 ```sh
-python3 tools/recommended_soundfonts.py list
-python3 tools/recommended_soundfonts.py list --category sc55
-python3 tools/recommended_soundfonts.py details sc55-patch93
-python3 tools/recommended_soundfonts.py fetch generaluser-gs --cache ./soundfonts
-python3 tools/recommended_soundfonts.py fetch yamaha-xg-logue --cache ./soundfonts
+python3 tools/soundfonts/recommended_soundfonts.py list
+python3 tools/soundfonts/recommended_soundfonts.py list --category sc55
+python3 tools/soundfonts/recommended_soundfonts.py details sc55-patch93
+python3 tools/soundfonts/recommended_soundfonts.py fetch generaluser-gs --cache ./soundfonts
+python3 tools/soundfonts/recommended_soundfonts.py fetch yamaha-xg-logue --cache ./soundfonts
 ```
 
 The index includes all five groups from the inspected wiki page: eight general
@@ -34,7 +34,7 @@ when checked on 2026-11-01, while the Patch93 and Phoenix pages returned HTTP403
 to ordinary public requests. The creator video, publisher landing pages, driver
 CD collections and commercial Voice Crystal purchase page also remain source
 choices. Open the original source and import a supplied file using
-`tools/fetch_soundfonts.py use-file PATH` when appropriate.
+`tools/soundfonts/fetch_soundfonts.py use-file PATH` when appropriate.
 
 Fetching leaves the active bank unchanged. Add `--use --config ./audio.conf`
 only when you want to select a downloaded complete GM SF2. Download receipts

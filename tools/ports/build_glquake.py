@@ -18,7 +18,7 @@ UNITS = """cl_demo cl_input cl_main cl_parse cl_tent chase cmd common console cr
  zone view wad world cd_null snd_dma snd_mem snd_mix snd_os2 sys_os2 vid_os2 gl_os2""".split()
 FLAGS = "-zq -w1 -e25 -bt=os2 -mf -5r -fp3 -fpi87 -otexan -dGLQUAKE -dOS2 -bm -j -ei".split()
 NATIVE_FLAGS = ["-od" if flag == "-otexan" else flag for flag in FLAGS]
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def digest(path):

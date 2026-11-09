@@ -150,7 +150,7 @@ def main():
         root = Path(temporary)
         media = root / "media"
         media.mkdir()
-        launcher = [sys.executable, str(ROOT / "tools/ball.py")]
+        launcher = [sys.executable, str(ROOT / "tools/ball/engine.py")]
         for name in ("first", "second"):
             ball = root / name
             base = [

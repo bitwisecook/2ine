@@ -647,7 +647,7 @@ def main() -> int:
     )
     check = bool(parser.parse_args().check)
     try:
-        changed = generate(Path(__file__).resolve().parents[1], check=check)
+        changed = generate(Path(__file__).resolve().parents[2], check=check)
     except (OSError, ValueError, KeyError) as error:
         print(f"lxapigen: {error}", file=sys.stderr)
         return 1

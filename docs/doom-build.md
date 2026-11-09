@@ -2,7 +2,7 @@
 
 # OS/2 Doom source build
 
-`tools/build_doom.py` builds a separate OS/2 LX executable from the published
+`tools/ports/build_doom.py` builds a separate OS/2 LX executable from the published
 [Doom 1.10 source archive](https://www.os2site.com/sw/games/action/doom/os2doom110-src.zip).
 It requires that exact ZIP (SHA-256
 `b4de031a2316d529f504d21f2095768aafa88eb789a7c46415f43186e53d15b9`), an OS/2
@@ -11,7 +11,7 @@ containing `binl/`, `h/`, and `lib386/`. Run on Linux with native i386 execution
 support and the `patch` utility installed.
 
 ```sh
-python3 tools/build_doom.py \
+python3 tools/ports/build_doom.py \
   --source-zip /path/to/os2doom110-src.zip \
   --sdk /path/to/os2tk45-master \
   --watcom /path/to/open-watcom-1.9/c-cpp \

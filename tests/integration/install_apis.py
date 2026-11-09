@@ -633,7 +633,7 @@ def main():
         ball = Path(temporary) / "ball"
         base = [
             sys.executable,
-            str(ROOT / "tools/ball.py"),
+            str(ROOT / "tools/ball/engine.py"),
             "--ball",
             str(ball),
             "--build",

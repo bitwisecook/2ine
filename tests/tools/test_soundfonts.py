@@ -13,7 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from tools import fetch_soundfonts as sf
+from tools.soundfonts import fetch_soundfonts as sf
 
 
 def soundfont(programs: int = 128) -> bytes:

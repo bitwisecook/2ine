@@ -65,7 +65,7 @@ cmake --build build-runtime --parallel
 ctest --test-dir build-runtime --output-on-failure
 ```
 
-Regenerate exports with `python3 tools/lxapigen.py`. Executables (`lx_loader`,
+Regenerate exports with `python3 tools/codegen/lxapigen.py`. Executables (`lx_loader`,
 `lx_dump`) and OS/2 shared libraries remain at the build-directory root.
 Historical compiler pipelines are described in [tests](testing.md).
 

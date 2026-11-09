@@ -16,7 +16,7 @@ from disk_images import iso_image
 from images import FlatGuest, linear_image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools import ball as ball_api
+from tools.ball import engine as ball_api
 
 
 def installer():

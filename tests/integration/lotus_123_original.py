@@ -53,7 +53,7 @@ def stop_group(process):
 
 def main():
     sys.path.insert(0, str(ROOT))
-    from tools import ball as ball_api
+    from tools.ball import engine as ball_api
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ball", required=True, type=Path)

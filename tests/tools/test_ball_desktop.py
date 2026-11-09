@@ -8,8 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools import ball as ball_api
-from tools import ball_desktop
+from tools.ball import desktop as ball_desktop
+from tools.ball import engine as ball_api
 
 
 class DesktopTests(unittest.TestCase):

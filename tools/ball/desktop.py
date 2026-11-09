@@ -5,13 +5,13 @@
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING or __package__:
-    from tools import ball as ball_api
-else:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import ball as ball_api
+# Run as a script, this file's directory is first on sys.path; the project
+# root makes the tools package importable.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from tools.ball import engine as ball_api  # noqa: E402
 
 
 def request(message):

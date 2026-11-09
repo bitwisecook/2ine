@@ -31,7 +31,7 @@ Each DLL directory holds:
 - `module.c`: the DLL entry and the only includer of the export table;
 - `bindings.h`: the guest wire marshalling for portable execution (forwarder
   DLLs have none);
-- `generated/<dll>-lx.h`: the export table written by `tools/lxapigen.py`;
+- `generated/<dll>-lx.h`: the export table written by `tools/codegen/lxapigen.py`;
 - `README.md`: IBM's source location for the DLL and how Warp 4.52 built it.
 
 IBM's source paths come from `@BSS` labels in SYM files, object paths in
@@ -92,4 +92,4 @@ and PMMERGE-only entries, PMCTLS's standard-dialog hooks, the video-frame
 service), `pmgpip.h`, `pmdevp.h` and `pmsplp.h` (printer catalogue and
 default queue), `os2mep.h` (MMIO services for the MCI devices and the guest
 layout of the MCI parameter blocks), the export framework `export*.h`, and
-the guest binding policies `api16.json`/`api32.json` read by `tools/lxapigen.py`.
+the guest binding policies `api16.json`/`api32.json` read by `tools/codegen/lxapigen.py`.
