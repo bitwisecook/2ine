@@ -20,7 +20,10 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-SOURCE_SHA256 = "b4de031a2316d529f504d21f2095768aafa88eb789a7c46415f43186e53d15b9"
+PORT = Path(__file__).resolve().parents[1] / "ports/doom"
+# The supported source release and the patches applied to it, in order.
+MANIFEST = json.loads((PORT / "upstream.json").read_text())
+SOURCE_SHA256 = MANIFEST["sha256"]
 OPTIONS = ["-w1", "-e25", "-d+", "-j", "-zq", "-otexan", "-of+", "-mf", "-5r", "-bt=os2", "-ei"]
 
 
@@ -70,18 +73,15 @@ def build(archive: Path, sdk: Path, watcom: Path, output: Path, build_epoch: int
         .replace("__DATE__", json.dumps(build_date))
         .replace("__TIME__", json.dumps(build_time))
     )
-    patch = Path(__file__).resolve().parents[1] / "research/patches/doom110-clock.patch"
     environment = dict(os.environ, WATCOM=str(watcom))
-    execute(
-        ["patch", "--batch", "-p1", "-i", str(patch)], source, environment, output / "patch.log"
-    )
-    desktop_patch = patch.with_name("doom110-desktop.patch")
-    execute(
-        ["patch", "--batch", "-p1", "-i", str(desktop_patch)],
-        source,
-        environment,
-        output / "desktop-patch.log",
-    )
+    patches = [PORT / name for name in MANIFEST["patches"]]
+    for patch in patches:
+        execute(
+            ["patch", "--batch", "-p1", "-i", str(patch)],
+            source,
+            environment,
+            output / f"patch-{patch.stem}.log",
+        )
 
     # The Linux compiler interprets include path separators literally. Copy the
     # authentic SDK, changing only backslashes in preprocessor include operands.
@@ -146,8 +146,7 @@ def build(archive: Path, sdk: Path, watcom: Path, output: Path, build_epoch: int
     executable = output / "os2doom.exe"
     inputs = [
         archive,
-        patch,
-        desktop_patch,
+        *patches,
         *(tools / name for name in ("wcc386", "wasm", "wlink")),
         *libraries,
     ]

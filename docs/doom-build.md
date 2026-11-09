@@ -23,7 +23,11 @@ The output contains `os2doom.exe`, patched source, compiler/linker logs and a
 The original archived executable is never read or modified. Third-party source
 and its original license remain in the output tree.
 
-The patch replaces the source's minute-relative wall clock with monotonic
+`ports/doom/upstream.json` records the archive hash and the patches the
+builder applies in order, both kept in `ports/doom/`, the same layout as
+`ports/glquake/`.
+
+The clock patch replaces the source's minute-relative wall clock with monotonic
 `DosQuerySysInfo(QSV_MS_COUNT)` time. A short process critical section serializes
 UI and game callers; unsigned differences extend the 32-bit millisecond wrap.
 The existing source configuration defaults to windowed DIVE output.
