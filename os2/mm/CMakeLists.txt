@@ -4,7 +4,14 @@
 # 2ine's software synthesizer (FluidSynth, liquidsfz, Munt) and FFmpeg video
 # decoder behind MMPM's sequencer and digital-video devices. Object libraries keep
 # their symbols in MMPM; the tests link the same objects.
-add_library(twoine_os2_midi OBJECT midi/midi_synth.c midi/midi_config.c midi/midi_mt32.c)
+add_library(
+    twoine_os2_midi
+    OBJECT
+    midi/midi_synth.c
+    midi/midi_config.c
+    midi/midi_mt32.c
+    midi/midi_sequence.c
+)
 twoine_application_target(twoine_os2_midi)
 set_target_properties(twoine_os2_midi PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(twoine_os2_midi PUBLIC twoine_midi_config twoine_mt32_config m)

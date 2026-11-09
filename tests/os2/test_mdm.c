@@ -4,7 +4,7 @@
 #include "os2/include/mmioos2.h"
 #include "os2/include/os2me.h"
 #include "os2/include/private/os2mep.h"
-#include "os2/mm/mmpm/mci/mdm/midi_sequence.h"
+#include "os2/mm/midi/midi_sequence.h"
 #include "host/clock.h"
 #include <math.h>
 #include <errno.h>
