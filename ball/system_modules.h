@@ -34,11 +34,11 @@ static int os2_module_disabled(Context *c, const char *name)
 
 static int os2_module_provided(Context *c, const char *name)
 {
-    static const char *modules[] = {"DOSCALLS", "DOSCALL1", "MSG",      "NLS",     "QUECALLS",
-                                    "VIOCALLS", "KBDCALLS", "SESMGR",   "PMWIN",   "PMSHAPI",
-                                    "PMWP",     "PMGPI",    "TCPIP32",  "PMWINX",  "PMCTLS",
-                                    "MDM",      "MMIO",     "PMSPL",    "PMDRAG",  "DIVE",
-                                    "PMGRE",    "SO32DLL",  "TCP32DLL", "PMMERGE", NULL};
+    static const char *modules[] = {
+        "DOSCALLS", "DOSCALL1", "MSG",     "NLS",   "QUECALLS", "VIOCALLS", "KBDCALLS",
+        "SESMGR",   "PMWIN",    "PMSHAPI", "PMWP",  "PMGPI",    "TCPIP32",  "PMWINX",
+        "PMCTLS",   "MDM",      "MMIO",    "PMSPL", "PMDRAG",   "DIVE",     "PMGRE",
+        "SO32DLL",  "TCP32DLL", "PMMERGE", "MMPM",  "REGISTRY", NULL};
     if (!name)
         return 0;
     if (os2_module_disabled(c, name))

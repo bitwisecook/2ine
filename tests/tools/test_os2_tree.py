@@ -155,7 +155,7 @@ class OS2TreeTests(unittest.TestCase):
         source = self.source(
             {
                 f"OS2/DLL/{name}.DLL": fixtures.CMD
-                for name in ("PMWIN", "MDM", "MMIO", "DIVE", "OPENGL", "PGL")
+                for name in ("PMWIN", "MDM", "MMIO", "MMPM", "REGISTRY", "DIVE", "OPENGL", "PGL")
             }
         )
         self.request("command", arguments=["config", "system.opengl", "off"])
