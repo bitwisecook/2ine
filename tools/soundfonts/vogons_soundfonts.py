@@ -37,6 +37,9 @@ from tools.soundfonts import fetch_soundfonts as sf  # noqa: E402
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36"
 PAGE_LIMIT = 4 * 1024 * 1024
+ZIP_MEMBER_LIMIT = 4096
+# A larger compression ratio than this is treated as a ZIP bomb.
+ZIP_RATIO_LIMIT = 500
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "wbr"}
 
 
@@ -386,7 +389,7 @@ def safe_name(name: str) -> str:
 
 def inspect_download(path: Path) -> dict:
     with path.open("rb") as stream:
-        head = stream.read(12)
+        head = stream.read(sf.RIFF_HEADER_SIZE)
     if head[:4] == b"RIFF" and head[8:] == b"sfbk":
         try:
             sf.validate_sf2(path)
@@ -396,7 +399,7 @@ def inspect_download(path: Path) -> dict:
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as archive:
             entries = archive.infolist()
-            if len(entries) > 4096:
+            if len(entries) > ZIP_MEMBER_LIMIT:
                 raise ValueError("ZIP has too many members")
             return {
                 "format": "zip",
@@ -514,7 +517,7 @@ def extract_member(receipt: dict, member: str, output: Path, max_bytes: int) -> 
         if (
             info.is_dir()
             or info.file_size > max_bytes
-            or info.file_size > max(1, info.compress_size) * 500
+            or info.file_size > max(1, info.compress_size) * ZIP_RATIO_LIMIT
         ):
             raise ValueError("ZIP member exceeds extraction limits")
         output.mkdir(parents=True, exist_ok=True)

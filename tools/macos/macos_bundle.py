@@ -9,7 +9,14 @@ import subprocess
 import time
 from pathlib import Path
 
-MACH_MAGICS = {b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}
+# Thin 64-bit, thin 32-bit and universal (both byte orders) Mach-O magics.
+MH_MAGIC_64_BYTES = b"\xcf\xfa\xed\xfe"
+MACH_MAGICS = {MH_MAGIC_64_BYTES, b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}
+# mach_header_64: magic, cputype, cpusubtype, then filetype at offset 12.
+MACHO_HEADER_PROBE_SIZE = 16
+MACHO_FILETYPE_OFFSET = 12
+MH_EXECUTE = 2
+NOTARY_POLL_SECONDS = 15
 
 
 def run(argv, **kwargs):
@@ -180,9 +187,10 @@ def sign(app, identity, entitlements):
             continue
         # Only lx_loader needs the exception for Unicorn's MAP_JIT allocation.
         with binary.open("rb") as file:
-            header = file.read(16)
+            header = file.read(MACHO_HEADER_PROBE_SIZE)
         executable = (
-            header[:4] == b"\xcf\xfa\xed\xfe" and struct.unpack_from("<I", header, 12)[0] == 2
+            header[:4] == MH_MAGIC_64_BYTES
+            and struct.unpack_from("<I", header, MACHO_FILETYPE_OFFSET)[0] == MH_EXECUTE
         )
         # Ad-hoc signatures have no Team ID, so library validation cannot link
         # their separately signed helpers. Hardened runtime is for Developer ID.
@@ -240,7 +248,7 @@ def notarize(app, profile, output):
         if status["status"] != "In Progress":
             break
         print(f"Notarization {identifier}: In Progress", flush=True)
-        time.sleep(15)
+        time.sleep(NOTARY_POLL_SECONDS)
     run(
         [
             "xcrun",
