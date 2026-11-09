@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "os2/ps/awe/batch_services.h"
+#include "os2/ps/awe/internal.h"
 
 static BOOL o32_service_span(ULONG address, uint64_t size, unsigned access, BOOL optional,
                              LxGuestBorrow *borrow)

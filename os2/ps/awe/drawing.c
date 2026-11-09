@@ -9,7 +9,6 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/input.h"
 #include "os2/ps/awe/windows.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/include/private/pmdevp.h"
 static _Thread_local Open32DC *contexts;
 

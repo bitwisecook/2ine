@@ -2,7 +2,6 @@
 /* Shared Windows system cursors use the corresponding PM host cursor. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"

@@ -5,7 +5,6 @@
 #include "os2/ps/pmmerge/pmwin/open32_post.h"
 #include "os2/ps/awe/input.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/include/private/pmp.h"
 #include <stdio.h>

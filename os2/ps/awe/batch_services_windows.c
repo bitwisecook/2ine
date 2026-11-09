@@ -2,7 +2,6 @@
 /* Window services preserve Open32's handles and top-left client coordinates. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/input.h"
 #include "os2/include/private/pmp.h"

@@ -2,7 +2,6 @@
 /* Legacy Open32 HFILE operations share DOSCALLS' file table and path semantics. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/process.h"
 #include "os2/include/bsedos.h"
 #include "host/fs.h"

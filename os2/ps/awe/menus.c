@@ -2,7 +2,6 @@
 /* Open32 menus retain PM menu windows and their normal message behavior. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"

@@ -2,7 +2,6 @@
 /* DROPFILES is a guest memory object, never a host DROPFILES pointer. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/include/pmstddlg.h"
 #include <stdlib.h>
 #include <string.h>

@@ -5,7 +5,6 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/pmmerge/pmwin/pointer_image.h"
 #include "host/fs.h"
-#include "os2/ps/awe/batch_services.h"
 
 typedef struct Open32Icon
 {

@@ -1,7 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 creates a PM anchor and queue lazily, reusing an existing thread context. */
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include <math.h>

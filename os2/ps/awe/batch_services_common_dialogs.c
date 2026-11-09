@@ -3,7 +3,6 @@
    documented hook and template paths and keep Windows numbering at the guest edge. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/input.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmstddlg.h"

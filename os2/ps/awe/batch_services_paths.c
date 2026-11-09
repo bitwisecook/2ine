@@ -1,7 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "emulator/abi.h"
 #include "host/sync.h"
 #include <stdio.h>

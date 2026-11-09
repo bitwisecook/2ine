@@ -2,7 +2,6 @@
 /* Synchronous Windows file handles retain host objects and process-local sharing contracts. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "host/fs.h"
 #include "host/sync.h"
 #include "host/thread.h"

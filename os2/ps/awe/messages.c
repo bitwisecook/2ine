@@ -2,7 +2,6 @@
 /* Windows messages retain native PM packets so native subclasses see dispatch. */
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "host/sync.h"
 #include "os2/ps/awe/input.h"
 #include "os2/ps/pmmerge/pmwin/open32_post.h"

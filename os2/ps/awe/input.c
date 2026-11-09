@@ -5,7 +5,6 @@
 #include "os2/ps/pmmerge/pmwin/input.h"
 #include "os2/ps/awe/internal.h"
 #include "host/input.h"
-#include "os2/ps/awe/batch_services.h"
 #include <stdio.h>
 static _Thread_local unsigned char down[256], toggled[256];
 static const unsigned char scan_keys[] = {

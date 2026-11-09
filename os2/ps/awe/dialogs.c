@@ -2,7 +2,6 @@
 /* Open32 resource dialogs use native PM templates, controls and modal lifetime. */
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/input.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"
 #include "os2/include/pmgpi.h"
