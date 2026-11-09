@@ -1,13 +1,13 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of MMIO.DLL: exported name [= C entry] @ordinal.
+; Exports of MMIO.DLL: exported name = MMPM.ordinal @ordinal.
 
 LIBRARY MMIO
 
 EXPORTS
-    mmioInstallIOProc @26
-    mmioOpen          @27
-    mmioRead          @28
-    mmioWrite         @29
-    mmioSeek          @30
-    mmioClose         @32
-    mmioGetHeader     @77
+    mmioInstallIOProc = MMPM.39 @26
+    mmioOpen          = MMPM.40 @27
+    mmioRead          = MMPM.41 @28
+    mmioWrite         = MMPM.42 @29
+    mmioSeek          = MMPM.43 @30
+    mmioClose         = MMPM.45 @32
+    mmioGetHeader     = MMPM.90 @77

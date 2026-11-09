@@ -67,6 +67,7 @@ OS2_FORWARDER_DLLS = {
     "os2/ps/pmwin": "PMMERGE",
     "os2/ps/controls/drag": "PMCTLS",
     "os2/mm/mci/mdm": "MMPM",
+    "os2/mm/mmio/mmio": "MMPM",
 }
 OS2_FORWARDER_FILES = {"module.c", "README.md"}
 # Static helper code shared by several DLLs of one group, outside any DLL.

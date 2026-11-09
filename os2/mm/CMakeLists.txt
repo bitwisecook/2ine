@@ -1,5 +1,6 @@
 # Derived from original 2ine; zlib-style license. See ../../LICENSE.txt.
-# Multimedia (IBM w4mm\src\mm): MMPM, which implements MDM; the MDM forwarder; MMIO and DIVE.
+# Multimedia (IBM w4mm\src\mm): MMPM, which implements MDM and MMIO; the MDM and MMIO
+# forwarders; DIVE.
 # 2ine's software synthesizer (FluidSynth, liquidsfz, Munt) and FFmpeg video
 # decoder behind MMPM's sequencer and digital-video devices. Object libraries keep
 # their symbols in MMPM; the tests link the same objects.
@@ -20,12 +21,12 @@ if(TWOINE_VIDEO)
     add_dependencies(twoine_os2_video_decode twoine_ffmpeg_metadata)
 endif()
 
-twoine_os2_dll(mmpm mmpm/module.c mmpm/mci/mdm/mdm_video.c)
+twoine_os2_dll(mmpm mmpm/module.c mmpm/mci/mdm/mdm_video.c mmpm/mmio/mmio/mmio.c)
 twoine_os2_dll(mdm mci/mdm/module.c)
 twoine_os2_dll(mmio mmio/mmio/module.c)
 twoine_os2_dll(dive video/dive/module.c video/dive/dive_pixels.c)
 target_link_libraries(dive PRIVATE pmmerge)
-target_link_libraries(mmpm PRIVATE mmio pmmerge twoine_os2_midi twoine_os2_video_decode)
+target_link_libraries(mmpm PRIVATE pmmerge twoine_os2_midi twoine_os2_video_decode)
 if(TWOINE_MIDI_EXTENDED AND TWOINE_MIDI_SYNTH)
     set_target_properties(mmpm PROPERTIES LINKER_LANGUAGE CXX)
 endif()

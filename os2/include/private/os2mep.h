@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Private multimedia interfaces shared by 2ine's MMPM/2 DLLs. */
+/* Private MMPM/2 interfaces: MMIO services used by the MCI devices and the tests. */
 #ifndef _INCL_OS2MEP_H_
 #define _INCL_OS2MEP_H_
 #include "os2/include/mmioos2.h"

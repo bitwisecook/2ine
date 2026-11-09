@@ -792,7 +792,7 @@ endif()
 if(TARGET mmpm)
     add_executable(twoine_mdm_tests os2/test_mdm.c)
     twoine_application_target(twoine_mdm_tests)
-    target_link_libraries(twoine_mdm_tests PRIVATE mmpm mmio 2ine m)
+    target_link_libraries(twoine_mdm_tests PRIVATE mmpm 2ine m)
     add_test(NAME multimedia COMMAND twoine_mdm_tests)
     set_tests_properties(
         multimedia

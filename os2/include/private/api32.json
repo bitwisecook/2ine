@@ -5152,9 +5152,7 @@
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
-    }
-  },
-  "mmio": {
+    },
     "mmioOpen": {
       "argument_bytes": 12,
       "callee_pop": 0,

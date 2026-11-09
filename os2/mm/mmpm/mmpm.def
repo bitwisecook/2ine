@@ -7,3 +7,10 @@ EXPORTS
     mciSendCommand    @1
     mciSendString     @2
     mciGetErrorString @3
+    mmioInstallIOProc @39
+    mmioOpen          @40
+    mmioRead          @41
+    mmioWrite         @42
+    mmioSeek          @43
+    mmioClose         @45
+    mmioGetHeader     @90
