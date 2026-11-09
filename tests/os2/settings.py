@@ -29,6 +29,12 @@ def main():
         (work / "truncated.ini").write_bytes(fixture[:-1])
         struct.pack_into("<I", fixture, 40, 40)
         (work / "cycle.ini").write_bytes(fixture)
+        # 2ine profiles: one valid entry, then names without their terminating NUL.
+        entry = struct.pack("<III", 4, 4, 2) + b"App\0Key\0hi"
+        (work / "stored.ini").write_bytes(b"2INEPRF1" + struct.pack("<I", 1) + entry)
+        unterminated = struct.pack("<III", 4, 4, 2) + b"AppXKey\0hi"
+        (work / "unterminated.ini").write_bytes(b"2INEPRF1" + struct.pack("<I", 1) + unterminated)
+        (work / "empty.ini").write_bytes(b"")
         env = dict(
             os.environ,
             TWOINE_USER_PROFILE=str(work / "user.profile"),

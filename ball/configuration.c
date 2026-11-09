@@ -5,7 +5,6 @@
 #include "os2/config/os2_ini.h"
 #include "ball/vendor/sha256/sha256.h"
 #include <time.h>
-#define TB_PROFILE_LIMIT (32u * 1024u * 1024u)
 
 static char *configuration_hex(TbBall *c, const unsigned char *p, size_t n)
 {
@@ -29,7 +28,7 @@ static int configuration_nibble(char c)
 
 unsigned char *configuration_unhex(TbBall *c, const char *text, size_t *n)
 {
-    if (!text || strlen(text) % 2 || strlen(text) > TB_PROFILE_LIMIT * 2)
+    if (!text || strlen(text) % 2 || strlen(text) > TB_PROFILE_SIZE_LIMIT * 2)
     {
         tb_ball_fail(c, "Use pairs of hexadecimal digits");
         return NULL;
@@ -260,7 +259,7 @@ static unsigned char *configuration_file_bytes(TbBall *c, const char *path, size
 {
     uint64_t size = 0;
     int64_t modified = 0;
-    if (!tb_path_info(path, &size, &modified) || size > TB_PROFILE_LIMIT)
+    if (!tb_path_info(path, &size, &modified) || size > TB_PROFILE_SIZE_LIMIT)
     {
         tb_ball_fail(c, "Configuration file exceeds 32 MiB or cannot be read");
         return NULL;
@@ -298,7 +297,7 @@ cJSON *configuration_read(TbBall *c, const cJSON *request)
     }
     size_t n = 0;
     unsigned char *bytes = (unsigned char *)tb_ball_read_file(c, path, &n, 1);
-    if (!bytes || n > TB_PROFILE_LIMIT)
+    if (!bytes || n > TB_PROFILE_SIZE_LIMIT)
     {
         tb_ball_fail(c, "Profile exceeds 32 MiB");
         return NULL;
@@ -335,7 +334,7 @@ static int configuration_serialize(TbBall *c, const char *path, cJSON *entries)
             return 0;
         size_t bytes = strlen(field(entry, "data")) / 2;
         if (a >= TB_PROFILE_NAME_LIMIT || k >= TB_PROFILE_NAME_LIMIT ||
-            tb_profile_entry_size(a, k, bytes) > TB_PROFILE_LIMIT - total)
+            tb_profile_entry_size(a, k, bytes) > TB_PROFILE_SIZE_LIMIT - total)
             return tb_ball_fail(c, "Profile exceeds format limits");
         total += tb_profile_entry_size(a, k, bytes);
     }
@@ -698,7 +697,8 @@ cJSON *configuration_file_write(TbBall *c, const cJSON *request)
     char *host = configuration_private_path(c, guest);
     if (!text)
         tb_ball_fail(c, "Text is required");
-    if (bytes && (size > TB_PROFILE_LIMIT || !configuration_is_text((unsigned char *)bytes, size)))
+    if (bytes &&
+        (size > TB_PROFILE_SIZE_LIMIT || !configuration_is_text((unsigned char *)bytes, size)))
         tb_ball_fail(c, "Use plain Latin-1 text without binary control bytes");
     int ok = bytes && host && !c->error && tb_atomic_write(host, bytes, size);
     cJSON_Delete(current);
@@ -739,7 +739,7 @@ static int configuration_file_catalogue(TbBall *c, cJSON *files, const cJSON *al
     cJSON *roles = configuration_roles(aliases, host);
     const char *kind = "binary", *reason = "", *format = "Unsupported binary";
     int editable = 0;
-    FILE *file = size <= TB_PROFILE_LIMIT ? tb_fopen(host, "rb") : NULL;
+    FILE *file = size <= TB_PROFILE_SIZE_LIMIT ? tb_fopen(host, "rb") : NULL;
     unsigned char *bytes = file ? malloc((size_t)size + 1) : NULL;
     int valid = bytes && fread(bytes, 1, (size_t)size, file) == (size_t)size && !ferror(file);
     if (file)
@@ -780,7 +780,7 @@ static int configuration_file_catalogue(TbBall *c, cJSON *files, const cJSON *al
     }
     free(bytes);
     if (!editable)
-        reason = size > TB_PROFILE_LIMIT
+        reason = size > TB_PROFILE_SIZE_LIMIT
                      ? "File exceeds the 32 MiB editor limit"
                      : "Unsupported or unreadable binary; open for read-only inspection";
     cJSON *out = cJSON_CreateObject();

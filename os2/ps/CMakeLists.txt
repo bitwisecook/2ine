@@ -224,7 +224,7 @@ foreach(
     )
     target_sources(pmwinx PRIVATE $<TARGET_OBJECTS:${_target}>)
 endforeach()
-target_link_libraries(pmmerge PRIVATE twoine_formats doscalls)
+target_link_libraries(pmmerge PRIVATE twoine_formats twoine_os2_config doscalls)
 find_package(ZLIB REQUIRED)
 if(TWOINE_NATIVE_LOADER)
     # This target uses -m32 while CMake's configure process runs on the host ABI.

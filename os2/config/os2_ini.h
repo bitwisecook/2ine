@@ -7,6 +7,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* The largest profile file the readers accept. */
+#define TB_PROFILE_SIZE_LIMIT (32u * 1024u * 1024u)
+
 /* Native OS/2 profiles start with this 32-bit little-endian signature. */
 #define TB_OS2_INI_SIGNATURE UINT32_MAX
 #define TB_OS2_INI_HEADER_SIZE 20u

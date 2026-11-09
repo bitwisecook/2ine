@@ -256,6 +256,15 @@ int main(int argc, char **argv)
     CHECK(PrfCloseProfile(cleared));
     CHECK(!PrfOpenProfile(0, "cycle.ini"));
     CHECK(!PrfOpenProfile(0, "truncated.ini"));
+    if (!writing)
+    {
+        profile = PrfOpenProfile(0, "stored.ini");
+        CHECK(profile);
+        CHECK(PrfQueryProfileSize(profile, "App", "Key", &size) && size == 2);
+        CHECK(PrfCloseProfile(profile));
+        CHECK(!PrfOpenProfile(0, "unterminated.ini"));
+        CHECK(!PrfOpenProfile(0, "empty.ini"));
+    }
 
     SWCNTRL switch_value = {0};
     switch_value.hwnd = 123;

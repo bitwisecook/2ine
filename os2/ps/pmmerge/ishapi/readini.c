@@ -10,6 +10,7 @@
 #include "emulator/process.h"
 #include "host/fs.h"
 #include "host/sync.h"
+#include "os2/config/os2_ini.h"
 #include <limits.h>
 
 typedef struct ProfileEntry
@@ -43,8 +44,6 @@ static ProfileHandle *profile_handles;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *mutex;
 static Profile *profiles, *user_profile, *system_profile;
-static const uint8 signature[8] = {'2', 'I', 'N', 'E', 'P', 'R', 'F', '1'};
-#define PROFILE_LIMIT (32u * 1024u * 1024u)
 
 static void free_entries(ProfileEntry *entry)
 {
@@ -78,76 +77,24 @@ static ProfileEntry *entry_new(const char *app, const char *key, const void *dat
     return e;
 }
 
-static int native_string(const uint8 *file, size_t size, uint32 offset, uint32 length)
+/* Profile names are NUL-terminated Latin-1 strings without embedded NULs. */
+static int profile_name(const unsigned char *name, size_t size)
 {
-    return length && offset <= size && length <= size - offset && !file[offset + length - 1] &&
-           !memchr(file + offset, 0, length - 1);
+    return size && !name[size - 1] && !memchr(name, 0, size - 1);
 }
 
-static int native_mark(uint8 *seen, size_t size, uint32 offset, uint32 extent)
+static int profile_entry(void *context, const unsigned char *app, size_t app_size,
+                         const unsigned char *key, size_t key_size, const unsigned char *data,
+                         size_t data_size)
 {
-    if (offset < 20 || offset > size || extent > size - offset ||
-        (seen[offset / 8] & (1u << (offset % 8))))
+    ProfileEntry ***tail = context;
+    if (!profile_name(app, app_size) || !profile_name(key, key_size))
         return 0;
-    seen[offset / 8] |= 1u << (offset % 8);
+    **tail = entry_new((const char *)app, (const char *)key, data, (ULONG)data_size);
+    if (!**tail)
+        return 0;
+    *tail = &(**tail)->next;
     return 1;
-}
-
-static int native_load(Profile *profile, const uint8 *file, size_t size)
-{
-    if (size < 20 || lx_guest_load_u32(file + 8) > size)
-        return 0;
-    uint8 *seen = calloc((size + 7) / 8, 1);
-    if (!seen)
-        return 0;
-    ProfileEntry **tail = &profile->entries;
-    uint32 app = lx_guest_load_u32(file + 4);
-    int ok = 1;
-    while (app && ok)
-    {
-        if (!native_mark(seen, size, app, 20))
-        {
-            ok = 0;
-            break;
-        }
-        uint32 name = lx_guest_load_u32(file + app + 16);
-        uint32 length = lx_guest_load_u16(file + app + 12);
-        if (!native_string(file, size, name, length))
-        {
-            ok = 0;
-            break;
-        }
-        uint32 key = lx_guest_load_u32(file + app + 4);
-        while (key && ok)
-        {
-            if (!native_mark(seen, size, key, 24))
-            {
-                ok = 0;
-                break;
-            }
-            uint32 keyname = lx_guest_load_u32(file + key + 12),
-                   data = lx_guest_load_u32(file + key + 20),
-                   bytes = lx_guest_load_u16(file + key + 16);
-            if (!native_string(file, size, keyname, lx_guest_load_u16(file + key + 8)) ||
-                data > size || bytes > size - data)
-            {
-                ok = 0;
-                break;
-            }
-            *tail = entry_new((const char *)file + name, (const char *)file + keyname, file + data,
-                              bytes);
-            if (!*tail)
-            {
-                ok = 0;
-                break;
-            }
-            tail = &(*tail)->next;
-            key = lx_guest_load_u32(file + key);
-        }
-        app = lx_guest_load_u32(file + app);
-    }
-    free(seen);
-    return ok;
 }
 
 /* Resolve an existing file or its existing parent so aliases share one snapshot. */
@@ -203,45 +150,16 @@ static Profile *profile_load(const char *path)
     int known = lx_host_path_identity(p->path, &before) == LX_HOST_FS_OK;
     size_t size = 0;
     LxHostFsError error;
-    uint8 *file = lx_host_file_snapshot(path, PROFILE_LIMIT, &size, &error);
+    uint8 *file = lx_host_file_snapshot(path, TB_PROFILE_SIZE_LIMIT, &size, &error);
     if (!file)
     {
         if (error == LX_HOST_FS_MISSING)
             return p;
         goto failed;
     }
-    if (size >= 20 && lx_guest_load_u32(file) == UINT32_MAX)
-    {
-        if (!native_load(p, file, size))
-            goto failed;
-        p->snapshot = file;
-        p->snapshot_size = size;
-        profile_identity(p, &before, known);
-        return p;
-    }
-    if (size < 12 || memcmp(file, signature, 8))
-        goto failed;
-    uint32 count = lx_guest_load_u32(file + 8);
-    size_t at = 12;
+    /* An empty file holds no profile: tb_profile_walk accepts it, Prf* does not. */
     ProfileEntry **tail = &p->entries;
-    while (count--)
-    {
-        if (size - at < 12)
-            goto failed;
-        uint32 a = lx_guest_load_u32(file + at), k = lx_guest_load_u32(file + at + 4),
-               n = lx_guest_load_u32(file + at + 8);
-        at += 12;
-        if (!a || !k || a > 65536 || k > 65536 || a > size - at || k > size - at - a ||
-            n > size - at - a - k || file[at + a - 1] || file[at + a + k - 1] ||
-            memchr(file + at, 0, a - 1) || memchr(file + at + a, 0, k - 1))
-            goto failed;
-        *tail = entry_new((char *)file + at, (char *)file + at + a, file + at + a + k, n);
-        if (!*tail)
-            goto failed;
-        tail = &(*tail)->next;
-        at += a + k + n;
-    }
-    if (at != size)
+    if (!tb_profile_recognised(file, size) || !tb_profile_walk(file, size, profile_entry, &tail))
         goto failed;
     p->snapshot = file;
     p->snapshot_size = size;
@@ -271,7 +189,7 @@ static int profile_refresh(Profile *p, int force)
     {
         size_t size = 0;
         LxHostFsError error;
-        uint8 *file = lx_host_file_snapshot(p->path, PROFILE_LIMIT, &size, &error);
+        uint8 *file = lx_host_file_snapshot(p->path, TB_PROFILE_SIZE_LIMIT, &size, &error);
         int unchanged =
             file ? p->snapshot && size == p->snapshot_size && !memcmp(file, p->snapshot, size)
                  : error == LX_HOST_FS_MISSING && !p->snapshot && !p->entries;
@@ -326,44 +244,39 @@ static int write_all(LxHostFile *file, const void *data, size_t size)
 
 static int profile_save(Profile *p, ProfileEntry *entries)
 {
-    size_t total = 12;
+    size_t total = TB_PROFILE_HEADER_SIZE;
     uint32 count = 0;
     for (ProfileEntry *e = entries; e; e = e->next)
     {
-        total += 12 + strlen(e->app) + 1 + strlen(e->key) + 1 + e->size;
-        if (total > PROFILE_LIMIT)
+        total += tb_profile_entry_size(strlen(e->app), strlen(e->key), e->size);
+        if (total > TB_PROFILE_SIZE_LIMIT)
             return 0;
         count++;
     }
+    uint8 *bytes = malloc(total);
     char *temporary = malloc(strlen(p->path) + 40);
-    if (!temporary)
+    if (!bytes || !temporary)
+    {
+        free(bytes);
+        free(temporary);
         return 0;
+    }
+    tb_profile_put_header(bytes, count);
+    size_t at = TB_PROFILE_HEADER_SIZE;
+    for (ProfileEntry *e = entries; e; e = e->next)
+        at += tb_profile_put_entry(bytes + at, e->app, strlen(e->app), e->key, strlen(e->key),
+                                   e->data, e->size);
     snprintf(temporary, strlen(p->path) + 40, "%s.tmp-%p", p->path, (void *)p);
     /* Only the sidecar lock owner publishes; discard a previous interrupted save. */
     lx_host_path_remove(temporary, 0);
     LxHostFile *file = lx_host_file_open(
         temporary, LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE | LX_HOST_FILE_EXCLUSIVE, 0, NULL);
-    if (!file)
-    {
-        free(temporary);
-        return 0;
-    }
-    uint8 header[12];
-    memcpy(header, signature, 8);
-    lx_guest_store_u32(header + 8, count);
-    int ok = write_all(file, header, sizeof header);
-    for (ProfileEntry *e = entries; ok && e; e = e->next)
-    {
-        uint32 a = (uint32)strlen(e->app) + 1, k = (uint32)strlen(e->key) + 1;
-        lx_guest_store_u32(header, a);
-        lx_guest_store_u32(header + 4, k);
-        lx_guest_store_u32(header + 8, e->size);
-        ok = write_all(file, header, sizeof header) && write_all(file, e->app, a) &&
-             write_all(file, e->key, k) && write_all(file, e->data, e->size);
-    }
+    int ok = file && write_all(file, bytes, total);
+    free(bytes);
     if (ok)
         ok = lx_host_file_flush(file) == LX_HOST_FS_OK;
-    lx_host_file_close(file);
+    if (file)
+        lx_host_file_close(file);
     if (ok)
         ok = lx_host_path_move(temporary, p->path) == LX_HOST_FS_OK;
     if (!ok)
@@ -779,7 +692,7 @@ LONG PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback)
 BOOL PrfWriteProfileData(HINI handle, PSZ app, PSZ key, PVOID data, ULONG size)
 {
     if ((!app && (key || data || size)) || (app && (!*app || strlen(app) >= 65536)) ||
-        (key && strlen(key) >= 65536) || size > PROFILE_LIMIT || (data && !key))
+        (key && strlen(key) >= 65536) || size > TB_PROFILE_SIZE_LIMIT || (data && !key))
         return FALSE;
     LxHandleBorrow borrow = {0};
     Profile *p = profile_get(handle, &borrow);
