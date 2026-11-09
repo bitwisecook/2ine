@@ -3,6 +3,7 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 
 typedef struct Open32Brush
 {
@@ -284,6 +285,58 @@ BOOL InvertRect(ULONG handle, PVOID input)
     return WinInvertRect(handle, &rectangle);
 }
 
+typedef struct BrushBlit
+{
+    Open32DC *dc;
+    Open32Brush *brush;
+    unsigned rop;
+    LONG canvas_height;
+} BrushBlit;
+
+static uint32 brush_rgb(ULONG color)
+{
+    return (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+}
+
+/* Pattern-only raster operation at one pel; Win32 brush origins and hatches are top-down. */
+static int brush_blit_pel(void *context, LONG x, LONG device_y, uint32_t *pel)
+{
+    BrushBlit *blit = context;
+    Open32DC *dc = blit->dc;
+    Open32Brush *brush = blit->brush;
+    LONG y = blit->canvas_height - 1 - device_y;
+    BOOL pattern = lx_pm_rop_uses_pattern(blit->rop);
+    uint32 p = brush_rgb(brush ? brush->color : 0);
+    if (pattern && brush->style == BS_HATCHED)
+    {
+        LONG px = (x - dc->brush_origin_x) & 7, py = (y - dc->brush_origin_y) & 7;
+        BOOL ink = brush->bitmap == HS_HORIZONTAL  ? py == 0
+                   : brush->bitmap == HS_VERTICAL  ? px == 0
+                   : brush->bitmap == HS_FDIAGONAL ? ((px + py) & 7) == 0
+                   : brush->bitmap == HS_BDIAGONAL ? ((px - py) & 7) == 0
+                   : brush->bitmap == HS_CROSS     ? (px == 0 || py == 0)
+                                                   : (((px + py) & 7) == 0 || ((px - py) & 7) == 0);
+        if (!ink && dc->background_mode == TRANSPARENT)
+            return LX_PM_PEL_KEEP;
+        p = brush_rgb(ink ? brush->color : dc->background_color);
+    }
+    if (pattern && brush->style == BS_PATTERN)
+    {
+        LONG px = (LONG)(((int64_t)x - dc->brush_origin_x) % brush->width);
+        LONG py = (LONG)(((int64_t)y - dc->brush_origin_y) % brush->height);
+        if (px < 0)
+            px += (LONG)brush->width;
+        if (py < 0)
+            py += (LONG)brush->height;
+        p = brush->pixels[(size_t)(brush->height - 1 - py) * brush->width + px];
+        if (brush->depth == 1)
+            p = brush_rgb(p ? dc->background_color : dc->text_color);
+    }
+    /* The operation ignores the source (checked by brush_blt), so any source value will do. */
+    *pel = lx_pm_rop3(p, 0, *pel, blit->rop);
+    return LX_PM_PEL_SET;
+}
+
 static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULONG operation,
                       Open32Brush *brush)
 {
@@ -295,7 +348,7 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
         open32SetError(6);
         return FALSE;
     }
-    if ((rop & 0x33) != ((rop >> 2) & 0x33))
+    if (lx_pm_rop_uses_source(rop))
     {
         open32SetError(87);
         return FALSE;
@@ -318,13 +371,13 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
     }
     width = (LONG)ex;
     height = (LONG)ey;
-    BOOL pattern = (rop & 15) != (rop >> 4);
+    BOOL pattern = lx_pm_rop_uses_pattern(rop);
     if (pattern && !brush)
     {
         open32SetError(6);
         return FALSE;
     }
-    if (!width || !height || (pattern && brush->style == 1))
+    if (!width || !height || (pattern && brush->style == BS_NULL))
         return TRUE;
     int64_t end_x = (int64_t)x + width, end_y = (int64_t)y + height;
     int64_t left = x < end_x ? x : end_x, right = x < end_x ? end_x : x;
@@ -340,79 +393,22 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
         bottom = canvas_height;
     if (left >= right || top >= bottom)
         return TRUE;
-    unsigned w = (unsigned)(right - left), h = (unsigned)(bottom - top);
-    size_t count = (size_t)w * h;
-    if (count > 16777216)
+    if ((uint64)(right - left) * (uint64)(bottom - top) > 16777216)
     {
         open32SetError(8);
         return FALSE;
     }
-    uint32 *pixels = malloc(count * sizeof *pixels);
-    if (!pixels)
-    {
-        open32SetError(8);
-        return FALSE;
-    }
-    BOOL result = lx_pm_raster_read(handle, (LONG)left, canvas_height - (LONG)bottom, w, h, pixels);
-    ULONG color = brush ? brush->color : 0;
-    uint32 p = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
-    if (result)
-    {
-        for (size_t i = 0; i < count; i++)
-        {
-            if (pattern && brush->style == 2)
-            {
-                LONG xx = (LONG)(left + i % w), yy = (LONG)(bottom - 1 - i / w);
-                LONG px = (xx - dc->brush_origin_x) & 7, py = (yy - dc->brush_origin_y) & 7;
-                BOOL ink = brush->bitmap == 0   ? py == 0
-                           : brush->bitmap == 1 ? px == 0
-                           : brush->bitmap == 2 ? ((px + py) & 7) == 0
-                           : brush->bitmap == 3 ? ((px - py) & 7) == 0
-                           : brush->bitmap == 4 ? (px == 0 || py == 0)
-                                                : (((px + py) & 7) == 0 || ((px - py) & 7) == 0);
-                if (!ink && dc->background_mode == 1)
-                    continue;
-                ULONG color = ink ? brush->color : dc->background_color;
-                p = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
-            }
-            if (pattern && brush->style == 3)
-            {
-                LONG px = (LONG)((left + (int64_t)(i % w) - dc->brush_origin_x) % brush->width);
-                LONG py =
-                    (LONG)((bottom - 1 - (int64_t)(i / w) - dc->brush_origin_y) % brush->height);
-                if (px < 0)
-                    px += (LONG)brush->width;
-                if (py < 0)
-                    py += (LONG)brush->height;
-                p = brush->pixels[(size_t)(brush->height - 1 - py) * brush->width + px];
-                if (brush->depth == 1)
-                {
-                    ULONG expanded = p ? dc->background_color : dc->text_color;
-                    p = (expanded & 255) << 16 | (expanded & 0xff00) | (expanded >> 16 & 255);
-                }
-            }
-            uint32 d = pixels[i], value = 0;
-            if (rop & 1)
-                value |= ~p & ~d;
-            if (rop & 2)
-                value |= ~p & d;
-            if (rop & 16)
-                value |= p & ~d;
-            if (rop & 32)
-                value |= p & d;
-            pixels[i] = value & 0xffffff;
-        }
-        result = lx_pm_raster_write(handle, (LONG)left, canvas_height - (LONG)bottom, w, h, pixels);
-    }
-    free(pixels);
-    return result;
+    BrushBlit blit = {dc, brush, rop, canvas_height};
+    RECTL device = {(LONG)left, canvas_height - (LONG)bottom, (LONG)right,
+                    canvas_height - (LONG)top};
+    return lx_pm_blit_rect(handle, &device, LX_PM_BLIT_READ, brush_blit_pel, &blit);
 }
 
 BOOL PatBlt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULONG operation)
 {
     Open32DC *dc = open32FindDC(handle);
     open32MetafilePatBlt(handle, x, y, width, height, operation);
-    if (dc && open32Rotated(dc) && operation == 0xF00021)
+    if (dc && open32Rotated(dc) && operation == PATCOPY)
         return open32RotatedFill(handle, x, y, x + width, y + height, dc->brush_handle);
     return brush_blt(handle, x, y, width, height, operation, dc ? dc->brush.resource : NULL);
 }

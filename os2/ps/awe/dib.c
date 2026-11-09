@@ -2,6 +2,7 @@
 /* DIB rows use DWORD padding; positive heights retain bottom-up bitmap order. */
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
+#include "os2/include/private/pmgrep.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
 #include <math.h>
 
@@ -439,7 +440,7 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
         last_x = maximum_x;
     if (last_y > maximum_y)
         last_y = maximum_y;
-    uint32 combined = mode == 1 ? 0xffffff : 0;
+    uint32 combined = mode == BLACKONWHITE ? 0xffffff : 0;
     for (LONG v = first_y; v < last_y; v++)
         for (LONG u = first_x; u < last_x; u++)
         {
@@ -468,6 +469,92 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
         }
     *rgb = combined;
     return TRUE;
+}
+
+typedef struct RotatedBlit
+{
+    Open32DC *dc;
+    const PmBitmap *bitmap;
+    LONG canvas_height, ax, ay;
+    double ex, ey, fx, fy, determinant;
+    LONG image_height, source_x, source_y, source_width, source_height;
+    unsigned rop;
+    BOOL pattern;
+} RotatedBlit;
+
+static int rotated_pel(void *context, LONG px, LONG device_y, uint32_t *pel)
+{
+    RotatedBlit *b = context;
+    LONG py = b->canvas_height - 1 - device_y;
+    double rx = px + 0.5 - b->ax, ry = py + 0.5 - b->ay;
+    double u = (rx * b->fy - ry * b->fx) / b->determinant,
+           v = (ry * b->ex - rx * b->ey) / b->determinant;
+    if (u < 0 || u >= 1 || v < 0 || v >= 1)
+        return LX_PM_PEL_KEEP;
+    LONG rows = (LONG)b->bitmap->height;
+    LONG span_x = b->source_width < 0 ? -b->source_width : b->source_width,
+         span_y = b->source_height < 0 ? -b->source_height : b->source_height;
+    LONG su = (LONG)(u * span_x), sv = (LONG)(v * span_y);
+    LONG sx = b->source_width > 0 ? b->source_x + su : b->source_x - 1 - su;
+    LONG sy = b->image_height > 0
+                  ? (b->source_height > 0 ? b->source_y + b->source_height - 1 - sv
+                                          : b->source_y + b->source_height + sv)
+                  : rows - 1 - (b->source_height > 0 ? b->source_y + sv : b->source_y - 1 - sv);
+    if (sx < 0 || sy < 0 || (ULONG)sx >= b->bitmap->width || (ULONG)sy >= b->bitmap->height)
+        return LX_PM_PEL_KEEP;
+    uint32 p = 0, s = b->bitmap->pixels[(size_t)sy * b->bitmap->width + sx];
+    if (b->pattern && !open32BrushPixel(b->dc, px, py, &p))
+        return LX_PM_PEL_KEEP;
+    *pel = lx_pm_rop3(p, s, *pel, b->rop);
+    return LX_PM_PEL_SET;
+}
+
+typedef struct StretchBlit
+{
+    Open32DC *dc;
+    const PmBitmap *bitmap;
+    LONG canvas_height, x, y;
+    int64_t dw, dh;
+    LONG image_height, rows, source_x, source_y, source_width, source_height;
+    unsigned rop;
+    BOOL pattern;
+    uint64 sampling_work;
+} StretchBlit;
+
+/* Maps one target pel back to its source pel, or under BLACKONWHITE/WHITEONBLACK to the
+   combination of the source pels it covers, and applies the raster operation. */
+static int stretch_pel(void *context, LONG px, LONG device_y, uint32_t *pel)
+{
+    StretchBlit *b = context;
+    LONG py = b->canvas_height - 1 - device_y;
+    int64_t dw = b->dw, dh = b->dh;
+    int64_t u = (dw > 0 ? (int64_t)px - b->x : (int64_t)b->x - 1 - px) *
+                llabs((int64_t)b->source_width) / llabs(dw);
+    int64_t v = (dh > 0 ? (int64_t)py - b->y : (int64_t)b->y - 1 - py) *
+                llabs((int64_t)b->source_height) / llabs(dh);
+    LONG sx = b->source_width > 0 ? b->source_x + (LONG)u : b->source_x - 1 - (LONG)u;
+    LONG sy = b->image_height > 0
+                  ? (b->source_height > 0 ? b->source_y + b->source_height - 1 - (LONG)v
+                                          : b->source_y + b->source_height + (LONG)v)
+                  : b->rows - 1 -
+                        (b->source_height > 0 ? b->source_y + (LONG)v : b->source_y - 1 - (LONG)v);
+    uint32 p = 0, s = b->bitmap->pixels[(size_t)sy * b->bitmap->width + sx];
+    if ((b->dc->stretch_mode == BLACKONWHITE || b->dc->stretch_mode == WHITEONBLACK) &&
+        (llabs(dw) < llabs((int64_t)b->source_width) ||
+         llabs(dh) < llabs((int64_t)b->source_height)))
+    {
+        double column = dw > 0 ? (double)((int64_t)px - b->x) : (double)((int64_t)b->x - 1 - px),
+               row = dh > 0 ? (double)((int64_t)py - b->y) : (double)((int64_t)b->y - 1 - py);
+        double xs = fabs((double)b->source_width / dw), ys = fabs((double)b->source_height / dh);
+        if (!stretch_sample(b->bitmap, b->image_height, b->source_x, b->source_y, b->source_width,
+                            b->source_height, column * xs, (column + 1) * xs, row * ys,
+                            (row + 1) * ys, b->dc->stretch_mode, &b->sampling_work, &s))
+            return LX_PM_PEL_FAIL;
+    }
+    if (b->pattern && !open32BrushPixel(b->dc, px, py, &p))
+        return LX_PM_PEL_FAIL;
+    *pel = lx_pm_rop3(p, s, *pel, b->rop);
+    return LX_PM_PEL_SET;
 }
 
 /* Under a rotating transform the target is a parallelogram: every device pel inside it maps back
@@ -501,47 +588,28 @@ static BOOL rotated_blit(ULONG handle, Open32DC *dc, const PmBitmap *bitmap, LON
     bottom = bottom > canvas_height ? canvas_height : bottom;
     if (left >= right || top >= bottom)
         return TRUE;
-    size_t area = (size_t)(right - left) * (size_t)(bottom - top);
-    uint32 *pixels = area <= 16777216 ? malloc(area * 4) : NULL;
-    if (!pixels || !lx_pm_raster_read(handle, left, canvas_height - bottom, right - left,
-                                      bottom - top, pixels))
-    {
-        free(pixels);
+    if ((size_t)(right - left) * (size_t)(bottom - top) > 16777216)
         return FALSE;
-    }
     unsigned rop = (operation >> 16) & 255;
-    BOOL pattern = (rop & 15) != (rop >> 4);
-    LONG rows = (LONG)bitmap->height, span_x = source_width < 0 ? -source_width : source_width,
-         span_y = source_height < 0 ? -source_height : source_height;
-    for (LONG py = top; py < bottom; py++)
-        for (LONG px = left; px < right; px++)
-        {
-            double rx = px + 0.5 - ax, ry = py + 0.5 - ay;
-            double u = (rx * fy - ry * fx) / determinant, v = (ry * ex - rx * ey) / determinant;
-            if (u < 0 || u >= 1 || v < 0 || v >= 1)
-                continue;
-            LONG su = (LONG)(u * span_x), sv = (LONG)(v * span_y);
-            LONG sx = source_width > 0 ? source_x + su : source_x - 1 - su;
-            LONG sy = image_height > 0
-                          ? (source_height > 0 ? source_y + source_height - 1 - sv
-                                               : source_y + source_height + sv)
-                          : rows - 1 - (source_height > 0 ? source_y + sv : source_y - 1 - sv);
-            if (sx < 0 || sy < 0 || (ULONG)sx >= bitmap->width || (ULONG)sy >= bitmap->height)
-                continue;
-            size_t index = (size_t)(bottom - 1 - py) * (size_t)(right - left) + (size_t)(px - left);
-            uint32 p = 0, s = bitmap->pixels[(size_t)sy * bitmap->width + sx], d = pixels[index],
-                   result = 0;
-            if (pattern && !open32BrushPixel(dc, px, py, &p))
-                continue;
-            for (unsigned bit = 0; bit < 8; bit++)
-                if (rop & (1u << bit))
-                    result |= (bit & 4 ? p : ~p) & (bit & 2 ? s : ~s) & (bit & 1 ? d : ~d);
-            pixels[index] = result & 0xFFFFFF;
-        }
-    BOOL ok = lx_pm_raster_write(handle, left, canvas_height - bottom, right - left, bottom - top,
-                                 pixels);
-    free(pixels);
-    return ok;
+    RotatedBlit blit = {dc,
+                        bitmap,
+                        canvas_height,
+                        ax,
+                        ay,
+                        ex,
+                        ey,
+                        fx,
+                        fy,
+                        determinant,
+                        image_height,
+                        source_x,
+                        source_y,
+                        source_width,
+                        source_height,
+                        rop,
+                        lx_pm_rop_uses_pattern(rop)};
+    RECTL device = {left, canvas_height - bottom, right, canvas_height - top};
+    return lx_pm_blit_rect(handle, &device, LX_PM_BLIT_READ, rotated_pel, &blit);
 }
 
 LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG source_x,
@@ -625,60 +693,16 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
     ULONG bitmap_handle = CreateBitmap(image_width, rows, 1, 24, NULL);
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = bitmap_handle ? lx_pm_bitmap(bitmap_handle, &borrow) : NULL;
-    uint32 *pixels = bitmap ? malloc(area * 4) : NULL;
-    BOOL ok = pixels &&
+    BOOL ok = bitmap &&
               SetDIBits(handle, bitmap_handle, 0, (ULONG)rows, bits, information, usage) == rows;
-    if (ok)
-        ok = lx_pm_raster_read(handle, left, canvas_height - bottom, right - left, bottom - top,
-                               pixels);
     unsigned rop = (operation >> 16) & 255;
-    BOOL pattern = (rop & 15) != (rop >> 4);
-    uint64 sampling_work = 0;
-    for (LONG py = top; ok && py < bottom; py++)
-        for (LONG px = left; ok && px < right; px++)
-        {
-            int64_t u = (dw > 0 ? (int64_t)px - x : (int64_t)x - 1 - px) *
-                        llabs((int64_t)source_width) / llabs(dw);
-            int64_t v = (dh > 0 ? (int64_t)py - y : (int64_t)y - 1 - py) *
-                        llabs((int64_t)source_height) / llabs(dh);
-            LONG sx = source_width > 0 ? source_x + (LONG)u : source_x - 1 - (LONG)u;
-            LONG sy =
-                image_height > 0
-                    ? (source_height > 0 ? source_y + source_height - 1 - (LONG)v
-                                         : source_y + source_height + (LONG)v)
-                    : rows - 1 - (source_height > 0 ? source_y + (LONG)v : source_y - 1 - (LONG)v);
-            uint32 p = 0, s = bitmap->pixels[(size_t)sy * bitmap->width + sx];
-            if ((dc->stretch_mode == 1 || dc->stretch_mode == 2) &&
-                (llabs(dw) < llabs((int64_t)source_width) ||
-                 llabs(dh) < llabs((int64_t)source_height)))
-            {
-                double column = dw > 0 ? (double)((int64_t)px - x) : (double)((int64_t)x - 1 - px),
-                       row = dh > 0 ? (double)((int64_t)py - y) : (double)((int64_t)y - 1 - py);
-                double xs = fabs((double)source_width / dw), ys = fabs((double)source_height / dh);
-                if (!stretch_sample(bitmap, image_height, source_x, source_y, source_width,
-                                    source_height, column * xs, (column + 1) * xs, row * ys,
-                                    (row + 1) * ys, dc->stretch_mode, &sampling_work, &s))
-                {
-                    ok = FALSE;
-                    break;
-                }
-            }
-            size_t index = (size_t)(bottom - 1 - py) * (right - left) + px - left;
-            uint32 d = pixels[index], result = 0;
-            if (pattern && !open32BrushPixel(dc, px, py, &p))
-            {
-                ok = FALSE;
-                break;
-            }
-            for (unsigned bit = 0; bit < 8; bit++)
-                if (rop & (1u << bit))
-                    result |= (bit & 4 ? p : ~p) & (bit & 2 ? s : ~s) & (bit & 1 ? d : ~d);
-            pixels[index] = result & 0xFFFFFF;
-        }
+    StretchBlit blit = {dc,       bitmap,       canvas_height, x,    y,
+                        dw,       dh,           image_height,  rows, source_x,
+                        source_y, source_width, source_height, rop,  lx_pm_rop_uses_pattern(rop),
+                        0};
+    RECTL device = {left, canvas_height - bottom, right, canvas_height - top};
     if (ok)
-        ok = lx_pm_raster_write(handle, left, canvas_height - bottom, right - left, bottom - top,
-                                pixels);
-    free(pixels);
+        ok = lx_pm_blit_rect(handle, &device, LX_PM_BLIT_READ, stretch_pel, &blit);
     lx_handle_release(&borrow);
     if (bitmap_handle)
         DeleteObject(bitmap_handle);

@@ -73,6 +73,59 @@ static BOOL raster_bounds(PresentationSpace *ps, LONG *width, LONG *height)
     return *width > 0 && *height > 0;
 }
 
+uint32_t lx_pm_rop3(uint32_t pattern, uint32_t source, uint32_t destination, unsigned rop)
+{
+    uint32_t value = 0;
+    for (unsigned i = 0; i < 8; i++)
+        if (rop & (1u << i))
+            value |= (i & 4 ? pattern : ~pattern) & (i & 2 ? source : ~source) &
+                     (i & 1 ? destination : ~destination);
+    return value & 0xffffff;
+}
+
+BOOL lx_pm_blit_rect(HPS handle, const RECTL *rect, unsigned read, LxPmBlitPel pel, void *context)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    int64_t w = (int64_t)rect->xRight - rect->xLeft, h = (int64_t)rect->yTop - rect->yBottom;
+    if (!ps || w <= 0 || h <= 0 || w > 16384 || h > 16384)
+        return FALSE;
+    uint32_t *pels = calloc((size_t)w * h, sizeof *pels);
+    if (!pels)
+        return FALSE;
+    BOOL ok = TRUE;
+    if (read == LX_PM_BLIT_READ)
+        ok = lx_pm_raster_read(handle, rect->xLeft, rect->yBottom, (unsigned)w, (unsigned)h, pels);
+    LONG target_width, target_height;
+    if (read == LX_PM_BLIT_READ_VISIBLE && raster_bounds(ps, &target_width, &target_height))
+    {
+        LONG left = rect->xLeft > 0 ? rect->xLeft : 0;
+        LONG bottom = rect->yBottom > 0 ? rect->yBottom : 0;
+        LONG right = rect->xRight < target_width ? rect->xRight : target_width;
+        LONG top = rect->yTop < target_height ? rect->yTop : target_height;
+        if (left < right && bottom < top)
+        {
+            size_t width = (size_t)(right - left), height = (size_t)(top - bottom);
+            uint32_t *visible = malloc(width * height * sizeof *visible);
+            ok = visible && lx_pm_raster_read(handle, left, bottom, (unsigned)width,
+                                              (unsigned)height, visible);
+            if (ok)
+                for (size_t row = 0; row < height; row++)
+                    memcpy(pels + ((size_t)((int64_t)bottom - rect->yBottom) + row) * w +
+                               ((int64_t)left - rect->xLeft),
+                           visible + row * width, width * sizeof *visible);
+            free(visible);
+        }
+    }
+    for (LONG y = 0; ok && y < h; y++)
+        for (LONG x = 0; ok && x < w; x++)
+            ok = pel(context, rect->xLeft + x, rect->yBottom + y, &pels[(size_t)y * w + x]) !=
+                 LX_PM_PEL_FAIL;
+    if (ok)
+        ok = lx_pm_raster_write(handle, rect->xLeft, rect->yBottom, (unsigned)w, (unsigned)h, pels);
+    free(pels);
+    return ok;
+}
+
 BOOL lx_pm_pattern_pixel(HPS handle, LONG x, LONG y, uint32_t *rgb, BOOL *foreground)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);

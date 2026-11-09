@@ -6,6 +6,7 @@
 #include "os2/include/pmgpi.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmgrep.h"
 #include "emulator/abi.h"
 
 ULONG GpiCreateBitmap(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info)
@@ -90,23 +91,44 @@ BOOL GpiQueryDeviceBitmapFormats(HPS ps, LONG count, PLONG output)
     return TRUE;
 }
 
-static uint32 rop_pixel(uint32 p, uint32 s, uint32 d, unsigned rop)
+typedef struct GpiBlit
 {
-    uint32 value = 0;
-    for (unsigned i = 0; i < 8; i++)
-        if (rop & (1u << i))
-            value |= (i & 4 ? p : ~p) & (i & 2 ? s : ~s) & (i & 1 ? d : ~d);
-    return value & 0xffffff;
+    HPS destination;
+    LONG back_mix, background, rop;
+    BOOL uses_source;
+    POINTL origin;
+    const uint32 *source;
+    int64_t width, height, source_width, source_height;
+} GpiBlit;
+
+/* The source is stretched by nearest neighbour; BBO options do not change the sampling. */
+static int gpi_blit_pel(void *context, LONG x, LONG y, uint32_t *pel)
+{
+    GpiBlit *blit = context;
+    int64_t column = (int64_t)x - blit->origin.x, row = (int64_t)y - blit->origin.y;
+    uint32 source =
+        blit->source[(size_t)(row * blit->source_height / blit->height) * blit->source_width +
+                     (size_t)(column * blit->source_width / blit->width)];
+    if (blit->uses_source &&
+        ((blit->back_mix == BM_SRCTRANSPARENT && source == (uint32)blit->background) ||
+         (blit->back_mix == BM_DESTTRANSPARENT && *pel != (uint32)blit->background)))
+        return LX_PM_PEL_KEEP;
+    uint32 pattern = 0;
+    BOOL foreground;
+    if (lx_pm_rop_uses_pattern((unsigned)blit->rop) &&
+        !lx_pm_pattern_pixel(blit->destination, x, y, &pattern, &foreground))
+        return LX_PM_PEL_FAIL;
+    *pel = lx_pm_rop3(pattern, source, *pel, (unsigned)blit->rop);
+    return LX_PM_PEL_SET;
 }
 
 static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count, PPOINTL points,
                        LONG rop, ULONG options)
 {
-    /* Each bit pair differing only in the source term matches when a ROP ignores the source. */
-    const BOOL uses_source = ((rop ^ (rop >> 2)) & 0x33) != 0;
+    const BOOL uses_source = lx_pm_rop_uses_source((unsigned)rop);
     if (!lx_pm_valid_ps(destination) || (uses_source && !bitmap && !lx_pm_valid_ps(source)) ||
         ((count != 3 && count != 4) && (uses_source || count != 2)) || !points || rop < 0 ||
-        rop > 255 || options > 2)
+        rop > 255 || options > BBO_IGNORE)
         return 0;
     int64_t w = (int64_t)points[1].x - points[0].x, h = (int64_t)points[1].y - points[0].y;
     int64_t sw = count == 4 ? (int64_t)points[3].x - points[2].x : w,
@@ -114,13 +136,9 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
     if (w <= 0 || h <= 0 || sw <= 0 || sh <= 0 || w > 16384 || h > 16384 || sw > 16384 ||
         sh > 16384 || w * h > 16777216 || sw * sh > 16777216)
         return 0;
-    uint32 *src = calloc((size_t)sw * sh, 4), *dst = calloc((size_t)w * h, 4);
-    if (!src || !dst)
-    {
-        free(src);
-        free(dst);
+    uint32 *src = calloc((size_t)sw * sh, 4);
+    if (!src)
         return 0;
-    }
     BOOL ok = TRUE;
     if (!uses_source)
         ok = TRUE;
@@ -138,57 +156,25 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
     else
         ok = lx_pm_raster_read(source, points[2].x, points[2].y, (unsigned)sw, (unsigned)sh, src);
     PresentationSpace *ps = lx_pm_font_space(destination);
-    BOOL transparent = ps && (ps->back_mix == 18 || ps->back_mix == 19);
-    if (ok && (transparent || (rop != 0xcc && rop != 0 && rop != 0xff)))
-    {
-        PmBitmap *target = ps->bitmap_lease.resource;
-        LONG target_width = target ? (LONG)target->width : ps->window ? ps->window->w : 0;
-        LONG target_height = target ? (LONG)target->height : ps->window ? ps->window->h : 0;
-        LONG left = points[0].x > 0 ? points[0].x : 0;
-        LONG bottom = points[0].y > 0 ? points[0].y : 0;
-        LONG right = points[1].x < target_width ? points[1].x : target_width;
-        LONG top = points[1].y < target_height ? points[1].y : target_height;
-        if (left < right && bottom < top)
-        {
-            size_t width = (size_t)(right - left), height = (size_t)(top - bottom);
-            uint32 *visible = malloc(width * height * sizeof *visible);
-            ok = visible && lx_pm_raster_read(destination, left, bottom, (unsigned)width,
-                                              (unsigned)height, visible);
-            if (ok)
-                for (size_t row = 0; row < height; row++)
-                    memcpy(dst + ((size_t)((int64_t)bottom - points[0].y) + row) * w +
-                               ((int64_t)left - points[0].x),
-                           visible + row * width, width * sizeof *visible);
-            free(visible);
-        }
-    }
-    LONG background = lx_pm_resolve_color(destination, ps->back_color);
+    BOOL transparent = ps->back_mix == BM_SRCTRANSPARENT || ps->back_mix == BM_DESTTRANSPARENT;
+    GpiBlit blit = {destination,
+                    ps->back_mix,
+                    lx_pm_resolve_color(destination, ps->back_color),
+                    rop,
+                    uses_source,
+                    points[0],
+                    src,
+                    w,
+                    h,
+                    sw,
+                    sh};
+    RECTL target = {points[0].x, points[0].y, points[1].x, points[1].y};
+    /* Copies and constant fills replace every pel, so they need not read the destination. */
+    unsigned read = transparent || (rop != ROP_SRCCOPY && rop != ROP_ZERO && rop != ROP_ONE)
+                        ? LX_PM_BLIT_READ_VISIBLE
+                        : LX_PM_BLIT_NO_READ;
     if (ok)
-    {
-        for (LONG y = 0; y < h && ok; y++)
-            for (LONG x = 0; x < w && ok; x++)
-            {
-                size_t index = (size_t)y * w + x;
-                uint32 source_pixel = src[(size_t)(y * sh / h) * sw + x * sw / w];
-                if (uses_source && ((ps->back_mix == 18 && source_pixel == (uint32)background) ||
-                                    (ps->back_mix == 19 && dst[index] != (uint32)background)))
-                    continue;
-                uint32 pattern = 0;
-                BOOL foreground;
-                if (((rop ^ (rop >> 4)) & 15) &&
-                    !lx_pm_pattern_pixel(destination, points[0].x + x, points[0].y + y, &pattern,
-                                         &foreground))
-                {
-                    ok = FALSE;
-                    break;
-                }
-                dst[index] = rop_pixel(pattern, source_pixel, dst[index], (unsigned)rop);
-            }
-        if (ok)
-            ok = lx_pm_raster_write(destination, points[0].x, points[0].y, (unsigned)w, (unsigned)h,
-                                    dst);
-    }
-    free(dst);
+        ok = lx_pm_blit_rect(destination, &target, read, gpi_blit_pel, &blit);
     free(src);
     return ok ? 1 : 0;
 }

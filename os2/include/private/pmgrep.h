@@ -49,6 +49,51 @@ extern "C"
     BOOL lx_pm_walk_line(LONG x0, LONG y0, LONG x1, LONG y1, BOOL include_end, LxPmPelVisitor visit,
                          void *context);
 
+    /* Raster operations */
+
+    /* Applies a ternary raster operation (GPI ROP_*, bits 16-23 of a Win32 one) to one pel: bit
+       (pattern << 2 | source << 1 | destination) of rop gives each result bit. */
+    uint32_t lx_pm_rop3(uint32_t pattern, uint32_t source, uint32_t destination, unsigned rop);
+
+    /* Whether a raster operation's result depends on the source, or on the pattern. */
+    static inline BOOL lx_pm_rop_uses_source(unsigned rop)
+    {
+        return ((rop ^ (rop >> 2)) & 0x33) != 0;
+    }
+
+    static inline BOOL lx_pm_rop_uses_pattern(unsigned rop)
+    {
+        return ((rop ^ (rop >> 4)) & 0x0f) != 0;
+    }
+
+    enum
+    {
+        /* The transfer ignores the destination; the pels start as 0. */
+        LX_PM_BLIT_NO_READ = 0,
+        /* The whole rectangle is read; the transfer fails when it cannot be. */
+        LX_PM_BLIT_READ = 1,
+        /* GPI: only the part inside the bit map or window is read; the rest starts as 0. */
+        LX_PM_BLIT_READ_VISIBLE = 2
+    };
+
+    enum
+    {
+        LX_PM_PEL_KEEP,
+        LX_PM_PEL_SET,
+        LX_PM_PEL_FAIL
+    };
+
+    /* Computes one pel of a raster transfer at device (x, y). *pel holds the destination; the
+       callback stores the result and returns LX_PM_PEL_SET, leaves it (LX_PM_PEL_KEEP), or stops
+       the transfer (LX_PM_PEL_FAIL). */
+    typedef int (*LxPmBlitPel)(void *context, LONG x, LONG y, uint32_t *pel);
+
+    /* The read-modify-write raster transfer shared by GPI and Win32 blits. The device rectangle
+       [xLeft, xRight) x [yBottom, yTop) is read as requested, every pel passes through pel from
+       the bottom row up, and the rectangle is written back through the clip. FALSE when a read,
+       allocation, write or pel fails; nothing is written then. */
+    BOOL lx_pm_blit_rect(HPS ps, const RECTL *rect, unsigned read, LxPmBlitPel pel, void *context);
+
 #ifdef __cplusplus
 }
 #endif
