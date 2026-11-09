@@ -8,7 +8,42 @@
 
 #ifndef TWOINE_FORMAT_NE_H
 #define TWOINE_FORMAT_NE_H
+#include "formats/executable/relocations.h"
 #include "formats/executable/types.h"
+
+/* NE field values; names and values follow the Toolkit's newexe.h. */
+enum
+{
+    NE_OS2 = 0x1, /* ne_exetyp */
+
+    /* ne_flags */
+    NEIERR = 0x2000, /* errors in image: not loadable */
+    NENOTP = 0x8000, /* library module */
+
+    /* ns_flags */
+    NSTYPE = 0x0007,
+    NSCODE = 0x0000,
+    NSITER = 0x0008,
+    NSPRELOAD = 0x0040,
+    NSEXRD = 0x0080, /* execute-only code, or read-only data */
+    NSRELOC = 0x0100,
+
+    /* Relocation target type that newexe.h adds to relocations.h */
+    NRROSF = 0x03, /* operating-system (floating-point) fixup */
+
+    /* Entry table bundle indicators; any other value is a fixed-segment number. */
+    NE_BUNDLE_UNUSED = 0x00,
+    NE_BUNDLE_MOVABLE = 0xFF,
+    NE_FIXED_ENTRY_SIZE = 3,   /* flags, offset */
+    NE_MOVABLE_ENTRY_SIZE = 6, /* flags, INT 3Fh, segment, offset */
+
+    /* An internal reference to this segment number names an entry ordinal instead. */
+    NE_MOVABLE_SEGMENT = 0xFF,
+
+    /* A segment length of zero means 64 KiB. */
+    NE_SEGMENT_MAX_SIZE = 0x10000
+};
+
 #pragma pack(push, 1)
 
 typedef struct NeHeader

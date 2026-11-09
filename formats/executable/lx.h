@@ -8,7 +8,78 @@
 
 #ifndef TWOINE_FORMAT_LX_H
 #define TWOINE_FORMAT_LX_H
+#include "formats/executable/relocations.h"
 #include "formats/executable/types.h"
+
+/* LX field values; names and values follow the Toolkit's exe386.h. */
+enum
+{
+    E32LEBO = 0x00, /* little-endian byte order */
+    E32LEWO = 0x00, /* little-endian word order */
+    E32LEVEL = 0,
+    E32CPU286 = 0x001,
+    E32CPU386 = 0x002,
+    E32CPU486 = 0x003,
+    LX_OS_OS2 = 1, /* e32_os; the other values are DOS 4, Windows and Win386 */
+    LX_PAGE_SIZE = 4096,
+
+    /* e32_mflags */
+    E32NOINTFIX = 0x0010,
+    E32NOLOAD = 0x2000,
+    E32NOTP = 0x8000,
+    E32MODEXE = 0x00000,
+    E32MODDLL = 0x08000,
+    E32MODMASK = 0x38000,
+
+    /* o32_flags */
+    OBJREAD = 0x0001,
+    OBJWRITE = 0x0002,
+    OBJEXEC = 0x0004,
+    OBJRSRC = 0x0008,
+    OBJALIAS16 = 0x1000,
+    OBJBIGDEF = 0x2000,
+
+    /* o32_pageflags; the Toolkit spells these VALID, ITERDATA, INVALID, ZEROED, ITERDATA2 */
+    LX_PAGE_VALID = 0x00,
+    LX_PAGE_ITERDATA = 0x01,
+    LX_PAGE_INVALID = 0x02,
+    LX_PAGE_ZEROED = 0x03,
+    LX_PAGE_ITERDATA2 = 0x05,
+    LX_PAGE_ITERDATA3 = 0x08, /* EXEPACK:2 compressed page; the Toolkit header predates it */
+
+    /* Fixup record bits exe386.h adds to relocations.h */
+    NRALIAS = 0x10,
+    NRCHAIN = 0x20,
+    NRRENT = 0x03,
+    NR32BITOFF = 0x10,
+    NR32BITADD = 0x20,
+    NR16OBJMOD = 0x40,
+    NR8BITORD = 0x80,
+
+    /* Entry table bundle types (b32_type); the Toolkit spells these EMPTY, ENTRY16, GATE16,
+       ENTRY32, ENTRYFWD and TYPEINFO */
+    LX_BUNDLE_EMPTY = 0x00,
+    LX_BUNDLE_ENTRY16 = 0x01,
+    LX_BUNDLE_GATE16 = 0x02,
+    LX_BUNDLE_ENTRY32 = 0x03,
+    LX_BUNDLE_ENTRYFWD = 0x04,
+    LX_BUNDLE_TYPEINFO = 0x80,
+    FIXENT16 = 3, /* bytes per 16-bit entry */
+    FIXENT32 = 5, /* bytes per 32-bit entry */
+    FWDENT = 7,   /* bytes per forwarder entry */
+    /* Forwarder entry flag: the target is an ordinal, not a procedure-name offset. */
+    FWD_ORDINAL = 0x01,
+
+    /* An internal chaining fixup's 32-bit link word: next offset in the top 12 bits, target
+       delta in the low 20; LX_ICHAIN_END ends the chain. */
+    LX_ICHAIN_TARGET_MASK = 0xFFFFF,
+    LX_ICHAIN_NEXT_SHIFT = 20,
+    LX_ICHAIN_END = 0xFFF,
+
+    /* Names in LX name tables are length-prefixed; the top length bit is reserved. */
+    LX_NAME_LENGTH_MASK = 0x7F
+};
+
 #pragma pack(push, 1)
 
 typedef struct LxHeader
