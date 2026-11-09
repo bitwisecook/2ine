@@ -193,7 +193,12 @@ twoine_os2_dll(
     awe/comdlg/print_dialog.c
     awe/shell/drag_drop.c
     awe/shell/execute.c
+    awe/dde/callbacks.c
     awe/dde/conversations.c
+    awe/dde/data.c
+    awe/dde/instance.c
+    awe/dde/remote.c
+    awe/dde/strings.c
 )
 target_link_libraries(pmmerge PRIVATE twoine_formats doscalls)
 find_package(ZLIB REQUIRED)
