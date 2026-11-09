@@ -48,7 +48,7 @@ twoine_os2_dll(
     pmmerge/pmwin/window_data.c
     pmmerge/pmwin/system.c
     pmmerge/pmwin/window_queries.c
-    pmmerge/pmwin/presentation.c
+    pmmerge/pmwin/winpres.c
     pmmerge/pmwin/create_message.c
     pmmerge/pmwin/dialogs.c
     pmmerge/pmwin/dialog_template.c
