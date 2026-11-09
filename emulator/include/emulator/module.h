@@ -22,9 +22,15 @@ typedef struct LxMmaps
     void *addr;
     size_t size;
     int prot;
-    uint16 alias;  // 16:16 alias, if one.
+    uint16 alias;  // 16:16 alias selector, or LX_NO_ALIAS.
     unsigned bits; // Default operand/address width of this object.
 } LxMmaps;
+
+/* LxMmaps.alias value for an object without a 16:16 alias selector. */
+enum
+{
+    LX_NO_ALIAS = 0xFFFF
+};
 
 typedef struct LxExport
 {

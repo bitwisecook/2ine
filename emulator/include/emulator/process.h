@@ -12,6 +12,12 @@
 #include "emulator/execution.h"
 #include "emulator/abi.h"
 
+/* The command line and environment share one 64 KiB segment, as on OS/2. */
+enum
+{
+    LX_ENVIRONMENT_SEGMENT_SIZE = 0x10000
+};
+
 /* The process information block as the host sees it: the fields of the guest
    PIB (LxGuestPib in emulator/abi.h) with the command line and environment as
    host pointers. lx_loader publishes the guest copy. */

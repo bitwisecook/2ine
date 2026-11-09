@@ -7,6 +7,25 @@
  */
 #include "emulator/loader/internal.h"
 
+/* Loads 16-bit NE modules: segments, segment fixups and the entry table. */
+
+enum
+{
+    /* Deeper import chains than this are treated as circular. */
+    MAX_DEPENDENCY_DEPTH = 32,
+    /* Names are length-prefixed with a byte. */
+    MAX_NAME_BUFFER = 256,
+    /* Allocation-failure value of the selector out-parameter. */
+    NO_SELECTOR = 0xFFFF,
+    /* Minimum stack reserved above the automatic data, and the highest usable stack top. */
+    MIN_AUTODATA_STACK = 0x8000,
+    MAX_AUTODATA_STACK_TOP = 0xFFF0,
+    /* SP zero in a far stack pointer means the top of a 64 KiB segment. */
+    SEGMENT_TOP_SP = 0xFFFF,
+    /* A fixup source chain ends at this offset. */
+    CHAIN_END = 0xFFFF
+};
+
 int sanityCheckNeModule(const uint8 *exe, const uint32 exelen)
 {
     if (sizeof(NeHeader) >= exelen)
@@ -16,7 +35,7 @@ int sanityCheckNeModule(const uint8 *exe, const uint32 exelen)
     }
 
     const NeHeader *ne = (const NeHeader *)exe;
-    if (ne->exe_type > 1)
+    if (ne->exe_type > NE_OS2)
     {
         fprintf(stderr, "Not an OS/2 NE module file (exe_type is %d, not 1)\n", (int)ne->exe_type);
         return 0;
@@ -30,10 +49,8 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
 {
     assert(!lxmod->is_lx);
 
-    if ((seg->segment_flags & 0x100) == 0)
-    {
-        return 1; // no fixups here.
-    }
+    if ((seg->segment_flags & NSRELOC) == 0)
+        return 1;
 
     const uint8 *segptr = origexe + (seg->offset << sector_shift);
     const uint8 *fixupptr = segptr + (seg->size ? seg->size : 0xFFFF);
@@ -41,7 +58,7 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
     fixupptr += 2;
     /* NE chains address the virtual segment, including its zero-filled tail. */
     const uint32 seg_fixup_limit =
-        seg->minimum_allocation ? (uint32)seg->minimum_allocation : 0x10000;
+        seg->minimum_allocation ? (uint32)seg->minimum_allocation : NE_SEGMENT_MAX_SIZE;
 
     for (uint32 i = 0; i < num_fixups; i++)
     {
@@ -51,20 +68,20 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
         fixupptr += 2;
         const uint8 *targetptr = fixupptr;
         fixupptr += 4;
-        const int additive = (flags & 0x4) != 0;
+        const int additive = (flags & NRADD) != 0;
         // NE names the patched location "source" and its resolved value "target".
         uint32 target = 0;
 
-        switch (flags & 0x3)
+        switch (flags & NRRTYP)
         {
-            case 0:
+            case NRRINT:
             {
                 const LxExport *lxexp = NULL;
                 const uint8 segment = targetptr[0];
 
                 const uint16 offset = *((const uint16 *)&targetptr[2]);
-                if (segment == 0xFF)
-                { // this is like IMPORTORDINAL with ourselves as the module.
+                if (segment == NE_MOVABLE_SEGMENT)
+                { /* A movable target is an entry ordinal in this module. */
                     void *addr = getModuleProcAddrByOrdinal(lxmod, offset, &lxexp, 1, 0);
                     if (addr)
                     {
@@ -78,7 +95,7 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
             }
             break;
 
-            case 1:
+            case NRRORD:
             {
                 const uint16 module = ((const uint16 *)targetptr)[0];
                 const uint16 ordinal = ((const uint16 *)targetptr)[1];
@@ -92,14 +109,14 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
             }
             break;
 
-            case 2:
+            case NRRNAM:
             {
                 const uint16 module = ((const uint16 *)targetptr)[0];
                 const uint16 offset = ((const uint16 *)targetptr)[1];
                 const LxExport *lxexp = NULL;
                 const uint8 *import_name =
                     (exe + lxmod->header.ne.imported_names_table_offset) + offset;
-                char name[256];
+                char name[MAX_NAME_BUFFER];
                 const uint8 namelen = *(import_name++);
                 memcpy(name, import_name, namelen);
                 name[namelen] = '\0';
@@ -112,38 +129,35 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
             }
             break;
 
-            case 3:
-            {
-
-                continue; // just skip this fixup.
-            }
-            break;
+            case NRROSF:
+                /* Operating-system (floating-point) fixups are deliberately left unapplied. */
+                continue;
 
             default:
-                fprintf(stderr, "unknown fixup target type %u\n", (uint)(flags & 0x3));
+                fprintf(stderr, "unknown fixup target type %u\n", (uint)(flags & NRRTYP));
                 break;
         }
 
         if (additive)
         {
             uint16 *source = (uint16 *)(dst + srcchain_offset);
-            switch (srctype & 0xF)
+            switch (srctype & NRSTYP)
             {
-                case 0:
+                case NRSBYT:
                     *((uint8 *)source) += target & 0xFF;
                     break;
-                case 2:
+                case NRSSEG:
                     *source += target >> 16;
                     break;
-                case 3:
+                case NRSPTR:
                     source[0] += target & 0xFFFF;
                     source[1] += target >> 16;
-                    break; // FAR_ADDR  ... this adds to the offset, not segment.
-                case 5:
+                    break;
+                case NRSOFF:
                     *source += target & 0xFFFF;
                     break;
                 default:
-                    fprintf(stderr, "unknown fixup type %u\n", (uint)(srctype & 0xF));
+                    fprintf(stderr, "unknown fixup type %u\n", (uint)(srctype & NRSTYP));
                     break;
             }
         }
@@ -156,27 +170,27 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
                 {
                     uint16 *source = (uint16 *)(dst + srcchain_offset);
                     const uint32 next_offset = (uint32)*source;
-                    switch (srctype & 0xF)
+                    switch (srctype & NRSTYP)
                     {
-                        case 0:
+                        case NRSBYT:
                             *((uint8 *)source) = target & 0xFF;
                             break;
-                        case 2:
+                        case NRSSEG:
                             *source = target >> 16;
                             break;
-                        case 3:
+                        case NRSPTR:
                             source[0] = target & 0xFFFF;
                             source[1] = target >> 16;
                             break;
-                        case 5:
+                        case NRSOFF:
                             *source = target & 0xFFFF;
                             break;
                         default:
-                            fprintf(stderr, "unknown fixup type %u\n", (uint)(srctype & 0xF));
+                            fprintf(stderr, "unknown fixup type %u\n", (uint)(srctype & NRSTYP));
                             break;
                     }
                     srcchain_offset = next_offset;
-                } while ((srcchain_offset != 0) && (srcchain_offset != 0xFFFF) &&
+                } while ((srcchain_offset != 0) && (srcchain_offset != CHAIN_END) &&
                          (srcchain_offset < seg_fixup_limit));
             }
         }
@@ -191,15 +205,15 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     LxModule *retval = NULL;
     FIXME("All of this needs bounds checking and corruption testing");
     const NeHeader *ne = (const NeHeader *)exe;
-    const uint16 module_type = ne->module_flags & 0x8000;
+    const uint16 module_type = ne->module_flags & NENOTP;
 
-    if (ne->module_flags & 0x2000)
+    if (ne->module_flags & NEIERR)
     {
         fprintf(stderr, "This module is marked as not loadable.\n");
         goto loadne_failed;
     }
 
-    const int isDLL = (module_type == 0x8000);
+    const int isDLL = (module_type == NENOTP);
 
     if (isDLL && !GProcessState.main_module)
     {
@@ -241,7 +255,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     retval->num_dependencies = ne->num_module_ref_table_entries;
     retval->num_mmaps = ne->num_segment_table_entries;
     for (int i = 0; i < retval->num_mmaps; i++)
-        retval->mmaps[i].alias = 0xFFFF;
+        retval->mmaps[i].alias = LX_NO_ALIAS;
 
     memcpy(&retval->header.ne, ne, sizeof(*ne));
 
@@ -271,7 +285,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
     const char *modname = retval->name;
 
-    if (++dependency_tree_depth > 32)
+    if (++dependency_tree_depth > MAX_DEPENDENCY_DEPTH)
     {
         fprintf(stderr, "Likely circular dependency in module '%s'\n", modname);
         goto loadne_failed;
@@ -295,11 +309,11 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     for (uint32 i = 0; i < ne->num_segment_table_entries; i++, seg++)
     {
         /* Allocate full 64-KiB NE segments so tiled selectors retain a fixed extent. */
-        const uint32 vsize = 0x10000;
+        const uint32 vsize = NE_SEGMENT_MAX_SIZE;
         /* NE segments remain fixed for their mapping lifetime. */
-        const int iscode = ((seg->segment_flags & 0x7) == 0) ? 1 : 0;
-        const int isiterated = (seg->segment_flags & 0x8) ? 1 : 0;
-        uint16 selector = 0xFFFF;
+        const int iscode = ((seg->segment_flags & NSTYPE) == NSCODE) ? 1 : 0;
+        const int isiterated = (seg->segment_flags & NSITER) ? 1 : 0;
+        uint16 selector = NO_SELECTOR;
         void *mmapaddr = lx_execution_alloc_segment(GProcessState.execution, &selector, iscode);
 
         if (mmapaddr == NULL)
@@ -307,7 +321,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             fprintf(stderr, "lx_execution_alloc_segment(%d) failed\n", iscode);
             goto loadne_failed;
         }
-        else if (selector == 0xFFFF)
+        else if (selector == NO_SELECTOR)
         {
             /* The execution instance retains ownership of this failed allocation. */
             mmapaddr = NULL;
@@ -334,7 +348,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
         uint8 *dst = (uint8 *)mmapaddr;
         const size_t segfiledataoffset = seg->offset;
-        const size_t segfiledatalen = seg->size ? seg->size : 0x10000;
+        const size_t segfiledatalen = seg->size ? seg->size : NE_SEGMENT_MAX_SIZE;
         assert(segfiledatalen <= vsize);
         const uint8 *src = origexe + (segfiledataoffset << ne->sector_alignment_shift_count);
 
@@ -389,15 +403,15 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             }
             /* Reserve stack space below autodata; the declared minimum can understate runtime usage. */
             uint32 stacktop = (uint32)autodataseg->size + ne->stack_size;
-            if (stacktop < ((uint32)autodataseg->size + 0x8000))
-                stacktop = (uint32)autodataseg->size + 0x8000;
-            if (stacktop >= 0xFFF0)
-                stacktop = 0xFFF0;
+            if (stacktop < ((uint32)autodataseg->size + MIN_AUTODATA_STACK))
+                stacktop = (uint32)autodataseg->size + MIN_AUTODATA_STACK;
+            if (stacktop >= MAX_AUTODATA_STACK_TOP)
+                stacktop = MAX_AUTODATA_STACK_TOP;
             sp = (uint16)stacktop;
         }
 
-        retval->esp =
-            (lxSelectorToSegment(retval->mmaps[ne->reg_ss - 1].alias) << 16) | (sp ? sp : 0xFFFF);
+        retval->esp = (lxSelectorToSegment(retval->mmaps[ne->reg_ss - 1].alias) << 16) |
+                      (sp ? sp : SEGMENT_TOP_SP);
 
         uint16 stacksize = ne->stack_size;
         if (stacksize == 0)
@@ -425,9 +439,11 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             const uint8 numentries = *(entryptr++); /* number of entries in this bundle */
             const uint8 bundletype = *(entryptr++);
             total_ordinals += numentries;
-            if (bundletype != 0x00)
+            if (bundletype != NE_BUNDLE_UNUSED)
             {
-                entryptr += ((bundletype == 0xFF) ? 6 : 3) * numentries;
+                entryptr += ((bundletype == NE_BUNDLE_MOVABLE) ? NE_MOVABLE_ENTRY_SIZE
+                                                               : NE_FIXED_ENTRY_SIZE) *
+                            numentries;
             }
         }
 
@@ -451,17 +467,17 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
                 switch (bundletype)
                 {
-                    case 0x00:
+                    case NE_BUNDLE_UNUSED:
                         ordinal += numentries;
                         break;
 
-                    case 0xFF:
+                    case NE_BUNDLE_MOVABLE:
                         for (uint8 i = 0; i < numentries; i++)
                         {
                             const uint8 flags = *(entryptr++);
                             FIXME("deal with flags");
                             (void)flags;
-                            entryptr += 2;
+                            entryptr += 2; /* INT 3Fh reload thunk */
                             const uint8 segment = (*(entryptr++)) - 1;
                             const uint16 offset = *((const uint16 *)entryptr);
                             entryptr += 2;
@@ -517,7 +533,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     {
         const uint8 *nameptr = (exe + ne->imported_names_table_offset) + *(import_modules_table++);
         const uint8 namelen = *(nameptr++);
-        char name[256];
+        char name[MAX_NAME_BUFFER];
         memcpy(name, nameptr, namelen);
         name[namelen] = '\0';
         retval->dependencies[i] = loadModuleByModuleNameInternal(name, dependency_tree_depth);
@@ -537,10 +553,9 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             goto loadne_failed;
         }
 
-        // Now set all the pages of this object to the proper final permissions...
-        const int iscode = ((seg->segment_flags & 0x7) == 0) ? 1 : 0;
-        /* PRELOAD (0x40) controls loading time; 0x80 marks read-only data. */
-        const int readonly = !iscode && (seg->segment_flags & 0x80);
+        const int iscode = ((seg->segment_flags & NSTYPE) == NSCODE) ? 1 : 0;
+        /* NSPRELOAD only controls loading time; NSEXRD on data marks it read-only. */
+        const int readonly = !iscode && (seg->segment_flags & NSEXRD);
         const int prot =
             (readonly ? 0 : LX_GUEST_WRITE) | (iscode ? LX_GUEST_EXECUTE : 0) | LX_GUEST_READ;
         retval->mmaps[i].prot = prot;

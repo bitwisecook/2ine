@@ -5,20 +5,48 @@
 #include "host/process.h"
 #include "host/shared_memory.h"
 
+enum
+{
+    LEASE_NAME_SIZE = 32,
+    /* Time allowed for REXXINIT.DLL to publish its queue. */
+    SERVICE_START_TIMEOUT_US = 5000000,
+    /* The service exits once no client has held the lease for this long. */
+    SERVICE_IDLE_EXIT_US = 1000000,
+    SERVICE_POLL_MS = 50,
+
+    /* Layout of the synthetic REXXSERVICE.EXE image that gives the service a main stack. */
+    SERVICE_IMAGE_SIZE = 515,
+    SERVICE_LX_HEADER_OFFSET = ENEWEXE,
+    SERVICE_CODE_OBJECT_BASE = 0x10000,
+    SERVICE_STACK_OBJECT_BASE = 0x20000,
+    SERVICE_STACK_OBJECT_SIZE = 0x10000,
+    SERVICE_INITIAL_ESP = 0xfff0,
+    SERVICE_DATA_PAGES_OFFSET = 512,
+    SERVICE_NAME_TABLE_SIZE = 11,     /* length byte, "SERVICE", ordinal, table terminator */
+    SERVICE_FIXUP_PAGE_TABLE_SIZE = 8 /* two offsets for the single page */
+};
+
+/* 64-bit FNV-1a parameters for the lease name. */
+#define FNV64_OFFSET_BASIS UINT64_C(1469598103934665603)
+#define FNV64_PRIME UINT64_C(1099511628211)
+
 static LxHostShared *RexxClientLease;
 static int RexxServiceWorker;
 
-static void rexxLeaseName(char name[32])
+/* Clients sharing a ball, IPC scope and C: drive share one service lease. */
+static void rexxLeaseName(char name[LEASE_NAME_SIZE])
 {
-    uint64 hash = UINT64_C(1469598103934665603);
-    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"), GProcessState.disks[2]};
+    uint64 hash = FNV64_OFFSET_BASIS;
+    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"),
+                           GProcessState.disks['C' - 'A']};
     for (size_t i = 0; i < sizeof scope / sizeof scope[0]; i++)
     {
         for (const char *p = scope[i]; p && *p; p++)
-            hash = (hash ^ (unsigned char)*p) * UINT64_C(1099511628211);
-        hash = (hash ^ 0xff) * UINT64_C(1099511628211);
+            hash = (hash ^ (unsigned char)*p) * FNV64_PRIME;
+        /* Separate the scope strings so their boundaries affect the hash. */
+        hash = (hash ^ 0xff) * FNV64_PRIME;
     }
-    snprintf(name, 32, "/2ine-rx-%016llx", (unsigned long long)hash);
+    snprintf(name, LEASE_NAME_SIZE, "/2ine-rx-%016llx", (unsigned long long)hash);
 }
 
 static int rexxQueueOwner(uint32 *owner)
@@ -61,8 +89,9 @@ static LxHostChild *spawnRexxService(void)
     }
     size_t output = 0;
     for (size_t i = 0; i < count; i++)
-        if (strncmp(host[i], "IS_2INE=", 8) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
-            strncmp(host[i], "TWOINE_DESKTOP_AUXILIARY=", 25))
+        if (strncmp(host[i], "IS_2INE=", strlen("IS_2INE=")) &&
+            strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", strlen("TWOINE_CHILD_ARGUMENTS=")) &&
+            strncmp(host[i], "TWOINE_DESKTOP_AUXILIARY=", strlen("TWOINE_DESKTOP_AUXILIARY=")))
             environment[output++] = host[i];
     environment[output++] = "TWOINE_DESKTOP_AUXILIARY=1";
     char *arguments[] = {executable, "--rexx-service", NULL};
@@ -78,7 +107,7 @@ int ensureRexxService(void)
         return 1;
     if (!RexxClientLease)
     {
-        char name[32];
+        char name[LEASE_NAME_SIZE];
         rexxLeaseName(name);
         LxHostSharedResult result = lx_host_shared_open(name, 1, &RexxClientLease);
         if (result == LX_HOST_SHARED_EXISTS)
@@ -98,7 +127,7 @@ int ensureRexxService(void)
         fprintf(stderr, "Cannot start the OS/2 REXX initialization worker\n");
         return 0;
     }
-    const uint64 deadline = lx_host_monotonic_us() + 5000000;
+    const uint64 deadline = lx_host_monotonic_us() + SERVICE_START_TIMEOUT_US;
     do
     {
         if (rexxQueueOwner(&owner))
@@ -126,43 +155,53 @@ static LxModule *serviceStack(void)
 {
     /* The loader's normal executable path creates a valid main stack and TIB
        before any original DLL initializer or guest service thread executes. */
-    uint8 image[515] = {0};
+    uint8 image[SERVICE_IMAGE_SIZE] = {0};
     image[0] = 'M';
     image[1] = 'Z';
-    lx_guest_store_u32(image + 60, 64);
-    LxHeader *header = (LxHeader *)(image + 64);
+    lx_guest_store_u32(image + ENEWHDR, SERVICE_LX_HEADER_OFFSET);
+    LxHeader *header = (LxHeader *)(image + SERVICE_LX_HEADER_OFFSET);
     header->magic_l = 'L';
     header->magic_x = 'X';
-    header->cpu_type = 2;
-    header->os_type = 1;
+    header->cpu_type = E32CPU386;
+    header->os_type = LX_OS_OS2;
     header->module_num_pages = 1;
     header->eip_object = 1;
     header->esp_object = 2;
-    header->esp = 0xfff0;
-    header->page_size = 4096;
+    header->esp = SERVICE_INITIAL_ESP;
+    header->page_size = LX_PAGE_SIZE;
     header->object_table_offset = sizeof *header;
     header->module_num_objects = 2;
     header->object_page_table_offset = sizeof *header + 2 * sizeof(LxObjectTableEntry);
     header->resident_name_table_offset =
         header->object_page_table_offset + sizeof(LxObjectPageTableEntry);
-    uint8 *name = image + 64 + header->resident_name_table_offset;
-    *name = 7;
-    memcpy(name + 1, "SERVICE", 7);
-    header->entry_table_offset = header->resident_name_table_offset + 11;
+    uint8 *name = image + SERVICE_LX_HEADER_OFFSET + header->resident_name_table_offset;
+    *name = (uint8)strlen("SERVICE");
+    memcpy(name + 1, "SERVICE", strlen("SERVICE"));
+    header->entry_table_offset = header->resident_name_table_offset + SERVICE_NAME_TABLE_SIZE;
     header->fixup_page_table_offset = header->entry_table_offset + 1;
-    header->fixup_record_table_offset = header->fixup_page_table_offset + 8;
+    header->fixup_record_table_offset =
+        header->fixup_page_table_offset + SERVICE_FIXUP_PAGE_TABLE_SIZE;
     header->import_module_table_offset = header->fixup_record_table_offset;
     header->import_proc_table_offset = header->fixup_record_table_offset;
-    header->data_pages_offset = 512;
+    header->data_pages_offset = SERVICE_DATA_PAGES_OFFSET;
     header->auto_ds_object_num = 2;
-    LxObjectTableEntry *objects = (LxObjectTableEntry *)(image + 64 + header->object_table_offset);
-    objects[0] = (LxObjectTableEntry){4096, 0x10000, 0x2005, 1, 1, 0};
-    objects[1] = (LxObjectTableEntry){65536, 0x20000, 0x2003, 2, 0, 0};
-    LxObjectPageTableEntry *page =
-        (LxObjectPageTableEntry *)(image + 64 + header->object_page_table_offset);
-    page->data_size = 3;
-    memcpy(image + 512, "\x31\xc0\xc3", 3);
-    const char *mount = GProcessState.disks[2];
+    LxObjectTableEntry *objects =
+        (LxObjectTableEntry *)(image + SERVICE_LX_HEADER_OFFSET + header->object_table_offset);
+    objects[0] = (LxObjectTableEntry){
+        LX_PAGE_SIZE, SERVICE_CODE_OBJECT_BASE, OBJBIGDEF | OBJEXEC | OBJREAD, 1, 1, 0};
+    objects[1] = (LxObjectTableEntry){SERVICE_STACK_OBJECT_SIZE,
+                                      SERVICE_STACK_OBJECT_BASE,
+                                      OBJBIGDEF | OBJWRITE | OBJREAD,
+                                      2,
+                                      0,
+                                      0};
+    LxObjectPageTableEntry *page = (LxObjectPageTableEntry *)(image + SERVICE_LX_HEADER_OFFSET +
+                                                              header->object_page_table_offset);
+    /* xor eax, eax; ret */
+    static const uint8 return_zero[] = {0x31, 0xc0, 0xc3};
+    page->data_size = sizeof return_zero;
+    memcpy(image + SERVICE_DATA_PAGES_OFFSET, return_zero, sizeof return_zero);
+    const char *mount = GProcessState.disks['C' - 'A'];
     char path[2048];
     if (!mount || snprintf(path, sizeof path, "%s/REXXSERVICE.EXE", mount) >= (int)sizeof path)
         return NULL;
@@ -184,7 +223,7 @@ int runRexxService(void)
                 "The REXX service requires original REXXINIT.DLL from OS/2 installation media\n");
         return 1;
     }
-    char lease[32];
+    char lease[LEASE_NAME_SIZE];
     rexxLeaseName(lease);
     uint64 idle_since = 0;
     for (;;)
@@ -196,8 +235,8 @@ int runRexxService(void)
             idle_since = 0;
         else if (!idle_since)
             idle_since = lx_host_monotonic_us();
-        else if (lx_host_monotonic_us() - idle_since >= 1000000)
+        else if (lx_host_monotonic_us() - idle_since >= SERVICE_IDLE_EXIT_US)
             lx_host_process_exit(0);
-        lx_host_sleep_ms(50);
+        lx_host_sleep_ms(SERVICE_POLL_MS);
     }
 }

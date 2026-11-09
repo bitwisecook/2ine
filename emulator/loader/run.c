@@ -11,6 +11,13 @@
 #include "host/fatal.h"
 #include "emulator/resolver_files.h"
 
+enum
+{
+    GUEST_PARAMETERS_ADDRESS = 0x07000000,
+    GUEST_PIB_ADDRESS = 0x07010000,
+    GUEST_PIB_MAPPING_SIZE = 0x1000 /* one page */
+};
+
 int lx_loader_run(int argc, char **argv)
 {
     GProcessState.running = 0;
@@ -31,19 +38,22 @@ int lx_loader_run(int argc, char **argv)
         lx_host_fatal(LX_FATAL_LOAD_FAILURE, error, NULL);
     lx_host_fatal_add_context(lxWriteFatalModules);
 
-    /* Keep the command and environment in one 64-KiB guest segment. */
+    /* Fixed guest addresses keep the parameter segment and PIB out of the module arena. */
     const size_t command_offset =
         (size_t)(GProcessState.pib.command - GProcessState.pib.environment);
     LxGuestMapping *parameters =
-        lx_execution_map(GProcessState.execution, 0x07000000, 0x10000, 3, 1);
+        lx_execution_map(GProcessState.execution, GUEST_PARAMETERS_ADDRESS,
+                         LX_ENVIRONMENT_SEGMENT_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, 1);
     if (!parameters)
         lx_host_fatal(LX_FATAL_LOAD_FAILURE, "Cannot allocate guest process parameters", NULL);
     char *environment = lx_execution_mapping_host(parameters);
-    memcpy(environment, GProcessState.pib.environment, 0x10000);
+    memcpy(environment, GProcessState.pib.environment, LX_ENVIRONMENT_SEGMENT_SIZE);
     free(GProcessState.pib.environment);
     GProcessState.pib.environment = environment;
     GProcessState.pib.command = environment + command_offset;
-    GProcessState.guest_pib = lx_execution_map(GProcessState.execution, 0x07010000, 0x1000, 3, 1);
+    GProcessState.guest_pib =
+        lx_execution_map(GProcessState.execution, GUEST_PIB_ADDRESS, GUEST_PIB_MAPPING_SIZE,
+                         LX_GUEST_READ | LX_GUEST_WRITE, 1);
     if (!GProcessState.guest_pib)
         lx_host_fatal(LX_FATAL_LOAD_FAILURE, "Cannot allocate guest PIB", NULL);
     LxGuestPib *pib = lx_execution_mapping_host(GProcessState.guest_pib);
