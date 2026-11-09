@@ -13,6 +13,34 @@
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
 
+enum
+{
+    /* Bytes FFmpeg reads from the host file per request. */
+    IO_BUFFER_SIZE = 65536,
+    /* Largest frame accepted: 16384 pixels a side and 32 megapixels in all. */
+    FRAME_SIDE_MAX = 16384,
+    FRAME_PIXELS_MAX = 32 * 1024 * 1024,
+    DECODER_THREADS = 2,
+    /* Frame rate assumed when the container does not state one. */
+    DEFAULT_FRAMES_PER_SECOND = 25,
+    MS_PER_SECOND = 1000,
+    /* Audio streams accepted for resampling. */
+    AUDIO_INPUT_RATE_MIN = 4000,
+    AUDIO_INPUT_RATE_MAX = 384000,
+    AUDIO_INPUT_CHANNELS_MAX = 8,
+    /* At most ten seconds of output frames per decoded audio frame, and an audio
+       position at most ten seconds before the video's start. */
+    AUDIO_OUTPUT_FRAMES_MAX = 10 * LX_VIDEO_AUDIO_RATE,
+    /* Row alignment of BGRA frames converted by swscale. */
+    CONVERTED_FRAME_ALIGN = 32,
+    /* YUV420P has three planes and NV12 two; their chroma planes have half the rows. */
+    YUV420P_PLANES = 3,
+    NV12_PLANES = 2
+};
+
+/* swscale's default brightness, contrast and saturation (16.16 fixed point). */
+static const int SWS_UNITY = 1 << 16;
+
 struct LxVideoDecoder
 {
     LxHostFile *file;
@@ -57,7 +85,7 @@ static int64_t seek_packet(void *opaque, int64_t offset, int whence)
     }
     uint64_t position = 0;
     int origin = whence & ~AVSEEK_FORCE;
-    if (origin < 0 || origin > 2 ||
+    if (origin < SEEK_SET || origin > SEEK_END ||
         lx_host_file_seek(d->file, offset, (unsigned)origin, &position) != LX_HOST_FS_OK ||
         position > INT64_MAX)
         return AVERROR(EIO);
@@ -98,13 +126,13 @@ LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info,
     if (!d->file)
         goto fail;
     d->format = avformat_alloc_context();
-    unsigned char *buffer = av_malloc(65536);
+    unsigned char *buffer = av_malloc(IO_BUFFER_SIZE);
     if (!d->format || !buffer)
     {
         av_free(buffer);
         goto fail;
     }
-    d->io = avio_alloc_context(buffer, 65536, 0, d, read_packet, NULL, seek_packet);
+    d->io = avio_alloc_context(buffer, IO_BUFFER_SIZE, 0, d, read_packet, NULL, seek_packet);
     if (!d->io)
     {
         av_free(buffer);
@@ -125,13 +153,14 @@ LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info,
         goto fail;
     AVStream *stream = d->format->streams[d->stream];
     AVCodecParameters *parameters = stream->codecpar;
-    if (parameters->width <= 0 || parameters->height <= 0 || parameters->width > 16384 ||
-        parameters->height > 16384 || (uint64_t)parameters->width * parameters->height > 33554432)
+    if (parameters->width <= 0 || parameters->height <= 0 || parameters->width > FRAME_SIDE_MAX ||
+        parameters->height > FRAME_SIDE_MAX ||
+        (uint64_t)parameters->width * parameters->height > FRAME_PIXELS_MAX)
         goto fail;
     d->codec = avcodec_alloc_context3(codec);
     if (!d->codec || avcodec_parameters_to_context(d->codec, parameters) < 0)
         goto fail;
-    d->codec->thread_count = 2;
+    d->codec->thread_count = DECODER_THREADS;
     if (avcodec_open2(d->codec, codec, NULL) < 0)
         goto fail;
     d->packet = av_packet_alloc();
@@ -140,12 +169,13 @@ LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info,
         goto fail;
     AVRational rate = av_guess_frame_rate(d->format, stream, NULL);
     if (rate.num <= 0 || rate.den <= 0)
-        rate = (AVRational){25, 1};
+        rate = (AVRational){DEFAULT_FRAMES_PER_SECOND, 1};
     d->info = (LxVideoInfo){.width = parameters->width,
                             .height = parameters->height,
-                            .duration_ms = d->format->duration != AV_NOPTS_VALUE
-                                               ? av_rescale(d->format->duration, 1000, AV_TIME_BASE)
-                                               : 0,
+                            .duration_ms =
+                                d->format->duration != AV_NOPTS_VALUE
+                                    ? av_rescale(d->format->duration, MS_PER_SECOND, AV_TIME_BASE)
+                                    : 0,
                             .rate_numerator = rate.num,
                             .rate_denominator = rate.den};
     if (d->info.duration_ms < 0 || d->info.duration_ms > UINT32_MAX)
@@ -154,7 +184,8 @@ LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info,
         d->info.audio_present |=
             audio && d->format->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO;
     d->start = stream->start_time == AV_NOPTS_VALUE ? 0 : stream->start_time;
-    d->video_origin_sample = av_rescale_q(d->start, stream->time_base, (AVRational){1, 48000});
+    d->video_origin_sample =
+        av_rescale_q(d->start, stream->time_base, (AVRational){1, LX_VIDEO_AUDIO_RATE});
     const AVCodec *audio_codec = NULL;
     d->audio_stream = av_find_best_stream(d->format, AVMEDIA_TYPE_AUDIO, -1, -1, &audio_codec, 0);
     if (!audio)
@@ -170,9 +201,10 @@ LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info,
             avcodec_open2(d->audio_codec, audio_codec, NULL) < 0)
             goto fail;
         AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
-        if (d->audio_codec->sample_rate < 4000 || d->audio_codec->sample_rate > 384000 ||
-            d->audio_codec->ch_layout.nb_channels > 8 ||
-            swr_alloc_set_opts2(&d->resampler, &stereo, AV_SAMPLE_FMT_FLT, 48000,
+        if (d->audio_codec->sample_rate < AUDIO_INPUT_RATE_MIN ||
+            d->audio_codec->sample_rate > AUDIO_INPUT_RATE_MAX ||
+            d->audio_codec->ch_layout.nb_channels > AUDIO_INPUT_CHANNELS_MAX ||
+            swr_alloc_set_opts2(&d->resampler, &stereo, AV_SAMPLE_FMT_FLT, LX_VIDEO_AUDIO_RATE,
                                 &d->audio_codec->ch_layout, d->audio_codec->sample_fmt,
                                 d->audio_codec->sample_rate, 0, NULL) < 0 ||
             swr_init(d->resampler) < 0)
@@ -199,8 +231,9 @@ void lx_video_frame_release(LxDecodedVideoFrame *frame)
 
 static int export_frame(LxVideoDecoder *d, LxDecodedVideoFrame *output)
 {
-    if (d->frame->width <= 0 || d->frame->height <= 0 || d->frame->width > 16384 ||
-        d->frame->height > 16384 || (uint64_t)d->frame->width * d->frame->height > 33554432)
+    if (d->frame->width <= 0 || d->frame->height <= 0 || d->frame->width > FRAME_SIDE_MAX ||
+        d->frame->height > FRAME_SIDE_MAX ||
+        (uint64_t)d->frame->width * d->frame->height > FRAME_PIXELS_MAX)
         return 0;
     AVFrame *frame = av_frame_alloc();
     if (!frame)
@@ -213,7 +246,8 @@ static int export_frame(LxVideoDecoder *d, LxDecodedVideoFrame *output)
         frame->colorspace != AVCOL_SPC_BT709 && frame->colorspace != AVCOL_SPC_BT470BG &&
         frame->colorspace != AVCOL_SPC_SMPTE170M)
         direct = 0;
-    for (unsigned i = 0; i < 3; i++)
+    /* Negative strides (bottom-up planes) are converted rather than passed on. */
+    for (unsigned i = 0; i < YUV420P_PLANES; i++)
         if (frame->data[i] && frame->linesize[i] <= 0)
             direct = 0;
     if (!direct)
@@ -224,7 +258,7 @@ static int export_frame(LxVideoDecoder *d, LxDecodedVideoFrame *output)
         converted->format = AV_PIX_FMT_BGRA;
         converted->width = frame->width;
         converted->height = frame->height;
-        if (av_frame_get_buffer(converted, 32) < 0)
+        if (av_frame_get_buffer(converted, CONVERTED_FRAME_ALIGN) < 0)
         {
             av_frame_free(&converted);
             goto fail;
@@ -244,7 +278,7 @@ static int export_frame(LxVideoDecoder *d, LxDecodedVideoFrame *output)
             sws_setColorspaceDetails(d->scale, coefficients,
                                      frame->color_range == AVCOL_RANGE_JPEG ||
                                          format == AV_PIX_FMT_YUVJ420P,
-                                     coefficients, 1, 0, 1 << 16, 1 << 16) < 0 ||
+                                     coefficients, 1, 0, SWS_UNITY, SWS_UNITY) < 0 ||
             sws_scale(d->scale, (const uint8_t *const *)frame->data, frame->linesize, 0,
                       frame->height, converted->data, converted->linesize) != frame->height)
         {
@@ -273,8 +307,8 @@ static int export_frame(LxVideoDecoder *d, LxDecodedVideoFrame *output)
                              ? LX_HOST_FRAME_BT601_FULL
                              : LX_HOST_FRAME_BT601_LIMITED)};
     unsigned planes = output->image.format == LX_HOST_FRAME_BGRA   ? 1
-                      : output->image.format == LX_HOST_FRAME_NV12 ? 2
-                                                                   : 3;
+                      : output->image.format == LX_HOST_FRAME_NV12 ? NV12_PLANES
+                                                                   : YUV420P_PLANES;
     for (unsigned i = 0; i < planes; i++)
     {
         output->image.planes[i] = frame->data[i];
@@ -285,14 +319,14 @@ static int export_frame(LxVideoDecoder *d, LxDecodedVideoFrame *output)
     AVStream *stream = d->format->streams[d->stream];
     output->duration_ms =
         frame->duration > 0
-            ? av_rescale_q(frame->duration, stream->time_base, (AVRational){1, 1000})
-            : av_rescale(d->info.rate_denominator, 1000, d->info.rate_numerator);
+            ? av_rescale_q(frame->duration, stream->time_base, (AVRational){1, MS_PER_SECOND})
+            : av_rescale(d->info.rate_denominator, MS_PER_SECOND, d->info.rate_numerator);
     if (output->duration_ms < 1)
         output->duration_ms = 1;
     output->milliseconds = frame->best_effort_timestamp == AV_NOPTS_VALUE
                                ? d->next_ms
                                : av_rescale_q(av_sat_sub64(frame->best_effort_timestamp, d->start),
-                                              stream->time_base, (AVRational){1, 1000});
+                                              stream->time_base, (AVRational){1, MS_PER_SECOND});
     if (output->milliseconds < 0)
         output->milliseconds = 0;
     if (output->milliseconds > UINT32_MAX || output->duration_ms > UINT32_MAX ||
@@ -319,15 +353,16 @@ static int audio_output(LxVideoDecoder *d, AVFrame *frame)
 {
     int rate = d->audio_codec->sample_rate;
     int64_t delay = swr_get_delay(d->resampler, rate);
-    int64_t needed = av_rescale_rnd(av_sat_add64(delay, frame ? frame->nb_samples : 0), 48000, rate,
-                                    AV_ROUND_UP);
-    if (needed < 0 || needed > 480000)
+    int64_t needed = av_rescale_rnd(av_sat_add64(delay, frame ? frame->nb_samples : 0),
+                                    LX_VIDEO_AUDIO_RATE, rate, AV_ROUND_UP);
+    if (needed < 0 || needed > AUDIO_OUTPUT_FRAMES_MAX)
         return 0;
     if (!needed)
         return 1;
     if ((uint64_t)needed > d->audio_capacity)
     {
-        float *buffer = realloc(d->audio_buffer, (size_t)needed * 2 * sizeof(float));
+        float *buffer =
+            realloc(d->audio_buffer, (size_t)needed * LX_VIDEO_AUDIO_CHANNELS * sizeof(float));
         if (!buffer)
             return 0;
         d->audio_buffer = buffer;
@@ -338,11 +373,13 @@ static int audio_output(LxVideoDecoder *d, AVFrame *frame)
         AVStream *stream = d->format->streams[d->audio_stream];
         d->audio_next_sample =
             av_sat_sub64(av_sat_sub64(av_rescale_q(frame->best_effort_timestamp, stream->time_base,
-                                                   (AVRational){1, 48000}),
+                                                   (AVRational){1, LX_VIDEO_AUDIO_RATE}),
                                       d->video_origin_sample),
-                         av_rescale(delay, 48000, rate));
+                         av_rescale(delay, LX_VIDEO_AUDIO_RATE, rate));
     }
-    if (d->audio_next_sample < -480000 || d->audio_next_sample > (int64_t)UINT32_MAX * 48 - needed)
+    /* Positions stay within the millisecond range MCI reports in 32 bits. */
+    if (d->audio_next_sample < -AUDIO_OUTPUT_FRAMES_MAX ||
+        d->audio_next_sample > (int64_t)UINT32_MAX * LX_VIDEO_AUDIO_FRAMES_PER_MS - needed)
         return 0;
     uint8_t *output = (uint8_t *)d->audio_buffer;
     int count = swr_convert(d->resampler, &output, (int)needed,
@@ -443,7 +480,7 @@ int lx_video_decoder_seek(LxVideoDecoder *d, int64_t milliseconds)
         return 0;
     AVStream *stream = d->format->streams[d->stream];
     int64_t target = av_sat_add64(
-        d->start, av_rescale_q(milliseconds, (AVRational){1, 1000}, stream->time_base));
+        d->start, av_rescale_q(milliseconds, (AVRational){1, MS_PER_SECOND}, stream->time_base));
     if (av_seek_frame(d->format, d->stream, target, AVSEEK_FLAG_BACKWARD) < 0)
         return 0;
     avcodec_flush_buffers(d->codec);
@@ -454,7 +491,7 @@ int lx_video_decoder_seek(LxVideoDecoder *d, int64_t milliseconds)
         swr_close(d->resampler);
         if (swr_init(d->resampler) < 0)
             return 0;
-        d->audio_next_sample = milliseconds * 48;
+        d->audio_next_sample = milliseconds * LX_VIDEO_AUDIO_FRAMES_PER_MS;
     }
     av_packet_unref(d->packet);
     av_frame_unref(d->frame);
