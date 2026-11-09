@@ -1,7 +1,7 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 # Export glue is formatted by its generator; keep regeneration independent.
 **/generated/**
-ball/project_sources.h
+ball/facade/project_sources.h
 host/include/host/gl/dispatch.h
 host/mesa/opengl/gl_load.h
 os2/opengl/opengl/bindings.h

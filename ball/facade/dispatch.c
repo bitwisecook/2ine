@@ -23,7 +23,7 @@
 #include "emulator/launch/features.h"
 #include "emulator/launch/runtime_selection.h"
 #include "environment/wps_sync.h"
-#include "ball/project_sources.h"
+#include "ball/facade/project_sources.h"
 
 static void dependency_refresh_mutation(TbBall *c, const cJSON *request)
 {

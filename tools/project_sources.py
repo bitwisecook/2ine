@@ -217,7 +217,7 @@ def generate():
     header += "\n".join(json.dumps(encoded[i : i + 96]) for i in range(0, len(encoded), 96)) + ";\n"
     return {
         ROOT / "docs/project-sources.md": "\n".join(lines),
-        ROOT / "ball/project_sources.h": header,
+        ROOT / "ball/facade/project_sources.h": header,
     }
 
 
