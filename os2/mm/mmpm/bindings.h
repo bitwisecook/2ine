@@ -1,7 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 static uint32 bridge32_mixWrite(uint8 *a)
 {
-    return queue_buffers(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
+    return lx_admc_queue_buffers(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                                 lx_guest_load_u32(a + 8));
 }
 
 static uint32 bridge32_mciSendCommand(uint8 *a)
@@ -9,7 +10,7 @@ static uint32 bridge32_mciSendCommand(uint8 *a)
     USHORT message = lx_guest_load_u32(a + 4);
     LxGuestBorrow parameters = {0};
     if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12),
-                             parameter_size(message, lx_guest_load_u32(a + 8)),
+                             lx_mci_parameter_size(message, lx_guest_load_u32(a + 8)),
                              LX_GUEST_READ | LX_GUEST_WRITE, &parameters))
         return MCIERR_INVALID_BUFFER;
     uint32 result = mciSendCommand(lx_guest_load_u32(a), message, lx_guest_load_u32(a + 8),
@@ -44,21 +45,25 @@ static uint32 bridge32_mciGetErrorString(uint8 *a)
 }
 
 /* DART's write callback is a guest-callable API entry, separate from exported ordinals. */
-static int initialize_write_bridge(void)
+ULONG lx_admc_write_entry(void)
 {
-    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
+    static ULONG write_entry;
+    if (write_entry)
+        return write_entry;
+    LxGuestMapping *mapping =
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
         return 0;
     const LxExecutionApi32 api = {bridge32_mixWrite, 12, 0, LX_ABI_STACK32};
     if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
                                     4096, &api) ||
-        !lx_execution_protect(GProcessState.execution, mapping, 5))
+        !lx_execution_protect(GProcessState.execution, mapping, LX_GUEST_READ | LX_GUEST_EXECUTE))
     {
         lx_execution_unmap(GProcessState.execution, mapping);
         return 0;
     }
     write_entry = lx_execution_mapping_address(mapping);
-    return 1;
+    return write_entry;
 }
 
 static uint32 bridge32_mmioOpen(uint8 *a)

@@ -29,7 +29,21 @@ if(TWOINE_VIDEO)
     add_dependencies(twoine_os2_video_decode twoine_ffmpeg_metadata)
 endif()
 
-twoine_os2_dll(mmpm mmpm/module.c mmpm/mci/mdm/mdm_video.c mmpm/mmio/mmio/mmio.c)
+twoine_os2_dll(
+    mmpm
+    mmpm/module.c
+    mmpm/mci/mdm/devices.c
+    mmpm/mci/mdm/mciopen.c
+    mmpm/mci/mdm/mciclose.c
+    mmpm/mci/mdm/mdmnotfy.c
+    mmpm/mci/mdm/minit.c
+    mmpm/mci/mdm/mmsndcmd.c
+    mmpm/mci/mdm/mmsndstr.c
+    mmpm/mci/mdm/mdm_video.c
+    mmpm/mci/admc/dart.c
+    mmpm/mci/mimc/sequencer.c
+    mmpm/mmio/mmio/mmio.c
+)
 twoine_os2_dll(mdm mci/mdm/module.c)
 twoine_os2_dll(mmio mmio/mmio/module.c)
 twoine_os2_dll(dive video/dive/module.c video/dive/dive_pixels.c)
