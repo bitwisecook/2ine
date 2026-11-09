@@ -37,8 +37,18 @@ enum
     SPARE_DNODES = 4,
     USER_TABLE_SECTORS = 8,
     CODEPAGE_TABLE = 26, /* offset of table 0 in the code-page data sector */
-    ROOT_ENTRY_BYTES = 36
-
+    ROOT_ENTRY_BYTES = 36,
+    /* Hotfix, bad-block and bitmap lists are allocated in four-sector runs. */
+    LIST_SECTORS = 4,
+    MAX_FORMAT_MIB = 65536, /* 64 GiB, the HPFS volume limit */
+    /* Boot sector values for a non-bootable fixed disk with the conventional geometry. */
+    BOOT_OEM_BYTES = 11, /* JMP SHORT; NOP; 8-byte OEM name */
+    BOOT_MEDIA_FIXED_DISK = 0xf8,
+    BOOT_GEOMETRY_SECTORS = 63,
+    BOOT_GEOMETRY_HEADS = 255,
+    BOOT_FIRST_HARD_DISK = 0x80,
+    BOOT_EXTENDED_SIGNATURE_BYTE = 0x28,
+    BOOT_LABEL_AND_TYPE_BYTES = 19 /* 11-byte label and 8-byte file-system name */
 };
 
 static int format_file(const char *path, uint64_t bytes, FILE **file)
@@ -60,7 +70,7 @@ static int format_file(const char *path, uint64_t bytes, FILE **file)
 
 int tb_hpfs_format(const char *path, uint64_t bytes)
 {
-    if (bytes < FORMAT_UNIT_BYTES || bytes > UINT64_C(65536) * 1024 * 1024 ||
+    if (bytes < FORMAT_UNIT_BYTES || bytes > (uint64_t)MAX_FORMAT_MIB * 1024 * 1024 ||
         bytes % FORMAT_UNIT_BYTES)
         return hpfs_fail(EINVAL);
     HpfsVolume disk = {0};
@@ -84,9 +94,10 @@ int tb_hpfs_format(const char *path, uint64_t bytes)
             disk.bitmaps[i / 8] &= ~(1u << (i % 8));
         for (unsigned i = 0; i < HPFS_FIRST_DATA_SECTOR; i++)
             disk.bitmaps[i / 8] &= ~(1u << (i % 8));
+        /* One 32-bit bitmap sector number per band, rounded up to whole runs. */
         unsigned list_sectors =
             ((disk.bands * 4 + HPFS_SECTOR_BYTES - 1) / HPFS_SECTOR_BYTES + 3) & ~3u;
-        disk.bitmap_list = hpfs_allocate(&disk, list_sectors, 4);
+        disk.bitmap_list = hpfs_allocate(&disk, list_sectors, LIST_SECTORS);
         for (uint32_t i = 0; ok && i < disk.bands; i++)
         {
             disk.bitmap_locations[i] =
@@ -95,8 +106,9 @@ int tb_hpfs_format(const char *path, uint64_t bytes)
                 ok = 0;
         }
         disk.dir_map = hpfs_allocate(&disk, HPFS_BITMAP_SECTORS, HPFS_BITMAP_SECTORS);
-        uint32_t bad = hpfs_allocate(&disk, 4, 4), hotfix = hpfs_allocate(&disk, 4, 4),
-                 uid = hpfs_allocate(&disk, USER_TABLE_SECTORS, 4),
+        uint32_t bad = hpfs_allocate(&disk, LIST_SECTORS, LIST_SECTORS),
+                 hotfix = hpfs_allocate(&disk, LIST_SECTORS, LIST_SECTORS),
+                 uid = hpfs_allocate(&disk, USER_TABLE_SECTORS, LIST_SECTORS),
                  cpinfo = hpfs_allocate(&disk, 1, 1), cpdata = hpfs_allocate(&disk, 1, 1);
         uint32_t hotfix_spares[HOTFIX_ENTRIES];
         for (unsigned i = 0; i < HOTFIX_ENTRIES; i++)
@@ -110,26 +122,27 @@ int tb_hpfs_format(const char *path, uint64_t bytes)
         if (!disk.bitmap_list || !disk.dir_map || !bad || !hotfix || !uid || !cpinfo || !cpdata ||
             !disk.dir_start)
             ok = 0;
-        unsigned char zeros[4 * HPFS_SECTOR_BYTES] = {0}, table[4 * HPFS_SECTOR_BYTES] = {0};
+        unsigned char zeros[LIST_SECTORS * HPFS_SECTOR_BYTES] = {0},
+                                           table[LIST_SECTORS * HPFS_SECTOR_BYTES] = {0};
         for (unsigned i = 0; i < HOTFIX_ENTRIES; i++)
             tb_put_le32(table + (HOTFIX_ENTRIES + i) * 4, hotfix_spares[i]);
         if (ok)
-            ok = hpfs_stage_sectors(&disk, bad, zeros, 4) &&
-                 hpfs_stage_sectors(&disk, hotfix, table, 4);
+            ok = hpfs_stage_sectors(&disk, bad, zeros, LIST_SECTORS) &&
+                 hpfs_stage_sectors(&disk, hotfix, table, LIST_SECTORS);
         memcpy(disk.boot,
                "\xeb\x3c\x90"
                "2INEHPFS",
-               11);
+               BOOT_OEM_BYTES);
         tb_put_le16(disk.boot + HPFS_BOOT_SECTOR_BYTES, HPFS_SECTOR_BYTES);
         disk.boot[BOOT_SECTORS_PER_CLUSTER] = 1;
-        disk.boot[BOOT_MEDIA] = 0xf8; /* fixed disk */
-        tb_put_le16(disk.boot + BOOT_SECTORS_PER_TRACK, 63);
-        tb_put_le16(disk.boot + BOOT_HEADS, 255);
+        disk.boot[BOOT_MEDIA] = BOOT_MEDIA_FIXED_DISK;
+        tb_put_le16(disk.boot + BOOT_SECTORS_PER_TRACK, BOOT_GEOMETRY_SECTORS);
+        tb_put_le16(disk.boot + BOOT_HEADS, BOOT_GEOMETRY_HEADS);
         tb_put_le32(disk.boot + BOOT_TOTAL_SECTORS, disk.sectors);
-        disk.boot[BOOT_DRIVE] = 0x80;
-        disk.boot[BOOT_EXTENDED_SIGNATURE] = 0x28;
+        disk.boot[BOOT_DRIVE] = BOOT_FIRST_HARD_DISK;
+        disk.boot[BOOT_EXTENDED_SIGNATURE] = BOOT_EXTENDED_SIGNATURE_BYTE;
         tb_put_le32(disk.boot + HPFS_BOOT_SERIAL, (uint32_t)time(NULL));
-        memcpy(disk.boot + HPFS_BOOT_LABEL, "NO NAME    HPFS    ", 19);
+        memcpy(disk.boot + HPFS_BOOT_LABEL, "NO NAME    HPFS    ", BOOT_LABEL_AND_TYPE_BYTES);
         /* cli; hlt; jmp back to the hlt: the volume is not bootable. */
         memcpy(disk.boot + BOOT_CODE, "\xfa\xf4\xeb\xfd", 4);
         disk.boot[BOOT_SIGNATURE] = 0x55;

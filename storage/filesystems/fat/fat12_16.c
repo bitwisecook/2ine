@@ -15,28 +15,45 @@
 #include <string.h>
 #include <time.h>
 
+enum
+{
+    FAT12_BITS = 12,
+    FAT16_BITS = 16,
+    FAT12_CHAIN_END = 0xff8u,
+    FAT16_CHAIN_END = 0xfff8u,
+    FAT12_CHAIN_END_MARK = 0xfffu,
+    FAT16_CHAIN_END_MARK = 0xffffu,
+    FAT12_ENTRY_MASK = 0xfff,
+    /* BPB sanity bounds beyond which the volume is not FAT12/16. */
+    FAT_MAX_SECTORS_PER_CLUSTER = 128,
+    FAT_MAX_FAT_COUNT = 2,
+    /* Numeric alias tails ("~1" onwards) tried before giving up. */
+    FAT_MAX_ALIAS_TAIL = 1000000
+};
+
 /* FAT entry values at or above this end a chain. */
 static unsigned fat_chain_end(const VolumeDisk *d)
 {
-    return d->fat_bits == 12 ? 0xff8u : 0xfff8u;
+    return d->fat_bits == FAT12_BITS ? FAT12_CHAIN_END : FAT16_CHAIN_END;
 }
 
 /* The end-of-chain value written for the last cluster of a file. */
 static unsigned fat_chain_end_mark(const VolumeDisk *d)
 {
-    return d->fat_bits == 12 ? 0xfffu : 0xffffu;
+    return d->fat_bits == FAT12_BITS ? FAT12_CHAIN_END_MARK : FAT16_CHAIN_END_MARK;
 }
 
 /* FAT12 packs two 12-bit entries into three bytes; FAT16 entries are 16-bit words. */
 static size_t fat_entry_offset(const VolumeDisk *d, uint32_t cluster)
 {
-    return d->fat_bits == 12 ? cluster + cluster / 2 : cluster * 2;
+    return d->fat_bits == FAT12_BITS ? cluster + cluster / 2 : cluster * 2;
 }
 
 static unsigned fat_value(VolumeDisk *d, uint32_t cluster)
 {
     unsigned value = tb_le16(d->fat + fat_entry_offset(d, cluster));
-    return d->fat_bits == 12 ? (cluster & 1 ? value >> 4 : value & 0xfff) : value;
+    return d->fat_bits == FAT12_BITS ? (cluster & 1 ? value >> 4 : value & FAT12_ENTRY_MASK)
+                                     : value;
 }
 
 static void trim_label(char label[12])
@@ -62,8 +79,8 @@ int fat_identify(VolumeDisk *d, const TbVolumeProbe *probe)
         total = tb_le32(b + FAT_BPB_TOTAL_SECTORS_32);
     /* A zero root-entry or FAT size means FAT32, which FatFs handles. */
     if ((sector != 512 && sector != 1024 && sector != 2048 && sector != 4096) || !spc ||
-        (spc & (spc - 1)) || spc > 128 || !reserved || !fats || fats > 2 || !entries ||
-        !fat_sectors)
+        (spc & (spc - 1)) || spc > FAT_MAX_SECTORS_PER_CLUSTER || !reserved || !fats ||
+        fats > FAT_MAX_FAT_COUNT || !entries || !fat_sectors)
         return volume_failure(ENOTSUP);
     uint64_t root_sectors = ((uint64_t)entries * FAT_ENTRY_BYTES + sector - 1) / sector;
     uint64_t data_sector = reserved + (uint64_t)fats * fat_sectors + root_sectors;
@@ -81,7 +98,7 @@ int fat_identify(VolumeDisk *d, const TbVolumeProbe *probe)
     d->hidden_sectors = tb_le32(b + FAT_BPB_HIDDEN_SECTORS);
     d->media = b[FAT_BPB_MEDIA];
     d->bytes = (uint64_t)total * sector;
-    d->fat_bits = clusters < FAT12_CLUSTER_LIMIT ? 12 : 16;
+    d->fat_bits = clusters < FAT12_CLUSTER_LIMIT ? FAT12_BITS : FAT16_BITS;
     d->clusters = (uint32_t)clusters;
     d->sector_bytes = sector;
     d->cluster_bytes = sector * spc;
@@ -288,7 +305,7 @@ uint64_t fat_available_bytes(VolumeDisk *d)
 static void fat_set(VolumeDisk *d, uint32_t cluster, unsigned value)
 {
     size_t at = fat_entry_offset(d, cluster);
-    if (d->fat_bits == 12)
+    if (d->fat_bits == FAT12_BITS)
     {
         unsigned old = tb_le16(d->fat + at);
         value = cluster & 1 ? (old & 15) | (value << 4) : (old & 0xf000) | value;
@@ -495,7 +512,7 @@ static int make_short(VolumeDisk *d, VolumeNode parent, const char *name,
     }
     unsigned char stem[8];
     memcpy(stem, alias, 8);
-    for (unsigned i = 1; i < 1000000; i++)
+    for (unsigned i = 1; i < FAT_MAX_ALIAS_TAIL; i++)
     {
         char number[9];
         snprintf(number, sizeof number, "~%u", i);

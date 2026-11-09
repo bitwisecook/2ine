@@ -23,12 +23,16 @@ static _Thread_local CFCalendarRef file_time_calendar;
 #endif
 /* mktime on macOS may reload zoneinfo for every DOS archive timestamp. A
    request uses one local-zone interpretation; no process-wide TZ is changed. */
+/* Fibonacci hashing: 2^64 divided by the golden ratio. */
+#define FIBONACCI_HASH_MULTIPLIER UINT64_C(11400714819323198485)
+#define FILE_TIME_CACHE_BITS 12
+
 static _Thread_local struct
 {
     uint64_t key;
     int64_t value;
     int valid;
-} file_time_cache[4096];
+} file_time_cache[1u << FILE_TIME_CACHE_BITS];
 
 void tb_file_time_cache_reset(void)
 {
@@ -43,8 +47,8 @@ void tb_file_time_cache_reset(void)
 int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
 {
     uint64_t key = ((uint64_t)date << 32) | clock;
-    size_t slot =
-        (size_t)((key ^ (key >> 17)) * UINT64_C(11400714819323198485)) >> (sizeof(size_t) * 8 - 12);
+    size_t slot = (size_t)((key ^ (key >> 17)) * FIBONACCI_HASH_MULTIPLIER) >>
+                  (sizeof(size_t) * 8 - FILE_TIME_CACHE_BITS);
     if (!file_time_cache[slot].valid || file_time_cache[slot].key != key)
     {
         file_time_cache[slot].key = key;
