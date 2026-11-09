@@ -742,7 +742,7 @@ if(TARGET pmwinx)
     twoine_application_target(twoine_settings_tests)
     target_link_libraries(
         twoine_settings_tests
-        PRIVATE pmmerge pmwinx pmwp helpmgr 2ine
+        PRIVATE pmmerge pmwinx registry pmwp helpmgr 2ine
     )
     add_test(
         NAME application_settings

@@ -1,5 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Open32 root aliases and typed values backed by a separate persistent profile. */
+/* The Win32-style registry for Open32: root aliases and typed values backed by a
+   separate persistent profile. */
 #include "os2/include/private/export.h"
 #include "os2/include/os2win.h"
 #include "os2/include/pmshl.h"
@@ -576,7 +577,7 @@ LONG RegEnumValue(ULONG key, ULONG index, PSZ name, PULONG name_size, PULONG res
     return result;
 }
 
-LX_NATIVE_DESTRUCTOR(pmwinx_registry)
+LX_NATIVE_DESTRUCTOR(registry_keys)
 {
     /* Closing handles precedes unloading the destructor code they reference. */
     while (keys)

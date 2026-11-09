@@ -114,7 +114,6 @@ twoine_os2_dll(
     awe/unicode.c
     awe/context.c
     awe/dde.c
-    awe/registry.c
     awe/modules.c
     awe/resources.c
     awe/accelerators.c

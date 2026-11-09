@@ -1,5 +1,5 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of PMWINX.DLL: exported name [= C entry] @ordinal.
+; Exports of PMWINX.DLL: exported name [= C entry | = MODULE.ordinal] @ordinal.
 
 LIBRARY PMWINX
 
@@ -449,21 +449,21 @@ EXPORTS
     RECTVISIBLE = RectVisible                                           @538
     RECTANGLE = Rectangle                                               @539
     REDRAWWINDOW = RedrawWindow                                         @540
-    REGCLOSEKEY = RegCloseKey                                           @541
-    REGCREATEKEY = RegCreateKey                                         @542
-    REGCREATEKEYEX = RegCreateKeyEx                                     @543
-    REGDELETEKEY = RegDeleteKey                                         @544
-    REGDELETEVALUE = RegDeleteValue                                     @545
-    REGENUMKEY = RegEnumKey                                             @546
-    REGENUMKEYEX = RegEnumKeyEx                                         @547
-    REGENUMVALUE = RegEnumValue                                         @548
-    REGOPENKEY = RegOpenKey                                             @549
-    REGOPENKEYEX = RegOpenKeyEx                                         @550
-    REGQUERYINFOKEY = RegQueryInfoKey                                   @551
-    REGQUERYVALUE = RegQueryValue                                       @552
-    REGQUERYVALUEEX = RegQueryValueEx                                   @553
-    REGSETVALUE = RegSetValue                                           @554
-    REGSETVALUEEX = RegSetValueEx                                       @555
+    REGCLOSEKEY = REGISTRY.1                                            @541
+    REGCREATEKEY = REGISTRY.3                                           @542
+    REGCREATEKEYEX = REGISTRY.4                                         @543
+    REGDELETEKEY = REGISTRY.7                                           @544
+    REGDELETEVALUE = REGISTRY.9                                         @545
+    REGENUMKEY = REGISTRY.11                                            @546
+    REGENUMKEYEX = REGISTRY.12                                          @547
+    REGENUMVALUE = REGISTRY.15                                          @548
+    REGOPENKEY = REGISTRY.22                                            @549
+    REGOPENKEYEX = REGISTRY.23                                          @550
+    REGQUERYINFOKEY = REGISTRY.26                                       @551
+    REGQUERYVALUE = REGISTRY.30                                         @552
+    REGQUERYVALUEEX = REGISTRY.31                                       @553
+    REGSETVALUE = REGISTRY.42                                           @554
+    REGSETVALUEEX = REGISTRY.43                                         @555
     REGISTERCLASS = RegisterClass                                       @556
     REGISTERCLIPBOARDFORMAT = RegisterClipboardFormat                   @557
     REGISTERWINDOWMESSAGE = RegisterWindowMessage                       @558

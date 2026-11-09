@@ -143,6 +143,13 @@ def program(checked):
         g.result(87, 61)
         g.call(4, 549, 0xFFFFFFEF, registry, 0xDEADBEEF)
         g.result(87, 62)
+        # REGISTRY reports bad guest memory through its result; Open32's last
+        # error belongs to PMWINX and stays unchanged.
+        g.call(4, 624, 0)
+        g.call(4, 552, 0xFFFFFFEF, registry, 0, 0xDEADBEEF)
+        g.result(87, 151)
+        g.call(4, 300)
+        g.result(0, 152)
     # The previous procedure returned by subclassing a built-in frame is guest-callable.
     class_name = g.field(b"BridgeClass\0")
     flags = g.field(bytes(4))

@@ -1,0 +1,21 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of REGISTRY.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY REGISTRY
+
+EXPORTS
+    RegCloseKey                          @1
+    RegCreateKeyA      = RegCreateKey    @3
+    RegCreateKeyExA    = RegCreateKeyEx  @4
+    RegDeleteKeyA      = RegDeleteKey    @7
+    RegDeleteValueA    = RegDeleteValue  @9
+    RegEnumKeyA        = RegEnumKey      @11
+    RegEnumKeyExA      = RegEnumKeyEx    @12
+    RegEnumValueA      = RegEnumValue    @15
+    RegOpenKeyA        = RegOpenKey      @22
+    RegOpenKeyExA      = RegOpenKeyEx    @23
+    RegQueryInfoKeyA   = RegQueryInfoKey @26
+    RegQueryValueA     = RegQueryValue   @30
+    RegQueryValueExA   = RegQueryValueEx @31
+    RegSetValueA       = RegSetValue     @42
+    RegSetValueExA     = RegSetValueEx   @43
