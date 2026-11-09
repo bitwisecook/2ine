@@ -1,55 +1,54 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* RECT arithmetic uses inclusive left/top and exclusive right/bottom edges. */
+/* RECT arithmetic: inclusive left/top and exclusive right/bottom edges, computed by PM's rectangle
+   calls. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
+#include "os2/include/pmwin.h"
 
-typedef struct Rectangle32
-{
-    LONG left, top, right, bottom;
-} Rectangle32;
-
-static Rectangle32 load_rectangle(PVOID input)
+/* A Win32 RECT (left, top, right, bottom) and a PM RECTL (xLeft, yBottom, xRight, yTop) both hold
+   the low x, low y, high x and high y edges in that order, and both are half-open. PM's rectangle
+   arithmetic therefore serves Win32 rectangles unchanged once they are loaded from guest memory. */
+static RECTL load_rectangle(PVOID input)
 {
     const uint8 *p = input;
-    return (Rectangle32){(LONG)lx_guest_load_u32(p), (LONG)lx_guest_load_u32(p + 4),
-                         (LONG)lx_guest_load_u32(p + 8), (LONG)lx_guest_load_u32(p + 12)};
+    return (RECTL){(LONG)lx_guest_load_u32(p), (LONG)lx_guest_load_u32(p + 4),
+                   (LONG)lx_guest_load_u32(p + 8), (LONG)lx_guest_load_u32(p + 12)};
 }
 
-static BOOL store_rectangle(PVOID output, Rectangle32 rect)
+static BOOL store_rectangle(PVOID output, RECTL rect)
 {
     if (!output)
     {
         open32SetError(87);
         return FALSE;
     }
-    lx_guest_store_u32(output, (ULONG)rect.left);
-    lx_guest_store_u32((uint8 *)output + 4, (ULONG)rect.top);
-    lx_guest_store_u32((uint8 *)output + 8, (ULONG)rect.right);
-    lx_guest_store_u32((uint8 *)output + 12, (ULONG)rect.bottom);
+    lx_guest_store_u32(output, (ULONG)rect.xLeft);
+    lx_guest_store_u32((uint8 *)output + 4, (ULONG)rect.yBottom);
+    lx_guest_store_u32((uint8 *)output + 8, (ULONG)rect.xRight);
+    lx_guest_store_u32((uint8 *)output + 12, (ULONG)rect.yTop);
     return TRUE;
 }
 
-static BOOL empty(Rectangle32 rect)
+static BOOL empty(RECTL rect)
 {
-    return rect.left >= rect.right || rect.top >= rect.bottom;
+    return WinIsRectEmpty(0, &rect);
 }
 
-static Rectangle32 intersection(Rectangle32 a, Rectangle32 b)
+static RECTL intersection(RECTL a, RECTL b)
 {
-    Rectangle32 result = {a.left > b.left ? a.left : b.left, a.top > b.top ? a.top : b.top,
-                          a.right < b.right ? a.right : b.right,
-                          a.bottom < b.bottom ? a.bottom : b.bottom};
-    return empty(result) ? (Rectangle32){0} : result;
+    RECTL result;
+    WinIntersectRect(0, &result, &a, &b);
+    return result;
 }
 
 BOOL SetRect(PVOID output, LONG left, LONG top, LONG right, LONG bottom)
 {
-    return store_rectangle(output, (Rectangle32){left, top, right, bottom});
+    return store_rectangle(output, (RECTL){left, top, right, bottom});
 }
 
 BOOL SetRectEmpty(PVOID output)
 {
-    return store_rectangle(output, (Rectangle32){0});
+    return store_rectangle(output, (RECTL){0});
 }
 
 BOOL CopyRect(PVOID output, PVOID input)
@@ -79,8 +78,8 @@ BOOL EqualRect(PVOID first, PVOID second)
         open32SetError(87);
         return FALSE;
     }
-    Rectangle32 a = load_rectangle(first), b = load_rectangle(second);
-    return a.left == b.left && a.top == b.top && a.right == b.right && a.bottom == b.bottom;
+    RECTL a = load_rectangle(first), b = load_rectangle(second);
+    return WinEqualRect(0, &a, &b);
 }
 
 BOOL UnionRect(PVOID output, PVOID first, PVOID second)
@@ -90,15 +89,11 @@ BOOL UnionRect(PVOID output, PVOID first, PVOID second)
         open32SetError(87);
         return FALSE;
     }
-    Rectangle32 a = load_rectangle(first), b = load_rectangle(second), result;
-    if (empty(a))
-        result = empty(b) ? (Rectangle32){0} : b;
-    else if (empty(b))
-        result = a;
-    else
-        result = (Rectangle32){a.left < b.left ? a.left : b.left, a.top < b.top ? a.top : b.top,
-                               a.right > b.right ? a.right : b.right,
-                               a.bottom > b.bottom ? a.bottom : b.bottom};
+    RECTL a = load_rectangle(first), b = load_rectangle(second), result = {0};
+    /* Unlike WinUnionRect, which copies the second of two empty rectangles, Windows clears the
+       result. */
+    if (!empty(a) || !empty(b))
+        WinUnionRect(0, &result, &a, &b);
     store_rectangle(output, result);
     return !empty(result);
 }
@@ -110,7 +105,7 @@ BOOL IntersectRect(PVOID output, PVOID first, PVOID second)
         open32SetError(87);
         return FALSE;
     }
-    Rectangle32 result = intersection(load_rectangle(first), load_rectangle(second));
+    RECTL result = intersection(load_rectangle(first), load_rectangle(second));
     store_rectangle(output, result);
     return !empty(result);
 }
@@ -122,27 +117,27 @@ BOOL SubtractRect(PVOID output, PVOID first, PVOID second)
         open32SetError(87);
         return FALSE;
     }
-    Rectangle32 a = load_rectangle(first), b = intersection(a, load_rectangle(second)), result = a;
+    RECTL a = load_rectangle(first), b = intersection(a, load_rectangle(second)), result = a;
     if (empty(a))
-        result = (Rectangle32){0};
+        result = (RECTL){0};
     else if (!empty(b))
     {
-        if (b.left == a.left && b.right == a.right)
+        if (b.xLeft == a.xLeft && b.xRight == a.xRight)
         {
-            if (b.top == a.top)
-                result.top = b.bottom;
-            else if (b.bottom == a.bottom)
-                result.bottom = b.top;
+            if (b.yBottom == a.yBottom)
+                result.yBottom = b.yTop;
+            else if (b.yTop == a.yTop)
+                result.yTop = b.yBottom;
         }
-        else if (b.top == a.top && b.bottom == a.bottom)
+        else if (b.yBottom == a.yBottom && b.yTop == a.yTop)
         {
-            if (b.left == a.left)
-                result.left = b.right;
-            else if (b.right == a.right)
-                result.right = b.left;
+            if (b.xLeft == a.xLeft)
+                result.xLeft = b.xRight;
+            else if (b.xRight == a.xRight)
+                result.xRight = b.xLeft;
         }
         if (empty(result))
-            result = (Rectangle32){0};
+            result = (RECTL){0};
     }
     store_rectangle(output, result);
     return !empty(result);
@@ -155,11 +150,8 @@ BOOL OffsetRect(PVOID input, LONG x, LONG y)
         open32SetError(87);
         return FALSE;
     }
-    Rectangle32 rect = load_rectangle(input);
-    rect.left = (LONG)((ULONG)rect.left + (ULONG)x);
-    rect.right = (LONG)((ULONG)rect.right + (ULONG)x);
-    rect.top = (LONG)((ULONG)rect.top + (ULONG)y);
-    rect.bottom = (LONG)((ULONG)rect.bottom + (ULONG)y);
+    RECTL rect = load_rectangle(input);
+    WinOffsetRect(0, &rect, x, y);
     return store_rectangle(input, rect);
 }
 
@@ -170,11 +162,8 @@ BOOL InflateRect(PVOID input, LONG x, LONG y)
         open32SetError(87);
         return FALSE;
     }
-    Rectangle32 rect = load_rectangle(input);
-    rect.left = (LONG)((ULONG)rect.left - (ULONG)x);
-    rect.right = (LONG)((ULONG)rect.right + (ULONG)x);
-    rect.top = (LONG)((ULONG)rect.top - (ULONG)y);
-    rect.bottom = (LONG)((ULONG)rect.bottom + (ULONG)y);
+    RECTL rect = load_rectangle(input);
+    WinInflateRect(0, &rect, x, y);
     return store_rectangle(input, rect);
 }
 
@@ -185,6 +174,7 @@ BOOL PtInRect(PVOID input, LONG x, LONG y)
         open32SetError(87);
         return FALSE;
     }
-    Rectangle32 rect = load_rectangle(input);
-    return x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
+    RECTL rect = load_rectangle(input);
+    POINTL point = {x, y};
+    return WinPtInRect(0, &rect, &point);
 }
