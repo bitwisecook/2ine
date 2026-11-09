@@ -1,6 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Guest clipboard metadata and system atoms are shared by PM threads. */
+/* The PM clipboard: format storage, ownership and transfers between guest
+   memory and the host clipboard. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/clipboard.h"
+#include "os2/include/private/pmp.h"
 #include "host/sync.h"
 #include "host/clipboard.h"
 #include "os2/ps/pmmerge/pmwin/graphics.h"
@@ -18,15 +21,8 @@ typedef struct ClipFormat
     struct ClipFormat *next;
 } ClipFormat;
 
-typedef struct SystemAtom
-{
-    char *name;
-    ULONG id, references, table;
-    struct SystemAtom *next;
-} SystemAtom;
-
 static LxHostOnce clipboard_once = LX_HOST_ONCE_INIT;
-static LxHostMutex *clipboard_mutex;
+LxHostMutex *clipboard_mutex;
 static AnchorBlock *clipboard_open;
 static HWND clipboard_owner;
 static AnchorBlock *owner_anchor;
@@ -34,51 +30,791 @@ static uint64_t clipboard_revision, clipboard_serial;
 static BOOL clipboard_dirty;
 static _Thread_local ULONG rendering_format;
 static ClipFormat *formats;
-static SystemAtom *atoms;
-
-typedef struct PrivateAtomTable
-{
-    ULONG handle;
-    struct PrivateAtomTable *next;
-} PrivateAtomTable;
-
-static PrivateAtomTable *atom_tables;
-static ULONG next_atom_table = 2;
-
-static BOOL valid_atom_table(ULONG table)
-{
-    if (table == 1)
-        return TRUE;
-    for (PrivateAtomTable *item = atom_tables; item; item = item->next)
-        if (item->handle == table)
-            return TRUE;
-    return FALSE;
-}
 
 static void initialize_clipboard(void)
 {
     clipboard_mutex = lx_host_mutex_create(0, 0);
 }
 
-static BOOL lock_clipboard(void)
+BOOL lock_clipboard(void)
 {
     lx_host_once(&clipboard_once, initialize_clipboard);
     return clipboard_mutex && lx_host_mutex_lock(clipboard_mutex, UINT32_MAX) == LX_HOST_LOCK_OK;
 }
 
-#include "os2/ps/pmmerge/pmwin/clipboard_transfer.h"
-#include "os2/include/private/pmp.h"
-
-ULONG WinQuerySystemAtomTable(VOID)
+static ClipFormat *find_format(ULONG format)
 {
-    return 1;
+    for (ClipFormat *item = formats; item; item = item->next)
+        if (item->format == format)
+            return item;
+    return NULL;
+}
+
+static const char *format_mime(ULONG format, const char *name)
+{
+    if (format == 1)
+        return "text/plain;charset=utf-8";
+    if (format == 2)
+        return "image/png";
+    if (!name)
+        return NULL;
+    if (!strcasecmp(name, "Rich Text Format") || !strcasecmp(name, "text/rtf") ||
+        !strcasecmp(name, "application/rtf"))
+        return "text/rtf";
+    if (!strcasecmp(name, "HTML Format") || !strcasecmp(name, "text/html"))
+        return "text/html";
+    if (!strcasecmp(name, "PNG") || !strcasecmp(name, "image/png"))
+        return "image/png";
+    return NULL;
+}
+
+typedef struct ClipboardFree
+{
+    ULONG address;
+    struct ClipboardFree *next;
+} ClipboardFree;
+
+static ClipboardFree *pending_free;
+
+static void drain_clipboard_free(void)
+{
+    if (!lock_clipboard())
+        return;
+    ClipboardFree *pending = pending_free;
+    pending_free = NULL;
+    lx_host_mutex_unlock(clipboard_mutex);
+    while (pending)
+    {
+        ClipboardFree *next = pending->next;
+        void *host = GProcessState.execution
+                         ? lx_execution_memory(GProcessState.execution, pending->address, 1, 0)
+                         : NULL;
+        if (host && GProcessState.freeSharedMemory)
+            GProcessState.freeSharedMemory(host);
+        free(pending);
+        pending = next;
+    }
+}
+
+static void discard_format(ClipFormat *item)
+{
+    if (item->mapping)
+        lx_execution_unmap(GProcessState.execution, item->mapping);
+    else if (item->data && !(item->flags & 1))
+    {
+        if (item->format == 2)
+            lx_pm_bitmap_delete(item->data);
+        else if ((item->flags & 0x400) && GProcessState.execution)
+        {
+            ClipboardFree *pending = malloc(sizeof *pending);
+            if (pending)
+            {
+                pending->address = item->data;
+                pending->next = pending_free;
+                pending_free = pending;
+            }
+        }
+    }
+    free(item->name);
+    free(item);
+}
+
+static void discard_formats(void)
+{
+    while (formats)
+    {
+        ClipFormat *item = formats;
+        formats = item->next;
+        discard_format(item);
+    }
+    clipboard_serial++;
+}
+
+static void synchronize_clipboard(void)
+{
+    LxHostClipboardState state;
+    if (!lx_host_clipboard_state(&state) || !lock_clipboard())
+        return;
+    HWND previous = 0;
+    if (!clipboard_dirty && !state.owned && state.revision != clipboard_revision)
+    {
+        previous = clipboard_owner;
+        discard_formats();
+        clipboard_owner = 0;
+        owner_anchor = NULL;
+    }
+    clipboard_revision = state.revision;
+    lx_host_mutex_unlock(clipboard_mutex);
+    drain_clipboard_free();
+    if (previous)
+        WinSendMsg(previous, WM_DESTROYCLIPBOARD, 0, 0);
+}
+
+/* A root RTF group can contain embedded NUL bytes in a \binN payload. */
+static size_t rtf_length(const unsigned char *bytes, size_t size)
+{
+    if (size < 6 || memcmp(bytes, "{\\rtf", 5))
+        return 0;
+    unsigned depth = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        if (bytes[i] == '{')
+            depth++;
+        else if (bytes[i] == '}' && depth && !--depth)
+            return i + 1;
+        else if (bytes[i] == '\\' && i + 1 < size)
+        {
+            i++;
+            if (size - i >= 3 && !memcmp(bytes + i, "bin", 3))
+            {
+                size_t at = i + 3, length = 0;
+                if (at == size || !isdigit(bytes[at]))
+                    continue;
+                while (at < size && isdigit(bytes[at]))
+                {
+                    if (length > 64 * 1024 * 1024 / 10)
+                        return 0;
+                    length = length * 10 + bytes[at++] - '0';
+                }
+                if (at < size && bytes[at] == ' ')
+                    at++;
+                if (length > size - at)
+                    return 0;
+                i = at + length - 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void *copy_pointer(ClipFormat *item, size_t *size)
+{
+    if (!GProcessState.execution || !item->data)
+        return NULL;
+    LxGuestMapping *mapping = lx_execution_mapping_at(GProcessState.execution, item->data);
+    if (!mapping)
+        return NULL;
+    size_t offset = (size_t)item->data - lx_execution_mapping_address(mapping);
+    size_t capacity = lx_execution_mapping_size(mapping) - offset;
+    if (capacity > 16 * 1024 * 1024)
+        capacity = 16 * 1024 * 1024;
+    if (item->length && item->length + 1 < capacity)
+        capacity = item->length + 1;
+    LxGuestBorrow borrow = {0};
+    if (!capacity ||
+        !lx_execution_borrow(GProcessState.execution, item->data, capacity, LX_GUEST_READ, &borrow))
+        return NULL;
+    const unsigned char *source = borrow.host;
+    size_t length = 0;
+    if (item->name && !format_mime(item->format, item->name))
+        length = item->length ? item->length : capacity;
+    else if (item->name && (!strcasecmp(item->name, "PNG") || !strcasecmp(item->name, "image/png")))
+    {
+        if (item->length)
+            length = item->length;
+        else if (capacity >= 20 && !memcmp(source, "\x89PNG\r\n\x1a\n", 8))
+            for (size_t at = 8; at <= capacity - 12;)
+            {
+                uint32_t chunk = (uint32_t)source[at] << 24 | (uint32_t)source[at + 1] << 16 |
+                                 (uint32_t)source[at + 2] << 8 | source[at + 3];
+                if (chunk > capacity - at - 12)
+                    break;
+                if (!memcmp(source + at + 4, "IEND", 4))
+                {
+                    if (!chunk)
+                        length = at + 12;
+                    break;
+                }
+                at += (size_t)chunk + 12;
+            }
+    }
+    else if (item->name && format_mime(item->format, item->name) &&
+             !strcmp(format_mime(item->format, item->name), "text/rtf"))
+        length = rtf_length(source, capacity);
+    else
+    {
+        const void *end = memchr(source, 0, capacity);
+        if (end)
+            length = (const unsigned char *)end - source;
+    }
+    void *copy =
+        length <= capacity && (length || (capacity && !source[0])) ? malloc(length + 1) : NULL;
+    if (copy)
+    {
+        memcpy(copy, source, length);
+        ((char *)copy)[length] = 0;
+        *size = length;
+    }
+    lx_execution_release(&borrow);
+    return copy;
+}
+
+static void *bitmap_bytes(ULONG handle, const char *mime, size_t *size)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_PM_BITMAP, &borrow))
+        return NULL;
+    const PmBitmap *bitmap = borrow.resource;
+    size_t count = (size_t)bitmap->width * bitmap->height;
+    uint8_t *rgba = malloc(count * 4);
+    if (rgba)
+        for (unsigned y = 0; y < bitmap->height; y++)
+            for (unsigned x = 0; x < bitmap->width; x++)
+            {
+                uint32_t rgb = bitmap->pixels[(size_t)(bitmap->height - y - 1) * bitmap->width + x];
+                size_t at = ((size_t)y * bitmap->width + x) * 4;
+                rgba[at] = rgb >> 16;
+                rgba[at + 1] = rgb >> 8;
+                rgba[at + 2] = rgb;
+                rgba[at + 3] = 255;
+            }
+    void *bytes =
+        rgba ? lx_host_clipboard_encode_image(mime, rgba, bitmap->width, bitmap->height, size)
+             : NULL;
+    free(rgba);
+    lx_handle_release(&borrow);
+    return bytes;
+}
+
+static void *provide_clipboard(void *context, const char *mime, size_t *size)
+{
+    (void)context;
+    if (!lock_clipboard())
+        return NULL;
+    ClipFormat *item = formats;
+    while (item)
+    {
+        const char *candidate = format_mime(item->format, item->name);
+        if (candidate &&
+            (!strcmp(candidate, mime) || (item->format == 2 && !strcmp(mime, "image/bmp"))))
+            break;
+        item = item->next;
+    }
+    ULONG format = item ? item->format : 0;
+    HWND owner = clipboard_owner;
+    BOOL delayed = item && !item->data;
+    lx_host_mutex_unlock(clipboard_mutex);
+    if (delayed && owner)
+    {
+        ULONG previous = rendering_format;
+        rendering_format = format;
+        WinSendMsg(owner, WM_RENDERFMT, (MPARAM)(uintptr_t)format, 0);
+        rendering_format = previous;
+    }
+    if (!lock_clipboard())
+        return NULL;
+    item = find_format(format);
+    void *bytes = NULL;
+    if (item && item->data)
+    {
+        if (format == 2)
+            bytes = bitmap_bytes(item->data, mime, size);
+        else
+        {
+            bytes = copy_pointer(item, size);
+            if (bytes && format == 1)
+            {
+                void *converted = lx_host_clipboard_text_utf8(item->codepage, bytes, *size, size);
+                free(bytes);
+                bytes = converted;
+            }
+            else if (bytes && item->name && !strcasecmp(item->name, "HTML Format"))
+            {
+                void *html = lx_host_clipboard_html_extract(bytes, *size, size);
+                free(bytes);
+                bytes = html;
+            }
+        }
+    }
+    lx_host_mutex_unlock(clipboard_mutex);
+    return bytes;
+}
+
+static BOOL publish_clipboard(void)
+{
+    if (!lock_clipboard())
+        return FALSE;
+    LxHostClipboardItem items[64] = {{0}};
+    size_t count = 0;
+    for (ClipFormat *item = formats; item && count < 63; item = item->next)
+    {
+        const char *mime = format_mime(item->format, item->name);
+        if (!mime)
+            continue;
+        BOOL duplicate = FALSE;
+        for (size_t i = 0; i < count; i++)
+            if (!strcmp(mime, items[i].mime))
+                duplicate = TRUE;
+        if (!duplicate)
+            items[count++].mime = mime;
+        if (item->format == 2)
+            items[count++].mime = "image/bmp";
+    }
+    /* MIME names are static strings, and providers copy guest data on demand. */
+    lx_host_mutex_unlock(clipboard_mutex);
+    LxHostClipboardState state;
+    BOOL result = lx_host_clipboard_offer(items, count, provide_clipboard, NULL, &state);
+    if (result && lock_clipboard())
+    {
+        clipboard_revision = state.revision;
+        clipboard_dirty = FALSE;
+        lx_host_mutex_unlock(clipboard_mutex);
+    }
+    return result;
+}
+
+BOOL WinOpenClipbrd(HAB hab)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor)
+        return FALSE;
+    synchronize_clipboard();
+    if (!lock_clipboard())
+        return FALSE;
+    BOOL result = clipboard_open == NULL;
+    if (result)
+        clipboard_open = anchor;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+
+BOOL WinCloseClipbrd(HAB hab)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor || !lock_clipboard())
+        return FALSE;
+    BOOL result = clipboard_open == anchor;
+    BOOL publish = result && clipboard_dirty;
+    if (result)
+        clipboard_open = NULL;
+    lx_host_mutex_unlock(clipboard_mutex);
+    /* Native publication failure never discards valid guest/private data. */
+    if (publish)
+        publish_clipboard();
+    return result;
+}
+
+BOOL WinEmptyClipbrd(HAB hab)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor || !lock_clipboard())
+        return FALSE;
+    BOOL result = clipboard_open == anchor;
+    HWND previous = result ? clipboard_owner : 0;
+    if (result)
+    {
+        discard_formats();
+        clipboard_owner = 0;
+        owner_anchor = NULL;
+        clipboard_dirty = TRUE;
+    }
+    lx_host_mutex_unlock(clipboard_mutex);
+    drain_clipboard_free();
+    if (previous)
+        WinSendMsg(previous, WM_DESTROYCLIPBOARD, 0, 0);
+    return result;
+}
+
+HWND WinQueryClipbrdOwner(HAB hab)
+{
+    if (!getAnchorBlock(hab))
+        return 0;
+    synchronize_clipboard();
+    if (!lock_clipboard())
+        return 0;
+    HWND result = clipboard_owner;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+
+BOOL WinSetClipbrdOwner(HAB hab, HWND owner)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor || (owner && !getWindowFromHWND(anchor, owner)) || !lock_clipboard())
+        return FALSE;
+    BOOL result = clipboard_open == anchor;
+    if (result)
+    {
+        clipboard_owner = owner;
+        owner_anchor = owner ? anchor : NULL;
+    }
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+
+static ULONG host_format(ULONG format)
+{
+    if (!lock_clipboard())
+        return 0;
+    BOOL changing = clipboard_dirty;
+    lx_host_mutex_unlock(clipboard_mutex);
+    if (changing)
+        return 0;
+    const char *name = NULL;
+    if (format >= 0xc000 && lock_clipboard())
+    {
+        const char *found = systemAtomName(format);
+        name = found ? strdup(found) : NULL;
+        lx_host_mutex_unlock(clipboard_mutex);
+    }
+    const char *mime = format_mime(format, name);
+    BOOL available = mime && lx_host_clipboard_has(mime);
+    if (!available && format == 1)
+        available = lx_host_clipboard_has("text/plain");
+    if (!available && format == 2)
+        available = lx_host_clipboard_has("image/bmp");
+    if (!available && mime && !strcmp(mime, "text/rtf"))
+        available = lx_host_clipboard_has("application/rtf");
+    free((void *)name);
+    return available;
+}
+
+BOOL WinQueryClipbrdFmtInfo(HAB hab, ULONG format, PULONG flags)
+{
+    if (!getAnchorBlock(hab) || !flags)
+        return FALSE;
+    synchronize_clipboard();
+    if (!lock_clipboard())
+        return FALSE;
+    ClipFormat *item = find_format(format);
+    if (item)
+        *flags = item->flags;
+    lx_host_mutex_unlock(clipboard_mutex);
+    if (item)
+        return TRUE;
+    if (!host_format(format))
+        return FALSE;
+    *flags = format == 2 ? 0x200 : 0x400;
+    return TRUE;
+}
+
+static void import_host_formats(void)
+{
+    static const char *names[] = {"Rich Text Format", "HTML Format", "PNG", NULL};
+    ULONG list[5] = {1, 2, 0, 0, 0};
+    for (unsigned i = 0; names[i]; i++)
+        list[i + 2] = WinFindAtom(1, (PSZ)names[i]);
+    /* Only create registered atoms when that native MIME is advertised. */
+    const char *mimes[] = {"text/rtf", "text/html", "image/png"};
+    for (unsigned i = 0; names[i]; i++)
+        if (!list[i + 2] && lx_host_clipboard_has(mimes[i]))
+            list[i + 2] = WinAddAtom(1, (PSZ)names[i]);
+    for (unsigned i = 0; i < 5; i++)
+    {
+        ULONG format = list[i];
+        if (!format || !host_format(format) || !lock_clipboard())
+            continue;
+        if (!find_format(format))
+        {
+            ClipFormat *item = calloc(1, sizeof *item);
+            if (item)
+            {
+                item->format = format;
+                item->serial = ++clipboard_serial;
+                item->flags = format == 2 ? 0x200 : 0x400;
+                item->codepage =
+                    GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+                item->imported = 1;
+                const char *name = systemAtomName(format);
+                item->name = name ? strdup(name) : NULL;
+                ClipFormat **end = &formats;
+                while (*end)
+                    end = &(*end)->next;
+                *end = item;
+            }
+        }
+        lx_host_mutex_unlock(clipboard_mutex);
+    }
+}
+
+static void import_requested_format(ULONG format)
+{
+    if (!host_format(format) || !lock_clipboard())
+        return;
+    if (!find_format(format))
+    {
+        ClipFormat *item = calloc(1, sizeof *item);
+        if (item)
+        {
+            item->format = format;
+            item->serial = ++clipboard_serial;
+            item->flags = format == 2 ? 0x200 : 0x400;
+            item->codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+            item->imported = 1;
+            const char *name = systemAtomName(format);
+            item->name = name ? strdup(name) : NULL;
+            ClipFormat **end = &formats;
+            while (*end)
+                end = &(*end)->next;
+            *end = item;
+        }
+    }
+    lx_host_mutex_unlock(clipboard_mutex);
+}
+
+ULONG WinEnumClipbrdFmts(HAB hab, ULONG format)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor)
+        return 0;
+    synchronize_clipboard();
+    LxHostClipboardState state;
+    if (lx_host_clipboard_state(&state) && !state.owned)
+        import_host_formats();
+    import_requested_format(format);
+    if (!lock_clipboard())
+        return 0;
+    ClipFormat *item = clipboard_open == anchor ? formats : NULL;
+    if (format)
+    {
+        while (item && item->format != format)
+            item = item->next;
+        if (item)
+            item = item->next;
+    }
+    ULONG result = item ? item->format : 0;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+
+static BOOL install_bytes(ClipFormat *item, const void *bytes, size_t size)
+{
+    if (!GProcessState.execution || size > 64 * 1024 * 1024)
+        return FALSE;
+    size_t capacity = (size + 4096) & ~(size_t)4095;
+    LxGuestMapping *mapping =
+        lx_execution_map(GProcessState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    if (!mapping)
+        return FALSE;
+    memcpy(lx_execution_mapping_host(mapping), bytes, size);
+    ((char *)lx_execution_mapping_host(mapping))[size] = 0;
+    item->mapping = mapping;
+    item->length = size;
+    item->data = lx_execution_mapping_address(mapping);
+    return TRUE;
+}
+
+ULONG WinQueryClipbrdData(HAB hab, ULONG format)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor || !lock_clipboard())
+        return 0;
+    BOOL opened = clipboard_open == anchor;
+    lx_host_mutex_unlock(clipboard_mutex);
+    if (!opened)
+        return 0;
+    synchronize_clipboard();
+    LxHostClipboardState state;
+    if (lx_host_clipboard_state(&state) && !state.owned)
+        import_host_formats();
+    import_requested_format(format);
+    if (!lock_clipboard())
+        return 0;
+    ClipFormat *item = find_format(format);
+    BOOL imported = item && item->imported;
+    BOOL cfhtml = item && item->name && !strcasecmp(item->name, "HTML Format");
+    uint64_t serial = item ? item->serial : 0;
+    HWND owner = item && !item->data && !imported ? clipboard_owner : 0;
+    ULONG result = item ? item->data : 0;
+    const char *mime = item ? format_mime(format, item->name) : NULL;
+    lx_host_mutex_unlock(clipboard_mutex);
+    if (result)
+        return result;
+    if (owner)
+    {
+        ULONG previous = rendering_format;
+        rendering_format = format;
+        WinSendMsg(owner, WM_RENDERFMT, (MPARAM)(uintptr_t)format, 0);
+        rendering_format = previous;
+    }
+    else if (imported && mime)
+    {
+        size_t size = 0;
+        void *bytes = lx_host_clipboard_read(mime, &size);
+        if (!bytes && format == 1)
+            bytes = lx_host_clipboard_read("text/plain", &size);
+        if (!bytes && format == 2)
+            bytes = lx_host_clipboard_read("image/bmp", &size), mime = "image/bmp";
+        if (!bytes && !strcmp(mime, "text/rtf"))
+            bytes = lx_host_clipboard_read("application/rtf", &size);
+        if (bytes && format == 1)
+        {
+            void *converted = lx_host_clipboard_text_os2(
+                GProcessState.process_codepage ? GProcessState.process_codepage : 437, bytes, size,
+                &size);
+            free(bytes);
+            bytes = converted;
+        }
+        else if (bytes && cfhtml)
+        {
+            void *html = lx_host_clipboard_html_wrap(bytes, size, &size);
+            free(bytes);
+            bytes = html;
+        }
+        ULONG bitmap = 0;
+        if (bytes && format == 2)
+        {
+            unsigned width, height;
+            uint8_t *rgba = lx_host_clipboard_decode_image(mime, bytes, size, &width, &height);
+            if (rgba)
+            {
+                bitmap = lx_pm_bitmap_create(width, height, 1, 24);
+                LxHandleBorrow borrow = {0};
+                PmBitmap *image = bitmap ? lx_pm_bitmap(bitmap, &borrow) : NULL;
+                if (image)
+                    for (unsigned y = 0; y < height; y++)
+                        for (unsigned x = 0; x < width; x++)
+                        {
+                            const uint8_t *pixel = rgba + ((size_t)y * width + x) * 4;
+                            image->pixels[(size_t)(height - y - 1) * width + x] =
+                                (uint32_t)pixel[0] << 16 | (uint32_t)pixel[1] << 8 | pixel[2];
+                        }
+                lx_handle_release(&borrow);
+                free(rgba);
+            }
+        }
+        if (lock_clipboard())
+        {
+            item = find_format(format);
+            if (item && item->serial == serial && item->imported && !item->data && bytes)
+            {
+                if (format == 2)
+                    item->data = bitmap;
+                else
+                    install_bytes(item, bytes, size);
+            }
+            lx_host_mutex_unlock(clipboard_mutex);
+        }
+        free(bytes);
+    }
+    if (!lock_clipboard())
+        return 0;
+    item = find_format(format);
+    result = item ? item->data : 0;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+
+BOOL WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor || !format || (flags & ~0x603u) || (flags & 0x600u) == 0x600u || !lock_clipboard())
+        return FALSE;
+    BOOL result =
+        clipboard_open == anchor || (rendering_format == format && owner_anchor == anchor);
+    if (!data && !clipboard_owner)
+        result = FALSE;
+    if (result)
+    {
+        ClipFormat **slot = &formats;
+        while (*slot && (*slot)->format != format)
+            slot = &(*slot)->next;
+        ClipFormat *item = calloc(1, sizeof *item);
+        result = item != NULL;
+        if (item)
+        {
+            item->format = format;
+            item->data = data;
+            item->flags = flags;
+            item->codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+            const char *name = systemAtomName(format);
+            item->name = name ? strdup(name) : NULL;
+            if (*slot)
+            {
+                item->next = (*slot)->next;
+                if ((*slot)->data == data)
+                {
+                    (*slot)->data = 0;
+                    item->mapping = (*slot)->mapping;
+                    (*slot)->mapping = NULL;
+                    item->length = (*slot)->length;
+                }
+                discard_format(*slot);
+            }
+            *slot = item;
+            if (!rendering_format)
+                clipboard_dirty = TRUE;
+            item->serial = ++clipboard_serial;
+        }
+    }
+    lx_host_mutex_unlock(clipboard_mutex);
+    drain_clipboard_free();
+    return result;
+}
+
+uint64_t lx_pm_clipboard_serial(void)
+{
+    synchronize_clipboard();
+    if (!lock_clipboard())
+        return 0;
+    uint64_t result = clipboard_serial;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+
+uint64_t lx_pm_clipboard_format_serial(ULONG format)
+{
+    synchronize_clipboard();
+    if (!lock_clipboard())
+        return 0;
+    ClipFormat *item = find_format(format);
+    uint64_t serial = item ? item->serial : 0;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return serial;
+}
+
+BOOL lx_pm_clipboard_set_bytes(HAB hab, ULONG format, const void *bytes, size_t size)
+{
+    ClipFormat staged = {0};
+    if (!bytes || size > 64 * 1024 * 1024 || !install_bytes(&staged, bytes, size))
+        return FALSE;
+    if (!WinSetClipbrdData(hab, staged.data, format, 0x400))
+    {
+        lx_execution_unmap(GProcessState.execution, staged.mapping);
+        return FALSE;
+    }
+    if (!lock_clipboard())
+        return FALSE;
+    ClipFormat *item = find_format(format);
+    item->mapping = staged.mapping;
+    item->length = staged.length;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return TRUE;
+}
+
+void *lx_pm_clipboard_copy_bytes(HAB hab, ULONG format, size_t *size)
+{
+    if (!size || !WinQueryClipbrdData(hab, format) || !lock_clipboard())
+        return NULL;
+    ClipFormat *item = find_format(format);
+    void *result = item ? copy_pointer(item, size) : NULL;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+
+void lx_pm_clipboard_window_destroyed(HWND window)
+{
+    if (!lock_clipboard())
+        return;
+    BOOL owner = clipboard_owner == window;
+    lx_host_mutex_unlock(clipboard_mutex);
+    if (!owner)
+        return;
+    WinSendMsg(window, WM_RENDERALLFMTS, 0, 0);
+    lx_host_clipboard_materialize();
+    if (lock_clipboard())
+    {
+        clipboard_owner = 0;
+        owner_anchor = NULL;
+        lx_host_mutex_unlock(clipboard_mutex);
+    }
 }
 
 ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity)
 {
     if (!output || !capacity || !lock_clipboard())
         return 0;
-    const char *name = format_name(format);
+    const char *name = systemAtomName(format);
     size_t size = name ? strlen(name) : 0;
     if (size >= capacity)
         size = capacity - 1;
@@ -87,103 +823,6 @@ ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity)
     output[size] = 0;
     lx_host_mutex_unlock(clipboard_mutex);
     return (ULONG)size;
-}
-
-static ULONG atom_name(ULONG table, PSZ name, BOOL add)
-{
-    if (!name)
-        return 0;
-    uintptr_t value = (uintptr_t)name;
-    if (value < 0x10000 || (value <= UINT32_MAX && value >= 0xffff0000))
-    {
-        if (!lock_clipboard())
-            return 0;
-        ULONG result = valid_atom_table(table) ? (ULONG)(value & 0xffff) : 0;
-        lx_host_mutex_unlock(clipboard_mutex);
-        return result;
-    }
-    if (!*name || strlen(name) > 255 || !lock_clipboard())
-        return 0;
-    if (!valid_atom_table(table))
-    {
-        lx_host_mutex_unlock(clipboard_mutex);
-        return 0;
-    }
-    SystemAtom *item = atoms;
-    ULONG id = 0xc000;
-    while (item && (item->table != table || strcasecmp(item->name, name)))
-    {
-        if (item->table == table && item->id >= id)
-            id = item->id + 1;
-        item = item->next;
-    }
-    if (item && add)
-        item->references++;
-    if (!item && add && id <= 0xffff)
-    {
-        item = calloc(1, sizeof *item);
-        if (item)
-        {
-            item->name = strdup(name);
-            if (!item->name)
-            {
-                free(item);
-                item = NULL;
-            }
-            else
-            {
-                item->id = id;
-                item->table = table;
-                item->references = 1;
-                item->next = atoms;
-                atoms = item;
-            }
-        }
-    }
-    ULONG result = item ? item->id : 0;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-
-ULONG WinAddAtom(ULONG table, PSZ name)
-{
-    return atom_name(table, name, TRUE);
-}
-
-ULONG WinFindAtom(ULONG table, PSZ name)
-{
-    return atom_name(table, name, FALSE);
-}
-
-ULONG WinDeleteAtom(ULONG table, ULONG atom)
-{
-    if (!atom)
-        return atom;
-    if (!lock_clipboard())
-        return atom;
-    if (!valid_atom_table(table))
-    {
-        lx_host_mutex_unlock(clipboard_mutex);
-        return atom;
-    }
-    if (atom < 0xc000)
-    {
-        lx_host_mutex_unlock(clipboard_mutex);
-        return 0;
-    }
-    SystemAtom **slot = &atoms;
-    while (*slot && ((*slot)->table != table || (*slot)->id != atom))
-        slot = &(*slot)->next;
-    ULONG result = *slot ? 0 : atom;
-    if (*slot && !--(*slot)->references)
-    {
-        SystemAtom *item = *slot;
-        *slot = item->next;
-        free(item->name);
-        free(item);
-    }
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
 }
 
 ULONG lx_pm_clipboard_count(void)
@@ -199,79 +838,4 @@ ULONG lx_pm_clipboard_count(void)
         count++;
     lx_host_mutex_unlock(clipboard_mutex);
     return count;
-}
-
-ULONG WinCreateAtomTable(ULONG initial, ULONG buckets)
-{
-    if (initial > 16 * 1024 * 1024 || buckets > 65535 || !lock_clipboard())
-        return 0;
-    PrivateAtomTable *table = next_atom_table < UINT32_MAX ? calloc(1, sizeof *table) : NULL;
-    if (table)
-    {
-        table->handle = next_atom_table++;
-        table->next = atom_tables;
-        atom_tables = table;
-    }
-    ULONG result = table ? table->handle : 0;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-
-ULONG WinDestroyAtomTable(ULONG handle)
-{
-    if (!lock_clipboard())
-        return handle;
-    PrivateAtomTable **slot = &atom_tables;
-    while (*slot && (*slot)->handle != handle)
-        slot = &(*slot)->next;
-    BOOL valid = *slot != NULL;
-    if (valid)
-    {
-        PrivateAtomTable *table = *slot;
-        *slot = table->next;
-        free(table);
-        SystemAtom **atom = &atoms;
-        while (*atom)
-        {
-            SystemAtom *item = *atom;
-            if (item->table == handle)
-            {
-                *atom = item->next;
-                free(item->name);
-                free(item);
-            }
-            else
-                atom = &item->next;
-        }
-    }
-    lx_host_mutex_unlock(clipboard_mutex);
-    return valid ? 0 : handle;
-}
-
-ULONG WinQueryAtomName(ULONG table, ULONG atom, PSZ output, ULONG capacity)
-{
-    if (!output || !capacity || !lock_clipboard())
-        return 0;
-    const char *name = NULL;
-    char number[24];
-    if (atom && atom < 0xc000)
-    {
-        snprintf(number, sizeof number, "#%u", (unsigned)atom);
-        name = number;
-    }
-    else
-        for (SystemAtom *p = atoms; p; p = p->next)
-            if (p->table == table && p->id == atom)
-            {
-                name = p->name;
-                break;
-            }
-    size_t n = name ? strlen(name) : 0;
-    if (n >= capacity)
-        n = capacity - 1;
-    if (n)
-        memcpy(output, name, n);
-    output[n] = 0;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return n;
 }

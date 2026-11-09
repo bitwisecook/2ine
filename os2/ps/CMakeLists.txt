@@ -70,6 +70,7 @@ twoine_os2_dll(
     pmmerge/pmwin/input.c
     pmmerge/pmwin/window_text.c
     pmmerge/pmwin/clipboard.c
+    pmmerge/pmwin/atoms.c
     pmmerge/pmwin/semaphore_waits.c
     pmmerge/pmwin/pointer_image.c
     pmmerge/pmwin/winshut.c
