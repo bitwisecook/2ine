@@ -5,7 +5,7 @@
 #include "os2/include/pmwin.h"
 #include "os2/include/pmgpi.h"
 #include "os2/ps/awe/drawing.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "emulator/abi.h"
 
 LONG GetMenuCheckMarkDimensions(void)

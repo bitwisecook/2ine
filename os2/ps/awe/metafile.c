@@ -6,7 +6,7 @@
 #include "host/sync.h"
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/common/pm_text.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include <math.h>
 
 typedef struct Open32Metafile

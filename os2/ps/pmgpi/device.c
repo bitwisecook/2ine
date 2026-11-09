@@ -4,7 +4,7 @@
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmdev.h"
 #include "host/font.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/private/pmdevp.h"
 
 HDC DevOpenDC(HAB hab, LONG type, PSZ token, LONG count, PVOID data, HDC compatible)

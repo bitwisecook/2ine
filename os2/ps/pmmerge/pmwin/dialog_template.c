@@ -3,7 +3,7 @@
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "emulator/abi.h"
 #include "os2/ps/pmmerge/pmwin/controls.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 
 enum
 {

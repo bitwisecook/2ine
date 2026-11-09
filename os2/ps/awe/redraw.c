@@ -3,7 +3,7 @@
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 
 enum
 {

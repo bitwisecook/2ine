@@ -4,7 +4,7 @@
 #include "formats/resources/icon.h"
 #include "host/fs.h"
 #include "host/sync.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"

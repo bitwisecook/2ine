@@ -2,7 +2,7 @@
 /* The WC_* control framework: one PmControl record per control, creation,
    painting and message dispatch to the control kinds. */
 #include "os2/ps/pmmerge/pmwin/controls.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/common/pm_text.h"
 
 enum

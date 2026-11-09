@@ -3,7 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "emulator/features.h"
 #include <stdio.h>
 #define CHECK(test)                                                                                \

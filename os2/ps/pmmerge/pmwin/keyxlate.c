@@ -3,7 +3,7 @@
    scan codes and code-page characters. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/common/pm_text.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"

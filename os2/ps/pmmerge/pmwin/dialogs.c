@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Modal state survives reentrant destruction until its message loop returns. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"

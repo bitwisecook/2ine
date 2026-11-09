@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* DIVE workers submit copies. The PM owner alone draws host window surfaces. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "host/sync.h"
 
 typedef struct PmDiveTarget

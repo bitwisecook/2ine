@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Raster primitives share clipping, logical colors, pattern tiles and Boolean mixes. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include <math.h>
 
 uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix)

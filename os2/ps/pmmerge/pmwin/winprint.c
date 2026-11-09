@@ -2,7 +2,7 @@
 /* Printer device contexts: page size, options, page breaks and DevEscape
    requests, written out through the print job. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/print_job.h"
 
 HDC lx_pm_open_printer_dc(HAB hab, LONG type, unsigned kind)

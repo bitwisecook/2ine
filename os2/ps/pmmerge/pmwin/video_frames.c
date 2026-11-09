@@ -2,7 +2,7 @@
 /* A latest-frame mailbox transfers ownership without copying decoded pixels.
    Only the owning PM thread touches renderer resources or window geometry. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/video_frames.h"
 #include "host/sync.h"
 

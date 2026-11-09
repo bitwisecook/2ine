@@ -2,7 +2,7 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/windows.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/private/pmp.h"
 
 static void wire_rect(uint8 p[16], LONG l, LONG t, LONG r, LONG b)

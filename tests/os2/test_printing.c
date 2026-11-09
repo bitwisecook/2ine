@@ -6,7 +6,7 @@
 #include "os2/include/pmdev.h"
 #include "os2/include/pmspl.h"
 #include "os2/include/private/pmp.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "host/print.h"
 #include <stdio.h>
 #include <stdlib.h>

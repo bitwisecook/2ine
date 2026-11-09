@@ -39,8 +39,8 @@ twoine_os2_dll(
     pmmerge/pmwin/paint.c
     pmmerge/pmwin/timers.c
     pmmerge/pmwin/graphics.c
-    pmmerge/pmwin/raster.c
-    pmmerge/pmwin/coordinates.c
+    pmmerge/pmgre/raster.c
+    pmmerge/pmgre/32xform.c
     pmmerge/pmwin/device_context.c
     pmmerge/pmwin/winprint.c
     pmmerge/pmwin/print_job.c
@@ -57,10 +57,10 @@ twoine_os2_dll(
     pmmerge/pmwin/listbox.c
     pmmerge/pmwin/static.c
     pmmerge/pmwin/buttons.c
-    pmmerge/pmwin/bitmap.c
+    pmmerge/pmgre/32bitmap.c
     pmmerge/pmwin/sysbitmap.c
     pmmerge/pmwin/draw.c
-    pmmerge/pmwin/text.c
+    pmmerge/pmgre/32chstr.c
     pmmerge/pmwin/rectangles.c
     pmmerge/pmwin/entry.c
     pmmerge/pmwin/spin.c
@@ -68,7 +68,7 @@ twoine_os2_dll(
     pmmerge/pmwin/combo.c
     pmmerge/pmwin/mle.c
     pmmerge/pmwin/menus.c
-    pmmerge/pmwin/regions.c
+    pmmerge/pmgre/regions.c
     pmmerge/pmwin/invalidation.c
     pmmerge/pmwin/accelerators.c
     pmmerge/pmwin/pointers.c

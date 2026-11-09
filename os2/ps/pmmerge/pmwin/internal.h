@@ -145,7 +145,7 @@ typedef struct
     MessageQueueItem *free_pool;
 } MessageQueue;
 
-#include "os2/ps/pmmerge/pmwin/gpi.h"
+#include "os2/ps/pmmerge/pmgre/gpi.h"
 
 typedef struct PmTimer
 {

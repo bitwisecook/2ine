@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* WC_LISTBOX: the item list, selection and the LM_* messages. */
 #include "os2/ps/pmmerge/pmwin/controls.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/common/pm_text.h"
 
 MRESULT listMessage(Window *window, ULONG message, MPARAM first, MPARAM second)

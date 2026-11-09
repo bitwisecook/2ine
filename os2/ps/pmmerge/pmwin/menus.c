@@ -2,7 +2,7 @@
 /* Resource menus and menu messages share the same item and popup lifetime. */
 #include "os2/ps/pmmerge/pmwin/menus.h"
 #include "os2/ps/pmmerge/pmwin/controls.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/common/pm_text.h"
 #include "emulator/abi.h"
 #include <ctype.h>

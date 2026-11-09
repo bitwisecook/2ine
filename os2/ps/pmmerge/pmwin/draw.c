@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* WinInvertRect and WinDrawBitmap: rectangle inversion and bitmap drawing on a PS. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "emulator/abi.h"
 
 BOOL WinInvertRect(HPS handle, PRECTL input)

@@ -8,7 +8,7 @@
 /* Window position, size, z-order, visibility and parent (WinSetWindowPos and
    its relatives), minimised and maximised positions, and flashing. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"

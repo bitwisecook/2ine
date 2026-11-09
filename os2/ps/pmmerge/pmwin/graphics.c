@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Presentation-space state is shared by paint and retained GPI drawing. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/private/pmp.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "emulator/abi.h"

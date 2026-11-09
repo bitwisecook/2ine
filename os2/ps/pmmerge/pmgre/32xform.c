@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Page units and an explicit viewport map model/view coordinates to device pels. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include <math.h>
 
 static void unit_scale(PresentationSpace *ps, LONG *pels, LONG *units)

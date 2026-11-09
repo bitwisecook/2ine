@@ -2,7 +2,7 @@
 /* Enumerations retain a snapshot of immediate child handles in snapshotted z order. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "emulator/handles.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"

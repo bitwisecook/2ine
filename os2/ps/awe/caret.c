@@ -2,7 +2,7 @@
 /* One queue-thread caret uses reversible raster inversion and a private PM timer. */
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/timers.h"
 
 typedef struct Caret

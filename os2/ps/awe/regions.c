@@ -2,7 +2,7 @@
 /* Windows regions retain top-left coordinates; selected clips are copied into GPI. */
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/private/pmp.h"
 #include <math.h>

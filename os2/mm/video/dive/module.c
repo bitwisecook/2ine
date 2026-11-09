@@ -4,7 +4,7 @@
 #include "os2/include/dive.h"
 #include "os2/mm/video/dive/dive_pixels.h"
 #include "os2/mm/video/dive/dive_palette.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "host/window.h"
 #include "host/sync.h"
 #include "emulator/features.h"

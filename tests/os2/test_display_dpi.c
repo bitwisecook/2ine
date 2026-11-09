@@ -3,7 +3,7 @@
 #include "os2/include/pmwin.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmdev.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "emulator/runtime.h"
 #include <stdio.h>
 #include <stdlib.h>

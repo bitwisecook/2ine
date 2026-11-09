@@ -7,7 +7,7 @@
  */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/video_frames.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/private/pmp.h"
 #include "host/clipboard.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"

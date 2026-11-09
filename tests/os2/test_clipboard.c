@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM ownership, codepages, delayed rendering and isolated host image fixtures. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/include/private/pmp.h"
 #include "host/clipboard.h"
 #include <SDL3/SDL.h>

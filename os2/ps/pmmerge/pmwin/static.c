@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* WC_STATIC: frame and fill shapes, and the group box. */
 #include "os2/ps/pmmerge/pmwin/controls.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/common/pm_text.h"
 
 enum

@@ -2,7 +2,7 @@
 /* Solid and null brushes retain RGB colors independently of DC text attributes. */
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 
 typedef struct Open32Brush
 {

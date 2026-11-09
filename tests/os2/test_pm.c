@@ -7,7 +7,7 @@
 #include "os2/include/pmdev.h"
 #include "emulator/handles.h"
 #include "emulator/abi.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/controls.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"
 #include <stdio.h>

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Foreign posts are staged under a lock and consumed by the owning PM thread. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "host/sync.h"
 #include "os2/ps/pmmerge/pmwin/open32_post.h"
 #include "os2/include/private/pmp.h"

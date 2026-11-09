@@ -2,7 +2,7 @@
 /* Public outline families are explicit substitutions backed by measured host faces. */
 #include "os2/include/private/export.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "host/font.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/common/pm_text.h"

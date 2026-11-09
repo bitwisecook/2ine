@@ -2,7 +2,7 @@
 /* Pens retain LOGPEN metadata; strokes apply one Boolean mix per covered pixel. */
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include <math.h>
 
 typedef struct Open32Pen

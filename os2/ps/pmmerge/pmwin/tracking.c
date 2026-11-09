@@ -2,7 +2,7 @@
 /* WinTrackRect: the tracking rectangle drawn with an inverting mix while the
    pointer or keyboard moves or sizes it. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"

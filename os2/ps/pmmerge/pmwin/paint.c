@@ -6,7 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 
 PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor, const HPS hps)
 {

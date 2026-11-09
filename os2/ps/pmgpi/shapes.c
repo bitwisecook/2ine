@@ -3,7 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/include/pmgpi.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 
 LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG vertical)
 {
