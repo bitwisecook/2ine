@@ -1,42 +1,44 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The drive table: folder and device roots and published device control files. */
 #include "ball/ball_internal.h"
+#include "storage/image_path.h"
 #include "storage/volume.h"
 
+/* Publishes a device slot as devices/<letter>.media through the storage
+   codec. The file is rewritten only when its contents change. */
 static char *tb_ball_device_root(TbBall *c, const char *letter, const char *kind, const char *image,
                                  int readonly)
 {
     char *directory = tb_ball_join(c, c->ball, "devices");
     char *control = tb_ball_join(c, directory, tb_ball_format(c, "%s.media", letter));
-    if (!directory || !control || !tb_mkdirs(directory))
+    if (!directory || !control)
+        return NULL;
+    size_t n = 0;
+    errno = 0;
+    unsigned char *bytes = (unsigned char *)tb_image_device_control(kind, readonly, image, &n);
+    if (!bytes)
+    {
+        if (errno == ENAMETOOLONG)
+            tb_ball_fail(c, "Image path is too long");
+        else
+            tb_ball_fail(c, "Out of memory");
+        return NULL;
+    }
+    if (!tb_ball_keep(c, (char *)bytes))
+        return NULL;
+    unsigned char *old = (unsigned char *)tb_ball_keep(c, malloc(n + 1));
+    if (!old)
+        return NULL;
+    FILE *file = tb_fopen(control, "rb");
+    int same = file && fread(old, 1, n + 1, file) == n && !memcmp(old, bytes, n);
+    if (file)
+        fclose(file);
+    if (!same && !tb_mkdirs(directory))
     {
         tb_ball_fail(c, "Cannot create media device directory: %s", strerror(errno));
         return NULL;
     }
-    size_t n = image ? strlen(image) : 0;
-    if (n > 32768)
-    {
-        tb_ball_fail(c, "Image path is too long");
-        return NULL;
-    }
-    unsigned char *bytes = (unsigned char *)tb_ball_keep(c, calloc(1, n + 16));
-    if (!bytes)
-        return NULL;
-    memcpy(bytes, "2INEMED1", 8);
-    bytes[8] = !strcmp(kind, "floppy") ? 2 : !strcmp(kind, "disk") ? 3 : 1;
-    bytes[9] = readonly || bytes[8] == 1;
-    for (unsigned i = 0; i < 4; i++)
-        bytes[12 + i] = (unsigned char)(n >> (8 * i));
-    if (n)
-        memcpy(bytes + 16, image, n);
-    unsigned char *old = (unsigned char *)tb_ball_keep(c, malloc(n + 17));
-    if (!old)
-        return NULL;
-    FILE *file = tb_fopen(control, "rb");
-    int same = file && fread(old, 1, n + 17, file) == n + 16 && !memcmp(old, bytes, n + 16);
-    if (file)
-        fclose(file);
-    if (!same && !tb_atomic_write(control, bytes, n + 16))
+    if (!same && !tb_atomic_write(control, bytes, n))
     {
         tb_ball_fail(c, "Cannot update %s: media: %s", letter, strerror(errno));
         return NULL;

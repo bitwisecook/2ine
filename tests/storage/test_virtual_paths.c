@@ -63,6 +63,31 @@ static void image_paths(void)
     free(path);
 }
 
+/* Control files: magic, kind, read-only flag, little-endian length, path. */
+static void device_controls(void)
+{
+    size_t size = 0;
+    unsigned char *bytes = tb_image_device_control("floppy", 0, "/x.img", &size);
+    static const unsigned char floppy[] = "2INEMED1\x02\x00\x00\x00\x06\x00\x00\x00/x.img";
+    CHECK(bytes && size == sizeof floppy - 1 && !memcmp(bytes, floppy, size));
+    free(bytes);
+    /* CD devices are read-only whatever the slot says; an ejected slot names no path. */
+    bytes = tb_image_device_control("cdrom", 0, NULL, &size);
+    CHECK(bytes && size == 16 && bytes[8] == 1 && bytes[9] == 1 && !bytes[12]);
+    free(bytes);
+    bytes = tb_image_device_control("disk", 1, "", &size);
+    CHECK(bytes && size == 16 && bytes[8] == 3 && bytes[9] == 1);
+    free(bytes);
+    char *path = repeated("", 16385, "");
+    errno = 0;
+    CHECK(!tb_image_device_control("disk", 0, path, &size) && errno == ENAMETOOLONG);
+    path[32768] = 0;
+    bytes = tb_image_device_control("disk", 0, path, &size);
+    CHECK(bytes && size == 16 + 32768);
+    free(bytes);
+    free(path);
+}
+
 static void media_paths(void)
 {
     check_string(tb_media_child("/@2ine-media/2f78!", "AB\xff"), "/@2ine-media/2f78!4142ff");
@@ -84,6 +109,7 @@ static void media_paths(void)
 int main(void)
 {
     image_paths();
+    device_controls();
     media_paths();
     puts("virtual path encoding passed");
     return 0;

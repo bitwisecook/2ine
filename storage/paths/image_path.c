@@ -57,6 +57,30 @@ char *tb_image_device_root(const char *control)
     return tb_hex_path_encode(DEVICE_PREFIX, control);
 }
 
+unsigned char *tb_image_device_control(const char *kind, int readonly, const char *medium,
+                                       size_t *size)
+{
+    size_t n = medium ? strlen(medium) : 0;
+    if (n > CONTROL_SOURCE_LIMIT)
+    {
+        errno = ENAMETOOLONG;
+        return NULL;
+    }
+    unsigned char *bytes = calloc(1, CONTROL_HEADER_BYTES + n);
+    if (!bytes)
+        return NULL;
+    memcpy(bytes, CONTROL_MAGIC, CONTROL_MAGIC_BYTES);
+    bytes[CONTROL_KIND] = !strcmp(kind, "floppy") ? TB_DEVICE_FLOPPY
+                          : !strcmp(kind, "disk") ? TB_DEVICE_DISK
+                                                  : TB_DEVICE_CD;
+    bytes[CONTROL_READONLY] = readonly || bytes[CONTROL_KIND] == TB_DEVICE_CD;
+    tb_put_le32(bytes + CONTROL_SOURCE_BYTES, (uint32_t)n);
+    if (n)
+        memcpy(bytes + CONTROL_HEADER_BYTES, medium, n);
+    *size = CONTROL_HEADER_BYTES + n;
+    return bytes;
+}
+
 FILE *tb_image_open_source(const char *path, int write)
 {
     return tb_host_fopen(path, write ? "rb+" : "rb");
