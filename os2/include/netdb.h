@@ -20,6 +20,15 @@ extern "C"
 
     /* Host, service and protocol databases */
 
+    /* h_errno values (tcp_h_errno) */
+    enum
+    {
+        OS2_HOST_NOT_FOUND = 1,
+        OS2_TRY_AGAIN = 2,
+        OS2_NO_RECOVERY = 3,
+        OS2_NO_DATA = 4
+    };
+
 #pragma pack(push, 1)
 
     typedef struct OS2_hostent

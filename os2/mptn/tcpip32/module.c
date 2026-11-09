@@ -24,6 +24,7 @@
 #include "host/thread.h"
 #include "os2/mptn/common/network.h"
 #include "os2/mptn/common/socket_errors.h"
+#include "os2/mptn/common/resolver.h"
 
 #include "host/network.h"
 #include "host/sync.h"
@@ -233,9 +234,7 @@ struct OS2_hostent *OS2_gethostbyname(const char *name)
 {
     static LX_HOST_THREAD_LOCAL OS2_hostent output;
     LxHostSocketHost host;
-    int ok = lx_host_socket_host(name, &host);
-    ResolverError = lx_host_socket_resolver_error();
-    if (!ok)
+    if (!lx_mptn_host_by_name(name, &host, &ResolverError))
         return NULL;
     output.h_name = host.name;
     output.h_aliases = host.aliases;
@@ -585,17 +584,9 @@ OS2_hostent *OS2_gethostbyaddr(const void *address, int length, int family)
 {
     static LX_HOST_THREAD_LOCAL OS2_hostent output;
     LxHostSocketHost host;
-    if (!address || length != 4 || family != 2)
-    {
+    if (!address || length != 4 || family != OS2_AF_INET)
         errno = EINVAL;
-        ResolverError = 3;
-        return NULL;
-    }
-    uint32_t ip;
-    memcpy(&ip, address, 4);
-    int ok = lx_host_socket_reverse(ip, &host);
-    ResolverError = lx_host_socket_resolver_error();
-    if (!ok)
+    if (!lx_mptn_host_by_address(address, length, family, &host, &ResolverError))
         return NULL;
     output.h_name = host.name;
     output.h_aliases = host.aliases;

@@ -3,6 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/include/stack16/netdb.h"
 #include "host/socket.h"
+#include "os2/mptn/common/resolver.h"
 #include "os2/mptn/tcp32dll/generated/tcp32dll-lx.h"
 static LX_HOST_THREAD_LOCAL int ResolverError;
 
@@ -26,9 +27,7 @@ Os2LegacyHost *Os2LegacyGetHostByName(const char *name)
 {
     LxHostSocketHost host;
     static LX_HOST_THREAD_LOCAL Os2LegacyHost output;
-    int ok = lx_host_socket_host(name, &host);
-    ResolverError = lx_host_socket_resolver_error();
-    if (!ok)
+    if (!lx_mptn_host_by_name(name, &host, &ResolverError))
         return NULL;
     output.name = host.name;
     output.aliases = host.aliases;
@@ -57,16 +56,7 @@ Os2LegacyHost *Os2LegacyGetHostByAddress(const void *address, int length, int fa
 {
     static LX_HOST_THREAD_LOCAL Os2LegacyHost output;
     LxHostSocketHost host;
-    if (!address || length != 4 || family != 2)
-    {
-        ResolverError = 3;
-        return NULL;
-    }
-    uint32_t ip;
-    memcpy(&ip, address, 4);
-    int ok = lx_host_socket_reverse(ip, &host);
-    ResolverError = lx_host_socket_resolver_error();
-    if (!ok)
+    if (!lx_mptn_host_by_address(address, length, family, &host, &ResolverError))
         return NULL;
     output = (Os2LegacyHost){host.name, host.aliases, host.family, host.length, host.addresses};
     return &output;

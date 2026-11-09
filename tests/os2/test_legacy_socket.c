@@ -2,6 +2,7 @@
 /* Legacy sockaddr layout, UDP round-trip, nonblocking errors and resolver exports. */
 #include "os2/include/stack16/sys/socket.h"
 #include "os2/include/stack16/netdb.h"
+#include "os2/include/netdb.h"
 #include "host/socket.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +61,14 @@ int main(void)
     CHECK(!Os2LegacyGetHostName(name, sizeof name) && name[0]);
     Os2LegacyHost *resolved = Os2LegacyGetHostByName("localhost");
     CHECK(resolved && resolved->family == 2 && resolved->length == 4 && resolved->addresses[0]);
+    /* TCP32DLL and TCPIP32 share the host lookup: only 4-byte AF_INET addresses
+       resolve; anything else fails with NO_RECOVERY in the DLL's own h_errno. */
+    uint32_t loopback = 0x0100007f;
+    CHECK(!Os2LegacyGetHostByAddress(&loopback, 16, 2) && *Os2LegacyResolverError() == 3);
+    CHECK(!Os2LegacyGetHostByAddress(&loopback, 4, 23) && *Os2LegacyResolverError() == 3);
+    CHECK(!Os2LegacyGetHostByAddress(NULL, 4, 2) && *Os2LegacyResolverError() == 3);
+    CHECK(!OS2_gethostbyaddr(&loopback, 16, 2) && *OS2_tcp_h_errno1() == 3);
+    CHECK(OS2_gethostbyname("localhost") && *OS2_tcp_h_errno1() != 3);
     puts("legacy socket UDP, errors, byte order and resolver checks passed");
     return 0;
 }
