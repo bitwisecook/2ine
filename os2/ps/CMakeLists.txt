@@ -78,6 +78,7 @@ twoine_os2_dll(
     pmmerge/pmwin/video_frames.c
     pmmerge/pmwin/thread_messages.c
     pmmerge/pmwin/input.c
+    pmmerge/pmwin/keyxlate.c
     pmmerge/pmwin/window_text.c
     pmmerge/pmwin/clipboard.c
     pmmerge/pmwin/atoms.c
