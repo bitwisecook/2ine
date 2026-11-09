@@ -3,7 +3,6 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/user/windows/windows.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"
 #include "emulator/abi.h"
 

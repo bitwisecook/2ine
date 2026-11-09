@@ -253,3 +253,38 @@ BOOL SetWindowExtEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
     return set_mapping(dc, x, y, previous, 3);
 }
+
+/* Mode 0 replaces the transform; MWT_IDENTITY 1 clears it; MWT_LEFTMULTIPLY 2 and
+   MWT_RIGHTMULTIPLY 3 compose with the current one. */
+BOOL open32WorldTransform(ULONG h, const double m[6], ULONG mode)
+{
+    Open32DC *dc = open32FindDC(h);
+    if (!dc || mode > 3)
+    {
+        open32SetError(dc ? 87 : 6);
+        return FALSE;
+    }
+    if (mode == 1)
+    {
+        dc->world_active = FALSE;
+        return TRUE;
+    }
+    double current[6] = {1, 0, 0, 1, 0, 0}, out[6];
+    if (dc->world_active)
+        memcpy(current, dc->world, sizeof current);
+    const double *a = mode == 3 ? current : m, *b = mode == 3 ? m : current;
+    if (mode)
+    {
+        out[0] = a[0] * b[0] + a[1] * b[2];
+        out[1] = a[0] * b[1] + a[1] * b[3];
+        out[2] = a[2] * b[0] + a[3] * b[2];
+        out[3] = a[2] * b[1] + a[3] * b[3];
+        out[4] = a[4] * b[0] + a[5] * b[2] + b[4];
+        out[5] = a[4] * b[1] + a[5] * b[3] + b[5];
+    }
+    else
+        memcpy(out, m, sizeof out);
+    memcpy(dc->world, out, sizeof out);
+    dc->world_active = TRUE;
+    return TRUE;
+}

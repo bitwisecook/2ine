@@ -38,6 +38,16 @@ typedef struct Open32DC
 } Open32DC;
 
 void open32SavedDCCleanup(Open32DC *dc);
+/* The stock font for a GetStockObject index; 0 (ERROR_INVALID_PARAMETER) for any other. */
+ULONG open32StockFont(LONG index);
+/* Shapes and the world transform without exports of their own, which EMF playback draws. */
+BOOL open32AngleArc(ULONG handle, LONG x, LONG y, ULONG radius, float start, float sweep);
+BOOL open32ArcTo(ULONG handle, LONG left, LONG top, LONG right, LONG bottom, LONG start_x,
+                 LONG start_y, LONG end_x, LONG end_y);
+BOOL open32Chord(ULONG handle, LONG left, LONG top, LONG right, LONG bottom, LONG start_x,
+                 LONG start_y, LONG end_x, LONG end_y);
+BOOL open32FloodFill(ULONG handle, LONG x, LONG y, ULONG color, ULONG mode);
+BOOL open32WorldTransform(ULONG handle, const double matrix[6], ULONG mode);
 BOOL open32BrushPixel(Open32DC *dc, LONG x, LONG y, uint32 *rgb);
 ULONG open32DibPatternBrush(PVOID information, PVOID bits, ULONG usage, BOOL monochrome);
 uint8 *open32BrushDib(ULONG handle, size_t *information_bytes, size_t *bytes, BOOL *monochrome);

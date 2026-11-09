@@ -284,3 +284,28 @@ ULONG SetPixel(ULONG h, LONG x, LONG y, ULONG color)
         return UINT32_MAX;
     return nearest;
 }
+
+LONG SetROP2(ULONG handle, LONG mode)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc || mode < 1 || mode > 16)
+    {
+        open32SetError(dc ? 87 : 6);
+        return 0;
+    }
+    LONG previous = dc->rop2;
+    dc->rop2 = mode;
+    open32MetafileWords(handle, 0x104, 1, &mode);
+    return previous;
+}
+
+LONG GetROP2(ULONG handle)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc)
+    {
+        open32SetError(6);
+        return 0;
+    }
+    return dc->rop2;
+}

@@ -1,6 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_OPEN32_BATCH_PATHS_H
-#define TWOINE_OPEN32_BATCH_PATHS_H
+/* GDI paths: recording figures between BeginPath and EndPath, and filling, stroking, widening
+   and clipping with them. */
+#ifndef TWOINE_PMWINX_PATHS_H
+#define TWOINE_PMWINX_PATHS_H
 struct Open32DC;
 int open32PathCapture(struct Open32DC *dc, PVOID points, LONG count, BOOL close);
 int open32PathLine(struct Open32DC *dc, LONG x, LONG y, BOOL move);
@@ -9,11 +11,6 @@ BOOL open32PathClose(struct Open32DC *dc);
 BOOL open32PathFill(ULONG handle, BOOL stroke);
 BOOL open32PathWiden(struct Open32DC *dc);
 BOOL open32PathClip(ULONG handle, LONG mode);
-BOOL open32AngleArc(ULONG handle, LONG x, LONG y, ULONG radius, float start, float sweep);
-BOOL open32ArcTo(ULONG handle, LONG left, LONG top, LONG right, LONG bottom, LONG start_x,
-                 LONG start_y, LONG end_x, LONG end_y);
-BOOL open32FloodFill(ULONG handle, LONG x, LONG y, ULONG color, ULONG mode);
-BOOL open32WorldTransform(ULONG handle, const double matrix[6], ULONG mode);
-BOOL open32Chord(ULONG handle, LONG left, LONG top, LONG right, LONG bottom, LONG start_x,
-                 LONG start_y, LONG end_x, LONG end_y);
+/* Whether the DC is between BeginPath and EndPath. */
+BOOL open32PathRecording(const struct Open32DC *dc);
 #endif

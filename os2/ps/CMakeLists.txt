@@ -170,10 +170,14 @@ twoine_os2_dll(
     awe/gdi/dc.c
     awe/gdi/dc_attributes.c
     awe/gdi/dc_state.c
+    awe/gdi/device_caps.c
     awe/gdi/dib.c
+    awe/gdi/fills.c
     awe/gdi/font_metrics.c
+    awe/gdi/lines_shapes.c
     awe/gdi/fonts.c
     awe/gdi/mapping_modes.c
+    awe/gdi/objects.c
     awe/gdi/metafiles/wmf.c
     awe/gdi/palettes.c
     awe/gdi/paths.c

@@ -5,7 +5,6 @@
 #include "os2/ps/pmmerge/pmwin/open32_post.h"
 #include "os2/ps/awe/user/input/keyboard.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/include/private/pmp.h"
 #include <stdio.h>
 static _Thread_local Open32Window *windows, *creating;

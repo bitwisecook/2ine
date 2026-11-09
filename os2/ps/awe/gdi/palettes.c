@@ -3,6 +3,8 @@
 #include "os2/ps/awe/gdi/dc.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/include/pmgpi.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
 
 typedef struct Open32Palette
 {
@@ -300,4 +302,55 @@ BOOL UnrealizeObject(ULONG object)
        device realization to discard. PMWINX reports success for every handle. */
     (void)object;
     return TRUE;
+}
+
+ULONG GetNearestColor(ULONG handle, ULONG color)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc)
+    {
+        open32SetError(6);
+        return UINT32_MAX;
+    }
+    ULONG kind = color >> 24;
+    if (kind == 1)
+    {
+        UCHAR entry[4];
+        if ((color & 0xFF0000) ||
+            GetPaletteEntries(dc->palette_handle, color & 0xFFFF, 1, entry) != 1)
+        {
+            open32SetError(87);
+            return UINT32_MAX;
+        }
+        color = (ULONG)entry[0] | (ULONG)entry[1] << 8 | (ULONG)entry[2] << 16;
+    }
+    else if (kind && kind != 2)
+    {
+        open32SetError(87);
+        return UINT32_MAX;
+    }
+    color &= 0xFFFFFF;
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
+    if (!bitmap || bitmap->depth > 8)
+        return color;
+    uint32 colors[256];
+    open32BitmapPalette(bitmap->depth, colors);
+    unsigned count = bitmap->palette_count ? bitmap->palette_count : 1u << bitmap->depth;
+    if (bitmap->palette_count)
+        memcpy(colors, bitmap->palette, count * sizeof *colors);
+    ULONG distance = UINT32_MAX, best = 0;
+    for (unsigned i = 0; i < count; i++)
+    {
+        LONG r = (LONG)(color & 255) - (LONG)((colors[i] >> 16) & 255);
+        LONG g = (LONG)((color >> 8) & 255) - (LONG)((colors[i] >> 8) & 255);
+        LONG b = (LONG)((color >> 16) & 255) - (LONG)(colors[i] & 255);
+        ULONG next = (ULONG)(r * r + g * g + b * b);
+        if (next < distance)
+        {
+            distance = next;
+            best = colors[i];
+        }
+    }
+    return (best & 255) << 16 | (best & 0xFF00) | (best >> 16 & 255);
 }

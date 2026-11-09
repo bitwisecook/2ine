@@ -127,37 +127,6 @@ LONG open32FontObject(ULONG handle, LONG capacity, PVOID output)
     return result;
 }
 
-ULONG GetStockObject(LONG index)
-{
-    if (index == 15)
-        return open32StockPalette();
-    if (index >= 6 && index <= 8)
-        return open32StockPen(index);
-    if (index >= 0 && index <= 5)
-        return open32StockBrush(index);
-    static _Thread_local ULONG stocks[18];
-    if (index < 10 || index == 15 || index > 17)
-    {
-        open32SetError(87);
-        return 0;
-    }
-    if (!stocks[index])
-    {
-        uint8 record[60] = {0};
-        lx_guest_store_u32(record, 16);
-        lx_guest_store_u32(record + 16, 400);
-        strcpy((char *)record + 28, index == 10 || index == 11 || index == 16 ? "Courier" : "Helv");
-        ULONG handle = CreateFontIndirect(record);
-        LxHandleBorrow borrow = {0};
-        if (!handle || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_FONT, &borrow))
-            return 0;
-        ((Open32Font *)borrow.resource)->stock = TRUE;
-        lx_handle_release(&borrow);
-        stocks[index] = handle;
-    }
-    return stocks[index];
-}
-
 ULONG CreateFont(LONG height, LONG width, LONG escapement, LONG orientation, LONG weight,
                  ULONG italic, ULONG underline, ULONG strikeout, ULONG charset, ULONG out_precision,
                  ULONG clip_precision, ULONG quality, ULONG pitch, PSZ face)
@@ -189,4 +158,33 @@ BOOL RemoveFontResource(PSZ path)
         return TRUE;
     open32SetError(3);
     return FALSE;
+}
+
+/* The stock fonts, created on first use for each thread. */
+ULONG open32StockFont(LONG index)
+{
+    static _Thread_local ULONG stocks[DEFAULT_GUI_FONT + 1];
+    if (index < OEM_FIXED_FONT || index == DEFAULT_PALETTE || index > DEFAULT_GUI_FONT)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    if (!stocks[index])
+    {
+        uint8 record[60] = {0};
+        lx_guest_store_u32(record, 16);
+        lx_guest_store_u32(record + 16, 400);
+        strcpy((char *)record + 28,
+               index == OEM_FIXED_FONT || index == ANSI_FIXED_FONT || index == SYSTEM_FIXED_FONT
+                   ? "Courier"
+                   : "Helv");
+        ULONG handle = CreateFontIndirect(record);
+        LxHandleBorrow borrow = {0};
+        if (!handle || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_FONT, &borrow))
+            return 0;
+        ((Open32Font *)borrow.resource)->stock = TRUE;
+        lx_handle_release(&borrow);
+        stocks[index] = handle;
+    }
+    return stocks[index];
 }
