@@ -74,7 +74,7 @@ twoine_os2_dll(
     pmmerge/pmwin/pointers.c
     pmmerge/pmwin/hooks.c
     pmmerge/pmwin/visible.c
-    pmmerge/pmwin/dive.c
+    pmmerge/pmwin/dive_targets.c
     pmmerge/pmwin/video_frames.c
     pmmerge/pmwin/thread_messages.c
     pmmerge/pmwin/input.c

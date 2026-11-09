@@ -3,7 +3,7 @@
    Only the owning PM thread touches renderer resources or window geometry. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
-#include "os2/ps/pmmerge/pmwin/video_frames.h"
+#include "os2/include/private/pmp.h"
 #include "host/sync.h"
 
 typedef struct VideoTarget

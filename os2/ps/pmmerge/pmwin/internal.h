@@ -231,6 +231,14 @@ typedef struct PaintScope
 extern LX_PRIVATE LX_HOST_THREAD_LOCAL PaintScope *ActivePaint;
 LX_PRIVATE void presentWindow(AnchorBlock *anchor, Window *window);
 LX_PRIVATE void presentWindows(AnchorBlock *anchor);
+/* The PM thread draws DIVE blits and decoded video frames that other threads
+   submitted for its windows (dive_targets.c, video_frames.c). */
+void lx_pm_dive_pump(void *anchor);
+void lx_pm_dive_forget(void *window);
+void lx_pm_dive_cleanup(void *anchor);
+void lx_pm_video_pump(void *anchor);
+void lx_pm_video_forget(void *window);
+void lx_pm_video_cleanup(void *anchor);
 LX_PRIVATE extern BOOL lxPmHostFocusReport;
 LX_PRIVATE HWND registerWindowMessages(AnchorBlock *anchor);
 LX_PRIVATE void unregisterWindowMessages(HWND window);

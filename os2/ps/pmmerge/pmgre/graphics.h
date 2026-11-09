@@ -88,9 +88,6 @@ BOOL lx_pm_dive_read(void *context, LONG x, LONG y, unsigned width, unsigned hei
                      uint32_t *pixels);
 BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned height,
                      const uint32_t *pixels, ULONG count, const RECTL *rectangles);
-void lx_pm_dive_pump(void *anchor);
-void lx_pm_dive_forget(void *window);
-void lx_pm_dive_cleanup(void *anchor);
 BOOL lx_pm_raster_read(HPS ps, LONG x, LONG y, unsigned width, unsigned height, uint32_t *pixels);
 BOOL lx_pm_raster_write(HPS ps, LONG x, LONG y, unsigned width, unsigned height,
                         const uint32_t *pixels);

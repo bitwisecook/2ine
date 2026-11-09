@@ -13,6 +13,7 @@
 
 #include "os2/include/pmwin.h"
 #include "os2/include/pmshl.h"
+#include "host/video_frame.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -83,6 +84,22 @@ extern "C"
     OS2EXPORT void *lx_pm_clipboard_copy_bytes(HAB hab, ULONG format, size_t *size);
 
     OS2EXPORT void lx_pm_clipboard_window_destroyed(HWND window);
+
+    /* Video frames for MDM's digital video: a latest-frame mailbox per window,
+       drawn by the window's PM thread. */
+
+    OS2EXPORT void *lx_pm_video_target(HWND window);
+
+    /* Submission always consumes owner, including rejected or superseded frames. */
+    OS2EXPORT BOOL lx_pm_video_submit(void *target, const LxHostVideoFrame *frame,
+                                      const RECTL *destination, void *owner,
+                                      void (*release)(void *));
+
+    OS2EXPORT void lx_pm_video_release(void *target);
+
+    OS2EXPORT BOOL lx_pm_video_ready(void *target);
+
+    OS2EXPORT void lx_pm_video_pump_current(void);
 
     /* PMSHAPI */
 

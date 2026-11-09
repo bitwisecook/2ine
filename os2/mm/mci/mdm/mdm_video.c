@@ -4,7 +4,7 @@
 #include "os2/include/private/export.h"
 #include "os2/mm/mci/mdm/mdm_video.h"
 #include "os2/mm/video/decode/video_decode.h"
-#include "os2/ps/pmmerge/pmwin/video_frames.h"
+#include "os2/include/private/pmp.h"
 #include "host/clock.h"
 #include "host/sync.h"
 #include "emulator/audio_mixer.h"

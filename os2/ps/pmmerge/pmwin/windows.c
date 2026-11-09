@@ -7,7 +7,6 @@
  */
 #include "emulator/launch_record.h"
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/video_frames.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/controls/pmwctls/controls.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"

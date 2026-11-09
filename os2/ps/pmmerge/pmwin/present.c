@@ -7,7 +7,6 @@
  */
 /* Presents finished host window canvases to the display. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/video_frames.h"
 #include "os2/ps/pmmerge/pmwin/input.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"
