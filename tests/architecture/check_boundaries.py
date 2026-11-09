@@ -71,6 +71,16 @@ LAYERED_INCLUDES = {
         STORE_CLIENT_BALL_INCLUDES,
     ),
     "emulator/": (r"emulator/launch/", r"environment/"),
+    # The loader program enters the emulator through its public headers.
+    "apps/lx_loader/": (
+        r"emulator/\w+/",
+        r"host/\w+/",
+        r"ball/",
+        r"environment/",
+        r"os2/",
+        r"storage/",
+        r"formats/",
+    ),
     # Applications talk to the engine through its JSON ABI only.
     "apps/": (
         r"ball/(?!include/)",
