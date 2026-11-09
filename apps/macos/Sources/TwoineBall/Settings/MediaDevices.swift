@@ -261,10 +261,14 @@ struct CreateDiskSheet: View {
     @State private var mib = 512
     @State private var path = ""
     @State private var error: String?
+    /// Powers of two within the engine's bounds: 8 MiB up to HPFS's 64 GiB,
+    /// and at least 64 MiB for FAT32.
+    private static let diskSizesMiB = [
+        8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536,
+    ]
+    private static let fat32MinimumMiB = 64
     private var capacities: [Int] {
-        [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536].filter {
-            filesystem != "fat32" || $0 >= 64
-        }
+        Self.diskSizesMiB.filter { filesystem != "fat32" || $0 >= Self.fat32MinimumMiB }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -309,7 +313,7 @@ struct CreateDiskSheet: View {
             }
         }.padding(24).frame(width: 540)
             .onChange(of: filesystem) { _, _ in
-                if !capacities.contains(mib) { mib = capacities.first ?? 64 }
+                if !capacities.contains(mib) { mib = capacities.first ?? Self.fat32MinimumMiB }
             }
     }
 }

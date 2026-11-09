@@ -1115,32 +1115,32 @@ final class AppModel {
         var pending = [(letter + ":\\", 0)]
         var candidates: [String] = []
         var scanned = 0
-        while !pending.isEmpty && scanned < 96 {
+        while !pending.isEmpty && scanned < InstallerSuggestions.searchFolderLimit {
             try Task.checkCancellation()
             let (path, depth) = pending.removeFirst()
             scanned += 1
             let listing = try await browse(path, ball: selected)
             for entry in listing.entries {
                 let name = entry.name.lowercased()
-                if entry.directory && depth < 2 {
+                if entry.directory && depth < InstallerSuggestions.searchDepthLimit {
                     if name == "english" || name == "os2" || name.contains("install")
                         || name.contains("setup") || depth == 0
                     {
                         pending.append((entry.path, depth + 1))
                     }
                 } else if !entry.directory {
-                    let stems = ["install", "setup", "inst", "os2inst", "autorun"]
                     let url = URL(filePath: name)
                     let stem = url.deletingPathExtension().lastPathComponent
-                    if stems.contains(stem) || depth == 0,
-                        ["exe", "cmd", "bat", "com"].contains(url.pathExtension)
+                    if InstallerSuggestions.stems.contains(stem) || depth == 0,
+                        InstallerSuggestions.extensions.contains(url.pathExtension)
                     {
                         candidates.append(entry.path)
                     }
                 }
             }
         }
-        return Array(InstallerSuggestions.sorted(candidates).prefix(32))
+        return Array(
+            InstallerSuggestions.sorted(candidates).prefix(InstallerSuggestions.candidateLimit))
     }
     func mapDrive(_ letter: String, directory: String, image: Bool = false) async throws {
         guard !busy, !mediaBusy, !componentOperationRunning, let selected else {

@@ -311,9 +311,15 @@ private struct BallUndoMenu: View {
     }
 }
 
+/// Activity log text size, in points.
+enum LogFont {
+    static let defaultSize = 12.0
+    static let sizes = 10.0...24.0
+}
+
 struct AppSettingsView: View {
     @AppStorage("ballFolder") private var folder = ""
-    @AppStorage("logFontSize") private var logFontSize = 12.0
+    @AppStorage("logFontSize") private var logFontSize = LogFont.defaultSize
     var body: some View {
         Form {
             Section("New Ball") {
@@ -326,7 +332,7 @@ struct AppSettingsView: View {
                 Button("Reset to Documents") { folder = "" }
             }
             Section("Logs") {
-                Slider(value: $logFontSize, in: 10...24, step: 1) { Text("Log text size") }
+                Slider(value: $logFontSize, in: LogFont.sizes, step: 1) { Text("Log text size") }
                 Text("\(Int(logFontSize)) pt").foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).frame(width: 500, height: 300)

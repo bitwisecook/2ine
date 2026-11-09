@@ -449,7 +449,7 @@ struct ApplicationsView: View {
 
 struct ActivityView: View {
     @Bindable var model: AppModel
-    @AppStorage("logFontSize") private var logFontSize = 12.0
+    @AppStorage("logFontSize") private var logFontSize = LogFont.defaultSize
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if !model.ballSessions.isEmpty {

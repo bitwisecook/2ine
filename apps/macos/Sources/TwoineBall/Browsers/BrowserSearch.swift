@@ -110,8 +110,11 @@ func browserSize(_ size: UInt64?, directory: Bool) -> String {
     return ByteCountFormatter.string(fromByteCount: Int64(clamping: size), countStyle: .file)
 }
 
+/// Seconds since 1970 from 0001-01-01 to 9999-12-31 23:59:59 UTC; the formatter's range.
+private let formattableDates: ClosedRange<Double> = -62_135_596_800...253_402_300_799
+
 func browserDate(_ modified: Double?) -> String {
-    guard let modified, modified.isFinite, (-62_135_596_800...253_402_300_799).contains(modified)
+    guard let modified, modified.isFinite, formattableDates.contains(modified)
     else { return "—" }
     return Date(timeIntervalSince1970: modified).formatted(date: .abbreviated, time: .shortened)
 }

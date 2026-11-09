@@ -23,11 +23,23 @@ public func abnormalExitMessage(
     return "\(program) was terminated by signal \(code). \(cause)\(location)"
 }
 
+/// Session IDs become file names, so they match the engine's token rule:
+/// at most 64 ASCII letters, digits, hyphens and underscores.
+private enum SessionID {
+    static let maximumLength = 64
+    static let uppercase: ClosedRange<UInt8> = 65...90
+    static let lowercase: ClosedRange<UInt8> = 97...122
+    static let digits: ClosedRange<UInt8> = 48...57
+    static let hyphen: UInt8 = 45
+    static let underscore: UInt8 = 95
+}
+
 func validLaunchSessionID(_ value: String) -> Bool {
-    !value.isEmpty && value.utf8.count <= 64
+    !value.isEmpty && value.utf8.count <= SessionID.maximumLength
         && value.utf8.allSatisfy {
-            (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45
-                || $0 == 95
+            SessionID.uppercase.contains($0) || SessionID.lowercase.contains($0)
+                || SessionID.digits.contains($0) || $0 == SessionID.hyphen
+                || $0 == SessionID.underscore
         }
 }
 

@@ -37,11 +37,20 @@ struct DisplayConfigurationView: View {
     @State private var error: String?
     @State private var beep = 0.05
     @State private var editingBeep = false
+    /// OS/2 display choices; 96 DPI is 100% scale.
+    private static let baseDPI = 96
+    private static let dpiChoices = [96, 120, 144, 192]
+    private static let depthChoices = [24, 16, 8, 4]
+    private static let defaultDepth = 24
     private var dpi: Int {
-        Int(Double(model.snapshot?.manifest.system["display_dpi"]?.text ?? "96") ?? 96)
+        Int(
+            Double(model.snapshot?.manifest.system["display_dpi"]?.text ?? "\(Self.baseDPI)")
+                ?? Double(Self.baseDPI))
     }
     private var depth: Int {
-        Int(Double(model.snapshot?.manifest.system["display_depth"]?.text ?? "24") ?? 24)
+        Int(
+            Double(model.snapshot?.manifest.system["display_depth"]?.text ?? "\(Self.defaultDepth)")
+                ?? Double(Self.defaultDepth))
     }
     var body: some View {
         ScrollViewReader { proxy in
@@ -71,10 +80,10 @@ struct DisplayConfigurationView: View {
                             get: { dpi },
                             set: { model.command(["config", "system.display_dpi", String($0)]) })
                     ) {
-                        ForEach([96, 120, 144, 192], id: \.self) { value in
-                            Text("\(value) DPI (\(value * 100 / 96)%)").tag(value)
+                        ForEach(Self.dpiChoices, id: \.self) { value in
+                            Text("\(value) DPI (\(value * 100 / Self.baseDPI)%)").tag(value)
                         }
-                        if ![96, 120, 144, 192].contains(dpi) {
+                        if !Self.dpiChoices.contains(dpi) {
                             Text("\(dpi) DPI (Custom)").tag(dpi)
                         }
                     }.accessibilityIdentifier("displayDPI")
@@ -84,7 +93,7 @@ struct DisplayConfigurationView: View {
                             get: { depth },
                             set: { model.command(["config", "system.display_depth", String($0)]) })
                     ) {
-                        ForEach([24, 16, 8, 4], id: \.self) { value in
+                        ForEach(Self.depthChoices, id: \.self) { value in
                             Text("\(value)-bit").tag(value)
                         }
                     }.accessibilityIdentifier("displayDepth")
@@ -252,6 +261,8 @@ extension View {
 }
 
 struct ProfileConfigurationView: View {
+    /// How many payload bytes a list row previews in hex.
+    private static let previewBytes = 32
     @Bindable var model: AppModel
     let area: String
     var filePath: String? = nil
@@ -362,7 +373,8 @@ struct ProfileConfigurationView: View {
             return ConfigurationValue.latin1(Array(bytes.dropLast())).replacingOccurrences(
                 of: "\n", with: " ↵ ")
         }
-        return "\(bytes.count) bytes: " + ConfigurationValue.hex(Array(bytes.prefix(32)))
+        return "\(bytes.count) bytes: "
+            + ConfigurationValue.hex(Array(bytes.prefix(Self.previewBytes)))
     }
     private func load() async {
         guard let ball = model.selected else { return }
