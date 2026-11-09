@@ -12,35 +12,21 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
-if __package__:
-    from . import (
-        gnome_applications,
-        gnome_audio,
-        gnome_ball_icons,
-        gnome_ball_lifecycle,
-        gnome_component_jobs,
-        gnome_configuration,
-        gnome_media_preferences,
-        gnome_navigation,
-        gnome_navigation_state,
-        gnome_sessions,
-        gnome_views,
-    )
-    from .ball import engine as ball_api
-else:
-    import gnome_applications
-    import gnome_audio
-    import gnome_ball_icons
-    import gnome_ball_lifecycle
-    import gnome_component_jobs
-    import gnome_configuration
-    import gnome_media_preferences
-    import gnome_navigation
-    import gnome_navigation_state
-    import gnome_sessions
-    import gnome_views
+from tools.ball import engine as ball_api
 
-    from ball import engine as ball_api
+from . import (
+    applications,
+    audio,
+    ball_icons,
+    ball_lifecycle,
+    component_jobs,
+    configuration,
+    media_preferences,
+    navigation,
+    navigation_state,
+    sessions,
+    views,
+)
 
 try:
     import gi
@@ -55,7 +41,21 @@ except (ImportError, ValueError) as error:
     ) from error
 
 APP_ID = "io.github.bitwisecook.Twoine.Ball"
-VERSION = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+PACKAGE = Path(__file__).resolve().parent
+# Resources sit in data/ beside the package, both in the source tree
+# (apps/gnome/data) and in the installed application (lib/2ine-ball/data).
+DATA = PACKAGE.parent / "data"
+
+
+def read_version():
+    """The installed application keeps VERSION beside the package; the source tree at its root."""
+    for directory in (PACKAGE.parent, PACKAGE.parents[2]):
+        if (directory / "VERSION").is_file():
+            return (directory / "VERSION").read_text().strip()
+    raise FileNotFoundError("VERSION")
+
+
+VERSION = read_version()
 
 
 def parse_arguments(text):
@@ -101,7 +101,7 @@ class BallWindow(Adw.ApplicationWindow):
         self.next_page = None
         self.pending_launches = {}
         self.process = None
-        self.sessions = gnome_sessions.Sessions()
+        self.sessions = sessions.Sessions()
         self.selected_session = None
         self.updating_sessions = False
         self.busy = False
@@ -156,7 +156,7 @@ class BallWindow(Adw.ApplicationWindow):
         self.connect("destroy", lambda *_: self.component_executor.shutdown(wait=False))
         self.connect("destroy", lambda *_: self.component_status_executor.shutdown(wait=False))
         self.connect("destroy", lambda *_: setattr(self, "component_closed", True))
-        builder = Gtk.Builder.new_from_file(str(Path(__file__).parent / "gnome/window.ui"))
+        builder = Gtk.Builder.new_from_file(str(DATA / "window.ui"))
         for name in (
             "overlay",
             "split",
@@ -172,9 +172,7 @@ class BallWindow(Adw.ApplicationWindow):
         ):
             setattr(self, name, builder.get_object(name))
         self.set_content(self.overlay)
-        Gtk.IconTheme.get_for_display(self.get_display()).add_search_path(
-            str(Path(__file__).parent / "gnome")
-        )
+        Gtk.IconTheme.get_for_display(self.get_display()).add_search_path(str(DATA))
         self.ball_list.connect("row-selected", self.selected)
         for name, callback in (
             ("new", self.new_ball),
@@ -200,7 +198,7 @@ class BallWindow(Adw.ApplicationWindow):
             ("restore-libraries", self.audit_dependencies),
             ("about", self.about),
             ("preferences", self.preferences_dialog),
-            ("shortcuts", lambda: gnome_navigation.shortcuts(self)),
+            ("shortcuts", lambda: navigation.shortcuts(self)),
             (
                 "help",
                 lambda: self.open_path(
@@ -588,7 +586,7 @@ class BallWindow(Adw.ApplicationWindow):
     @staticmethod
     def read_snapshot(path):
         snapshot = ball_api.native_request({"action": "snapshot", "ball": str(path)})
-        gnome_ball_icons.decorate(path)
+        ball_icons.decorate(path)
         return snapshot
 
     def effective_runtime(self, snapshot):
@@ -645,7 +643,7 @@ class BallWindow(Adw.ApplicationWindow):
             row = Adw.ActionRow(
                 title=path.name.removesuffix(".2ineball"),
                 subtitle=("Not Found · " if path in self.missing_balls else "")
-                + gnome_views.display_path(path),
+                + views.display_path(path),
                 subtitle_lines=1,
                 use_markup=False,
             )
@@ -712,10 +710,10 @@ class BallWindow(Adw.ApplicationWindow):
         needs_landing = newly_created or previous != path
 
         def loaded(result):
-            snapshot, self.install_summary, navigation = result
+            snapshot, self.install_summary, saved_navigation = result
             if needs_landing:
-                self.next_page = gnome_navigation_state.initial_page(
-                    navigation, newly_created=newly_created
+                self.next_page = navigation_state.initial_page(
+                    saved_navigation, newly_created=newly_created
                 )
                 self.new_balls.discard(path.resolve())
             if previous != path:
@@ -797,13 +795,13 @@ class BallWindow(Adw.ApplicationWindow):
         self.detail.set_title(self.ball.name.removesuffix(".2ineball"))
         self.stack = Adw.ViewStack(vexpand=True, hhomogeneous=False, vhomogeneous=False)
         if not hasattr(self, "switcher"):
-            self.switcher = gnome_navigation.PageNavigation()
+            self.switcher = navigation.PageNavigation()
             self.switcher.set_margin_top(6)
             self.switcher.set_margin_bottom(6)
         self.switcher.set_stack(self.stack)
         self.content.append(self.switcher)
         self.content.append(self.stack)
-        self.drives_page = gnome_views.DrivesPage(self)
+        self.drives_page = views.DrivesPage(self)
         self.stack.add_titled_with_icon(
             self.drives_page, "drives", "Drives", "drive-harddisk-symbolic"
         )
@@ -818,16 +816,16 @@ class BallWindow(Adw.ApplicationWindow):
             "application-installation",
             "Application Installation",
             "system-software-install-symbolic",
-        ).append(gnome_navigation.InstallationPage(self))
+        ).append(navigation.InstallationPage(self))
         apps = self.page("apps", "Applications", "application-x-executable-symbolic")
-        self.applications_page = gnome_applications.ApplicationsPage(self)
+        self.applications_page = applications.ApplicationsPage(self)
         apps.append(self.applications_page)
-        configuration = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
+        settings_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
         self.stack.add_titled_with_icon(
-            configuration, "settings", "Settings", "preferences-system-symbolic"
+            settings_box, "settings", "Settings", "preferences-system-symbolic"
         )
-        self.configuration_stack = gnome_navigation.SettingsNavigation()
-        configuration.append(self.configuration_stack)
+        self.configuration_stack = navigation.SettingsNavigation()
+        settings_box.append(self.configuration_stack)
         settings = Adw.PreferencesPage()
         self.general_configuration = settings
         self.configuration_stack.add_titled(settings, "general", "General")
@@ -835,7 +833,7 @@ class BallWindow(Adw.ApplicationWindow):
         settings.add(group)
         runtime = Adw.ActionRow(
             title="Runtime Build",
-            subtitle=gnome_views.display_path(self.build),
+            subtitle=views.display_path(self.build),
             subtitle_lines=1,
             use_markup=False,
             activatable=True,
@@ -906,15 +904,15 @@ class BallWindow(Adw.ApplicationWindow):
         row.add_suffix(Gtk.Image(icon_name="folder-open-symbolic"))
         group.add(row)
         settings.add(group)
-        self.display_configuration = gnome_configuration.display_page(self)
+        self.display_configuration = configuration.display_page(self)
         self.configuration_stack.add_titled(
             self.display_configuration, "display", "Graphics & Sound"
         )
-        self.environment_configuration = gnome_configuration.EnvironmentPage(self)
+        self.environment_configuration = configuration.EnvironmentPage(self)
         self.configuration_stack.add_titled(
             self.environment_configuration, "environment", "Environment"
         )
-        self.printing_configuration = gnome_configuration.PrintingPage(self)
+        self.printing_configuration = configuration.PrintingPage(self)
         self.configuration_stack.add_titled(self.printing_configuration, "printing", "Printing")
         config = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, vexpand=True)
         self.profile_pages = []
@@ -951,9 +949,9 @@ class BallWindow(Adw.ApplicationWindow):
         self.save_button.set_sensitive(self.ball in self.drafts)
         controls.append(self.save_button)
         config.append(controls)
-        self.os2_files_configuration = gnome_configuration.Os2FilesPage(self, config)
+        self.os2_files_configuration = configuration.Os2FilesPage(self, config)
         self.configuration_stack.add_titled(self.os2_files_configuration, "files", "Config Files")
-        registry = gnome_configuration.RegistryPage(self)
+        registry = configuration.RegistryPage(self)
         self.profile_pages.append(registry)
         self.configuration_stack.add_titled(registry, "registry", "Registry")
         self.configuration_stack.set_visible_child_name(configuration_tab or "overview")
@@ -1066,7 +1064,7 @@ class BallWindow(Adw.ApplicationWindow):
         if not self.ball or self.operation_busy or self.sessions.active(self.ball):
             return
         self.show_page("components")
-        remembered = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
+        remembered = media_preferences.preferred(self.snapshot, self.app_preferences)
         if remembered and not force_picker:
             self.present_os2_media(remembered, categories, selecting)
             return
@@ -1092,7 +1090,7 @@ class BallWindow(Adw.ApplicationWindow):
         picker.open_multiple(self, None, chosen)
 
     def initial_os2_picker(self, picker, folder=False):
-        path = gnome_media_preferences.picker_path(self.app_preferences)
+        path = media_preferences.picker_path(self.app_preferences)
         if path:
             if folder and path.is_file():
                 path = path.parent
@@ -1102,17 +1100,17 @@ class BallWindow(Adw.ApplicationWindow):
                 picker.set_initial_file(Gio.File.new_for_path(str(path)))
 
     def remember_os2_media(self, validation):
-        if gnome_media_preferences.remember(self.app_preferences, validation):
+        if media_preferences.remember(self.app_preferences, validation):
             self.persist_preferences()
 
     def forget_os2_media(self):
-        if gnome_media_preferences.forget(self.app_preferences):
+        if media_preferences.forget(self.app_preferences):
             self.persist_preferences()
 
     def component_active(self, path=None):
         target = path if path is not None else self.ball
         pane = self.component_panes.get(str(target))
-        return gnome_component_jobs.active(self.component_jobs, target) or bool(
+        return component_jobs.active(self.component_jobs, target) or bool(
             pane and pane.pending_mutations()
         )
 
@@ -1149,10 +1147,8 @@ class BallWindow(Adw.ApplicationWindow):
         return ball_api.native_request({"action": action, **fields})
 
     def component_pane(self):
-        if __package__:
-            from .gnome_media import OS2ComponentsPane
-        else:
-            from gnome_media import OS2ComponentsPane
+        from .media import OS2ComponentsPane
+
         key = str(self.ball)
         if key not in self.component_panes:
             self.component_panes[key] = OS2ComponentsPane(self)
@@ -1185,7 +1181,7 @@ class BallWindow(Adw.ApplicationWindow):
             else:
                 pane.resume_components(category, selecting)
         else:
-            sources = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
+            sources = media_preferences.preferred(self.snapshot, self.app_preferences)
             if sources:
                 self.present_os2_media(sources, {category}, selecting)
             else:
@@ -1216,7 +1212,7 @@ class BallWindow(Adw.ApplicationWindow):
             if token == "graphics.opengl"
             else self.display_configuration.rows["video"]
         )
-        gnome_navigation.highlight_setting(target)
+        navigation.highlight_setting(target)
 
     def install_opengl_component(self):
         if not self.ball or self.busy or self.process or self.component_active():
@@ -1251,7 +1247,7 @@ class BallWindow(Adw.ApplicationWindow):
             dialog.open(self, None, done)
 
     def form(self, title, fields, callback, accept="Save", *, deferred=False):
-        dialog = gnome_navigation.InputDialog(self, title, fields, callback, accept, deferred)
+        dialog = navigation.InputDialog(self, title, fields, callback, accept, deferred)
         dialog.present(self)
         return dialog.entries
 
@@ -1270,7 +1266,7 @@ class BallWindow(Adw.ApplicationWindow):
                 snapshot = ball_api.native_request(
                     {"action": "command", "ball": str(path), "arguments": ["init"]}
                 )
-                gnome_ball_icons.decorate(path)
+                ball_icons.decorate(path)
                 return snapshot
 
             def created(snapshot):
@@ -1317,7 +1313,7 @@ class BallWindow(Adw.ApplicationWindow):
                 raise ValueError("This ball is available. Open it or move it to the Trash instead.")
 
         def forgotten(_result):
-            gnome_ball_lifecycle.update_references(self, source)
+            ball_lifecycle.update_references(self, source)
             self.missing_balls.discard(source)
             self.persist_preferences()
             self.refresh()
@@ -1334,8 +1330,8 @@ class BallWindow(Adw.ApplicationWindow):
         ):
             return
         try:
-            source = gnome_ball_lifecycle.package(path or self.ball)
-            expected = gnome_ball_lifecycle.identity(source)
+            source = ball_lifecycle.package(path or self.ball)
+            expected = ball_lifecycle.identity(source)
         except (OSError, ValueError) as error:
             self.report_error(error)
             return
@@ -1343,7 +1339,7 @@ class BallWindow(Adw.ApplicationWindow):
         def rename(values, dialog):
             if self.operation_busy or self.sessions.active(source) or self.component_active(source):
                 return
-            destination = gnome_ball_lifecycle.rename_destination(source, values["name"])
+            destination = ball_lifecycle.rename_destination(source, values["name"])
             if destination == source:
                 dialog.close()
                 return
@@ -1351,7 +1347,7 @@ class BallWindow(Adw.ApplicationWindow):
             def renamed(result):
                 target = Path(result["path"])
                 selected = self.ball is not None and self.ball.resolve() == source
-                gnome_ball_lifecycle.update_references(self, source, target)
+                ball_lifecycle.update_references(self, source, target)
                 if selected:
                     self.snapshot = result["snapshot"]
                 dialog.close()
@@ -1360,7 +1356,7 @@ class BallWindow(Adw.ApplicationWindow):
                 self.toast("Renamed ball to " + target.name)
 
             def work():
-                gnome_ball_lifecycle.package(source, expected)
+                ball_lifecycle.package(source, expected)
                 return ball_api.native_request(
                     {"action": "rename-ball", "ball": str(source), "text": values["name"]}
                 )
@@ -1384,8 +1380,8 @@ class BallWindow(Adw.ApplicationWindow):
         ):
             return
         try:
-            source = gnome_ball_lifecycle.package(path or self.ball)
-            expected = gnome_ball_lifecycle.identity(source)
+            source = ball_lifecycle.package(path or self.ball)
+            expected = ball_lifecycle.identity(source)
         except (OSError, ValueError) as error:
             self.report_error(error)
             return
@@ -1411,7 +1407,7 @@ class BallWindow(Adw.ApplicationWindow):
             return
 
         def work():
-            path = gnome_ball_lifecycle.package(source, expected)
+            path = ball_lifecycle.package(source, expected)
             if permanent:
                 shutil.rmtree(path)
                 return True
@@ -1445,7 +1441,7 @@ class BallWindow(Adw.ApplicationWindow):
                 )
                 dialog.present(self)
                 return
-            gnome_ball_lifecycle.update_references(self, source)
+            ball_lifecycle.update_references(self, source)
             self.persist_preferences()
             self.refresh(self.ball)
             self.toast("Deleted ball" if permanent else "Moved ball to Trash")
@@ -1483,7 +1479,7 @@ class BallWindow(Adw.ApplicationWindow):
                     snapshot = ball_api.native_request(
                         {"action": "import-ball", "ball": path, "path": str(source)}
                     )
-                    gnome_ball_icons.decorate(destination)
+                    ball_icons.decorate(destination)
                     return snapshot
 
                 self.request_work(import_source, imported)
@@ -1507,7 +1503,7 @@ class BallWindow(Adw.ApplicationWindow):
             self.report_error("Save the OS/2 file drafts before exporting this ball.")
             self.show_page("config")
             return
-        dialog = gnome_views.ExportDialog(self, include_images)
+        dialog = views.ExportDialog(self, include_images)
         dialog.present(self)
         return dialog
 
@@ -1548,17 +1544,17 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def map_dialog(self, letter=None, folder=""):
-        dialog = gnome_views.MediaDialog(self, letter, folder)
+        dialog = views.MediaDialog(self, letter, folder)
         dialog.present(self)
         return dialog
 
     def create_image(self, floppy=False, letter=None):
-        dialog = gnome_views.CreateImageDialog(self, floppy=floppy, letter=letter)
+        dialog = views.CreateImageDialog(self, floppy=floppy, letter=letter)
         dialog.present(self)
         return dialog
 
     def device_settings(self, letter):
-        dialog = gnome_views.DriveSettingsDialog(self, letter)
+        dialog = views.DriveSettingsDialog(self, letter)
         dialog.present(self)
         return dialog
 
@@ -1581,7 +1577,7 @@ class BallWindow(Adw.ApplicationWindow):
             )
         ):
             return None
-        dialog = gnome_views.ProgramDialog(self, action, name=name, program=program)
+        dialog = views.ProgramDialog(self, action, name=name, program=program)
         dialog.present(self)
         return dialog
 
@@ -2111,7 +2107,7 @@ class BallWindow(Adw.ApplicationWindow):
 
         def loaded(result):
             try:
-                paintable = gnome_views.texture(result)
+                paintable = views.texture(result)
                 if len(self.icon_cache) > 256:
                     self.icon_cache.clear()
                 self.icon_cache[key] = paintable
@@ -2293,7 +2289,7 @@ class BallWindow(Adw.ApplicationWindow):
             child.wait_async(None, exited)
             return child
 
-        session.leases, error = gnome_sessions.STARTUP_POOL.acquire(
+        session.leases, error = sessions.STARTUP_POOL.acquire(
             path,
             plan.get("startup", []),
             session.id,
@@ -2306,7 +2302,7 @@ class BallWindow(Adw.ApplicationWindow):
             session.process = self.spawn_session_process(plan, log)
             session.state = "running"
         except (GLib.Error, OSError, ValueError) as error:
-            gnome_sessions.STARTUP_POOL.release(session.leases, session.id, self.stop_owned_service)
+            sessions.STARTUP_POOL.release(session.leases, session.id, self.stop_owned_service)
             session.state = "failed"
             self.refresh_session_selector()
             self.set_busy(False)
@@ -2346,14 +2342,12 @@ class BallWindow(Adw.ApplicationWindow):
         process.wait_finish(result)
         code = process.get_exit_status() if process.get_if_exited() else -process.get_term_sig()
         session.code, session.state = code, "finishing"
-        message = gnome_sessions.abnormal_exit_message(
-            session.name, code, session.stop_sent, session.log
-        )
+        message = sessions.abnormal_exit_message(session.name, code, session.stop_sent, session.log)
         if message:
             dialog = Adw.AlertDialog(heading=f"{session.name} stopped unexpectedly", body=message)
             dialog.add_response("close", "Close")
             dialog.present(self)
-        gnome_sessions.STARTUP_POOL.release(session.leases, session.id, self.stop_owned_service)
+        sessions.STARTUP_POOL.release(session.leases, session.id, self.stop_owned_service)
         path, plan, log = Path(session.ball), session.plan, session.log
         self.refresh_session_selector()
         self.set_busy(False)
@@ -2485,7 +2479,7 @@ class BallWindow(Adw.ApplicationWindow):
 
     def audio_dialog(self):
         if self.ball and not self.busy:
-            return gnome_audio.AudioDialog(self)
+            return audio.AudioDialog(self)
         return None
 
     def default_ball_folder(self):
@@ -2493,7 +2487,7 @@ class BallWindow(Adw.ApplicationWindow):
         return Path(folder).expanduser() if folder else ball_api.ball_home()
 
     def preferences_dialog(self):
-        dialog = gnome_navigation.PreferencesDialog(self)
+        dialog = navigation.PreferencesDialog(self)
         dialog.present(self)
         return dialog
 
@@ -2509,9 +2503,9 @@ class BallWindow(Adw.ApplicationWindow):
     def find(self):
         dialog = self.get_visible_dialog()
         if dialog:
-            return gnome_navigation.focus_search(dialog)
+            return navigation.focus_search(dialog)
         if hasattr(self, "stack"):
-            return gnome_navigation.focus_search(self.stack.get_visible_child())
+            return navigation.focus_search(self.stack.get_visible_child())
         return False
 
     def update_application_actions(self):
@@ -2653,7 +2647,7 @@ class BallApplication(Adw.Application):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog="2ine-ball", description=__doc__)
     parser.add_argument("--version", action="version", version="2ine 0.1")
     parser.add_argument("--build", type=Path, help="2ine build directory containing lx_loader")
     parser.add_argument("--ball", type=Path, help="open an existing ball")

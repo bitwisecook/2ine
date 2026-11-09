@@ -3,7 +3,11 @@
 
 import unittest
 
-from tools.gnome_program_choice import ProgramChoice, candidate_rank, installer_candidates
+from apps.gnome.twoine_gnome.program_choice import (
+    ProgramChoice,
+    candidate_rank,
+    installer_candidates,
+)
 
 
 class ProgramChoiceTests(unittest.TestCase):

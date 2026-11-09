@@ -50,17 +50,18 @@ def main():
             assert "not found" not in dependencies, (binary, dependencies)
             assert str(ROOT) not in dependencies, (binary, dependencies)
         run([destination / "usr/bin/2ine-ball", "--help"], capture_output=True)
-        frontend = destination / "usr/lib/2ine-ball/tools"
+        frontend = destination / "usr/lib/2ine-ball"
         for module in (
-            "gnome_browser.py",
-            "gnome_browser_model.py",
-            "gnome_media_preferences.py",
-            "gnome_component_jobs.py",
-            "gnome_application_order.py",
-            "gnome_sessions.py",
-            "gnome_program_choice.py",
-            "gnome_lazy_folders.py",
-            "gnome_navigation_state.py",
+            "twoine_gnome/browser.py",
+            "twoine_gnome/browser_model.py",
+            "twoine_gnome/media_preferences.py",
+            "twoine_gnome/component_jobs.py",
+            "twoine_gnome/application_order.py",
+            "twoine_gnome/sessions.py",
+            "twoine_gnome/program_choice.py",
+            "twoine_gnome/lazy_folders.py",
+            "twoine_gnome/navigation_state.py",
+            "tools/ball/engine.py",
         ):
             assert (frontend / module).is_file(), module
         environment = dict(

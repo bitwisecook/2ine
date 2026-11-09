@@ -2,16 +2,11 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Searchable native application rows and their shared window actions."""
 
-if __package__:
-    from . import gnome_application_order, gnome_files, gnome_views
-else:
-    import gnome_application_order
-    import gnome_files
-    import gnome_views
-
 from gi.repository import Gio
 
-Adw, Gtk, GLib = gnome_views.Adw, gnome_views.Gtk, gnome_views.GLib
+from . import application_order, files, views
+
+Adw, Gtk, GLib = views.Adw, views.Gtk, views.GLib
 
 
 class ApplicationsPage(Gtk.Box):
@@ -25,15 +20,15 @@ class ApplicationsPage(Gtk.Box):
         ):
             button = Gtk.Button(label=label, action_name="win." + action)
             controls.append(button)
-        self.sort_mode = gnome_application_order.mode(window.app_preferences.get("applicationSort"))
+        self.sort_mode = application_order.mode(window.app_preferences.get("applicationSort"))
         self.sort = Gtk.DropDown.new_from_strings(["Icons First", "Name", "Program"])
-        self.sort.set_selected(gnome_application_order.MODES.index(self.sort_mode))
+        self.sort.set_selected(application_order.MODES.index(self.sort_mode))
         self.sort.set_tooltip_text("Sort Applications")
         self.sort.update_property([Gtk.AccessibleProperty.LABEL], ["Sort applications"])
         self.sort.connect("notify::selected", self.sort_changed)
         controls.append(self.sort)
         self.append(controls)
-        self.append(gnome_views.dependency_advice_box(window))
+        self.append(views.dependency_advice_box(window))
         self.search = Gtk.SearchEntry(placeholder_text="Search Applications")
         self.search.update_property([Gtk.AccessibleProperty.LABEL], ["Search applications"])
         self.append(self.search)
@@ -60,7 +55,7 @@ class ApplicationsPage(Gtk.Box):
             row.application_name = name
             row.application_program = application["program"]
             row.has_icon = False
-            row.search_text = gnome_files.folded(name + " " + application["program"])
+            row.search_text = files.folded(name + " " + application["program"])
             image = Gtk.Image(icon_name="application-x-executable-symbolic", pixel_size=40)
             window.load_application_icon(
                 name, image, lambda available, row=row: self.icon_loaded(row, available)
@@ -150,16 +145,16 @@ class ApplicationsPage(Gtk.Box):
             self.window.session_changed(self.window.session_selector, None)
 
     def compare(self, left, right):
-        left_key = gnome_application_order.key(
+        left_key = application_order.key(
             left.application_name, left.application_program, left.has_icon, self.sort_mode
         )
-        right_key = gnome_application_order.key(
+        right_key = application_order.key(
             right.application_name, right.application_program, right.has_icon, self.sort_mode
         )
         return (left_key > right_key) - (left_key < right_key)
 
     def sort_changed(self, row, _property):
-        self.sort_mode = gnome_application_order.MODES[row.get_selected()]
+        self.sort_mode = application_order.MODES[row.get_selected()]
         self.window.app_preferences["applicationSort"] = self.sort_mode
         self.window.persist_preferences()
         self.list.invalidate_sort()
@@ -170,9 +165,7 @@ class ApplicationsPage(Gtk.Box):
             self.list.invalidate_sort()
 
     def matches(self, row):
-        return all(
-            word in row.search_text for word in gnome_files.folded(self.search.get_text()).split()
-        )
+        return all(word in row.search_text for word in files.folded(self.search.get_text()).split())
 
     def filter(self, *_):
         self.list.invalidate_filter()

@@ -5,24 +5,17 @@ import uuid
 
 import gi
 
+from . import component_jobs, media_preferences
+from .components import ComponentTree
+from .files import FileList, display_path
+from .views import action_button
+
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 try:
     from gi.repository import Adw, GLib, Gtk
 except ImportError as error:
     raise SystemExit("GTK 4 and libadwaita are required: " + str(error)) from error
-
-if __package__:
-    from . import gnome_component_jobs, gnome_media_preferences
-    from .gnome_components import ComponentTree
-    from .gnome_files import FileList, display_path
-    from .gnome_views import action_button
-else:
-    import gnome_component_jobs
-    import gnome_media_preferences
-    from gnome_components import ComponentTree
-    from gnome_files import FileList, display_path
-    from gnome_views import action_button
 
 
 class OS2ComponentsPane(Gtk.Box):
@@ -99,9 +92,7 @@ class OS2ComponentsPane(Gtk.Box):
         if self.plan:
             self.refresh_state()
         elif not self.sources and not self.working and self.window.ball == self.ball:
-            sources = gnome_media_preferences.preferred(
-                self.window.snapshot, self.window.app_preferences
-            )
+            sources = media_preferences.preferred(self.window.snapshot, self.window.app_preferences)
             if sources:
                 self.open_sources(sources)
 
@@ -229,7 +220,7 @@ class OS2ComponentsPane(Gtk.Box):
             self.opening_sources = None
             if self.validation.get("complete"):
                 self.window.remember_os2_media(self.validation)
-            elif list(sources) == gnome_media_preferences.sources(
+            elif list(sources) == media_preferences.sources(
                 self.window.app_preferences.get("lastOS2MediaSources")
             ):
                 self.window.forget_os2_media()
@@ -272,7 +263,7 @@ class OS2ComponentsPane(Gtk.Box):
         self.run(open_verified, loaded)
 
     def error_message(self, error):
-        if self.opening_sources == gnome_media_preferences.sources(
+        if self.opening_sources == media_preferences.sources(
             self.window.app_preferences.get("lastOS2MediaSources")
         ):
             self.window.forget_os2_media()
@@ -354,7 +345,7 @@ class OS2ComponentsPane(Gtk.Box):
         )
         allowed = self.component_tree.sources.get(plan["tree"]["id"], set())
         if previous_queue is None:
-            self.desired_queue = gnome_component_jobs.DesiredComponents(
+            self.desired_queue = component_jobs.DesiredComponents(
                 allowed, self.component_tree.selected
             )
         else:
@@ -448,9 +439,7 @@ class OS2ComponentsPane(Gtk.Box):
                     configureComponents=self.component_tree.configured_components(),
                 )
             else:
-                fields["selection"] = gnome_component_jobs.state_selection(
-                    self.plan["files"], attempted
-                )
+                fields["selection"] = component_jobs.state_selection(self.plan["files"], attempted)
             self.start_job(
                 "import-os2-support" if kind == "install" else "remove-os2-components",
                 attempted=attempted,
@@ -567,7 +556,7 @@ class OS2ComponentsPane(Gtk.Box):
                     for path in [file["path"], *file.get("actualPaths", [])]
                 ):
                     source_ids.add(file["source"])
-            selection = gnome_component_jobs.state_selection(
+            selection = component_jobs.state_selection(
                 (self.plan or {}).get("files", []), source_ids
             )
             self.window.component_work(
@@ -603,12 +592,12 @@ class OS2ComponentsPane(Gtk.Box):
     def update_row_activity(self):
         if self.component_tree:
             job = self.job if self.job and self.job.get("active") else None
-            active = gnome_component_jobs.activity_ids(self.plan["tree"], job)
+            active = component_jobs.activity_ids(self.plan["tree"], job)
             queued = (
                 self.desired_queue.pending() if self.desired_queue and self.state_ready else set()
             )
             active.update(
-                gnome_component_jobs.activity_ids(
+                component_jobs.activity_ids(
                     self.plan["tree"], {"active": bool(queued), "sources": queued}
                 )
             )
@@ -655,7 +644,7 @@ class OS2ComponentsPane(Gtk.Box):
         if not self.plan or self.polling:
             return
         self.polling = True
-        selection = gnome_component_jobs.state_selection(self.plan["files"])
+        selection = component_jobs.state_selection(self.plan["files"])
 
         def received(result):
             self.polling = False
@@ -706,7 +695,7 @@ class OS2ComponentsPane(Gtk.Box):
         self.window.set_busy(False)
 
     def apply_file_state(self, result):
-        records = gnome_component_jobs.source_states(result.get("files", []))
+        records = component_jobs.source_states(result.get("files", []))
         if self.desired_queue:
             self.desired_queue.update_actual(records)
         for file in self.plan["files"]:

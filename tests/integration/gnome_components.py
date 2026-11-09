@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tests.integration.gnome_ball import ball_api, pump
 
 if TYPE_CHECKING:
-    from tools import gnome_ball
+    from apps.gnome.twoine_gnome import app as gnome_ball
 else:
     from tests.integration.gnome_ball import gnome_ball
 from tests.tools.test_os2_support import CMD, LEVEL, MESSAGE

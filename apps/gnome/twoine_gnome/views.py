@@ -16,16 +16,11 @@ except (ImportError, ValueError) as error:
     raise SystemExit("GTK 4, libadwaita and PyGObject are required: " + str(error)) from error
 
 
-if __package__:
-    from .ball.engine import dependency_advice
-    from .gnome_files import FileList, display_path
-    from .gnome_lazy_folders import FolderChildren
-    from .gnome_program_choice import ProgramChoice, installer_candidates
-else:
-    from ball.engine import dependency_advice
-    from gnome_files import FileList, display_path
-    from gnome_lazy_folders import FolderChildren
-    from gnome_program_choice import ProgramChoice, installer_candidates
+from tools.ball.engine import dependency_advice
+
+from .files import FileList, display_path
+from .lazy_folders import FolderChildren
+from .program_choice import ProgramChoice, installer_candidates
 
 
 def action_button(label, callback, icon=None):

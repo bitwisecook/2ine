@@ -16,12 +16,12 @@ from images import FlatGuest, linear_image
 from tests.integration.gnome_ball import ball_api, click, pump
 
 if TYPE_CHECKING:
-    from tools import gnome_ball
-    from tools import gnome_sessions as session_model
+    from apps.gnome.twoine_gnome import app as gnome_ball
+    from apps.gnome.twoine_gnome import sessions as session_model
 else:
     from tests.integration.gnome_ball import gnome_ball
 
-    session_model = gnome_ball.gnome_sessions
+    session_model = gnome_ball.sessions
 
 
 def main():

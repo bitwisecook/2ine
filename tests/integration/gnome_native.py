@@ -240,7 +240,7 @@ def main():
         assert entries["name"].get_text() == "Existing"
         failed.close()
         pump(lambda: window.get_visible_dialog() is None)
-        dialog = gnome_ball.gnome_navigation.shortcuts(window)
+        dialog = gnome_ball.navigation.shortcuts(window)
         assert isinstance(dialog, Adw.ShortcutsDialog)
         capture("keyboard-shortcuts")
         dialog.close()

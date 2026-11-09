@@ -3,7 +3,7 @@
 
 import unittest
 
-from tools.gnome_navigation_state import PAGES, initial_page
+from apps.gnome.twoine_gnome.navigation_state import PAGES, initial_page
 
 
 class NavigationStateTests(unittest.TestCase):

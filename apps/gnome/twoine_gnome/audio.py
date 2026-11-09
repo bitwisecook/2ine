@@ -6,17 +6,14 @@ import copy
 
 import gi
 
+from .views import FormDialog, action_button, empty
+
 try:
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
     from gi.repository import Adw, Gio, GLib, Gtk
 except (ImportError, ValueError) as error:
     raise SystemExit("GTK 4 and libadwaita are required: " + str(error)) from error
-
-try:
-    from .gnome_views import FormDialog, action_button, empty
-except ImportError:
-    from gnome_views import FormDialog, action_button, empty
 
 
 class AudioDialog(FormDialog):

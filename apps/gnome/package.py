@@ -12,12 +12,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Run as a script, this file's directory is first on sys.path; the project
+# root makes the tools package importable.
 if not __package__:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.codegen.project_sources import installed_catalogue  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+GNOME = ROOT / "apps/gnome"
 APP_ID = "io.github.bitwisecook.Twoine.Ball"
 # Host libc and graphics/desktop drivers remain owned by the distribution.
 HOST_LIBRARIES = re.compile(
@@ -52,52 +55,55 @@ def stage(build, destination):
     runtime.mkdir(parents=True, exist_ok=True)
     copy(ROOT / "VERSION", app / "VERSION")
     for name in (
-        "gnome_ball.py",
-        "gnome_navigation.py",
-        "gnome_applications.py",
-        "gnome_application_order.py",
-        "gnome_views.py",
-        "gnome_files.py",
-        "gnome_browser.py",
-        "gnome_browser_model.py",
-        "gnome_media.py",
-        "gnome_media_preferences.py",
-        "gnome_components.py",
-        "gnome_component_jobs.py",
-        "gnome_audio.py",
-        "gnome_ball_icons.py",
-        "gnome_ball_lifecycle.py",
-        "gnome_sessions.py",
-        "gnome_program_choice.py",
-        "gnome_lazy_folders.py",
-        "gnome_navigation_state.py",
-        "gnome_configuration.py",
+        "__init__.py",
+        "__main__.py",
+        "app.py",
+        "navigation.py",
+        "applications.py",
+        "application_order.py",
+        "views.py",
+        "files.py",
+        "browser.py",
+        "browser_model.py",
+        "media.py",
+        "media_preferences.py",
+        "components.py",
+        "component_jobs.py",
+        "audio.py",
+        "ball_icons.py",
+        "ball_lifecycle.py",
+        "sessions.py",
+        "program_choice.py",
+        "lazy_folders.py",
+        "navigation_state.py",
+        "configuration.py",
     ):
-        copy(ROOT / "tools" / name, app / "tools" / name)
-    for name in ("__init__.py", "engine.py"):
-        copy(ROOT / "tools/ball" / name, app / "tools/ball" / name)
+        copy(GNOME / "twoine_gnome" / name, app / "twoine_gnome" / name)
+    # The frontend reaches the shared engine through the tools.ball adapter.
+    for name in ("tools/__init__.py", "tools/ball/__init__.py", "tools/ball/engine.py"):
+        copy(ROOT / name, app / name)
     for name in ("window.ui", APP_ID + ".svg", APP_ID + "-symbolic.svg"):
-        copy(ROOT / "tools/gnome" / name, app / "tools/gnome" / name)
+        copy(GNOME / "data" / name, app / "data" / name)
     for directory in ("fonts", "soundfonts"):
         shutil.copytree(build / directory, runtime / directory)
     launcher = destination / "usr/bin/2ine-ball"
-    copy(ROOT / "tools/gnome/2ine-ball", launcher)
+    copy(ROOT / "apps/gnome/2ine-ball", launcher)
     launcher.chmod(0o755)
     copy(
-        ROOT / "tools/gnome" / (APP_ID + ".desktop"),
+        GNOME / "data" / (APP_ID + ".desktop"),
         destination / "usr/share/applications" / (APP_ID + ".desktop"),
     )
     copy(
-        ROOT / "tools/gnome" / (APP_ID + ".metainfo.xml"),
+        GNOME / "data" / (APP_ID + ".metainfo.xml"),
         destination / "usr/share/metainfo" / (APP_ID + ".metainfo.xml"),
     )
     copy(
-        ROOT / "tools/gnome" / (APP_ID + ".mime.xml"),
+        GNOME / "data" / (APP_ID + ".mime.xml"),
         destination / "usr/share/mime/packages" / (APP_ID + ".xml"),
     )
     for suffix, size in ((".svg", "scalable"), ("-symbolic.svg", "symbolic")):
         copy(
-            ROOT / "tools/gnome" / (APP_ID + suffix),
+            GNOME / "data" / (APP_ID + suffix),
             destination / f"usr/share/icons/hicolor/{size}/apps" / (APP_ID + suffix),
         )
     copy(

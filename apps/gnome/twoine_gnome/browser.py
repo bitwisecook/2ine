@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 import gi
 
+from .browser_model import visible_tree
+
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Adw", "1")
@@ -12,11 +14,6 @@ try:
     from gi.repository import Adw, Gdk, Gio, GObject, Gtk, Pango
 except ImportError as error:
     raise SystemExit("GTK 4 is required: " + str(error)) from error
-
-if __package__:
-    from .gnome_browser_model import visible_tree
-else:
-    from gnome_browser_model import visible_tree
 
 
 @dataclass

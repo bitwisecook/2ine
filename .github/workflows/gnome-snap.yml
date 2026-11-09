@@ -4,11 +4,9 @@ on:
   pull_request:
     paths:
       - 'snap/**'
-      - 'tools/gnome/**'
-      - 'tools/gnome_*.py'
+      - 'apps/gnome/**'
+      - 'apps/common/**'
       - 'VERSION'
-      - 'tools/gnome_views.py'
-      - 'tools/gnome_audio.py'
       - 'tools/codegen/project_sources.py'
       - 'tools/codegen/data/**'
       - 'docs/project-sources.md'
@@ -17,7 +15,6 @@ on:
       - 'cmake/**'
       - 'os2/mm/midi/**'
       - 'tools/ball/**'
-      - 'tools/build_gnome_packages.py'
       - '.github/workflows/gnome-snap.yml'
 
   workflow_dispatch:

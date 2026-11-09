@@ -3,7 +3,7 @@
 
 import unittest
 
-from tools import gnome_application_order as order
+from apps.gnome.twoine_gnome import application_order as order
 
 
 class ApplicationOrderTests(unittest.TestCase):

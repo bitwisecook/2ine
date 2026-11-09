@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from tools import gnome_ball_lifecycle as lifecycle
+from apps.gnome.twoine_gnome import ball_lifecycle as lifecycle
 
 
 class BallLifecycleTests(unittest.TestCase):

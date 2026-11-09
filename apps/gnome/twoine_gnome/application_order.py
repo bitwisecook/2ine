@@ -1,12 +1,7 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Stable application ordering independent of asynchronous icon completion."""
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING or __package__:
-    from .gnome_browser_model import folded
-else:
-    from gnome_browser_model import folded
+from .browser_model import folded
 
 MODES = ("icons", "name", "program")
 

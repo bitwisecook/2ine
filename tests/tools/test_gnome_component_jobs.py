@@ -4,7 +4,7 @@
 import unittest
 from pathlib import Path
 
-from tools import gnome_component_jobs as jobs
+from apps.gnome.twoine_gnome import component_jobs as jobs
 
 
 class ComponentJobsTests(unittest.TestCase):

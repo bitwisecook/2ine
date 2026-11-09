@@ -29,7 +29,7 @@ parts:
     override-build: |
       cmake -S . -B build-snap -G Ninja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=ON -DTWOINE_SDL3_PROVIDER=source -DTWOINE_OPENGL=ON
       cmake --build build-snap --parallel "$CRAFT_PARALLEL_BUILD_COUNT"
-      python3 tools/build_gnome_packages.py --build build-snap --stage "$CRAFT_PART_INSTALL" --output build-snap-packaging
+      python3 apps/gnome/package.py --build build-snap --stage "$CRAFT_PART_INSTALL" --output build-snap-packaging
       install -Dm755 snap/2ine-ball-snap "$CRAFT_PART_INSTALL/bin/2ine-ball-snap"
 plugs:
   install-cups:

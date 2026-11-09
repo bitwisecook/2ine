@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools import gnome_media_preferences as media
+from apps.gnome.twoine_gnome import media_preferences as media
 
 
 class MediaPreferencesTests(unittest.TestCase):

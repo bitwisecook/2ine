@@ -6,5 +6,5 @@ export CUPS_SERVER=/var/cups/cups.sock
 export XDG_DATA_HOME="$SNAP_USER_COMMON/.local/share"
 export TWOINE_BUILD="$SNAP/usr/lib/2ine-ball/runtime"
 export TWOINE_BALL_LIBRARY="$TWOINE_BUILD/libtwoine_ball.so"
-export PYTHONPATH="$SNAP/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
-exec "$SNAP/usr/bin/python3" "$SNAP/usr/lib/2ine-ball/tools/gnome_ball.py" "$@"
+export PYTHONPATH="$SNAP/usr/lib/2ine-ball:$SNAP/usr/lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
+exec "$SNAP/usr/bin/python3" -m twoine_gnome "$@"

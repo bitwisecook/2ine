@@ -3,7 +3,7 @@
 
 import unittest
 
-from tools.gnome_lazy_folders import FolderChildren
+from apps.gnome.twoine_gnome.lazy_folders import FolderChildren
 
 
 class FolderChildrenTests(unittest.TestCase):

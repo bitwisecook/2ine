@@ -25,12 +25,12 @@ def main():
         from tools.ball import engine as api
 
         if TYPE_CHECKING:
-            from tools import gnome_ball as gui
+            from apps.gnome.twoine_gnome import app as gui
         elif os.environ.get("TWOINE_GNOME_FRONTEND"):
             sys.path.insert(0, os.environ["TWOINE_GNOME_FRONTEND"])
-            gui = importlib.import_module("gnome_ball")
+            gui = importlib.import_module("twoine_gnome.app")
         else:
-            from tools import gnome_ball as gui
+            from apps.gnome.twoine_gnome import app as gui
 
         def pump(until, timeout=30):
             deadline = time.monotonic() + timeout
@@ -108,7 +108,7 @@ def main():
         # touching the host's real Trash. Cancellation preserves the fixture.
         original = window.request_work
         window.request_work = lambda _work, finished: finished(False)
-        expected = gui.gnome_ball_lifecycle.identity(other)
+        expected = gui.ball_lifecycle.identity(other)
         window.remove_ball_package(other, expected)
         window.request_work = original
         dialog = window.get_visible_dialog()

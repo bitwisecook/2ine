@@ -40,10 +40,10 @@ GNOME_OUTPUT ?= $(CURDIR)/build-gnome/packages
 .PHONY: gnome-app gnome-packages gnome-test gnome-snap
 
 gnome-app:
-	$(PYTHON) tools/gnome_ball.py --build "$(GNOME_RUNTIME_BUILD)"
+	$(PYTHON) -m apps.gnome.twoine_gnome --build "$(GNOME_RUNTIME_BUILD)"
 
 gnome-packages:
-	$(PYTHON) tools/build_gnome_packages.py --build "$(GNOME_RUNTIME_BUILD)" --output "$(GNOME_OUTPUT)"
+	$(PYTHON) apps/gnome/package.py --build "$(GNOME_RUNTIME_BUILD)" --output "$(GNOME_OUTPUT)"
 
 gnome-test:
 	dbus-run-session -- xvfb-run -a $(PYTHON) tests/integration/gnome_ball.py --build "$(GNOME_RUNTIME_BUILD)"

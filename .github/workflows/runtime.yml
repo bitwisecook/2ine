@@ -63,9 +63,9 @@ jobs:
       - name: Validate GNOME metadata and build native packages
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: |
-          desktop-file-validate tools/gnome/*.desktop
-          appstreamcli validate --no-net tools/gnome/*.metainfo.xml
-          python3 tools/build_gnome_packages.py --build build-runtime
+          desktop-file-validate apps/gnome/data/*.desktop
+          appstreamcli validate --no-net apps/gnome/data/*.metainfo.xml
+          python3 apps/gnome/package.py --build build-runtime
       - name: Test relocated Debian package
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_package.py build-gnome/packages/*.deb

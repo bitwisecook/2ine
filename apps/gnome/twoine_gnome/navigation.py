@@ -4,15 +4,10 @@
 
 from pathlib import Path
 
-if __package__:
-    from . import gnome_media_preferences, gnome_views
-    from .gnome_navigation_state import PAGE_ITEMS
-else:
-    import gnome_media_preferences
-    import gnome_views
-    from gnome_navigation_state import PAGE_ITEMS
+from . import media_preferences, views
+from .navigation_state import PAGE_ITEMS
 
-Adw, Gtk, GLib = gnome_views.Adw, gnome_views.Gtk, gnome_views.GLib
+Adw, Gtk, GLib = views.Adw, views.Gtk, views.GLib
 
 SETTINGS = {
     "general": ("General", "applications-system-symbolic", "Runtime and diagnostics"),
@@ -24,7 +19,7 @@ SETTINGS = {
 }
 
 
-class InputDialog(gnome_views.FormDialog):
+class InputDialog(views.FormDialog):
     def __init__(self, window, title, fields, callback, accept, deferred=False):
         super().__init__(window, title, accept=accept, width=520, height=320)
         self.callback, self.deferred, self.entries = callback, deferred, {}
@@ -37,7 +32,7 @@ class InputDialog(gnome_views.FormDialog):
             row = Adw.EntryRow(title=label, text=value)
             row.connect("entry-activated", lambda *_: self.accept.activate())
             if browse:
-                choose = gnome_views.action_button(
+                choose = views.action_button(
                     "Choose " + label,
                     lambda row=row, label=label, browse=browse: window.choose(
                         label, lambda path: row.set_text(str(path)), folder=browse == "folder"
@@ -195,9 +190,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
         self.update_folder()
 
     def update_media(self):
-        paths = gnome_media_preferences.sources(
-            self.window.app_preferences.get("lastOS2MediaSources")
-        )
+        paths = media_preferences.sources(self.window.app_preferences.get("lastOS2MediaSources"))
         self.media.set_subtitle("\n".join(paths) if paths else "No verified media remembered")
         self.forget_media.set_sensitive(bool(paths))
 
@@ -207,9 +200,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
 
     def update_folder(self):
         folder = self.window.app_preferences.get("ballFolder")
-        self.folder.set_subtitle(
-            gnome_views.display_path(folder or self.window.default_ball_folder())
-        )
+        self.folder.set_subtitle(views.display_path(folder or self.window.default_ball_folder()))
         self.reset.set_sensitive(bool(folder))
 
     def set_folder(self, folder):
@@ -369,7 +360,7 @@ class InstallationPage(Gtk.Box):
             actions.append(cancel)
             support.add(actions)
         if not system:
-            self.append(gnome_views.dependency_advice_box(window))
+            self.append(views.dependency_advice_box(window))
         tasks = Adw.PreferencesGroup()
         self.append(tasks)
         if system:

@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 APP_ID = "io.github.bitwisecook.Twoine.Ball"
 
 
@@ -17,14 +17,14 @@ def main():
     executable = Path.home() / ".local/bin/2ine-ball"
     executable.parent.mkdir(parents=True, exist_ok=True)
     executable.write_text(
-        "#!/bin/sh\nexec /usr/bin/python3 "
-        + shlex.quote(str(ROOT / "tools/gnome_ball.py"))
-        + ' "$@"\n'
+        "#!/bin/sh\nPYTHONPATH="
+        + shlex.quote(str(ROOT))
+        + ' exec /usr/bin/python3 -m apps.gnome.twoine_gnome "$@"\n'
     )
     executable.chmod(0o755)
     desktop = data / "applications" / (APP_ID + ".desktop")
     desktop.parent.mkdir(parents=True, exist_ok=True)
-    text = (ROOT / "tools/gnome" / desktop.name).read_text()
+    text = (ROOT / "apps/gnome/data" / desktop.name).read_text()
     # Desktop Entry Exec quoting differs from shell quoting, including literal percent signs.
     quoted = (
         str(executable)
@@ -37,19 +37,19 @@ def main():
     desktop.write_text(text.replace("Exec=2ine-ball", 'Exec="' + quoted + '"'))
     icon = data / "icons/hicolor/scalable/apps" / (APP_ID + ".svg")
     icon.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / icon.name, icon)
+    shutil.copyfile(ROOT / "apps/gnome/data" / icon.name, icon)
     symbolic = data / "icons/hicolor/symbolic/apps" / (APP_ID + "-symbolic.svg")
     symbolic.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / symbolic.name, symbolic)
+    shutil.copyfile(ROOT / "apps/gnome/data" / symbolic.name, symbolic)
     document_icon = data / "icons/hicolor/scalable/mimetypes/application-x-2ine-ball.svg"
     document_icon.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / "apps/common/icons/TwoineBall.svg", document_icon)
     mime = data / "mime/packages" / (APP_ID + ".xml")
     mime.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / (APP_ID + ".mime.xml"), mime)
+    shutil.copyfile(ROOT / "apps/gnome/data" / (APP_ID + ".mime.xml"), mime)
     metadata = data / "metainfo" / (APP_ID + ".metainfo.xml")
     metadata.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / metadata.name, metadata)
+    shutil.copyfile(ROOT / "apps/gnome/data" / metadata.name, metadata)
     for tool, directory in (
         ("update-mime-database", data / "mime"),
         ("update-desktop-database", data / "applications"),

@@ -14,9 +14,9 @@ from tests.integration.gnome_ball import pump
 
 if os.environ.get("TWOINE_GNOME_FRONTEND"):
     sys.path.insert(0, os.environ["TWOINE_GNOME_FRONTEND"])
-    import gnome_ball
+    from twoine_gnome import app as gnome_ball
 else:
-    from tools import gnome_ball
+    from apps.gnome.twoine_gnome import app as gnome_ball
 
 ball_api = gnome_ball.ball_api
 
@@ -45,7 +45,7 @@ def main():
         window.configuration_stack.set_visible_child_name("registry")
         page = next(page for page in window.profile_pages if page.area == "registry")
         pump(lambda: page.snapshot is not None)
-        dialog = gnome_ball.gnome_configuration.ProfileValueDialog(page, None)
+        dialog = gnome_ball.configuration.ProfileValueDialog(page, None)
         dialog.present(window)
         dialog.application.set_text(r"hkcu\software\fixture")
         dialog.key.set_text("count")
@@ -64,7 +64,7 @@ def main():
         assert page.selected_key == "hkcu"
         page.select_key(r"hkcu\software\fixture")
         assert page.selected_key == r"hkcu\software\fixture"
-        stale = gnome_ball.gnome_configuration.ProfileValueDialog(page, entry)
+        stale = gnome_ball.configuration.ProfileValueDialog(page, entry)
         stale.present(window)
         current = window.api("configuration-read", name="registry")
         window.api(

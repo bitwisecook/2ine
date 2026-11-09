@@ -12,12 +12,12 @@ the main loop. No Python subprocess or shell mediates application launches.
 ```sh
 cmake -S ball -B build-ball-engine -G Ninja
 cmake --build build-ball-engine
-python3 tools/gnome_ball.py --build build-portable
+python3 -m apps.gnome.twoine_gnome --build build-portable
 ```
 
 The full runtime must be built separately as described in the main README.
 Install `python3-gi`, `gir1.2-gtk-4.0` and `gir1.2-adw-1` on Ubuntu.
-`python3 tools/install_gnome.py` installs a development launcher tied to the
+`python3 apps/gnome/install.py` installs a development launcher tied to the
 checkout. Distribution packages use a separate relocatable launcher.
 
 ## Native workflow
@@ -149,7 +149,7 @@ Original OS/2 files, private fonts and application media are not packaged.
 The package includes third-party license notices and runtime input hashes.
 
 ```sh
-python3 tools/build_gnome_packages.py --build build-portable --output build-gnome/packages
+python3 apps/gnome/package.py --build build-portable --output build-gnome/packages
 ```
 
 This produces `2ine-ball_0.3_amd64.deb` and
@@ -218,8 +218,8 @@ loose end. Both are installed into the hicolor icon theme.
 ```sh
 python3 -m unittest discover -s tests/tools
 python3 tools/codegen/lxapigen.py --check
-desktop-file-validate tools/gnome/*.desktop
-appstreamcli validate --no-net tools/gnome/*.metainfo.xml
+desktop-file-validate apps/gnome/data/*.desktop
+appstreamcli validate --no-net apps/gnome/data/*.metainfo.xml
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_ball.py --build build-portable
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_features.py --build build-portable
 dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-ball_0.3_amd64.deb

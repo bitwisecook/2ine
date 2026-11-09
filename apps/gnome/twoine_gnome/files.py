@@ -4,16 +4,11 @@
 import datetime
 from pathlib import Path
 
-if __package__:
-    from .gnome_browser import Column, NativeBrowser
-    from .gnome_browser_model import folded as folded
-    from .gnome_browser_model import matches as matches
-else:
-    from gnome_browser import Column, NativeBrowser
-    from gnome_browser_model import folded as folded
-    from gnome_browser_model import matches as matches
-
 from gi.repository import GLib, Gtk
+
+from .browser import Column, NativeBrowser
+from .browser_model import folded as folded
+from .browser_model import matches as matches
 
 
 def display_path(path):

@@ -17,11 +17,11 @@ from tests.integration.gnome_ball import click, pump
 
 if os.environ.get("TWOINE_GNOME_FRONTEND"):
     sys.path.insert(0, os.environ["TWOINE_GNOME_FRONTEND"])
-    import gnome_ball
+    from twoine_gnome import app as gnome_ball
 
     ball_api = gnome_ball.ball_api
 else:
-    from tools import gnome_ball
+    from apps.gnome.twoine_gnome import app as gnome_ball
     from tools.ball import engine as ball_api
 
 

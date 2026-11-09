@@ -5,7 +5,7 @@ import subprocess
 import sys
 import unittest
 
-from tools.gnome_sessions import Sessions, StartupPool, abnormal_exit_message
+from apps.gnome.twoine_gnome.sessions import Sessions, StartupPool, abnormal_exit_message
 
 
 class SessionTests(unittest.TestCase):

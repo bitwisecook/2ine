@@ -5,7 +5,7 @@ import ast
 import unittest
 from pathlib import Path
 
-from tools.gnome_browser_model import CheckedTree, folded, matches, visible_tree
+from apps.gnome.twoine_gnome.browser_model import CheckedTree, folded, matches, visible_tree
 
 
 class BrowserModelTests(unittest.TestCase):
@@ -179,7 +179,7 @@ class BrowserModelTests(unittest.TestCase):
         self.assertEqual(checks.selected, {"a", "b", "c"})
 
     def test_packaging_registers_both_shared_browser_modules(self):
-        source = Path(__file__).resolve().parents[2] / "tools/build_gnome_packages.py"
+        source = Path(__file__).resolve().parents[2] / "apps/gnome/package.py"
         tree = ast.parse(source.read_text())
         staged = set()
         for node in ast.walk(tree):
@@ -189,11 +189,9 @@ class BrowserModelTests(unittest.TestCase):
                     for value in node.iter.elts
                     if isinstance(value, ast.Constant) and isinstance(value.value, str)
                 }
-                if "gnome_files.py" in names:
+                if "files.py" in names:
                     staged.update(names)
-        self.assertTrue(
-            {"gnome_browser.py", "gnome_browser_model.py", "gnome_media_preferences.py"} <= staged
-        )
+        self.assertTrue({"browser.py", "browser_model.py", "media_preferences.py"} <= staged)
 
 
 if __name__ == "__main__":

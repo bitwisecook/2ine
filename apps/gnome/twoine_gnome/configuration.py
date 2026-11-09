@@ -4,15 +4,11 @@
 
 from gi.repository import GObject, Pango
 
-if __package__:
-    from . import gnome_views
-    from .gnome_browser import Column, NativeBrowser
-else:
-    import gnome_views
-    from gnome_browser import Column, NativeBrowser
+from . import views
+from .browser import Column, NativeBrowser
 
-Adw, GLib, Gtk = gnome_views.Adw, gnome_views.GLib, gnome_views.Gtk
-button = gnome_views.action_button
+Adw, GLib, Gtk = views.Adw, views.GLib, views.Gtk
+button = views.action_button
 REGISTRY_TYPES = {
     0: "REG_NONE",
     1: "REG_SZ",
@@ -58,7 +54,7 @@ class EnvironmentPage(Gtk.Box):
 
     def refresh(self):
         window = self.window
-        gnome_views.empty(self)
+        views.empty(self)
         page = Adw.PreferencesPage()
         self.append(page)
         values = Adw.PreferencesGroup(
@@ -545,7 +541,7 @@ class Os2FilesPage(Gtk.Box):
         if self.profile in self.window.profile_pages:
             self.window.profile_pages.remove(self.profile)
         self.profile = None
-        gnome_views.empty(self.content)
+        views.empty(self.content)
         if record["role"] == "config":
             self.content.append(self.config_widget)
             return
@@ -785,7 +781,7 @@ class RegistryPage(ProfilePage):
         dialog.present(self.window)
 
 
-class ProfileValueDialog(gnome_views.FormDialog):
+class ProfileValueDialog(views.FormDialog):
     def __init__(self, page, entry):
         super().__init__(page.window, "Add Value" if entry is None else "Edit Value", height=650)
         self.profile_page, self.entry, self.revision = page, entry, page.snapshot["revision"]

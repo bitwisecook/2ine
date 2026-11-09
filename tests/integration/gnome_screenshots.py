@@ -14,8 +14,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from linux.x11 import Display
 
+from apps.gnome.twoine_gnome import app as gnome_ball
+from apps.gnome.twoine_gnome import views as gnome_views
 from tests.integration.gnome_ball import pump
-from tools import gnome_ball, gnome_views
 
 
 def main():

@@ -3,14 +3,9 @@
 
 from gi.repository import GLib
 
-if __package__:
-    from .gnome_browser import Column, NativeBrowser
-    from .gnome_browser_model import CheckedTree, CheckState
-    from .gnome_component_jobs import file_tooltip, state_label
-else:
-    from gnome_browser import Column, NativeBrowser
-    from gnome_browser_model import CheckedTree, CheckState
-    from gnome_component_jobs import file_tooltip, state_label
+from .browser import Column, NativeBrowser
+from .browser_model import CheckedTree, CheckState
+from .component_jobs import file_tooltip, state_label
 
 
 class ComponentTree(NativeBrowser):
