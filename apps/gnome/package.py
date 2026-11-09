@@ -37,9 +37,12 @@ def copy(source, destination):
     shutil.copy2(source, destination)
 
 
+ELF_MAGIC = b"\x7fELF"
+
+
 def elf(path):
     with path.open("rb") as stream:
-        return stream.read(4) == b"\x7fELF"
+        return stream.read(len(ELF_MAGIC)) == ELF_MAGIC
 
 
 def stage(build, destination):

@@ -102,7 +102,7 @@ class ApplicationsPage(Gtk.Box):
             )
             more.update_property([Gtk.AccessibleProperty.LABEL], ["Actions for " + name])
             row.add_suffix(more)
-            gesture = Gtk.GestureClick(button=3)
+            gesture = Gtk.GestureClick(button=views.Gdk.BUTTON_SECONDARY)
             gesture.connect("pressed", window.ball_context_menu, row, menu)
             row.add_controller(gesture)
             self.list.append(row)

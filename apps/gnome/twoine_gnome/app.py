@@ -41,6 +41,19 @@ except (ImportError, ValueError) as error:
     ) from error
 
 APP_ID = "io.github.bitwisecook.Twoine.Ball"
+# Component jobs copy and hash files; a few run at once without starving the UI.
+COMPONENT_WORKERS = 4
+# The activity view shows only the tail of a log; the ball keeps all of it.
+LOG_PREVIEW_BYTES = 64 * 1024
+ICON_CACHE_LIMIT = 256
+# Session polling: the log follows output closely; configuration changes rarely.
+LOG_POLL_MS = 250
+CONFIG_POLL_MS = 1000
+# Retry interval while a just-opened ball finishes starting.
+OPEN_RETRY_MS = 50
+# Execution backend choices, in the order the settings list them.
+BACKEND_CHOICES = {"native": 1, "unicorn": 2}
+BACKEND_BUILD_DEFAULT = 0
 PACKAGE = Path(__file__).resolve().parent
 # Resources sit in data/ beside the package, both in the source tree
 # (apps/gnome/data) and in the installed application (lib/2ine-ball/data).
@@ -113,7 +126,7 @@ class BallWindow(Adw.ApplicationWindow):
             max_workers=1, thread_name_prefix="os2-component-status"
         )
         self.component_executor = ThreadPoolExecutor(
-            max_workers=4, thread_name_prefix="os2-components"
+            max_workers=COMPONENT_WORKERS, thread_name_prefix="os2-components"
         )
         self.last_result = None
         self.last_log = None
@@ -472,8 +485,12 @@ class BallWindow(Adw.ApplicationWindow):
 
     def started(self, result):
         self.external, target, self.app_preferences = result
-        size = self.app_preferences.get("logFontSize", 12)
-        self.app_preferences["logFontSize"] = min(24, max(10, size)) if type(size) is int else 12
+        size = self.app_preferences.get("logFontSize", navigation.LOG_FONT_SIZE_DEFAULT)
+        self.app_preferences["logFontSize"] = (
+            min(navigation.LOG_FONT_SIZE_MAX, max(navigation.LOG_FONT_SIZE_MIN, size))
+            if type(size) is int
+            else navigation.LOG_FONT_SIZE_DEFAULT
+        )
         self.app_preferences["customLogSize"] = self.app_preferences.get("customLogSize") is True
         if not isinstance(self.app_preferences.get("ballFolder"), str):
             self.app_preferences.pop("ballFolder", None)
@@ -679,7 +696,7 @@ class BallWindow(Adw.ApplicationWindow):
             )
             more.update_property([Gtk.AccessibleProperty.LABEL], ["Actions for " + path.name])
             row.add_suffix(more)
-            gesture = Gtk.GestureClick(button=3)
+            gesture = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
             gesture.connect("pressed", self.ball_context_menu, row, menu)
             row.add_controller(gesture)
             self.ball_list.append(row)
@@ -847,7 +864,7 @@ class BallWindow(Adw.ApplicationWindow):
             model=Gtk.StringList.new(["Build Default", "Native (x86 Linux)", "Unicorn"]),
         )
         backend.set_selected(
-            {"native": 1, "unicorn": 2}.get(data.get("runtime", {}).get("backend"), 0)
+            BACKEND_CHOICES.get(data.get("runtime", {}).get("backend"), BACKEND_BUILD_DEFAULT)
         )
         backend.connect("notify::selected", self.backend_changed)
         group.add(backend)
@@ -1910,6 +1927,7 @@ class BallWindow(Adw.ApplicationWindow):
         path, build = self.ball, self.build
         peers = bool(self.sessions.active(path))
         try:
+            # "run --cwd DIR PROGRAM": the program follows the working directory.
             at = 3 if len(arguments) > 1 and arguments[1] == "--cwd" else 1
             title = arguments[at] if len(arguments) > at else "Application"
             if arguments[0] != "launch":
@@ -2108,7 +2126,7 @@ class BallWindow(Adw.ApplicationWindow):
         def loaded(result):
             try:
                 paintable = views.texture(result)
-                if len(self.icon_cache) > 256:
+                if len(self.icon_cache) > ICON_CACHE_LIMIT:
                     self.icon_cache.clear()
                 self.icon_cache[key] = paintable
                 if paintable:
@@ -2322,8 +2340,8 @@ class BallWindow(Adw.ApplicationWindow):
 
     def start_session_polling(self):
         for name, delay, callback in (
-            ("log_timer", 250, self.poll_log),
-            ("config_timer", 1000, self.poll_config),
+            ("log_timer", LOG_POLL_MS, self.poll_log),
+            ("config_timer", CONFIG_POLL_MS, self.poll_config),
         ):
             previous = getattr(self, name, None)
             if previous:
@@ -2407,7 +2425,7 @@ class BallWindow(Adw.ApplicationWindow):
         if not path or not path.exists():
             return ""
         with path.open("rb") as log:
-            log.seek(max(0, path.stat().st_size - 65536))
+            log.seek(max(0, path.stat().st_size - LOG_PREVIEW_BYTES))
             return log.read().decode("utf-8", errors="replace").replace("\x00", "")
 
     def update_activity(self):
@@ -2492,7 +2510,7 @@ class BallWindow(Adw.ApplicationWindow):
         return dialog
 
     def apply_log_font(self):
-        size = self.app_preferences.get("logFontSize", 12)
+        size = self.app_preferences.get("logFontSize", navigation.LOG_FONT_SIZE_DEFAULT)
         css = (
             f"textview.twoine-activity-log {{ font-size: {size}pt; }}"
             if self.app_preferences.get("customLogSize")
@@ -2637,7 +2655,7 @@ class BallApplication(Adw.Application):
                 window.remember(Path(path))
                 return GLib.SOURCE_REMOVE
 
-            GLib.timeout_add(50, opened)
+            GLib.timeout_add(OPEN_RETRY_MS, opened)
 
     def do_activate(self):
         window = self.get_active_window()

@@ -296,7 +296,7 @@ class NativeBrowser(Gtk.Box):
                 target.connect("drop", lambda _target, files, _x, _y: self.drop(item, files))
                 box.add_controller(target)
             if self.on_context:
-                click = Gtk.GestureClick(button=3)
+                click = Gtk.GestureClick(button=Gdk.BUTTON_SECONDARY)
                 click.connect(
                     "pressed", lambda gesture, _count, x, y: self.context(item, gesture, x, y)
                 )

@@ -9,20 +9,50 @@ from .browser import Column, NativeBrowser
 
 Adw, GLib, Gtk = views.Adw, views.GLib, views.Gtk
 button = views.action_button
+
+# Win32 registry value types, as stored by Open32 in REGISTRY.INI.
+REG_NONE = 0
+REG_SZ = 1
+REG_EXPAND_SZ = 2
+REG_BINARY = 3
+REG_DWORD = 4
+REG_DWORD_BIG_ENDIAN = 5
+REG_LINK = 6
+REG_MULTI_SZ = 7
+REG_RESOURCE_LIST = 8
+REG_FULL_RESOURCE_DESCRIPTOR = 9
+REG_RESOURCE_REQUIREMENTS_LIST = 10
+REG_QWORD = 11
 REGISTRY_TYPES = {
-    0: "REG_NONE",
-    1: "REG_SZ",
-    2: "REG_EXPAND_SZ",
-    3: "REG_BINARY",
-    4: "REG_DWORD (Little Endian)",
-    5: "REG_DWORD_BIG_ENDIAN",
-    6: "REG_LINK",
-    7: "REG_MULTI_SZ",
-    8: "REG_RESOURCE_LIST",
-    9: "REG_FULL_RESOURCE_DESCRIPTOR",
-    10: "REG_RESOURCE_REQUIREMENTS_LIST",
-    11: "REG_QWORD (Little Endian)",
+    REG_NONE: "REG_NONE",
+    REG_SZ: "REG_SZ",
+    REG_EXPAND_SZ: "REG_EXPAND_SZ",
+    REG_BINARY: "REG_BINARY",
+    REG_DWORD: "REG_DWORD (Little Endian)",
+    REG_DWORD_BIG_ENDIAN: "REG_DWORD_BIG_ENDIAN",
+    REG_LINK: "REG_LINK",
+    REG_MULTI_SZ: "REG_MULTI_SZ",
+    REG_RESOURCE_LIST: "REG_RESOURCE_LIST",
+    REG_FULL_RESOURCE_DESCRIPTOR: "REG_FULL_RESOURCE_DESCRIPTOR",
+    REG_RESOURCE_REQUIREMENTS_LIST: "REG_RESOURCE_REQUIREMENTS_LIST",
+    REG_QWORD: "REG_QWORD (Little Endian)",
 }
+# A registry value record: "v:" + name as its key; a little-endian type word
+# followed by the payload as its data.
+REGISTRY_VALUE_PREFIX = "v:"
+REGISTRY_TYPE_SIZE = 4
+DWORD_SIZE = 4
+QWORD_SIZE = 8
+REGISTRY_PAYLOAD_LIMIT = 16 * 1024 * 1024
+REGISTRY_NAME_LIMIT = 32767
+# How many payload bytes a list row previews in hex.
+PAYLOAD_PREVIEW_BYTES = 32
+# The value editor's "Edit As" choices, in model order.
+EDIT_HEX, EDIT_TEXT, EDIT_DWORD = range(3)
+# OS/2 display settings the preferences offer; 96 DPI is 100% scale.
+DISPLAY_DPI_BASE = 96
+DISPLAY_DPI_CHOICES = [96, 120, 144, 192]
+DISPLAY_DEPTH_CHOICES = [24, 16, 8, 4]
 
 
 def registry_fold(value):
@@ -32,15 +62,19 @@ def registry_fold(value):
 
 
 def validate_registry_value(kind, data):
-    if len(data) > 16 * 1024 * 1024:
+    if len(data) > REGISTRY_PAYLOAD_LIMIT:
         raise ValueError("Registry payloads are limited to 16 MiB.")
-    if kind in (4, 5) and len(data) != 4:
+    if kind in (REG_DWORD, REG_DWORD_BIG_ENDIAN) and len(data) != DWORD_SIZE:
         raise ValueError("DWORD values require exactly four bytes.")
-    if kind == 11 and len(data) != 8:
+    if kind == REG_QWORD and len(data) != QWORD_SIZE:
         raise ValueError("QWORD values require exactly eight bytes.")
-    if kind in (1, 2, 6) and (not data.endswith(b"\0") or b"\0" in data[:-1]):
+    if kind in (REG_SZ, REG_EXPAND_SZ, REG_LINK) and (
+        not data.endswith(b"\0") or b"\0" in data[:-1]
+    ):
         raise ValueError("This string type requires one terminating NUL and no embedded NUL bytes.")
-    if kind == 7 and (not data.endswith(b"\0\0") or (data[:-2] and b"" in data[:-2].split(b"\0"))):
+    if kind == REG_MULTI_SZ and (
+        not data.endswith(b"\0\0") or (data[:-2] and b"" in data[:-2].split(b"\0"))
+    ):
         raise ValueError(
             "REG_MULTI_SZ requires NUL-separated strings, a final double NUL and no empty interior strings."
         )
@@ -67,7 +101,7 @@ class EnvironmentPage(Gtk.Box):
         for line in window.snapshot["configSys"].splitlines():
             line = line.strip()
             if line.upper().startswith("SET "):
-                entry = line[4:]
+                entry = line[len("SET ") :]
             elif line.upper().startswith("LIBPATH="):
                 entry = line
             else:
@@ -221,7 +255,9 @@ class PrintingPage(Adw.PreferencesPage):
         if name.upper() not in self.choices:
             self.choices.append(None)
             labels.append("Stored Queue: " + (name or "(none)"))
-        index = self.choices.index(name.upper()) if name.upper() in self.choices else 2
+        index = (
+            self.choices.index(name.upper()) if name.upper() in self.choices else len(labels) - 1
+        )
         self.updating = True
         self.queue.set_model(Gtk.StringList.new(labels))
         self.queue.set_selected(index)
@@ -377,21 +413,25 @@ class ProfilePage(Gtk.Box):
         rows = []
         for entry in sorted(self.entries, key=lambda value: (value["application"], value["key"])):
             registry = self.area == "registry"
-            if registry and not entry["key"].startswith("v:"):
+            if registry and not entry["key"].startswith(REGISTRY_VALUE_PREFIX):
                 continue
-            key = entry["key"][2:] if registry else entry["key"]
+            key = entry["key"][len(REGISTRY_VALUE_PREFIX) :] if registry else entry["key"]
             data = bytes.fromhex(entry["data"])
-            short_header = registry and len(data) < 4
-            kind = int.from_bytes(data[:4], "little") if registry and not short_header else None
-            data = data[4:] if registry and not short_header else data
+            short_header = registry and len(data) < REGISTRY_TYPE_SIZE
+            kind = (
+                int.from_bytes(data[:REGISTRY_TYPE_SIZE], "little")
+                if registry and not short_header
+                else None
+            )
+            data = data[REGISTRY_TYPE_SIZE:] if registry and not short_header else data
             if short_header:
                 summary = "Incomplete type header: " + data.hex()
-            elif kind == 4 and len(data) == 4:
+            elif kind == REG_DWORD and len(data) == DWORD_SIZE:
                 summary = f"DWORD: {int.from_bytes(data, 'little')}"
             elif data.endswith(b"\0") and b"\0" not in data[:-1]:
                 summary = data[:-1].decode("latin1").replace("\n", " ↵ ")
             else:
-                summary = f"{len(data)} bytes: {data[:32].hex()}"
+                summary = f"{len(data)} bytes: {data[:PAYLOAD_PREVIEW_BYTES].hex()}"
             name = entry["application"] + " · " + (key or "(Default)")
             if registry:
                 name = key or "(Default)"
@@ -786,7 +826,7 @@ class ProfileValueDialog(views.FormDialog):
         super().__init__(page.window, "Add Value" if entry is None else "Edit Value", height=650)
         self.profile_page, self.entry, self.revision = page, entry, page.snapshot["revision"]
         self.registry = page.area == "registry"
-        self.mode = 0
+        self.mode = EDIT_HEX
         self.converting = False
         group = self.group("Value")
         preferences = self.page()
@@ -797,15 +837,18 @@ class ProfileValueDialog(views.FormDialog):
         )
         self.key = Adw.EntryRow(
             title="Value Name (empty for default)" if self.registry else "Key",
-            text=(entry["key"][2:] if self.registry else entry["key"]) if entry else "",
+            text=(entry["key"][len(REGISTRY_VALUE_PREFIX) :] if self.registry else entry["key"])
+            if entry
+            else "",
         )
         for row in (self.application, self.key):
             row.set_sensitive(entry is None)
             group.add(row)
         data = bytes.fromhex(entry["data"]) if entry else b""
-        self.short_header = self.registry and entry is not None and len(data) < 4
+        self.short_header = self.registry and entry is not None and len(data) < REGISTRY_TYPE_SIZE
         self.kind = Adw.EntryRow(
-            title="Registry Type", text=str(int.from_bytes(data[:4], "little") if entry else 3)
+            title="Registry Type",
+            text=str(int.from_bytes(data[:REGISTRY_TYPE_SIZE], "little") if entry else REG_BINARY),
         )
         if self.registry:
             self.type_codes = list(REGISTRY_TYPES)
@@ -850,7 +893,7 @@ class ProfileValueDialog(views.FormDialog):
                 subtitle="Original record bytes are shown as payload. Choose a type and explicitly enable replacement to repair the header.",
             )
             group.add(self.repair_header)
-            data = data if self.short_header else data[4:]
+            data = data if self.short_header else data[REGISTRY_TYPE_SIZE:]
         self.format = Adw.ComboRow(
             title="Edit As",
             model=Gtk.StringList.new(["Hexadecimal", "Latin-1 Text", "DWORD (Little Endian)"]),
@@ -891,13 +934,13 @@ class ProfileValueDialog(views.FormDialog):
 
     def data(self):
         text = self.text()
-        if self.mode == 0:
+        if self.mode == EDIT_HEX:
             return bytes.fromhex(text)
-        if self.mode == 1:
+        if self.mode == EDIT_TEXT:
             if "\0" in text:
                 raise ValueError("Text cannot contain NUL. Use hexadecimal for binary values.")
             return text.encode("latin1") + (b"\0" if self.terminated.get_active() else b"")
-        return int(text.strip(), 10).to_bytes(4, "little", signed=False)
+        return int(text.strip(), 10).to_bytes(DWORD_SIZE, "little", signed=False)
 
     def convert(self, row, _property):
         if self.converting:
@@ -905,9 +948,9 @@ class ProfileValueDialog(views.FormDialog):
         new = row.get_selected()
         try:
             data = self.data()
-            if new == 0:
+            if new == EDIT_HEX:
                 text = data.hex()
-            elif new == 1:
+            elif new == EDIT_TEXT:
                 terminated = data.endswith(b"\0")
                 value = data[:-1] if terminated else data
                 if b"\0" in value:
@@ -915,12 +958,12 @@ class ProfileValueDialog(views.FormDialog):
                 text = value.decode("latin1")
                 self.terminated.set_active(terminated)
             else:
-                if len(data) != 4:
+                if len(data) != DWORD_SIZE:
                     raise ValueError("An integer requires exactly four bytes.")
                 text = str(int.from_bytes(data, "little"))
             self.editor.get_buffer().set_text(text)
             self.mode = new
-            self.terminated.set_visible(new == 1)
+            self.terminated.set_visible(new == EDIT_TEXT)
             self.error.set_revealed(False)
         except (ValueError, OverflowError, UnicodeError) as error:
             self.converting = True
@@ -939,19 +982,22 @@ class ProfileValueDialog(views.FormDialog):
                 kind = int(self.kind.get_text(), 10)
                 if not remove:
                     validate_registry_value(kind, data)
-                data = kind.to_bytes(4, "little", signed=False) + data
+                data = kind.to_bytes(REGISTRY_TYPE_SIZE, "little", signed=False) + data
             application, key = self.application.get_text(), self.key.get_text()
             if self.registry:
                 if "\0" in application or "\0" in key:
                     raise ValueError("Registry names cannot contain NUL bytes.")
                 if (
-                    len(application.encode("latin1")) > 32767
-                    or len(key.encode("latin1")) + 2 > 32767
+                    len(application.encode("latin1")) > REGISTRY_NAME_LIMIT
+                    or len(key.encode("latin1")) + len(REGISTRY_VALUE_PREFIX) > REGISTRY_NAME_LIMIT
                 ):
                     raise ValueError(
                         "Registry paths and v:-prefixed value names are limited to 32767 bytes."
                     )
-                application, key = registry_fold(application), "v:" + registry_fold(key)
+                application, key = (
+                    registry_fold(application),
+                    REGISTRY_VALUE_PREFIX + registry_fold(key),
+                )
         except (ValueError, OverflowError, UnicodeError) as error:
             self.error_message(error)
             return
@@ -1014,13 +1060,15 @@ class GraphicsMediaPage(Adw.PreferencesPage):
             description="Applies next launch. Fonts, dialog units and controls scale together. Printer resolution remains 300 DPI.",
         )
         self.add(display)
-        dpi = int(float(self.settings.get("display_dpi", 96)))
-        values = [96, 120, 144, 192]
+        dpi = int(float(self.settings.get("display_dpi", DISPLAY_DPI_BASE)))
+        values = list(DISPLAY_DPI_CHOICES)
         if dpi not in values:
             values.append(dpi)
         row = Adw.ComboRow(
             title="Display DPI",
-            model=Gtk.StringList.new([f"{value} DPI ({value * 100 // 96}%)" for value in values]),
+            model=Gtk.StringList.new(
+                [f"{value} DPI ({value * 100 // DISPLAY_DPI_BASE}%)" for value in values]
+            ),
         )
         row.set_selected(values.index(dpi))
         row.connect(
@@ -1028,8 +1076,8 @@ class GraphicsMediaPage(Adw.PreferencesPage):
             lambda row, _prop: self.save("display_dpi", str(values[row.get_selected()])),
         )
         display.add(row)
-        depth_values = [24, 16, 8, 4]
-        depth = int(float(self.settings.get("display_depth", 24)))
+        depth_values = DISPLAY_DEPTH_CHOICES
+        depth = int(float(self.settings.get("display_depth", DISPLAY_DEPTH_CHOICES[0])))
         depth_row = Adw.ComboRow(
             title="Colour Depth",
             model=Gtk.StringList.new([f"{value}-bit" for value in depth_values]),
