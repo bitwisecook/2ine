@@ -2,7 +2,7 @@
 /* Digital-video MCI wire parameters follow the OS/2 Toolkit mcios2.h.
    Decoder workers transfer retained frames to the PM owner; they never render. */
 #include "os2/include/private/export.h"
-#include "os2/mm/mci/mdm/mdm_video.h"
+#include "os2/mm/mmpm/mci/mdm/mdm_video.h"
 #include "os2/mm/video/decode/video_decode.h"
 #include "os2/include/private/pmp.h"
 #include "host/clock.h"
@@ -950,4 +950,4 @@ void lx_mci_video_shutdown(void)
         }
 }
 
-#include "os2/mm/mci/mdm/mdm_video_string.h"
+#include "os2/mm/mmpm/mci/mdm/mdm_video_string.h"

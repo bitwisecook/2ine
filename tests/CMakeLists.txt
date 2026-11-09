@@ -789,10 +789,10 @@ if(TARGET so32dll)
     add_test(NAME legacy_socket COMMAND twoine_legacy_socket_tests)
     set_tests_properties(legacy_socket PROPERTIES TIMEOUT 20)
 endif()
-if(TARGET mdm)
+if(TARGET mmpm)
     add_executable(twoine_mdm_tests os2/test_mdm.c)
     twoine_application_target(twoine_mdm_tests)
-    target_link_libraries(twoine_mdm_tests PRIVATE mdm mmio 2ine m)
+    target_link_libraries(twoine_mdm_tests PRIVATE mmpm mmio 2ine m)
     add_test(NAME multimedia COMMAND twoine_mdm_tests)
     set_tests_properties(
         multimedia
@@ -873,7 +873,7 @@ if(TARGET doscalls)
     set_tests_properties(guest_file_compat PROPERTIES TIMEOUT 20)
 endif()
 
-if(TARGET mdm AND TWOINE_MIDI_SYNTH)
+if(TARGET mmpm AND TWOINE_MIDI_SYNTH)
     add_executable(twoine_midi_synth_tests os2/test_midi_synth.c)
     twoine_application_target(twoine_midi_synth_tests)
     target_link_libraries(twoine_midi_synth_tests PRIVATE twoine_os2_midi 2ine)
@@ -917,7 +917,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET dive)
     endif()
 endif()
 
-if(TARGET mdm AND UNIX)
+if(TARGET mmpm AND UNIX)
     add_executable(twoine_midi_config_tests os2/test_midi_config.c)
     twoine_application_target(twoine_midi_config_tests)
     target_link_libraries(twoine_midi_config_tests PRIVATE twoine_os2_midi 2ine)
@@ -925,7 +925,7 @@ if(TARGET mdm AND UNIX)
     set_tests_properties(midi_preferences PROPERTIES TIMEOUT 20)
 endif()
 
-if(TARGET mdm AND UNIX)
+if(TARGET mmpm AND UNIX)
     add_executable(
         twoine_midi_mt32_tests
         os2/test_midi_mt32.c
@@ -1143,10 +1143,10 @@ if(TARGET pmmerge AND TARGET pmgpi)
     )
 endif()
 
-if(TARGET mdm AND TWOINE_VIDEO)
+if(TARGET mmpm AND TWOINE_VIDEO)
     add_executable(twoine_video_tests os2/test_video.c)
     twoine_application_target(twoine_video_tests)
-    target_link_libraries(twoine_video_tests PRIVATE mdm pmmerge 2ine)
+    target_link_libraries(twoine_video_tests PRIVATE mmpm pmmerge 2ine)
     add_test(
         NAME digital_video
         COMMAND

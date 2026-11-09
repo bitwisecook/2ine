@@ -5137,7 +5137,7 @@
       "convention": "LX_ABI_STACK32"
     }
   },
-  "mdm": {
+  "mmpm": {
     "mciSendCommand": {
       "argument_bytes": 20,
       "callee_pop": 0,

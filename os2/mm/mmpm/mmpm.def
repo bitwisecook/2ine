@@ -1,0 +1,9 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of MMPM.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY MMPM
+
+EXPORTS
+    mciSendCommand    @1
+    mciSendString     @2
+    mciGetErrorString @3

@@ -1,9 +1,9 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of MDM.DLL: exported name [= C entry] @ordinal.
+; Exports of MDM.DLL: exported name = MMPM.ordinal @ordinal.
 
 LIBRARY MDM
 
 EXPORTS
-    mciSendCommand    @1
-    mciSendString     @2
-    mciGetErrorString @3
+    mciSendCommand    = MMPM.1 @1
+    mciSendString     = MMPM.2 @2
+    mciGetErrorString = MMPM.3 @3
