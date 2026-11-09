@@ -61,8 +61,8 @@ if(NOT TARGET twoine_environment)
 endif()
 set(TWOINE_BALL_SOURCES
     applications.c
-    ball_archive.c
-    ball_rename.c
+    package/archive.c
+    package/rename.c
     commands.c
     configuration.c
     context.c
