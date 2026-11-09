@@ -4,6 +4,7 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/pmmerge/pmwin/paint.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "os2/include/private/pmp.h"
 
 enum
 {
@@ -186,4 +187,36 @@ BOOL GetUpdateRect(ULONG window, PVOID output, BOOL erase)
     if (damaged && erase)
         update_tree(window, RDW_ERASENOW);
     return damaged;
+}
+
+static ULONG locked_window; /* WinLockWindowUpdate state is shared by the desktop. */
+
+BOOL open32WindowUpdateLocked(ULONG window)
+{
+    ULONG locked = __atomic_load_n(&locked_window, __ATOMIC_ACQUIRE);
+    return locked &&
+           (locked == window || open32ClientWindow(locked) == window || IsChild(locked, window));
+}
+
+BOOL LockWindowUpdate(ULONG window)
+{
+    if (window && !IsWindow(window))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    if (window)
+    {
+        ULONG expected = 0;
+        if (!__atomic_compare_exchange_n(&locked_window, &expected, window, 0, __ATOMIC_ACQ_REL,
+                                         __ATOMIC_ACQUIRE))
+            return FALSE;
+        lx_pm_set_update_lock(window);
+        return TRUE;
+    }
+    ULONG previous = __atomic_exchange_n(&locked_window, 0, __ATOMIC_ACQ_REL);
+    lx_pm_set_update_lock(0);
+    if (previous && IsWindow(previous))
+        InvalidateRect(previous, NULL, TRUE);
+    return TRUE;
 }

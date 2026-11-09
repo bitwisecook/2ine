@@ -226,3 +226,26 @@ LONG DefMDIChildProc(ULONG child, ULONG message, ULONG first, ULONG second)
 {
     return DefWindowProc(child, message, first, second);
 }
+
+BOOL TranslateMDISysAccel(ULONG client, PVOID message)
+{
+    if (!message)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    ULONG kind = lx_guest_load_u32((uint8 *)message + 4),
+          key = lx_guest_load_u32((uint8 *)message + 8);
+    if ((kind != 0x100 && kind != 0x104) || !(GetKeyState(17) & 0x8000))
+        return FALSE;
+    ULONG active = (ULONG)SendMessage(client, 0x229, 0, 0);
+    if (!active)
+        return FALSE;
+    if (key == 0x73)
+        SendMessage(client, 0x221, active, 0); /* Ctrl+F4 */
+    else if (key == 0x75 || key == 9)
+        SendMessage(client, 0x224, active, (GetKeyState(16) & 0x8000) != 0);
+    else
+        return FALSE;
+    return TRUE;
+}

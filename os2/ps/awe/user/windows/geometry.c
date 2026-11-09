@@ -368,3 +368,25 @@ ULONG SetParent(ULONG window, ULONG parent)
     }
     return previous == HWND_DESKTOP ? 0 : open32PublicWindow(previous);
 }
+
+LONG MapWindowPoints(ULONG from, ULONG to, PVOID points, ULONG count)
+{
+    if (!points || !count || count > 65536)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    uint8 origin[8] = {0};
+    if (from && !ClientToScreen(from, origin))
+        return 0;
+    if (to && !ScreenToClient(to, origin))
+        return 0;
+    LONG dx = (LONG)lx_guest_load_u32(origin), dy = (LONG)lx_guest_load_u32(origin + 4);
+    for (ULONG i = 0; i < count; i++)
+    {
+        uint8 *point = (uint8 *)points + i * 8;
+        lx_guest_store_u32(point, lx_guest_load_u32(point) + (ULONG)dx);
+        lx_guest_store_u32(point + 4, lx_guest_load_u32(point + 4) + (ULONG)dy);
+    }
+    return (LONG)((ULONG)(USHORT)dx | (ULONG)(USHORT)dy << 16);
+}

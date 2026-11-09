@@ -338,3 +338,29 @@ VOID ZeroMemory(PVOID output, ULONG count)
     if (count)
         memset(output, 0, count);
 }
+
+VOID GlobalMemoryStatus(PVOID output)
+{
+    if (!output)
+    {
+        open32SetError(87);
+        return;
+    }
+    typedef APIRET(OS2API * Fn)(ULONG, ULONG, PVOID, ULONG);
+    Fn query = (Fn)open32DosService("DosQuerySysInfo");
+    ULONG info[5] = {0};
+    ULONG error = query ? query(17, 21, info, sizeof info) : 120;
+    if (error)
+    {
+        open32SetError(error);
+        return;
+    }
+    /* TOTPHYSMEM, TOTRESMEM, TOTAVAILMEM: the paging file is what exceeds physical memory. */
+    ULONG available = info[0] - info[1], paging = info[2] - info[0];
+    ULONG fields[] = {32,      info[0] ? (ULONG)((uint64_t)info[1] * 100 / info[0]) : 0,
+                      info[0], available,
+                      paging,  paging,
+                      info[0], available};
+    for (unsigned i = 0; i < 8; i++)
+        lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
+}

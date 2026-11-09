@@ -335,3 +335,21 @@ ULONG GetClipboardData(ULONG format)
     }
     return handle;
 }
+
+LONG GetPriorityClipboardFormat(PVOID formats, LONG count)
+{
+    if (count < 0 || (count && !formats))
+    {
+        open32SetError(87);
+        return -1;
+    }
+    if (!CountClipboardFormats())
+        return 0;
+    for (LONG i = 0; i < count; i++)
+    {
+        ULONG format = lx_guest_load_u32((uint8 *)formats + i * 4);
+        if (IsClipboardFormatAvailable(format))
+            return (LONG)format;
+    }
+    return -1;
+}

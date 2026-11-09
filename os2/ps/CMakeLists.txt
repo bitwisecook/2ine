@@ -145,13 +145,13 @@ twoine_os2_dll(
     awe/user/input/cursors.c
     awe/user/input/icons.c
     awe/user/input/keyboard.c
+    awe/user/input/mouse.c
     awe/user/menus.c
     awe/user/messages/hooks.c
     awe/user/messages/queue.c
     awe/user/messages/timers.c
     awe/user/painting/redraw.c
     awe/user/painting/scrolling.c
-    awe/user/painting/update_lock.c
     awe/user/rectangles.c
     awe/user/strings/format.c
     awe/user/strings/strings.c
@@ -159,6 +159,7 @@ twoine_os2_dll(
     awe/user/windows/activation.c
     awe/user/windows/adjust_window.c
     awe/user/windows/classes.c
+    awe/user/windows/defer_position.c
     awe/user/windows/enumeration.c
     awe/user/windows/geometry.c
     awe/user/windows/mdi.c

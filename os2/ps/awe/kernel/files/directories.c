@@ -273,3 +273,188 @@ ULONG GetSystemDirectory(PSZ output, ULONG capacity)
     memcpy(output, path, length + 1);
     return length;
 }
+
+ULONG GetTempPath(ULONG capacity, PSZ output)
+{
+    char path[260];
+    ULONG n = GetEnvironmentVariable("TEMP", path, sizeof path);
+    if (!n || n >= sizeof path)
+        n = GetEnvironmentVariable("TMP", path, sizeof path);
+    if (!n || n >= sizeof path)
+        n = GetCurrentDirectory(sizeof path, path);
+    if (!n || n >= sizeof path - 1)
+    {
+        open32SetError(206);
+        return 0;
+    }
+    if (path[n - 1] != '\\' && path[n - 1] != '/')
+        path[n++] = '\\';
+    path[n] = 0;
+    if (capacity <= n)
+        return n + 1;
+    if (!output)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    memcpy(output, path, n + 1);
+    return n;
+}
+
+ULONG GetTempFileName(PSZ path, PSZ prefix, ULONG unique, PSZ output)
+{
+    if (!path || !prefix || !output || strlen(path) > 240)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    typedef APIRET(OS2API * Open)(PSZ, PULONG, PULONG, ULONG, ULONG, ULONG, ULONG, PVOID);
+    typedef APIRET(OS2API * Close)(ULONG);
+    Open open = (Open)open32DosService("DosOpen");
+    Close close = (Close)open32DosService("DosClose");
+    ULONG start = unique ? unique & 0xFFFF : GetTickCount() & 0xFFFF;
+    if (!start)
+        start = 1;
+    for (ULONG attempt = 0; attempt < 65535; attempt++)
+    {
+        ULONG number = ((start + attempt - 1) % 65535) + 1;
+        size_t n = strlen(path);
+        snprintf(output, 260, "%s%s%3.3s%04X.TMP", path,
+                 n && path[n - 1] != '\\' && path[n - 1] != '/' ? "\\" : "", prefix, number);
+        if (unique)
+            return number;
+        ULONG file = 0, action = 0,
+              error = open ? open(output, &file, &action, 0, 0, 0x10, 0x42, NULL) : 120;
+        if (!error)
+        {
+            if (close)
+                close(file);
+            return number;
+        }
+        if (error != 80 && error != 110) /* ERROR_FILE_EXISTS, ERROR_OPEN_FAILED */
+        {
+            open32SetError(error);
+            return 0;
+        }
+    }
+    open32SetError(80);
+    return 0;
+}
+
+BOOL GetDiskFreeSpace(PSZ root, PVOID sectors, PVOID bytes, PVOID free_clusters,
+                      PVOID total_clusters)
+{
+    typedef APIRET(OS2API * Fn)(ULONG, ULONG, PVOID, ULONG);
+    Fn call = (Fn)open32DosService("DosQueryFSInfo");
+    ULONG drive = 0;
+    if (root && *root)
+    {
+        char c = root[0];
+        if (c >= 'a' && c <= 'z')
+            c -= 'a' - 'A';
+        if (c < 'A' || c > 'Z')
+        {
+            open32SetError(3);
+            return FALSE;
+        }
+        drive = c - 'A' + 1;
+    }
+    uint8 info[18];
+    ULONG error = call ? call(drive, 1, info, sizeof info) : 120;
+    if (error)
+    {
+        open32SetError(error);
+        return FALSE;
+    }
+    if (sectors)
+        lx_guest_store_u32(sectors, lx_guest_load_u32(info + 4));
+    if (bytes)
+        lx_guest_store_u32(bytes, lx_guest_load_u16(info + 16));
+    if (free_clusters)
+        lx_guest_store_u32(free_clusters, lx_guest_load_u32(info + 12));
+    if (total_clusters)
+        lx_guest_store_u32(total_clusters, lx_guest_load_u32(info + 8));
+    return TRUE;
+}
+
+ULONG SearchPath(PSZ path, PSZ file, PSZ extension, ULONG capacity, PSZ output, PVOID part)
+{
+    if (!file || !*file || (capacity && !output))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    char name[260], found[260];
+    size_t length = strlen(file);
+    if (length >= sizeof name)
+    {
+        open32SetError(206);
+        return 0;
+    }
+    strcpy(name, file);
+    const char *base = strrchr(name, '\\');
+    if (!base)
+        base = name;
+    if (extension && !strchr(base, '.'))
+    {
+        if (length + strlen(extension) >= sizeof name)
+        {
+            open32SetError(206);
+            return 0;
+        }
+        strcat(name, extension);
+    }
+    typedef APIRET(OS2API * Fn)(ULONG, PSZ, PSZ, PVOID, ULONG);
+    Fn search = (Fn)open32DosService("DosSearchPath");
+    ULONG error = 2;
+    if (strchr(name, '\\') || strchr(name, '/') || strchr(name, ':'))
+    {
+        if (GetFileAttributes(name) != UINT32_MAX)
+        {
+            ULONG n = GetFullPathName(name, sizeof found, found, NULL);
+            error = n && n < sizeof found ? 0 : 3;
+        }
+    }
+    else if (path)
+        error = search ? search(0, path, name, found, sizeof found) : 120;
+    else
+    {
+        char directories[2048], module[260], current[260], system[260], windows[260],
+            environment[1024];
+        GetModuleFileName(0, module, sizeof module);
+        char *slash = strrchr(module, '\\');
+        if (slash)
+            *slash = 0;
+        else
+            module[0] = 0;
+        GetCurrentDirectory(sizeof current, current);
+        GetSystemDirectory(system, sizeof system);
+        GetWindowsDirectory(windows, sizeof windows);
+        ULONG envsize = GetEnvironmentVariable("PATH", environment, sizeof environment);
+        if (!envsize || envsize >= sizeof environment)
+            environment[0] = 0;
+        snprintf(directories, sizeof directories, "%s;%s;%s;%s;%s", module, current, system,
+                 windows, environment);
+        error = search ? search(0, directories, name, found, sizeof found) : 120;
+    }
+    if (error)
+    {
+        open32SetError(error);
+        return 0;
+    }
+    length = strlen(found);
+    if (length >= capacity)
+        return (ULONG)length + 1;
+    memcpy(output, found, length + 1);
+    if (part)
+    {
+        ULONG address = 0;
+        const char *last = strrchr(found, '\\');
+        size_t offset = last ? (size_t)(last - found + 1) : 0;
+        if (!lx_execution_address(GProcessState.execution, output + offset, 1, LX_GUEST_READ,
+                                  &address))
+            address = 0;
+        lx_guest_store_u32(part, address);
+    }
+    return (ULONG)length;
+}

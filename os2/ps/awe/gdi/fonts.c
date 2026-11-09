@@ -174,3 +174,19 @@ ULONG CreateFont(LONG height, LONG width, LONG escapement, LONG orientation, LON
         memcpy(record + 28, face, strnlen(face, 31));
     return CreateFontIndirect(record);
 }
+
+BOOL AddFontResource(PSZ path)
+{
+    if (GpiLoadPublicFonts(0, path))
+        return TRUE;
+    open32SetError(3);
+    return FALSE;
+}
+
+BOOL RemoveFontResource(PSZ path)
+{
+    if (GpiUnloadPublicFonts(0, path))
+        return TRUE;
+    open32SetError(3);
+    return FALSE;
+}

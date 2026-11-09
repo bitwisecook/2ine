@@ -124,3 +124,8 @@ BOOL SetForegroundWindow(ULONG handle)
         handle = parent;
     return BringWindowToTop(handle);
 }
+
+ULONG GetForegroundWindow(void)
+{
+    return open32PublicWindow(GetActiveWindow());
+}

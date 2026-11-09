@@ -1055,3 +1055,35 @@ ULONG GetWindow(ULONG handle, ULONG command)
         result = WinQueryWindow(result, (LONG)direction);
     return result;
 }
+
+USHORT GetWindowWord(ULONG handle, LONG index)
+{
+    Open32Window *w = open32FindWindow(handle);
+    if (index >= 0 && w && index <= (LONG)w->class->window_extra - 2)
+        return lx_guest_load_u16(w->extra + index);
+    if (index == -12)
+        return (USHORT)GetWindowLong(handle, index);
+    if (index == -6)
+        return (USHORT)GetWindowLong(handle, index);
+    if (index == -8)
+        return (USHORT)GetWindowLong(handle, index);
+    if (!w && index >= 0)
+        return WinQueryWindowUShort(open32ClientWindow(handle), index);
+    open32SetError(1413);
+    return 0;
+}
+
+USHORT SetWindowWord(ULONG handle, LONG index, USHORT value)
+{
+    USHORT old = GetWindowWord(handle, index);
+    Open32Window *w = open32FindWindow(handle);
+    if (index >= 0 && w && index <= (LONG)w->class->window_extra - 2)
+        lx_guest_store_u16(w->extra + index, value);
+    else if (index == -12 || index == -6 || index == -8)
+        SetWindowLong(handle, index, value);
+    else if (!w && index >= 0)
+        WinSetWindowUShort(open32ClientWindow(handle), index, value);
+    else
+        open32SetError(1413);
+    return old;
+}

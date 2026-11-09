@@ -1,11 +1,11 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* Mouse pointer state: the show count, the confining rectangle, the current cursor and the
+   double-click time. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/awe/user/windows/windows.h"
-#include "os2/include/pmgpi.h"
 #include "os2/include/private/pmp.h"
+
 static _Thread_local LONG cursor_count;
-static ULONG locked_window; /* WinLockWindowUpdate state is shared by the desktop. */
 
 LONG ShowCursor(BOOL show)
 {
@@ -24,7 +24,7 @@ LONG ShowCursor(BOOL show)
 
 void open32ClipCursorPoint(LONG *x, LONG *y)
 {
-    LONG height = WinQuerySysValue(HWND_DESKTOP, 21), native = height - 1 - *y;
+    LONG height = WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN), native = height - 1 - *y;
     lx_pm_clip_pointer(x, &native);
     *y = height - 1 - native;
 }
@@ -43,7 +43,8 @@ BOOL ClipCursor(PVOID rectangle)
     }
     /* Windows bounds become inclusive PM desktop bounds limited to the screen. */
     const uint8 *wire = rectangle;
-    LONG width = WinQuerySysValue(HWND_DESKTOP, 20), height = WinQuerySysValue(HWND_DESKTOP, 21);
+    LONG width = WinQuerySysValue(HWND_DESKTOP, SV_CXSCREEN),
+         height = WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN);
     LONG left = (LONG)lx_guest_load_u32(wire), top = height - (LONG)lx_guest_load_u32(wire + 4);
     LONG right = (LONG)lx_guest_load_u32(wire + 8);
     LONG bottom = height - (LONG)lx_guest_load_u32(wire + 12);
@@ -56,48 +57,12 @@ BOOL ClipCursor(PVOID rectangle)
     return TRUE;
 }
 
-BOOL open32WindowUpdateLocked(ULONG window)
+ULONG GetCursor(void)
 {
-    ULONG locked = __atomic_load_n(&locked_window, __ATOMIC_ACQUIRE);
-    return locked &&
-           (locked == window || open32ClientWindow(locked) == window || IsChild(locked, window));
+    return open32Presentation() ? WinQueryPointer(HWND_DESKTOP) : 0;
 }
 
-BOOL LockWindowUpdate(ULONG window)
+ULONG GetDoubleClickTime(void)
 {
-    if (window && !IsWindow(window))
-    {
-        open32SetError(1400);
-        return FALSE;
-    }
-    if (window)
-    {
-        ULONG expected = 0;
-        if (!__atomic_compare_exchange_n(&locked_window, &expected, window, 0, __ATOMIC_ACQ_REL,
-                                         __ATOMIC_ACQUIRE))
-            return FALSE;
-        lx_pm_set_update_lock(window);
-        return TRUE;
-    }
-    ULONG previous = __atomic_exchange_n(&locked_window, 0, __ATOMIC_ACQ_REL);
-    lx_pm_set_update_lock(0);
-    if (previous && IsWindow(previous))
-        InvalidateRect(previous, NULL, TRUE);
-    return TRUE;
-}
-
-BOOL AddFontResource(PSZ path)
-{
-    if (GpiLoadPublicFonts(0, path))
-        return TRUE;
-    open32SetError(3);
-    return FALSE;
-}
-
-BOOL RemoveFontResource(PSZ path)
-{
-    if (GpiUnloadPublicFonts(0, path))
-        return TRUE;
-    open32SetError(3);
-    return FALSE;
+    return (ULONG)WinQuerySysValue(HWND_DESKTOP, SV_DBLCLKTIME);
 }
