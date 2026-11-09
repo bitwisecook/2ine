@@ -556,7 +556,7 @@ static cJSON *dependency_sources(TbBall *c, const cJSON *request, cJSON *errors)
 
 static int dependency_possible_media(TbBall *c, const char *source)
 {
-    cJSON *listing = browse_media(c, source);
+    cJSON *listing = os2_browse_media(c, source);
     if (!listing)
         return 0;
     int possible = 0;
@@ -598,7 +598,7 @@ static int dependency_source_accessible(const char *source)
 
 static char *dependency_installation_root(TbBall *c, const char *source)
 {
-    cJSON *listing = browse_media(c, source);
+    cJSON *listing = os2_browse_media(c, source);
     if (!listing)
     {
         free(c->error);
@@ -871,13 +871,13 @@ static cJSON *dependency_verified_sources(TbBall *c, cJSON *sources, cJSON *erro
             cJSON_ArrayForEach(file, get(plan, "files"))
             {
                 const char *destination = field(file, "path");
-                int index = equal_case(destination, support_paths[0])   ? 0
-                            : equal_case(destination, support_paths[1]) ? 1
-                                                                        : -1;
+                int index = equal_case(destination, os2_support_paths[0])   ? 0
+                            : equal_case(destination, os2_support_paths[1]) ? 1
+                                                                            : -1;
                 if (index < 0 || (index == 0 && command) || (index == 1 && level))
                     continue;
                 SupportFile signature = {0};
-                if (support_read(c, field(file, "source"), index, &signature))
+                if (os2_support_read(c, field(file, "source"), index, &signature))
                 {
                     command |= index == 0;
                     level |= index == 1;
@@ -997,7 +997,7 @@ cJSON *validate_os2_media(TbBall *c, const cJSON *request)
     cJSON_AddBoolToObject(result, "complete", complete);
     cJSON_AddItemToObject(result, "skippedSources",
                           cJSON_Duplicate(get(opened, "skippedSources"), 1));
-    cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
+    cJSON_AddItemToObject(result, "readStats", os2_extraction_read_stats());
     cJSON_Delete(index);
     cJSON_Delete(installation_set);
     cJSON_Delete(opened);

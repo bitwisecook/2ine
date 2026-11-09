@@ -132,7 +132,7 @@ static char *extract_optional_directory(TbBall *c, const char *parent, const cha
         char *next = strchr(part, '/');
         if (next)
             *next++ = 0;
-        cJSON *listing = browse_media(c, current);
+        cJSON *listing = os2_browse_media(c, current);
         if (!listing)
         {
             free(c->error);
@@ -214,7 +214,7 @@ cJSON *open_os2_source(TbBall *c, const cJSON *request)
             continue;
         if (cJSON_IsTrue(get(node, "directory")))
             extract_children(c, queue, path, "");
-        else if (name && media_candidate(name) && tb_media_container(path))
+        else if (name && os2_media_candidate(name) && tb_media_container(path))
         {
             char *root = tb_ball_keep(c, tb_media_root(path));
             if (root)
@@ -235,7 +235,7 @@ cJSON *open_os2_source(TbBall *c, const cJSON *request)
         const cJSON *image;
         cJSON_ArrayForEach(image, detected)
         {
-            cJSON *opened = browse_media(c, str(image));
+            cJSON *opened = os2_browse_media(c, str(image));
             if (!opened)
             {
                 cJSON *warning = cJSON_CreateObject();
@@ -261,7 +261,7 @@ cJSON *open_os2_source(TbBall *c, const cJSON *request)
                          field(cJSON_GetArrayItem(skipped, 0), "reason"));
     }
     else
-        directory = browse_media(c, str(cJSON_GetArrayItem(chosen, 0)));
+        directory = os2_browse_media(c, str(cJSON_GetArrayItem(chosen, 0)));
     cJSON_Delete(detected);
     if (!directory)
     {
@@ -278,7 +278,7 @@ cJSON *open_os2_source(TbBall *c, const cJSON *request)
                                                   equal_case(field(entry, "name"), "os2image"))
         {
             char *path = tb_ball_keep(c, strdup(field(entry, "path")));
-            cJSON *focused = browse_media(c, path);
+            cJSON *focused = os2_browse_media(c, path);
             if (focused)
             {
                 cJSON_Delete(directory);
@@ -298,7 +298,7 @@ cJSON *open_os2_source(TbBall *c, const cJSON *request)
     cJSON_AddBoolToObject(result, "detectedISO", found != 0);
     cJSON_AddBoolToObject(result, "installationDirectory", installation_directory);
     cJSON_AddItemToObject(result, "skippedSources", skipped);
-    cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
+    cJSON_AddItemToObject(result, "readStats", os2_extraction_read_stats());
     return result;
 }
 
@@ -347,11 +347,11 @@ static char *extract_destination(TbBall *c, const char *layout, const char *sour
     const char *base = strrchr(upper, '/');
     base = base ? base + 1 : upper;
     for (int i = 0; i < SUPPORT_COUNT; i++)
-        if (equal_case(base, support_names[i]))
+        if (equal_case(base, os2_support_names[i]))
         {
             *category = 0;
             *priority = 3;
-            return tb_ball_keep(c, strdup(support_paths[i]));
+            return tb_ball_keep(c, strdup(os2_support_paths[i]));
         }
     /* These services execute through 2ine's system/API bridges. HELPMGR is
        deliberately absent: its original viewer is an optional help payload. */
@@ -588,7 +588,7 @@ cJSON *plan_os2_extraction(TbBall *c, const cJSON *request)
         }
         const char *base = strrchr(layout, '/');
         base = base ? base + 1 : layout;
-        if (media_candidate(base) && tb_media_container(path))
+        if (os2_media_candidate(base) && tb_media_container(path))
         {
             char *root = tb_ball_keep(c, tb_media_root(path));
             if (root)
@@ -628,7 +628,7 @@ cJSON *plan_os2_extraction(TbBall *c, const cJSON *request)
         cJSON_Delete(result);
         return NULL;
     }
-    cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
+    cJSON_AddItemToObject(result, "readStats", os2_extraction_read_stats());
     cJSON_AddItemToObject(result, "tree", extract_tree(c, files));
     return result;
 }
@@ -904,10 +904,10 @@ static cJSON *extract_os2_categories_impl(TbBall *c, const cJSON *request)
         /* Retain the original format validation for CMD/REXX support files. */
         if (index == 0)
             for (int i = 0; i < SUPPORT_COUNT && !c->error; i++)
-                if (equal_case(destination, support_paths[i]))
+                if (equal_case(destination, os2_support_paths[i]))
                 {
                     SupportFile check = {0};
-                    support_read(c, source, i, &check);
+                    os2_support_read(c, source, i, &check);
                     free(check.data);
                     free(check.source);
                 }
@@ -1076,7 +1076,7 @@ static cJSON *extract_os2_categories_impl(TbBall *c, const cJSON *request)
         cJSON_AddItemToObject(result, "imported", imported);
         cJSON_AddItemToObject(result, "preservedVariants", variants);
         cJSON_AddItemToObject(result, "skippedFiles", skipped);
-        cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
+        cJSON_AddItemToObject(result, "readStats", os2_extraction_read_stats());
         if (variant_log)
             cJSON_AddStringToObject(result, "variantManifestPath", variant_log);
     }

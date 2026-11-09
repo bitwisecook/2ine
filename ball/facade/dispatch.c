@@ -182,7 +182,7 @@ static cJSON *dispatch(TbBall *c, const cJSON *request)
     if (!strcmp(action, "remember-os2-media"))
         return remember_os2_media(c, request);
     if (!strcmp(action, "browse-media"))
-        return browse_media(c, field(request, "path"));
+        return os2_browse_media(c, field(request, "path"));
     if (!strcmp(action, "open-os2-source"))
         return open_os2_source(c, request);
     if (!strcmp(action, "validate-os2-media"))

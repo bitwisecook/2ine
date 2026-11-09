@@ -8,11 +8,11 @@
 #include "formats/executable/os2_executable.h"
 #include "ball/vendor/sha256/sha256.h"
 
-const char *support_names[] = {"CMD.EXE",     "SYSLEVEL.OS2", "OSO001.MSG",   "REXX.DLL",
-                               "REXXAPI.DLL", "REXXUTIL.DLL", "REXXINIT.DLL", "REX.MSG",
-                               "REXH.MSG",    "RXQUEUE.EXE",  "RXSUBCOM.EXE"};
+const char *os2_support_names[] = {"CMD.EXE",     "SYSLEVEL.OS2", "OSO001.MSG",   "REXX.DLL",
+                                   "REXXAPI.DLL", "REXXUTIL.DLL", "REXXINIT.DLL", "REX.MSG",
+                                   "REXH.MSG",    "RXQUEUE.EXE",  "RXSUBCOM.EXE"};
 
-const char *support_paths[] = {
+const char *os2_support_paths[] = {
     "C:\\OS2\\CMD.EXE",           "C:\\OS2\\SYSLEVEL.OS2",     "C:\\OS2\\SYSTEM\\OSO001.MSG",
     "C:\\OS2\\DLL\\REXX.DLL",     "C:\\OS2\\DLL\\REXXAPI.DLL", "C:\\OS2\\DLL\\REXXUTIL.DLL",
     "C:\\OS2\\DLL\\REXXINIT.DLL", "C:\\OS2\\SYSTEM\\REX.MSG",  "C:\\OS2\\SYSTEM\\REXH.MSG",
@@ -24,7 +24,7 @@ cJSON *os2_support(TbBall *c)
     int complete = 1, rexx_complete = 1;
     for (int i = 0; i < SUPPORT_COUNT; i++)
     {
-        char *host = tb_ball_host_path(c, support_paths[i], 0);
+        char *host = tb_ball_host_path(c, os2_support_paths[i], 0);
         if (!host)
         {
             cJSON_Delete(result);
@@ -32,8 +32,8 @@ cJSON *os2_support(TbBall *c)
         }
         int present = tb_is_file(host);
         cJSON *file = cJSON_CreateObject();
-        cJSON_AddStringToObject(file, "name", support_names[i]);
-        cJSON_AddStringToObject(file, "path", support_paths[i]);
+        cJSON_AddStringToObject(file, "name", os2_support_names[i]);
+        cJSON_AddStringToObject(file, "path", os2_support_paths[i]);
         cJSON_AddBoolToObject(file, "present", present);
         cJSON_AddItemToArray(files, file);
         cJSON_AddBoolToObject(file, "required", i < BASE_SUPPORT_COUNT);
@@ -112,7 +112,7 @@ int os2_media_follow_references(TbBall *c)
     return ok;
 }
 
-int media_candidate(const char *name)
+int os2_media_candidate(const char *name)
 {
     const char *extension = strrchr(name, '.');
     if (!extension)
@@ -129,7 +129,7 @@ int media_candidate(const char *name)
     return 0;
 }
 
-cJSON *extraction_read_stats(void)
+cJSON *os2_extraction_read_stats(void)
 {
     TbMediaReadStats stats = tb_media_read_stats();
     cJSON *result = cJSON_CreateObject();
@@ -145,7 +145,7 @@ cJSON *extraction_read_stats(void)
     return result;
 }
 
-cJSON *browse_media(TbBall *c, const char *input)
+cJSON *os2_browse_media(TbBall *c, const char *input)
 {
     if (!input)
     {
@@ -217,9 +217,9 @@ cJSON *browse_media(TbBall *c, const char *input)
         cJSON_AddStringToObject(entry, "name", items[i].name);
         cJSON_AddStringToObject(entry, "path", child);
         cJSON_AddBoolToObject(entry, "directory", items[i].directory);
-        int container = !items[i].directory && media_candidate(items[i].name);
+        int container = !items[i].directory && os2_media_candidate(items[i].name);
         for (int file = 0; file < SUPPORT_COUNT && !items[i].directory; file++)
-            if (equal_case(items[i].name, support_names[file]))
+            if (equal_case(items[i].name, os2_support_names[file]))
                 container = tb_media_container(child);
         cJSON_AddBoolToObject(entry, "container", container);
         cJSON_AddNumberToObject(entry, "size", (double)items[i].size);
@@ -228,7 +228,7 @@ cJSON *browse_media(TbBall *c, const char *input)
         cJSON_AddItemToArray(entries, entry);
         free(child);
     }
-    cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
+    cJSON_AddItemToObject(result, "readStats", os2_extraction_read_stats());
     tb_media_entries_free(items, count);
     if (c->error)
     {
@@ -238,23 +238,23 @@ cJSON *browse_media(TbBall *c, const char *input)
     return result;
 }
 
-int support_read(TbBall *c, const char *source, int index, SupportFile *file)
+int os2_support_read(TbBall *c, const char *source, int index, SupportFile *file)
 {
     if (component_cancelled(c))
         return 0;
-    component_progress(c, "extracting", source, support_paths[index]);
+    component_progress(c, "extracting", source, os2_support_paths[index]);
     if (c->error)
         return 0;
     FILE *input = tb_media_path(source) ? tb_media_fopen(source) : tb_fopen(source, "rb");
     if (!input)
-        return tb_ball_fail(c, "Cannot extract %s: %s", support_names[index], strerror(errno));
+        return tb_ball_fail(c, "Cannot extract %s: %s", os2_support_names[index], strerror(errno));
     int ok = !fseek(input, 0, SEEK_END);
     long size = ok ? ftell(input) : -1;
     rewind(input);
     if (size <= 0 || size > 16 * 1024 * 1024)
     {
         fclose(input);
-        return tb_ball_fail(c, "Invalid support file size: %s", support_names[index]);
+        return tb_ball_fail(c, "Invalid support file size: %s", os2_support_names[index]);
     }
     unsigned char *data = malloc((size_t)size);
     ok = data && fread(data, 1, (size_t)size, input) == (size_t)size;
@@ -262,7 +262,7 @@ int support_read(TbBall *c, const char *source, int index, SupportFile *file)
     if (!ok)
     {
         free(data);
-        return tb_ball_fail(c, "Cannot read %s", support_names[index]);
+        return tb_ball_fail(c, "Cannot read %s", os2_support_names[index]);
     }
     TbExecutable exe;
     int valid = index == 0 || (index >= 3 && index <= 6) || index >= 9
@@ -273,7 +273,7 @@ int support_read(TbBall *c, const char *source, int index, SupportFile *file)
     if (!valid)
     {
         free(data);
-        return tb_ball_fail(c, "%s is not an original OS/2 support file", support_names[index]);
+        return tb_ball_fail(c, "%s is not an original OS/2 support file", os2_support_names[index]);
     }
     if (file->data)
     {
@@ -283,7 +283,7 @@ int support_read(TbBall *c, const char *source, int index, SupportFile *file)
                   : tb_ball_fail(
                         c,
                         "Different versions of %s were found. Select one OS/2 release or language.",
-                        support_names[index]);
+                        os2_support_names[index]);
     }
     file->data = data;
     file->size = (size_t)size;
@@ -353,11 +353,11 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
         }
         int index = -1;
         for (int i = 0; i < SUPPORT_COUNT; i++)
-            if (equal_case(base, support_names[i]))
+            if (equal_case(base, os2_support_names[i]))
                 index = i;
         if (index >= 0)
         {
-            char *destination = tb_ball_host_path(c, support_paths[index], 0);
+            char *destination = tb_ball_host_path(c, os2_support_paths[index], 0);
             if (!destination || tb_is_file(destination))
             {
                 free(decoded);
@@ -366,7 +366,7 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
             /* Some installation disks give a compressed member its final filename. */
             if (!tb_media_container(input))
             {
-                support_read(c, input, index, &files[index]);
+                os2_support_read(c, input, index, &files[index]);
                 free(decoded);
                 continue;
             }
@@ -402,9 +402,9 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
         else
             for (size_t n = 0; n < count; n++)
             {
-                int wanted = entries[n].directory || media_candidate(entries[n].name);
+                int wanted = entries[n].directory || os2_media_candidate(entries[n].name);
                 for (int i = 0; i < SUPPORT_COUNT; i++)
-                    if (equal_case(entries[n].name, support_names[i]))
+                    if (equal_case(entries[n].name, os2_support_names[i]))
                         wanted = 1;
                 if (wanted)
                 {
@@ -437,10 +437,10 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
         {
             if (component_cancelled(c))
                 break;
-            component_progress(c, "installing", files[i].source, support_paths[i]);
+            component_progress(c, "installing", files[i].source, os2_support_paths[i]);
             if (c->error)
                 break;
-            char *destination = component_private_path(c, support_paths[i]);
+            char *destination = component_private_path(c, os2_support_paths[i]);
             char *parent = destination ? tb_ball_keep(c, strdup(destination)) : NULL;
             if (parent)
             {
@@ -453,11 +453,11 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
                 !tb_atomic_write(temporary, files[i].data, files[i].size) || !tb_mkdirs(parent) ||
                 !tb_copy_new(temporary, destination))
             {
-                tb_ball_fail(c, "Cannot install %s", support_paths[i]);
+                tb_ball_fail(c, "Cannot install %s", os2_support_paths[i]);
                 break;
             }
             cJSON *entry = cJSON_CreateObject();
-            cJSON_AddStringToObject(entry, "path", support_paths[i]);
+            cJSON_AddStringToObject(entry, "path", os2_support_paths[i]);
             char *label = tb_media_label(files[i].source);
             cJSON_AddStringToObject(entry, "source", label ? label : files[i].source);
             free(label);
@@ -467,8 +467,9 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
             sha256_init(&hash);
             sha256_update(&hash, files[i].data, files[i].size);
             sha256_final(&hash, digest);
-            component_record(c, support_paths[i], files[i].source, "cmd", tb_ball_hex(c, digest));
-            component_progress(c, "installing", files[i].source, support_paths[i]);
+            component_record(c, os2_support_paths[i], files[i].source, "cmd",
+                             tb_ball_hex(c, digest));
+            component_progress(c, "installing", files[i].source, os2_support_paths[i]);
         }
     if (workspace)
         tb_remove_tree(workspace);
@@ -485,7 +486,7 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
         for (int i = 0; i < SUPPORT_COUNT; i++)
         {
             cJSON *entry = cJSON_CreateObject();
-            cJSON_AddStringToObject(entry, "path", support_paths[i]);
+            cJSON_AddStringToObject(entry, "path", os2_support_paths[i]);
             cJSON_AddItemToArray(paths, entry);
         }
         os2_configure_paths(c, paths);

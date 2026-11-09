@@ -10,17 +10,17 @@ enum
     SUPPORT_COUNT = 11
 };
 
-extern const char *support_names[];
-extern const char *support_paths[];
+extern const char *os2_support_names[];
+extern const char *os2_support_paths[];
 cJSON *os2_support(TbBall *c);
 void os2_preserve_media_selection(TbBall *c, cJSON *media);
 cJSON *remember_os2_media(TbBall *c, const cJSON *request);
 /* Rewrites the remembered sources in os2-media.json from the ball's media
    references, after one was relinked. */
 int os2_media_follow_references(TbBall *c);
-int media_candidate(const char *name);
-cJSON *extraction_read_stats(void);
-cJSON *browse_media(TbBall *c, const char *input);
+int os2_media_candidate(const char *name);
+cJSON *os2_extraction_read_stats(void);
+cJSON *os2_browse_media(TbBall *c, const char *input);
 
 typedef struct SupportFile
 {
@@ -29,6 +29,6 @@ typedef struct SupportFile
     char *source;
 } SupportFile;
 
-int support_read(TbBall *c, const char *source, int index, SupportFile *file);
+int os2_support_read(TbBall *c, const char *source, int index, SupportFile *file);
 cJSON *import_os2_support(TbBall *c, const cJSON *request);
 #endif
