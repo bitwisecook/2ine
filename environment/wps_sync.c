@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Project persistent WPProgram registrations into independently managed launchers. */
 #include "ball/store.h"
+#include "os2/config/wps_objects.h"
 #include "environment/wps_sync.h"
 #include "formats/endian.h"
 #include "os2/config/os2_ini.h"
@@ -17,40 +18,16 @@ static void wps_digest(const unsigned char *bytes, size_t size, unsigned char di
     sha256_final(&hash, digest);
 }
 
+/* Longest setup value read; longer values are cut. */
+#define TB_WPS_SETUP_VALUE_LIMIT 32768u
+
 static char *wps_property(TbBall *c, const char *setup, const char *wanted)
 {
-    char *result = NULL;
-    while (setup && *setup)
-    {
-        char key[256], value[32768];
-        size_t k = 0, n = 0;
-        while (*setup && *setup != '=' && *setup != ';')
-        {
-            char ch = *setup++;
-            if (ch == '^' && *setup)
-                ch = *setup++;
-            if (k + 1 < sizeof key)
-                key[k++] = ch;
-        }
-        key[k] = 0;
-        int match = *setup == '=' && equal_case(tb_ball_trim(key), wanted);
-        if (*setup == '=')
-            setup++;
-        while (*setup && *setup != ';')
-        {
-            char ch = *setup++;
-            if (ch == '^' && *setup)
-                ch = *setup++;
-            if (n + 1 < sizeof value)
-                value[n++] = ch;
-        }
-        value[n] = 0;
-        if (match)
-            result = tb_ball_latin1_to_utf8(c, value, n);
-        if (*setup)
-            setup++;
-    }
-    return result;
+    char value[TB_WPS_SETUP_VALUE_LIMIT];
+    size_t n = 0;
+    return os2_wps_setup_value(setup, wanted, value, sizeof value, &n)
+               ? tb_ball_latin1_to_utf8(c, value, n)
+               : NULL;
 }
 
 static char *wps_title(TbBall *c, const char *raw)
@@ -269,30 +246,21 @@ static cJSON *wps_objects(TbBall *c, const unsigned char *bytes, size_t size)
         unsigned char *data = configuration_unhex(c, field(entry, "data"), &n);
         if (!data)
             break;
-        const char *names[] = {"class", "title", "location", "setup"};
+        const char *names[OS2_WPS_OBJECT_FIELDS] = {"class", "title", "location", "setup"};
+        const char *fields[OS2_WPS_OBJECT_FIELDS];
         cJSON *record = cJSON_CreateObject();
-        size_t at = 0;
-        for (unsigned i = 0; i < 4; i++)
-        {
-            unsigned char *nul = at < n ? memchr(data + at, 0, n - at) : NULL;
-            if (!nul)
-            {
-                tb_ball_fail(c, "Invalid Workplace Shell object record");
-                break;
-            }
-            cJSON_AddStringToObject(
-                record, names[i],
-                tb_ball_latin1_to_utf8(c, (char *)data + at, (size_t)(nul - data - at)));
-            at = (size_t)(nul - data) + 1;
-        }
-        if (at != n)
+        int status = os2_wps_object_fields((const char *)data, n, fields);
+        if (status == OS2_WPS_RECORD_TRUNCATED)
+            tb_ball_fail(c, "Invalid Workplace Shell object record");
+        else if (status == OS2_WPS_RECORD_TRAILING)
             tb_ball_fail(c, "Invalid Workplace Shell object extent");
         /* Setup parsing consumes original Latin-1, while other fields are UTF-8. */
         if (!c->error)
         {
-            const char *raw_setup = (char *)data;
-            for (unsigned i = 0; i < 3; i++)
-                raw_setup += strlen(raw_setup) + 1;
+            for (unsigned i = 0; i < OS2_WPS_OBJECT_FIELDS; i++)
+                cJSON_AddStringToObject(record, names[i],
+                                        tb_ball_latin1_to_utf8(c, fields[i], strlen(fields[i])));
+            const char *raw_setup = fields[OS2_WPS_OBJECT_SETUP];
             cJSON_AddStringToObject(record, "id", wps_property(c, raw_setup, "OBJECTID"));
             const char *properties[] = {"TITLE",    "EXENAME",      "STARTUPDIR", "PARAMETERS",
                                         "ICONFILE", "ICONRESOURCE", "PROGTYPE",   NULL};

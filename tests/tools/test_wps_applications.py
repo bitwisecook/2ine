@@ -57,6 +57,20 @@ class WpsApplicationTests(unittest.TestCase):
             )
         )
 
+    def test_setup_keys_follow_the_shell_parser(self):
+        # PMWP trims blanks and tabs around setup keys, nothing else; a key
+        # after a line break is not EXENAME to the shell, nor to the launcher.
+        self.records["00020001"] = (
+            "WPProgram",
+            "Tabbed",
+            "<SUITE>",
+            "OBJECTID=<APP>;\t ExeName \t=C:\\APPS\\APP.EXE;\nSTARTUPDIR=C:\\APPS;",
+        )
+        self.save_objects()
+        app = self.request()["manifest"]["applications"]["Tabbed"]
+        self.assertEqual(app["program"], r"C:\APPS\APP.EXE")
+        self.assertNotIn("cwd", app)
+
     def test_registration_fields_update_delete_and_folder_provenance(self):
         self.save_objects()
         result = self.request()

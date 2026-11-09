@@ -6,7 +6,13 @@
 function(twoine_add_os2_config target)
     set(_config "${CMAKE_CURRENT_FUNCTION_LIST_DIR}")
     cmake_parse_arguments(PARSE_ARGV 1 OS2_CONFIG "I386" "" "")
-    add_library(${target} STATIC "${_config}/config_sys.c" "${_config}/os2_ini.c")
+    add_library(
+        ${target}
+        STATIC
+        "${_config}/config_sys.c"
+        "${_config}/os2_ini.c"
+        "${_config}/wps_objects.c"
+    )
     cmake_path(GET _config PARENT_PATH _os2)
     cmake_path(GET _os2 PARENT_PATH _root)
     target_include_directories(${target} PUBLIC "${_root}")

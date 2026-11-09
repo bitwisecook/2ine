@@ -9,6 +9,7 @@
 #include "os2/include/pmwp.h"
 #include "os2/include/private/pmp.h"
 #include "os2/wpsh/pmwp/internal.h"
+#include "os2/config/wps_objects.h"
 #include "os2/include/bsedos.h"
 #include "emulator/abi.h"
 #include "host/fs.h"
@@ -74,18 +75,13 @@ BOOL store_load(HINI profile, ULONG handle, PmwpRecord *object)
         return FALSE;
     if (!PrfQueryProfileData(profile, "objects", key, data, &size))
         goto fail;
-    char **fields[] = {&object->class_name, &object->title, &object->location, &object->setup};
-    size_t offset = 0;
-    for (size_t i = 0; i < 4; i++)
-    {
-        char *nul = memchr(data + offset, 0, size - offset);
-        if (!nul)
-            goto fail;
-        *fields[i] = data + offset;
-        offset = (size_t)(nul - data) + 1;
-    }
-    if (offset != size)
+    const char *fields[OS2_WPS_OBJECT_FIELDS];
+    if (os2_wps_object_fields(data, size, fields) != OS2_WPS_RECORD_VALID)
         goto fail;
+    object->class_name = (char *)fields[OS2_WPS_OBJECT_CLASS];
+    object->title = (char *)fields[OS2_WPS_OBJECT_TITLE];
+    object->location = (char *)fields[OS2_WPS_OBJECT_LOCATION];
+    object->setup = (char *)fields[OS2_WPS_OBJECT_SETUP];
     object->data = data;
     return TRUE;
 fail:
@@ -118,49 +114,9 @@ BOOL store_save(HINI profile, ULONG handle, const PmwpRecord *object)
     return result;
 }
 
-/* Caret escapes delimiters; the last occurrence of a property takes effect. */
 BOOL store_property(const char *setup, const char *name, char *value, size_t capacity)
 {
-    BOOL found = FALSE;
-    while (setup && *setup)
-    {
-        char key[256];
-        size_t at = 0;
-        while (*setup && *setup != '=' && *setup != ';')
-        {
-            char c = *setup++;
-            if (c == '^' && *setup)
-                c = *setup++;
-            if (at + 1 < sizeof key)
-                key[at++] = c;
-        }
-        key[at] = 0;
-        while (at && (key[at - 1] == ' ' || key[at - 1] == '\t'))
-            key[--at] = 0;
-        char *start = key;
-        while (*start == ' ' || *start == '\t')
-            start++;
-        BOOL match = *setup == '=' && !strcasecmp(start, name);
-        if (*setup == '=')
-            setup++;
-        at = 0;
-        while (*setup && *setup != ';')
-        {
-            char c = *setup++;
-            if (c == '^' && *setup)
-                c = *setup++;
-            if (match && at + 1 < capacity)
-                value[at++] = c;
-        }
-        if (match)
-        {
-            value[at] = 0;
-            found = TRUE;
-        }
-        if (*setup)
-            setup++;
-    }
-    return found;
+    return os2_wps_setup_value(setup, name, value, capacity, NULL) ? TRUE : FALSE;
 }
 
 char *store_keys(HINI profile, ULONG *size)
