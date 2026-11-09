@@ -652,6 +652,15 @@ if(TARGET pmwinx)
             setpriority=priority_test_setpriority)
         add_test(NAME process_priority_linux_policy COMMAND twoine_process_priority_linux_tests)
     endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_executable(twoine_host_dialog_linux_tests hal/test_host_dialog_linux.c
+            ../hal/linux/host_dialog.c ../hal/linux/print_dialog.c)
+        target_include_directories(twoine_host_dialog_linux_tests PRIVATE "${PROJECT_SOURCE_DIR}"
+            "${PROJECT_SOURCE_DIR}/hal/include")
+        add_test(NAME host_dialog_linux_protocol COMMAND twoine_host_dialog_linux_tests)
+        set_tests_properties(host_dialog_linux_protocol PROPERTIES TIMEOUT 20
+            WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
+    endif()
     add_test(NAME open32_accelerators COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_accelerators.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(open32_accelerators PROPERTIES TIMEOUT 30)

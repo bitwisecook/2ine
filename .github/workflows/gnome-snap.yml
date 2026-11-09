@@ -4,11 +4,8 @@ on:
   pull_request:
     paths:
       - 'snap/**'
-      - 'tools/gnome/**'
-      - 'tools/gnome_*.py'
+      - 'gnome/**'
       - 'VERSION'
-      - 'tools/gnome_views.py'
-      - 'tools/gnome_audio.py'
       - 'tools/project_sources.py'
       - 'tools/data/**'
       - 'docs/project-sources.md'

@@ -1,0 +1,70 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineFileList: Box {
+  orientation: vertical;
+  spacing: 8;
+  vexpand: true;
+
+  SearchEntry search {
+    placeholder-text: _("Search Files");
+    hexpand: true;
+    search-changed => $on_search_changed() swapped;
+
+    accessibility {
+      label: _("Search files");
+    }
+  }
+
+  Adw.BreakpointBin layout {
+    width-request: 180;
+    height-request: 180;
+    vexpand: true;
+
+    Adw.Breakpoint {
+      condition ("max-width: 600sp")
+
+      setters {
+        size_column.visible: false;
+        modified_column.visible: false;
+        name_column.fixed-width: -1;
+      }
+    }
+
+    child: ScrolledWindow {
+      vexpand: true;
+      min-content-height: 180;
+
+      child: ColumnView table {
+        show-row-separators: true;
+
+        styles [
+          "data-table",
+        ]
+
+        accessibility {
+          label: _("Files");
+        }
+
+        ColumnViewColumn name_column {
+          title: _("Name");
+          expand: true;
+          resizable: true;
+          fixed-width: 300;
+        }
+
+        ColumnViewColumn size_column {
+          title: _("Size");
+          resizable: true;
+          fixed-width: 100;
+        }
+
+        ColumnViewColumn modified_column {
+          title: _("Date Modified");
+          resizable: true;
+          fixed-width: 170;
+        }
+      };
+    };
+  }
+}

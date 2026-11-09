@@ -1,0 +1,164 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineApplicationsPage: Adw.Bin {
+  child: Adw.BreakpointBin {
+    width-request: 300;
+    height-request: 300;
+    vexpand: true;
+
+    Adw.Breakpoint {
+      condition ("max-width: 500sp")
+
+      setters {
+        run_content.label: "";
+        add_content.label: "";
+      }
+    }
+
+    child: ScrolledWindow {
+      hscrollbar-policy: never;
+
+      child: Adw.Clamp {
+        maximum-size: 780;
+
+        child: Box {
+          orientation: vertical;
+          spacing: 18;
+          margin-top: 18;
+          margin-bottom: 18;
+          margin-start: 18;
+          margin-end: 18;
+
+          Adw.Bin advice_slot {}
+
+          Adw.PreferencesGroup group {
+            title: _("Applications");
+
+            header-suffix: Box {
+              spacing: 6;
+
+              Button {
+                action-name: "win.run";
+                tooltip-text: _("Run an OS/2 Program Once");
+                valign: center;
+
+                accessibility {
+                  label: _("Run program");
+                }
+
+                child: Adw.ButtonContent run_content {
+                  icon-name: "media-playback-start-symbolic";
+                  label: _("Run Program…");
+                };
+
+                styles [
+                  "flat",
+                ]
+              }
+
+              Button {
+                action-name: "win.add-app";
+                tooltip-text: _("Add an Application Launcher");
+                valign: center;
+
+                accessibility {
+                  label: _("Add application");
+                }
+
+                child: Adw.ButtonContent add_content {
+                  icon-name: "list-add-symbolic";
+                  label: _("Add Application…");
+                };
+
+                styles [
+                  "flat",
+                ]
+              }
+
+              MenuButton {
+                icon-name: "view-sort-ascending-symbolic";
+                menu-model: sort_menu;
+                tooltip-text: _("Sort Applications");
+                valign: center;
+
+                accessibility {
+                  label: _("Sort applications");
+                }
+
+                styles [
+                  "flat",
+                ]
+              }
+            };
+
+            SearchEntry search {
+              placeholder-text: _("Search Applications");
+              margin-bottom: 12;
+              key-capture-widget: list;
+              search-changed => $on_search_changed() swapped;
+
+              accessibility {
+                label: _("Search applications");
+              }
+            }
+
+            ListBox list {
+              selection-mode: single;
+              activate-on-single-click: false;
+              row-selected => $on_row_selected() swapped;
+
+              accessibility {
+                label: _("Installed application launchers");
+              }
+
+              styles [
+                "boxed-list",
+              ]
+            }
+
+            Adw.StatusPage empty {
+              title: _("No Matching Applications");
+              icon-name: "system-search-symbolic";
+              visible: false;
+            }
+
+            Label caption {
+              label: _("Removing a launcher keeps installed files.");
+              xalign: 0;
+              wrap: true;
+              margin-top: 12;
+
+              styles [
+                "dim-label",
+                "caption",
+              ]
+            }
+          }
+        };
+      };
+    };
+  };
+}
+
+menu sort_menu {
+  section {
+    item {
+      label: _("Icons First");
+      action: "applications.sort";
+      target: "icons";
+    }
+
+    item {
+      label: _("Name");
+      action: "applications.sort";
+      target: "name";
+    }
+
+    item {
+      label: _("Program");
+      action: "applications.sort";
+      target: "program";
+    }
+  }
+}

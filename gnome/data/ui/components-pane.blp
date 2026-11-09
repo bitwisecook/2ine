@@ -1,0 +1,245 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineComponentsPane: Adw.BreakpointBin {
+  width-request: 300;
+  height-request: 300;
+
+  Adw.Breakpoint {
+    condition ("max-width: 500sp")
+
+    setters {
+      content.margin-start: 12;
+      content.margin-end: 12;
+      content.margin-top: 12;
+      content.margin-bottom: 12;
+    }
+  }
+
+  child: ScrolledWindow {
+    hscrollbar-policy: never;
+
+    child: Adw.Clamp {
+      maximum-size: 780;
+
+      child: Box content {
+        orientation: vertical;
+        spacing: 12;
+        margin-start: 18;
+        margin-end: 18;
+        margin-top: 18;
+        margin-bottom: 18;
+
+        Adw.Banner error_banner {
+          use-markup: false;
+          revealed: false;
+        }
+
+        Adw.StatusPage empty_page {
+          icon-name: "media-optical-symbolic";
+          title: _("Choose OS/2 Installation Media");
+          description: _("Open an original OS/2 CD image, archive or folder to install CMD, REXX and other system components into this ball.");
+          vexpand: true;
+
+          child: Box {
+            orientation: vertical;
+            spacing: 12;
+            halign: center;
+
+            Button {
+              label: _("Choose ISO or Archive…");
+              clicked => $choose_media() swapped;
+
+              styles [
+                "pill",
+                "suggested-action",
+              ]
+            }
+
+            Button {
+              label: _("Choose Folder…");
+              clicked => $choose_folder() swapped;
+
+              styles [
+                "pill",
+              ]
+            }
+          };
+
+          styles [
+            "compact",
+          ]
+        }
+
+        Box browse_box {
+          orientation: vertical;
+          spacing: 12;
+          visible: false;
+
+          Label {
+            label: _("OS/2 System Components");
+            xalign: 0;
+            wrap: true;
+
+            styles [
+              "title-1",
+            ]
+          }
+
+          Adw.WrapBox {
+            child-spacing: 6;
+            line-spacing: 6;
+
+            Button {
+              label: _("Choose ISO or Archive…");
+              clicked => $choose_media() swapped;
+            }
+
+            Button {
+              label: _("Choose Folder…");
+              clicked => $choose_folder() swapped;
+            }
+
+            Button up_button {
+              icon-name: "go-up-symbolic";
+              tooltip-text: _("Parent Folder");
+              sensitive: false;
+              clicked => $go_up() swapped;
+
+              accessibility {
+                label: _("Parent Folder");
+              }
+            }
+
+            MenuButton sources_button {
+              label: _("Sources");
+              visible: false;
+              tooltip-text: _("Browse one of the chosen media sources");
+            }
+
+            Button {
+              label: _("Rescan Dependencies");
+              clicked => $rescan() swapped;
+            }
+          }
+
+          Label address_label {
+            xalign: 0;
+            wrap: true;
+            wrap-mode: word_char;
+            selectable: true;
+            visible: false;
+          }
+
+          CheckButton relevant_check {
+            label: _("Relevant Files Only");
+            active: true;
+            toggled => $relevant_toggled() swapped;
+          }
+
+          Box files_box {
+            orientation: vertical;
+          }
+
+          CheckButton current_only_check {
+            child: Label {
+              label: _("Search only the current folder or selected item");
+              xalign: 0;
+              wrap: true;
+              wrap-mode: word_char;
+            };
+          }
+
+          Button scan_button {
+            label: _("Browse Components");
+            halign: start;
+            sensitive: false;
+            clicked => $browse_components() swapped;
+          }
+        }
+
+        Box tree_box {
+          orientation: vertical;
+          spacing: 8;
+          vexpand: true;
+        }
+
+        Adw.WrapBox summary_box {
+          child-spacing: 12;
+          line-spacing: 4;
+          visible: false;
+
+          Label summary_label {
+            xalign: 0;
+            wrap: true;
+
+            styles [
+              "caption",
+              "dim-label",
+            ]
+          }
+
+          Label {
+            label: _("Only managed files can be removed.");
+            xalign: 0;
+            wrap: true;
+
+            styles [
+              "caption",
+              "dim-label",
+            ]
+          }
+        }
+
+        Adw.PreferencesGroup recommended_group {
+          visible: false;
+
+          Adw.ExpanderRow recommended_row {
+            title: _("Recommended for Installed Applications");
+            subtitle: _("Components required by applications registered in this ball");
+          }
+        }
+
+        Adw.WrapBox job_box {
+          child-spacing: 6;
+          line-spacing: 6;
+          visible: false;
+
+          Button refresh_button {
+            label: _("Refresh Installed Status");
+            sensitive: false;
+            clicked => $refresh_clicked() swapped;
+          }
+
+          Button cancel_button {
+            label: _("Cancel Job");
+            sensitive: false;
+            clicked => $cancel_clicked() swapped;
+          }
+
+          Button log_button {
+            label: _("Show Log");
+            visible: false;
+            clicked => $show_log() swapped;
+          }
+        }
+
+        Box {
+          spacing: 8;
+
+          Adw.Spinner progress_spinner {
+            visible: false;
+          }
+
+          Label notice_label {
+            xalign: 0;
+            hexpand: true;
+            wrap: true;
+            wrap-mode: word_char;
+            selectable: true;
+          }
+        }
+      };
+    };
+  };
+}

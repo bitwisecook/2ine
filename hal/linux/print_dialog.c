@@ -1,85 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* GNOME's Zenity chooser presents save destinations and configured printers.
-   All external commands receive literal argv, never shell-interpreted text. */
+/* The native 2ine-dialog helper presents save destinations and configured
+   printers. All arguments are passed literally, never shell-interpreted. */
 #define _POSIX_C_SOURCE 200809L
 #include "hal/print.h"
-#include <errno.h>
+#include "host_dialog.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-static LxHostSaveResult dialog(char *const arguments[], char **output)
-{
-    *output = NULL;
-    int descriptors[2];
-    if (pipe(descriptors))
-        return LX_HOST_SAVE_ERROR;
-    pid_t child = fork();
-    if (!child)
-    {
-        close(descriptors[0]);
-        if (dup2(descriptors[1], STDOUT_FILENO) < 0)
-            _exit(127);
-        close(descriptors[1]);
-        execvp(arguments[0], arguments);
-        _exit(127);
-    }
-    close(descriptors[1]);
-    const size_t capacity = 65536;
-    char *buffer = malloc(capacity);
-    size_t length = 0;
-    ssize_t n = 0;
-    if (child > 0 && buffer)
-        while (length < capacity - 1 &&
-               (n = read(descriptors[0], buffer + length, capacity - 1 - length)) != 0)
-        {
-            if (n < 0)
-            {
-                if (errno == EINTR)
-                    continue;
-                break;
-            }
-            length += (size_t)n;
-        }
-    close(descriptors[0]);
-    int status = 0;
-    pid_t waited;
-    do
-        waited = child > 0 ? waitpid(child, &status, 0) : -1;
-    while (waited < 0 && errno == EINTR);
-    if (child < 0 || waited != child || !WIFEXITED(status) || n < 0 || !buffer ||
-        length == capacity - 1)
-    {
-        free(buffer);
-        return LX_HOST_SAVE_ERROR;
-    }
-    if (WEXITSTATUS(status) == 1)
-    {
-        free(buffer);
-        return LX_HOST_SAVE_CANCEL;
-    }
-    if (WEXITSTATUS(status) != 0)
-    {
-        fprintf(
-            stderr,
-            "2ine: Cannot open the GNOME print dialog. Install zenity and run in a desktop session.\n");
-        free(buffer);
-        return LX_HOST_SAVE_ERROR;
-    }
-    if (length && buffer[length - 1] == '\n')
-        length--;
-    if (!length || memchr(buffer, 0, length))
-    {
-        free(buffer);
-        return LX_HOST_SAVE_ERROR;
-    }
-    buffer[length] = 0;
-    *output = strdup(buffer);
-    free(buffer);
-    return *output ? LX_HOST_SAVE_OK : LX_HOST_SAVE_ERROR;
-}
 LxHostSaveResult lx_host_print_save_path(const char *title, const char *extension, char **path)
 {
     if (!path || !extension)
@@ -93,30 +20,9 @@ LxHostSaveResult lx_host_print_save_path(const char *title, const char *extensio
         *path = strdup(override);
         return *path ? LX_HOST_SAVE_OK : LX_HOST_SAVE_ERROR;
     }
-    size_t size = strlen(title ? title : "Print Job") + strlen(extension) + 32;
-    char *name = malloc(size), *filter = malloc(strlen(extension) + 40);
-    if (!name || !filter)
-    {
-        free(name);
-        free(filter);
-        return LX_HOST_SAVE_ERROR;
-    }
-    snprintf(name, size, "--filename=%s.%s", title && *title ? title : "Print Job", extension);
-    for (char *p = name + strlen("--filename="); *p; p++)
-        if (*p == '/' || *p == '\\' || (unsigned char)*p < 32)
-            *p = '-';
-    snprintf(filter, strlen(extension) + 40, "--file-filter=Print files | *.%s", extension);
-    char *arguments[] = {"zenity",
-                         "--file-selection",
-                         "--save",
-                         "--confirm-overwrite",
-                         "--title=Save Print Output",
-                         name,
-                         filter,
-                         NULL};
-    LxHostSaveResult result = dialog(arguments, path);
-    free(name);
-    free(filter);
+    const char *arguments[] = {"save", "Save Print Output", title && *title ? title : "Print Job",
+                               extension, NULL};
+    LxHostSaveResult result = lx_host_dialog_run(arguments, path);
     if (result == LX_HOST_SAVE_OK && **path != '/')
     {
         free(*path);
@@ -143,7 +49,7 @@ LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestinat
     }
     size_t count = 0;
     char **printers = lx_host_print_printers(&count);
-    char **arguments = calloc(13 + count * 2, sizeof *arguments);
+    const char **arguments = calloc(count + 2, sizeof *arguments);
     if (!arguments)
     {
         for (size_t i = 0; i < count; i++)
@@ -152,23 +58,11 @@ LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestinat
         return LX_HOST_SAVE_ERROR;
     }
     unsigned at = 0;
-    arguments[at++] = "zenity";
-    arguments[at++] = "--list";
-    arguments[at++] = "--title=PCL Printer";
-    arguments[at++] = "--text=Choose a PCL 5-compatible system printer, or save a PCL file.";
-    arguments[at++] = "--column=Destination";
-    arguments[at++] = "--column=Description";
-    arguments[at++] = "--hide-column=1";
-    arguments[at++] = "--print-column=1";
-    arguments[at++] = "@save";
-    arguments[at++] = "Save PCL File…";
+    arguments[at++] = "print-pcl";
     for (size_t i = 0; i < count; i++)
-    {
         arguments[at++] = printers[i];
-        arguments[at++] = printers[i];
-    }
     char *choice = NULL;
-    LxHostSaveResult result = dialog(arguments, &choice);
+    LxHostSaveResult result = lx_host_dialog_run(arguments, &choice);
     if (result == LX_HOST_SAVE_OK)
     {
         if (!strcmp(choice, "@save"))
@@ -211,22 +105,9 @@ LxHostSaveResult lx_host_print_choose_device(unsigned *kind)
                                                  : 1;
         return LX_HOST_SAVE_OK;
     }
-    char *arguments[] = {
-        "zenity",
-        "--list",
-        "--title=Print Destination",
-        "--text=PDF saves a document. PCL prints to a compatible printer or saves a PCL file.",
-        "--column=Device",
-        "--column=Description",
-        "--hide-column=1",
-        "--print-column=1",
-        "pdf",
-        "Save as PDF",
-        "pcl",
-        "PCL Printer",
-        NULL};
+    const char *arguments[] = {"print-device", NULL};
     char *choice = NULL;
-    LxHostSaveResult result = dialog(arguments, &choice);
+    LxHostSaveResult result = lx_host_dialog_run(arguments, &choice);
     if (result == LX_HOST_SAVE_OK)
     {
         if (strcmp(choice, "pdf") && strcmp(choice, "pcl"))

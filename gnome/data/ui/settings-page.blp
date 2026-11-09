@@ -1,0 +1,40 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineSettingsPage: Adw.Bin {
+  child: Adw.NavigationView view {
+    hhomogeneous: false;
+    vhomogeneous: false;
+
+    Adw.NavigationPage overview {
+      title: _("Settings");
+      tag: "overview";
+
+      child: Adw.PreferencesPage {
+        Adw.PreferencesGroup {
+          SearchEntry search {
+            placeholder-text: _("Search Settings");
+            search-changed => $on_search_changed() swapped;
+
+            accessibility {
+              label: _("Search ball settings");
+            }
+          }
+        }
+
+        Adw.PreferencesGroup sections {
+          title: _("Ball Settings");
+        }
+
+        Adw.PreferencesGroup empty {
+          visible: false;
+
+          Adw.ActionRow {
+            title: _("No Matching Settings");
+            use-markup: false;
+          }
+        }
+      };
+    }
+  };
+}

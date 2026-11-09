@@ -1,0 +1,79 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu add_menu {
+  section {
+    item (_("Map Folder or Image…"), "win.add-drive")
+    item (_("Create Disk Image…"), "win.create-disk")
+    item (_("Create Floppy Image…"), "win.create-floppy")
+  }
+}
+
+template $TwoineDrivesPage: Adw.Bin {
+  vexpand: true;
+
+  child: Adw.BreakpointBin {
+    width-request: 300;
+    height-request: 300;
+    vexpand: true;
+
+    Adw.Breakpoint {
+      condition ("max-width: 500sp")
+
+      setters {
+        add_content.label: "";
+      }
+    }
+
+    child: ScrolledWindow {
+      hscrollbar-policy: never;
+      vexpand: true;
+
+      child: Box content {
+        orientation: vertical;
+        spacing: 12;
+        vexpand: true;
+        margin-top: 18;
+        margin-bottom: 18;
+        margin-start: 18;
+        margin-end: 18;
+
+        Adw.PreferencesGroup {
+          title: _("Drives");
+          description: _("Drop files onto a writable drive to copy them. CDs and protected floppies are read-only. Existing files are never replaced.");
+
+          header-suffix: MenuButton add_button {
+            menu-model: add_menu;
+            tooltip-text: _("Add a Drive");
+            valign: center;
+
+            child: Adw.ButtonContent add_content {
+              icon-name: "list-add-symbolic";
+              label: _("Add Drive");
+            };
+
+            styles [
+              "flat",
+            ]
+
+            accessibility {
+              label: _("Add drive");
+            }
+          };
+
+          ListBox list {
+            selection-mode: single;
+
+            styles [
+              "boxed-list",
+            ]
+
+            accessibility {
+              label: _("Mapped OS/2 drives");
+            }
+          }
+        }
+      };
+    };
+  };
+}

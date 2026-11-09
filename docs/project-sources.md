@@ -361,17 +361,27 @@ are user-supplied and are not licensed or redistributed by this project.
 
 - Version: 3.14.4-1ubuntu0.2 (host selected)
 - License: PSF-2.0 and retained notices
-- Used as: host dependency
+- Used as: build/packaging tool; not bundled
 - Authors / origin credits: Guido van Rossum; Python Software Foundation; CPython contributors
 - [Project](https://www.python.org/) · [Source](https://github.com/python/cpython) · [Download](https://launchpad.net/ubuntu/+source/python3.14/3.14.4-1ubuntu0.2)
 
-## PyGObject
+## gtk-rs (gtk4-rs, libadwaita-rs, glib, gio)
 
-- Version: 3.56.2-1 (host selected)
-- License: LGPL-2.1-or-later
-- Used as: host dependency
-- Authors / origin credits: James Henstridge; Johan Dahlin; PyGObject contributors
-- [Project](https://pygobject.gnome.org/) · [Source](https://gitlab.gnome.org/GNOME/pygobject) · [Download](https://launchpad.net/ubuntu/+source/pygobject/3.56.2-1)
+- Version: gtk4 0.11.5; libadwaita 0.9.2; glib/gio 0.22.10
+- License: MIT
+- Used as: runtime
+- Authors / origin credits: The gtk-rs Project Developers
+- [Project](https://gtk-rs.org/) · [Source](https://github.com/gtk-rs/gtk4-rs) · [Download](https://crates.io/crates/gtk4/0.11.5)
+- Notes: Statically linked into the GNOME frontend. gnome/Cargo.lock pins every crate.
+
+## Rust crates (serde, serde_json, thiserror, async-channel)
+
+- Version: serde 1.0.229; serde_json 1.0.154; thiserror 2.0.21; async-channel 2.5.0
+- License: MIT OR Apache-2.0
+- Used as: runtime
+- Authors / origin credits: David Tolnay; Erick Tryzelaar; Stjepan Glavina; Rust crate contributors
+- [Project](https://crates.io/) · [Source](https://github.com/serde-rs/json) · [Download](https://crates.io/crates/serde_json/1.0.154)
+- Notes: Statically linked into the GNOME frontend with their dependencies; gnome/Cargo.lock lists every crate and version.
 
 ## GTK
 
@@ -601,14 +611,6 @@ are user-supplied and are not licensed or redistributed by this project.
 - Used as: runtime
 - Authors / origin credits: Hans Wennborg
 - [Project](https://www.hanshq.net/zip.html) · [Source](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip) · [Download](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip)
-
-## Zenity
-
-- Version: 4.2.1-1 (host selected)
-- License: LGPL-2.0-or-later file headers; LGPL-2.1-or-later COPYING
-- Used as: Linux native printing dialogs; system package for Debian/RPM, staged helper for Snap
-- Authors / origin credits: Glynn Foster; Lucas Rocha; Arx Cruz; Logan Rathbone; GNOME and Zenity contributors
-- [Project](https://gitlab.gnome.org/GNOME/zenity) · [Source](https://gitlab.gnome.org/GNOME/zenity) · [Download](https://launchpad.net/ubuntu/+source/zenity/4.2.1-1)
 
 ## CUPS clients
 

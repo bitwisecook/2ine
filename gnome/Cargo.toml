@@ -1,0 +1,63 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+[package]
+name = "twoine-gnome"
+description = "Native GNOME manager for 2ine balls"
+version = "0.6.0"
+edition = "2024"
+rust-version = "1.99"
+license = "Zlib"
+publish = false
+build = "build.rs"
+
+[lib]
+name = "twoine_gnome"
+path = "src/lib.rs"
+
+[[bin]]
+name = "2ine-ball"
+path = "src/main.rs"
+
+# Native dialogs requested by the OS/2 runtime (printing, failure reports).
+[[bin]]
+name = "2ine-dialog"
+path = "src/bin/dialog.rs"
+
+# GTK must own the main thread, so the UI suite runs without libtest's harness.
+[[test]]
+name = "ui"
+path = "tests/ui.rs"
+harness = false
+
+[dependencies]
+adw = { package = "libadwaita", version = "0.9", features = ["v1_9"] }
+async-channel = "2.5"
+gtk = { package = "gtk4", version = "0.11", features = ["v4_18"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+
+[build-dependencies]
+cmake = "0.1"
+glib-build-tools = "0.22"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "allow"
+unused_qualifications = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_many_lines = "allow"
+# `use super::*` inside `imp` modules is the gtk-rs subclassing convention.
+wildcard_imports = "allow"

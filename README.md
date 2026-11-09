@@ -40,7 +40,7 @@ Raise an issue on GH or find a way to contact me.
 
 Use a [ball](docs/ball.md) to keep application installations, drive mappings,
 profiles, registry and launch settings in separate persistent environments.
-The [native GNOME manager](docs/gnome-app.md) provides ball creation,
+The [native GNOME manager](docs/gnome-app.md), written in Rust with GTK 4 and libadwaita, provides ball creation,
 configuration, installer execution and saved application launchers on Ubuntu 26.04+.
 The [native macOS manager](docs/macos-app.md) uses SwiftUI and a shared C ball
 engine, with a Python-free app bundle and Make targets for development and

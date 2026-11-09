@@ -1,11 +1,12 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 name: 2ine-ball
-version: '0.3'
+version: '0.6'
 summary: Give your OS/2 applications a home on GNOME
 description: |
   Install and run OS/2 applications in a ball of 2ine. Each ball keeps its own
   drives, runtime settings, CONFIG.SYS, profiles, registry and installed files.
-  Includes the portable Unicorn runtime and the shared native ball engine.
+  A native Rust, GTK 4 and libadwaita manager with the portable Unicorn
+  runtime and the shared native ball engine.
 base: core26
 grade: devel
 confinement: strict
@@ -24,12 +25,16 @@ parts:
   2ine:
     plugin: nil
     source: .
-    build-packages: [libarchive-dev, zlib1g-dev, libglib2.0-dev, libsndfile1-dev, cmake, ninja-build, build-essential, clang, patchelf, python3, libunicorn-dev, libgl-dev, libegl-dev, libncurses-dev, libx11-dev, libxext-dev, libxrandr-dev, libxcursor-dev, libxi-dev, libxfixes-dev, libxss-dev, libwayland-dev, libxkbcommon-dev, libasound2-dev, libpulse-dev]
-    stage-packages: [python3, python3-gi, zenity, cups-client]
+    build-snaps: [rustup]
+    build-packages: [libgtk-4-dev, libadwaita-1-dev, blueprint-compiler, libarchive-dev, zlib1g-dev, libglib2.0-dev, libsndfile1-dev, cmake, ninja-build, build-essential, clang, patchelf, python3, libunicorn-dev, libgl-dev, libegl-dev, libncurses-dev, libx11-dev, libxext-dev, libxrandr-dev, libxcursor-dev, libxi-dev, libxfixes-dev, libxss-dev, libwayland-dev, libxkbcommon-dev, libasound2-dev, libpulse-dev]
+    stage-packages: [cups-client]
     override-build: |
+      rustup toolchain install stable --profile minimal
+      rustup default stable
+      cargo build --release --locked --manifest-path gnome/Cargo.toml
       cmake -S . -B build-snap -G Ninja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=ON -DTWOINE_SDL3_PROVIDER=source -DTWOINE_OPENGL=ON
       cmake --build build-snap --parallel "$CRAFT_PARALLEL_BUILD_COUNT"
-      python3 tools/build_gnome_packages.py --build build-snap --stage "$CRAFT_PART_INSTALL" --output build-snap-packaging
+      python3 tools/build_gnome_packages.py --build build-snap --frontend build/gnome/release/2ine-ball --stage "$CRAFT_PART_INSTALL" --output build-snap-packaging
       install -Dm755 snap/2ine-ball-snap "$CRAFT_PART_INSTALL/bin/2ine-ball-snap"
 plugs:
   install-cups:

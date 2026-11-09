@@ -1,0 +1,58 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineConfigSysEditor: Box {
+  orientation: vertical;
+  spacing: 12;
+  vexpand: true;
+
+  Adw.Banner conflict {
+    revealed: false;
+    use-markup: false;
+  }
+
+  Label {
+    label: _("SET and LIBPATH apply at launch. Drivers and boot commands are not executed.");
+    wrap: true;
+    xalign: 0;
+  }
+
+  ScrolledWindow {
+    vexpand: true;
+    min-content-height: 280;
+    has-frame: true;
+
+    child: TextView editor {
+      monospace: true;
+      wrap-mode: none;
+      left-margin: 12;
+      right-margin: 12;
+      top-margin: 12;
+      bottom-margin: 12;
+
+      accessibility {
+        label: _("CONFIG.SYS contents");
+      }
+    };
+  }
+
+  Adw.WrapBox {
+    child-spacing: 12;
+    line-spacing: 6;
+
+    Button reload_button {
+      label: _("Reload from Disk");
+      clicked => $on_reload() swapped;
+    }
+
+    Button save_button {
+      label: _("Save CONFIG.SYS");
+      sensitive: false;
+      clicked => $on_save() swapped;
+
+      styles [
+        "suggested-action",
+      ]
+    }
+  }
+}

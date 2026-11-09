@@ -1,0 +1,149 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineLogsPage: Adw.Bin {
+  child: ScrolledWindow {
+    hscrollbar-policy: never;
+
+    child: Adw.Clamp {
+      maximum-size: 780;
+
+      child: Box {
+        orientation: vertical;
+        spacing: 18;
+        margin-top: 18;
+        margin-bottom: 18;
+        margin-start: 18;
+        margin-end: 18;
+
+        Box {
+          spacing: 12;
+
+          Label status {
+            xalign: 0;
+            wrap: true;
+            wrap-mode: word_char;
+            hexpand: true;
+
+            styles [
+              "title-3",
+            ]
+          }
+
+          Box {
+            spacing: 6;
+            valign: center;
+
+            Button stop_button {
+              label: _("Stop");
+              action-name: "win.stop";
+
+              styles [
+                "destructive-action",
+              ]
+            }
+
+            Button force_button {
+              label: _("Force Stop…");
+              action-name: "win.force-stop";
+
+              styles [
+                "destructive-action",
+              ]
+            }
+
+            MenuButton more_button {
+              icon-name: "view-more-symbolic";
+              tooltip-text: _("Logs and Audits");
+
+              accessibility {
+                label: _("Logs and audits");
+              }
+
+              styles [
+                "flat",
+              ]
+            }
+          }
+        }
+
+        DropDown session_selector {
+          halign: start;
+          visible: false;
+          notify::selected => $on_session_selected() swapped;
+
+          accessibility {
+            label: _("Application session");
+          }
+        }
+
+        Label summary {
+          visible: false;
+          wrap: true;
+          wrap-mode: word_char;
+          xalign: 0;
+          selectable: true;
+        }
+
+        Stack log_stack {
+          vexpand: true;
+          overflow: hidden;
+
+          StackPage {
+            name: "log";
+
+            child: ScrolledWindow {
+              min-content-height: 220;
+              vexpand: true;
+
+              child: TextView log_view {
+                editable: false;
+                cursor-visible: false;
+                monospace: true;
+                wrap-mode: word_char;
+                left-margin: 12;
+                right-margin: 12;
+                top-margin: 12;
+                bottom-margin: 12;
+
+                accessibility {
+                  label: _("Application output");
+                }
+              };
+            };
+          }
+
+          StackPage {
+            name: "empty";
+
+            child: Adw.StatusPage {
+              icon-name: "utilities-terminal-symbolic";
+              title: _("No Output");
+              description: _("Program output appears here while it runs.");
+              vexpand: true;
+
+              styles [
+                "compact",
+              ]
+            };
+          }
+
+          styles [
+            "card",
+          ]
+        }
+
+        Label {
+          label: _("Shows the last 64 KiB. Complete logs are kept in the ball.");
+          wrap: true;
+          xalign: 0;
+
+          styles [
+            "dim-label",
+            "caption",
+          ]
+        }
+      };
+    };
+  };
+}

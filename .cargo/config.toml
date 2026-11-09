@@ -1,0 +1,3 @@
+# Disposable build output stays beneath the repository's single build/ tree.
+[build]
+target-dir = "build/gnome"

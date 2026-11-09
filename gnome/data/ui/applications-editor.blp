@@ -1,0 +1,230 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineProgramEditor: Adw.Bin {
+  vexpand: true;
+
+  child: Box {
+    orientation: vertical;
+    spacing: 6;
+
+    Adw.InlineViewSwitcher switcher {
+      stack: stack;
+      display-mode: both;
+      halign: center;
+    }
+
+    Adw.ViewStack stack {
+      vexpand: true;
+
+      Adw.ViewStackPage {
+        name: "general";
+        title: _("General");
+        icon-name: "application-x-executable-symbolic";
+
+        child: Adw.PreferencesPage {
+          Adw.PreferencesGroup program_group {
+            title: _("Program");
+            description: _("Quotes group arguments; backslashes stay literal. Leave the initial folder empty to inherit per-drive defaults. Installers start in their own folder.");
+
+            Adw.EntryRow name_row {
+              title: _("Application Name");
+              visible: false;
+            }
+
+            Adw.EntryRow program_row {
+              title: _("OS/2 Executable or Command File");
+
+              [suffix]
+              MenuButton candidates_button {
+                icon-name: "pan-down-symbolic";
+                tooltip-text: _("Suggested Installers");
+                valign: center;
+                visible: false;
+                sensitive: false;
+
+                accessibility {
+                  label: _("Suggested installers");
+                }
+
+                styles [
+                  "flat",
+                ]
+              }
+
+              [suffix]
+              Button browse_program_button {
+                icon-name: "folder-open-symbolic";
+                tooltip-text: _("Browse Drives");
+                valign: center;
+
+                accessibility {
+                  label: _("Browse Drives");
+                }
+
+                styles [
+                  "flat",
+                ]
+              }
+            }
+
+            Adw.EntryRow arguments_row {
+              title: _("Arguments");
+            }
+
+            Adw.EntryRow cwd_row {
+              title: _("Initial Working Folder (optional)");
+
+              [suffix]
+              Button browse_cwd_button {
+                icon-name: "folder-open-symbolic";
+                tooltip-text: _("Choose Initial Working Folder");
+                valign: center;
+
+                accessibility {
+                  label: _("Choose Initial Working Folder");
+                }
+
+                styles [
+                  "flat",
+                ]
+              }
+            }
+          }
+
+          Adw.PreferencesGroup media_group {
+            title: _("Installation Media");
+            description: _("Attach an original CD or floppy image, or browse any mapped drive. CMD/BAT installers require the original OS/2 CMD.EXE.");
+            visible: false;
+
+            Adw.ComboRow media_kind {
+              title: _("Device");
+
+              model: StringList {
+                strings [
+                  _("CD"),
+                  _("Floppy"),
+                ]
+              };
+            }
+
+            Adw.ComboRow media_letter {
+              title: _("Drive Letter");
+            }
+
+            Adw.ActionRow media_row {
+              title: _("Attach Image");
+              subtitle: _("Browse installers from the selected medium");
+
+              [suffix]
+              Button media_button {
+                icon-name: "media-optical-symbolic";
+                tooltip-text: _("Attach Image");
+                valign: center;
+
+                accessibility {
+                  label: _("Attach Image");
+                }
+
+                styles [
+                  "flat",
+                ]
+              }
+
+              [suffix]
+              Button eject_button {
+                icon-name: "media-eject-symbolic";
+                tooltip-text: _("Eject Medium");
+                valign: center;
+
+                accessibility {
+                  label: _("Eject Medium");
+                }
+
+                styles [
+                  "flat",
+                ]
+              }
+            }
+          }
+
+          Adw.PreferencesGroup icon_group {
+            title: _("Application Icon");
+            visible: false;
+
+            Adw.ActionRow {
+              title: _("Executable Icon");
+              subtitle: _("Uses embedded OS/2 artwork when available");
+
+              [prefix]
+              Image icon {
+                icon-name: "application-x-executable-symbolic";
+                pixel-size: 48;
+
+                accessibility {
+                  label: _("Application icon preview");
+                }
+              }
+
+              [suffix]
+              Button choose_icon_button {
+                label: _("Choose Icon…");
+                valign: center;
+              }
+            }
+
+            Adw.ActionRow use_executable_icon_row {
+              title: _("Use Executable Icon");
+              activatable: true;
+
+              [suffix]
+              Image {
+                icon-name: "edit-undo-symbolic";
+              }
+            }
+          }
+        };
+      }
+
+      Adw.ViewStackPage {
+        name: "folders";
+        title: _("Working Folders");
+        icon-name: "folder-symbolic";
+
+        child: Adw.PreferencesPage {
+          Adw.PreferencesGroup folders_group {
+            title: _("Per-Drive Working Folders");
+            description: _("Leave an override off to inherit that drive's ball default.");
+          }
+        };
+      }
+
+      Adw.ViewStackPage {
+        name: "environment";
+        title: _("Environment");
+        icon-name: "preferences-system-symbolic";
+
+        child: Adw.PreferencesPage {
+          Adw.PreferencesGroup environment_group {
+            title: _("Guest Environment Overrides");
+            description: _("Off means inherit. An empty override is an explicit empty value. %NAME% expands the inherited guest value; PATH=%PATH%;C:\\DOOM appends a folder.");
+          }
+
+          Adw.PreferencesGroup {
+            title: _("Add an Override");
+
+            header-suffix: Button preview_button {
+              label: _("Preview Effective Environment");
+              valign: center;
+            };
+
+            Adw.EntryRow variable_row {
+              title: _("Variable Name");
+              show-apply-button: true;
+            }
+          }
+        };
+      }
+    }
+  };
+}

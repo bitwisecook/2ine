@@ -711,26 +711,44 @@
       "homepage": "https://www.python.org/",
       "source": "https://github.com/python/cpython",
       "download": "https://launchpad.net/ubuntu/+source/python3.14/3.14.4-1ubuntu0.2",
-      "role": "host dependency",
+      "role": "build/packaging tool; not bundled",
       "versionPolicy": "host",
       "sourcePackage": "python3.14"
     },
     {
-      "id": "pygobject",
-      "name": "PyGObject",
-      "version": "3.56.2-1",
-      "license": "LGPL-2.1-or-later",
+      "id": "gtk-rs",
+      "name": "gtk-rs (gtk4-rs, libadwaita-rs, glib, gio)",
+      "version": "gtk4 0.11.5; libadwaita 0.9.2; glib/gio 0.22.10",
+      "license": "MIT",
       "authors": [
-        "James Henstridge",
-        "Johan Dahlin",
-        "PyGObject contributors"
+        "The gtk-rs Project Developers"
       ],
-      "homepage": "https://pygobject.gnome.org/",
-      "source": "https://gitlab.gnome.org/GNOME/pygobject",
-      "download": "https://launchpad.net/ubuntu/+source/pygobject/3.56.2-1",
-      "role": "host dependency",
-      "versionPolicy": "host",
-      "sourcePackage": "pygobject"
+      "homepage": "https://gtk-rs.org/",
+      "source": "https://github.com/gtk-rs/gtk4-rs",
+      "download": "https://crates.io/crates/gtk4/0.11.5",
+      "role": "runtime",
+      "versionPolicy": "pinned",
+      "sourcePackage": null,
+      "notes": "Statically linked into the GNOME frontend. gnome/Cargo.lock pins every crate."
+    },
+    {
+      "id": "rust-crates",
+      "name": "Rust crates (serde, serde_json, thiserror, async-channel)",
+      "version": "serde 1.0.229; serde_json 1.0.154; thiserror 2.0.21; async-channel 2.5.0",
+      "license": "MIT OR Apache-2.0",
+      "authors": [
+        "David Tolnay",
+        "Erick Tryzelaar",
+        "Stjepan Glavina",
+        "Rust crate contributors"
+      ],
+      "homepage": "https://crates.io/",
+      "source": "https://github.com/serde-rs/json",
+      "download": "https://crates.io/crates/serde_json/1.0.154",
+      "role": "runtime",
+      "versionPolicy": "pinned",
+      "sourcePackage": null,
+      "notes": "Statically linked into the GNOME frontend with their dependencies; gnome/Cargo.lock lists every crate and version."
     },
     {
       "id": "gtk",
@@ -1168,25 +1186,6 @@
       "role": "runtime",
       "versionPolicy": "pinned",
       "sourcePackage": null
-    },
-    {
-      "id": "zenity",
-      "name": "Zenity",
-      "version": "4.2.1-1",
-      "license": "LGPL-2.0-or-later file headers; LGPL-2.1-or-later COPYING",
-      "authors": [
-        "Glynn Foster",
-        "Lucas Rocha",
-        "Arx Cruz",
-        "Logan Rathbone",
-        "GNOME and Zenity contributors"
-      ],
-      "homepage": "https://gitlab.gnome.org/GNOME/zenity",
-      "source": "https://gitlab.gnome.org/GNOME/zenity",
-      "download": "https://launchpad.net/ubuntu/+source/zenity/4.2.1-1",
-      "sourcePackage": "zenity",
-      "role": "Linux native printing dialogs; system package for Debian/RPM, staged helper for Snap",
-      "versionPolicy": "host"
     },
     {
       "id": "cups",

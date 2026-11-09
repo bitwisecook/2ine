@@ -1,24 +1,40 @@
 # GNOME ball manager
 
-2ine uses GTK 4, libadwaita and PyGObject. GNOME 51 is the design target;
-GTK 4.18+ and libadwaita 1.9+ are the supported library floor, including Ubuntu
-26.04. The shared C engine owns ball persistence, drive translation, runtime
+The GNOME manager is a native Rust application built with gtk4-rs and
+libadwaita-rs. Its windows and dialogs are Blueprint composite templates.
+GNOME 51 is the design target; GTK 4.18+ and libadwaita 1.9+ are the supported
+library floor, including Ubuntu 26.04. The crate uses Rust 1.99 and the 2024
+edition, and lives in [`../gnome`](../gnome) beside the macOS app.
+
+The shared C engine owns ball persistence, drive translation, runtime
 selection, CONFIG.SYS validation, launch plans and installer receipts. The
-frontend calls that engine on one serialized worker and updates GTK only on
-the main loop. No Python subprocess or shell mediates application launches.
+manager links it statically and calls it on one serialized worker thread, with
+read-only requests on the GIO thread pool; GTK is updated only on the main loop.
+Typed serde models describe snapshots without writing `ball.json`. No Python
+interpreter, subprocess or shell mediates application launches.
 
 ## Run from a checkout
 
+Install the Rust toolchain (1.99 or later), CMake, Ninja and the GTK
+development packages. On Ubuntu:
+
 ```sh
-cmake -S ball -B build-ball-engine -G Ninja
-cmake --build build-ball-engine
-python3 tools/gnome_ball.py --build build-portable
+sudo apt install libgtk-4-dev libadwaita-1-dev blueprint-compiler libarchive-dev zlib1g-dev
+make gnome-run GNOME_RUNTIME_BUILD=build/runtime
 ```
 
-The full runtime must be built separately as described in the main README.
-Install `python3-gi`, `gir1.2-gtk-4.0` and `gir1.2-adw-1` on Ubuntu.
-`python3 tools/install_gnome.py` installs a development launcher tied to the
-checkout. Distribution packages use a separate relocatable launcher.
+`make gnome-run` builds the manager with Cargo and opens it with the given
+runtime build; `cargo run --manifest-path gnome/Cargo.toml -- --build DIR [BALL]`
+is equivalent. Build output is kept in `build/gnome`. The full runtime is built
+separately as described in the main README. Without `--build`, the manager uses
+`TWOINE_BUILD`, then a packaged runtime beside the executable, then
+`build/runtime`. The crate also builds `2ine-dialog`, the native libadwaita
+helper the runtime uses for print destinations, save locations and failure
+reports; packages install it beside `lx_loader`, and the manager passes its own
+copy to the guests it launches through `TWOINE_DIALOG`.
+`python3 tools/install_gnome.py` builds a release binary and
+installs a development launcher, desktop entry, MIME type and icons tied to the
+checkout.
 
 ## Native workflow
 
@@ -26,9 +42,16 @@ Create a ball with Ctrl+N or open a directory with Ctrl+O or a file-manager
 drop. New directories have the `.2ineball` suffix. Existing directories with
 `ball.json` also open. The sidebar remembers each external ball and the last
 selection. A narrow window becomes a navigation view with a Back button.
-Drives is the initial workspace. The four section buttons show labels where space allows and icons with
-native tooltips at smaller sizes. Alt+1 through Alt+4 select Drives,
-Applications, Settings and Activity.
+Drives is the initial workspace for a new ball. The six sections — Drives,
+Components, Install, Applications, Settings and Logs — use a header-bar view
+switcher on wide windows and a bottom view-switcher bar on narrower ones, where
+the header shows the ball name instead. Alt+1 through Alt+6 select them in order.
+The header's Removable Media menu lists every CD, floppy and disk device with its
+image or ejected source and lock state. It attaches/replaces and ejects images,
+toggles floppy/disk write protection, creates an image for a device, browses
+the drive, and adds a CD, floppy or disk device at the next conventional letter.
+Sidebar rows show missing balls and how many applications are running; their
+menu opens the folder, copies the path, renames or moves the ball to Trash.
 
 Install Software (Ctrl+I), Run (Ctrl+Shift+R) and saved applications all use
 structured argument arrays. Backslashes stay literal; quotes group spaces;
@@ -51,17 +74,30 @@ across unrelated changes until applied.
 CONFIG.SYS drafts survive section changes, ball changes and refresh. Save
 (Ctrl+S) compares the originally loaded text with disk contents. Conflicts
 remain editable and never overwrite installer changes. Reload explicitly
-confirms discarding a draft. Closing or Ctrl+Q offers Save, Discard Changes
+confirms discarding a draft. Closing (Ctrl+W) or quitting (Ctrl+Q) offers Save, Discard Changes
 or Cancel when drafts remain. Ball writes and launch preparation disable
 competing operations while leaving navigation, activity and output usable.
 Close guest windows before closing the manager during a running application.
-Activity also provides Stop Operation (Ctrl+Period), a native confirmation, and
+Logs also provides Stop (Ctrl+Period), a native confirmation, and
 Force Stop after termination was requested. Both retain the actual exit/signal
 and output before releasing the operation.
 
-Activity shows the actual process exit or signal, last installer receipt and
-the last 64 KiB of output; complete logs remain in `logs/gnome-*.log`. An
-installer exit does not establish that every installed application works.
+Logs shows the actual process exit or signal, last installer receipt and
+the last 64 KiB of output; complete logs remain in `logs/gnome-*.log`. Its
+session list starts with Activity and Audits, followed by each application
+session with its start time and state. The Logs menu opens the full log, the
+dependency audit, the Workplace Shell application registrations
+(`logs/wps-registration-latest.json`), the logs folder and the ball folder.
+An installer exit does not establish that every installed application works.
+
+Before starting a program the manager checks its OS/2 dependencies. When
+original OS/2 media is required the launch is cancelled and Components opens
+the first required group. A launch waiting for components or configuration is
+shown in a banner on every section. After an installer started from an
+attached image exits, a dialog offers Keep Attached or Eject; the drive letter
+is retained either way. Launched guests receive their session and desktop name
+(`TWOINE_DESKTOP_SESSION`, `TWOINE_DESKTOP_NAME`); shared startup services are
+marked auxiliary and are asked to exit before being forced after two seconds.
 Profiles, registry and shell objects persist in the common engine's formats;
 Settings provides binary-safe OS/2 file editors and a Registry key tree. The manager
 does not provide an interactive stdin terminal.
@@ -83,7 +119,8 @@ The main menu is available in both sidebar and detail navigation. Preferences
 (Ctrl+,) selects a default location for new balls and an optional Activity log
 text size. Text otherwise follows the desktop's settings. These application
 preferences stay on the host and are separate from portable ball settings.
-Keyboard Shortcuts (Ctrl+?) lists the actual window accelerators; F1 opens help.
+Keyboard Shortcuts (Ctrl+?) lists the actual window accelerators, including Export
+Ball (Ctrl+Alt+E) and Add Drive (Ctrl+Shift+D); F1 opens help.
 Ctrl+F focuses search in the current view or dialog. Applications supports
 search by name or guest program, double-click/Return activation, Ctrl+Return to
 launch the selected application, Ctrl+Shift+E to edit it, and a native action
@@ -141,31 +178,33 @@ media unless image inclusion was explicitly selected.
 
 ## Packages
 
-Build a complete portable Linux runtime first. The package builder copies only
-declared frontend files, runtime modules, Liberation fonts and soundfont assets,
-closes private ELF dependencies, and replaces build-directory RPATHs with
-`$ORIGIN`. Distribution libc, desktop and graphics drivers stay external.
-Original OS/2 files, private fonts and application media are not packaged.
-The package includes third-party license notices and runtime input hashes.
+Build a complete portable Linux runtime and the release manager first. The
+package builder copies the native frontend, runtime modules, Liberation fonts
+and soundfont assets, closes private ELF dependencies, and replaces
+build-directory RPATHs with `$ORIGIN`. GTK, libadwaita, libarchive, distribution
+libc, desktop and graphics drivers stay external. Original OS/2 files, private
+fonts and application media are not packaged. The package includes third-party
+license notices and runtime input hashes.
 
 ```sh
-python3 tools/build_gnome_packages.py --build build-portable --output build-gnome/packages
+make gnome-packages GNOME_RUNTIME_BUILD=build/runtime
 ```
 
-This produces `2ine-ball_0.3_amd64.deb` and
-`2ine-ball-0.3-1.x86_64.rpm` on x86-64. Choose `--format deb` or
-`--format rpm` for one format. Builders require `patchelf`, `binutils`, `ldd`
-and the selected format's `dpkg-deb` or `rpmbuild`. Use a fresh output directory;
-an existing staged 2ine installation is rejected. Other parts may populate the
-prefix first, as Snapcraft does with Python dependencies. Build on each target
-architecture and distribution baseline. Debian's libc floor is derived from
-the selected ELF symbols; RPM retains system ABI requirements and excludes
-bundled modules from public providers and external requirements.
+This produces `2ine-ball_<version>_amd64.deb` and
+`2ine-ball-<version>-1.x86_64.rpm` in `build/gnome/packages` on x86-64. Use
+`tools/build_gnome_packages.py --format deb` or `--format rpm` for one format.
+Builders require `patchelf`, `binutils`, `ldd` and the selected format's
+`dpkg-deb` or `rpmbuild`. Use a fresh output directory; an existing staged 2ine
+installation is rejected. Other parts may populate the prefix first, as
+Snapcraft does. Build on each target architecture and distribution baseline.
+Debian's libc floor is derived from the selected ELF symbols; RPM retains system
+ABI requirements and excludes bundled modules from public providers and
+external requirements.
 
 Install using `sudo apt install ./2ine-ball_*.deb` or
-`sudo dnf install ./2ine-ball-*.rpm`. The installed launcher locates its shared
-engine and bundled runtime relative to its installation prefix. A ball can
-still select an external build without replacing the packaged engine.
+`sudo dnf install ./2ine-ball-*.rpm`. The installed `/usr/bin/2ine-ball` locates
+its bundled runtime at `../lib/2ine-ball/runtime`. A ball can still select an
+external build. A [Flatpak](flatpak.md) build is also provided.
 
 The icon theme includes a standalone twine-ball MIME icon. After opening or
 creating a ball, the frontend optionally assigns that themed icon name in
@@ -185,8 +224,8 @@ extension, builds the pinned SDL provider, and stages the same app/runtime.
 With Snapcraft 9.2+, snapd and an initialized LXD builder:
 
 ```sh
-snapcraft pack --use-lxd --platform amd64 --output build-gnome-snap
-sudo snap install --dangerous build-gnome-snap/2ine-ball_*.snap
+snapcraft pack --use-lxd --platform amd64 --output build/gnome/snap
+sudo snap install --dangerous build/gnome/snap/2ine-ball_*.snap
 sudo snap connect 2ine-ball:removable-media
 ```
 
@@ -201,11 +240,14 @@ creating a local package. Snap CI retains the built artifact without publishing.
 
 The layout follows the [GNOME HIG](https://developer.gnome.org/hig/),
 [GNOME 51 developer notes](https://release.gnome.org/51/developers/) and
-[James Doyle's GNOME Blueprint skill](https://gist.github.com/james2doyle/20a45c2d3f853a1d6114d7bad7b2fafb),
-which links GTK Workbench examples and native adaptive patterns. The static
-window is GtkBuilder XML; dynamic lists use standard Adwaita rows and groups.
-There is no custom application theme. Icon buttons have tooltips and accessible
-names; native controls supply keyboard and screen-reader roles.
+[James Doyle's GNOME Blueprint skill](https://gist.github.com/james2doyle/20a45c2d3f853a1d6114d7bad7b2fafb).
+The window, dialogs and sections are Blueprint templates under
+`gnome/data/ui`, compiled into a GResource with the icons at build time.
+Sections use standard Adwaita rows, groups, status pages and breakpoints, and
+fit a 360 px window. A header-bar view switcher becomes a bottom switcher bar
+on narrower windows. There is no custom application theme. Icon buttons have
+tooltips and accessible names; native controls supply keyboard and
+screen-reader roles.
 
 The editable 128 px application SVG follows GNOME's simple shapes, shallow
 extrusion and restrained shading. A warm ball of twine forms the O while one
@@ -216,39 +258,21 @@ loose end. Both are installed into the hicolor icon theme.
 ## Verification
 
 ```sh
-python3 -m unittest discover -s tests/tools
-python3 tools/lxapigen.py --check
-desktop-file-validate tools/gnome/*.desktop
-appstreamcli validate --no-net tools/gnome/*.metainfo.xml
-xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_ball.py --build build-portable
-xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_features.py --build build-portable
-dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-ball_0.3_amd64.deb
+make gnome-test
+TWOINE_TEST_BUILD=build/runtime xvfb-run -a dbus-run-session -- cargo test --manifest-path gnome/Cargo.toml --test ui
+desktop-file-validate gnome/data/*.desktop
+appstreamcli validate --no-net gnome/data/*.metainfo.xml
+make gnome-packages GNOME_RUNTIME_BUILD=build/runtime
+xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_package.py build/gnome/packages/2ine-ball_*_amd64.deb
 ```
 
-The GTK integration executes a generated LX installer and saved launcher using
-the real runtime. It checks cwd/arguments, settings, actual exit and receipts,
-undo, config draft retention, conflict protection and narrow navigation. The
-package test extracts to a path with spaces, audits private ELF relocation and
-runs those workflows from the extracted frontend and runtime. CI adds a Fedora
-45 / GNOME 51 library run and the strict Snap build. These checks do not qualify
-a full SmartSuite reinstall or every installed suite application.
-
-
-## Screenshot gallery
-
-`tests/integration/gnome_screenshots.py` captures the actual GTK application,
-not mockups, in both appearances. It covers the five views, installation media,
-application tabs, drive/program pickers, creation/protection/export dialogs and
-the adaptive layout. It writes PNGs, an HTML gallery, a JSON index and a ZIP:
-
-```sh
-xvfb-run -a -s '-screen 0 1440x1000x24' dbus-run-session -- \
-  python3 tests/integration/gnome_screenshots.py --build build-portable \
-  --ball '/path/to/preview.2ineball' --output build-gnome/screenshots
-```
-
-Use a separate preview copy when selecting real application media/state. Original
-applications and media are never included in the distributable manager packages.
+`make gnome-test` checks formatting, runs Clippy with warnings denied and runs
+the unit tests. The `ui` test drives the real window through its actions and
+widget tree under a display; with `TWOINE_TEST_BUILD` it also saves and launches a
+real OS/2 program and checks its exit status and log. The package test extracts to a path with spaces,
+audits private ELF relocation and starts the relocated frontend. CI adds a
+Fedora 45 / GNOME 51 library run and the strict Snap build. These checks do not
+qualify a full SmartSuite reinstall or every installed suite application.
 
 ## Sound banks and source credits
 
@@ -257,16 +281,21 @@ About prominently credits original author Ryan C. Gordon and lists the
 [project versions, authors, sources and downloads](project-sources.md).
 
 Settings groups General, Graphics & Sound, Environment, Printing, Config Files and Registry
-in an inner tab strip. General contains runtime and diagnostic preferences.
+in a searchable list with native back navigation. General contains runtime and diagnostic preferences.
 Environment shows CONFIG.SYS values, ball overrides and the backend-resolved
 effective guest environment together; edit an override or reset it to inherit.
 Config Files discovers CONFIG.SYS, User Profile (OS2.INI), System Profile
 (OS2SYS.INI) and other INI files. Text files use revision-checked edits; binary
 profiles edit individual application/key records; unsupported binaries stay
 read-only. Registry has a key tree and typed values, preserving unknown types.
-Profile and registry dialogs
-edit individual values as exact hexadecimal, Latin-1 text, or
-little-endian DWORDs and check the file revision before saving. Stop the guest
+Profile dialogs edit individual values as exact hexadecimal, Latin-1 text, or
+little-endian DWORDs. Registry values open in their type's own form — Latin-1
+text for REG_SZ/REG_EXPAND_SZ, one string per line for REG_MULTI_SZ, and an
+unsigned decimal or 0x number for REG_DWORD, REG_DWORD_BIG_ENDIAN and REG_QWORD —
+with Hexadecimal Data and Complete Raw Record (type header plus payload)
+alternatives. An existing value's type is shown read-only; names stored in a
+non-normalized form can be inspected but not rewritten. Both check the file
+revision before saving. Stop the guest
 before editing binary profiles or the registry. CONFIG.SYS polls external changes
 while the owned guest runs, retaining unsaved drafts and showing conflicts.
 Display DPI is per ball and applies next launch; presets are 96/120/144/192, with
@@ -276,6 +305,8 @@ Colour depth is per ball through `system.display_depth` (4, 8, 16 or 24, default
 Title Bars selects Native, OS/2 or Both for top-level standard frames. Both is
 the default; document windows retain their OS/2 controls in every mode. This
 per-ball preference also applies next launch.
+General also has Removable Devices: Lock Device to Image and Read Only per
+CD, floppy and disk device. Locked devices cannot be ejected or replaced.
 Graphics & Sound also selects OpenGL (receiving-runtime default, Mesa, Original
 OS/2 or Off) and toggles video, PCM audio, MIDI synthesis and DIVE. Reset each
 override to follow the receiving runtime. Capability and missing-support reasons
@@ -283,16 +314,9 @@ appear beside the saved choices; unavailable options remain selectable for a
 future host, and apply on the next launch. Original OS/2 OpenGL requires the
 user's renderer DLLs and remains unqualified. Installer audits retain the build
 used for that launch even if the selected runtime later changes.
-Beep volume, sound-bank installation and MIDI channel mapping are on this same
-tab. Printing chooses PDF or PCL through the OS/2 User Profile with revision
-checks. A stored unknown queue remains visible and unchanged until explicitly
+PC speaker volume (a percentage; the runtime default is 5%), sound-bank
+installation and MIDI channel mapping are on this same tab. Printing chooses PDF or PCL through the OS/2 User Profile with revision
+checks, and is blocked while a guest from the ball is running. Output is 300 DPI
+on A4. A stored unknown queue remains visible and unchanged until explicitly
 replaced; resetting the preference inherits the System Profile or virtual PDF
 default. Merely opening Printing does not write a default.
-
-The shared backend and native macOS controls are tested. The GTK configuration
-code passes Python syntax and Ruff checks; its new controls still need Linux
-runtime, keyboard and visual acceptance with:
-
-```sh
-xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_configuration.py --build build-portable
-```

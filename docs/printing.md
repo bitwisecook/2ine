@@ -13,9 +13,11 @@ one does not make an unsupported guest device driver executable.
 PDF uses the host's ordinary save-location and filename dialog. PCL offers a
 system-printer destination or Save PCL File. Choose a printer that understands
 PCL 5: raw PCL is sent without conversion by another host printer driver.
-macOS uses Cocoa dialogs. Linux uses GNOME Zenity dialogs and the CUPS `lp` and
-`lpstat` commands; packages install `zenity` and the CUPS client tools; run in a desktop
-session. Windows adapters use the common Save/Print dialogs and RAW spool API;
+macOS uses Cocoa dialogs. Linux uses native libadwaita dialogs from the
+`2ine-dialog` helper, built with the GNOME manager and installed beside the
+runtime, and the CUPS `lp` and `lpstat` commands; packages install the CUPS
+client tools. Set `TWOINE_DIALOG` to use a helper in another location. Run in a
+desktop session. Windows adapters use the common Save/Print dialogs and RAW spool API;
 the full Windows runtime is not yet built or qualified.
 
 The filename and location are chosen when a job starts. Cancel leaves existing

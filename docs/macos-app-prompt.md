@@ -24,7 +24,7 @@ macOS and concurrency guidance, strictly follow the macOS 27 Apple Human
 Interface Guidelines, and use Icon Composer tooling to author and
 validate the icon. These are development tools, not application runtime libraries.
 
-Use `tools/ball.py`, `docs/ball.md` and `tools/gnome_ball.py` as the
+Use `tools/ball.py`, `docs/ball.md` and the GNOME manager in `gnome/` as the
 existing behavior and interoperability contract. Preserve version-1 ball
 manifests, private C: drives, additional mapped drives, CONFIG.SYS, 2ine settings,
 environment overrides, profiles, registry, shell objects, IPC directories,

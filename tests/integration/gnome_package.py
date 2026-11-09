@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Extract a Linux package, audit relocation, then exercise its real GTK frontend."""
+"""Extract a Linux package, audit relocation, then start its native GTK frontend."""
 
 import argparse
 import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,6 +15,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def run(argv, **kwargs):
     return subprocess.run([str(arg) for arg in argv], check=True, **kwargs)
+
+
+def windows(environment):
+    sys.path.insert(0, str(ROOT / "tests/integration"))
+    from linux.x11 import Display
+
+    return Display(environment["DISPLAY"]).windows()
 
 
 def main():
@@ -49,38 +57,44 @@ def main():
             dependencies = run(["ldd", binary], capture_output=True, text=True).stdout
             assert "not found" not in dependencies, (binary, dependencies)
             assert str(ROOT) not in dependencies, (binary, dependencies)
-        run([destination / "usr/bin/2ine-ball", "--help"], capture_output=True)
-        frontend = destination / "usr/lib/2ine-ball/tools"
-        for module in (
-            "gnome_browser.py",
-            "gnome_browser_model.py",
-            "gnome_media_preferences.py",
-            "gnome_component_jobs.py",
-            "gnome_application_order.py",
-            "gnome_sessions.py",
-            "gnome_program_choice.py",
-            "gnome_lazy_folders.py",
-            "gnome_navigation_state.py",
-        ):
-            assert (frontend / module).is_file(), module
-        environment = dict(
-            os.environ,
-            TWOINE_GNOME_FRONTEND=str(frontend),
-            TWOINE_BALL_LIBRARY=str(runtime / "libtwoine_ball.so"),
+        frontend = destination / "usr/bin/2ine-ball"
+        with frontend.open("rb") as stream:
+            assert stream.read(4) == b"\x7fELF", "the frontend is a native executable"
+        dependencies = run(["ldd", frontend], capture_output=True, text=True).stdout
+        assert "not found" not in dependencies, dependencies
+        assert "libtwoine_ball" not in dependencies, "the ball engine is linked statically"
+        assert "python" not in dependencies.lower(), dependencies
+        run([frontend, "--help"], capture_output=True)
+        helper = runtime / "2ine-dialog"
+        assert helper.is_file(), "the native dialog helper ships beside lx_loader"
+        assert "libtwoine_ball" not in run(["ldd", helper], capture_output=True, text=True).stdout
+        invalid = subprocess.run([helper, "unknown"], capture_output=True, text=True)
+        assert invalid.returncode == 2, (invalid.returncode, invalid.stderr)
+        home = Path(temporary) / "home"
+        environment = {
+            key: value for key, value in os.environ.items() if not key.startswith("TWOINE_")
+        }
+        environment.update(
+            HOME=str(home),
+            XDG_CONFIG_HOME=str(home / ".config"),
+            XDG_DATA_HOME=str(home / ".local/share"),
+            GDK_BACKEND="x11",
         )
-        for test in (
-            "gnome_ball.py",
-            "gnome_features.py",
-            "gnome_audio.py",
-            "gnome_configuration.py",
-            "gnome_ball_management.py",
-            "gnome_native.py",
-        ):
-            run(
-                [sys.executable, ROOT / "tests/integration" / test, "--build", runtime],
-                env=environment,
-            )
-        print(f"{args.package.name}: relocated ELF closure and GTK/LX workflows passed")
+        ball = home / "Relocated.2ineball"
+        process = subprocess.Popen([frontend, ball], env=environment)
+        try:
+            # The relocated frontend opens the ball with the packaged runtime and engine.
+            deadline = time.monotonic() + 60
+            while time.monotonic() < deadline and process.poll() is None:
+                if (ball / "ball.json").is_file() or windows(environment):
+                    break
+                time.sleep(0.5)
+            assert process.poll() is None, "the frontend exited during startup"
+            assert any(title == "2ine" for _wid, title in windows(environment))
+        finally:
+            process.terminate()
+            process.wait(timeout=30)
+        print(f"{args.package.name}: relocated ELF closure and native frontend startup passed")
 
 
 if __name__ == "__main__":

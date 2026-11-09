@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Install the GNOME ball launcher for the current user from this checkout."""
+"""Install the Rust GNOME ball manager for the current user from this checkout."""
 
 import os
 import shlex
@@ -14,17 +14,26 @@ APP_ID = "io.github.bitwisecook.Twoine.Ball"
 
 def main():
     data = Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share")))
+    subprocess.run(
+        ["cargo", "build", "--release", "--manifest-path", str(ROOT / "gnome/Cargo.toml")],
+        check=True,
+    )
+    binary = ROOT / "build/gnome/release/2ine-ball"
     executable = Path.home() / ".local/bin/2ine-ball"
     executable.parent.mkdir(parents=True, exist_ok=True)
+    # The development launcher keeps using this checkout's runtime build.
     executable.write_text(
-        "#!/bin/sh\nexec /usr/bin/python3 "
-        + shlex.quote(str(ROOT / "tools/gnome_ball.py"))
+        '#!/bin/sh\n: "${TWOINE_BUILD:='
+        + shlex.quote(str(ROOT / "build/runtime"))
+        + '}"\nexport TWOINE_BUILD\nexec '
+        + shlex.quote(str(binary))
         + ' "$@"\n'
     )
     executable.chmod(0o755)
     desktop = data / "applications" / (APP_ID + ".desktop")
     desktop.parent.mkdir(parents=True, exist_ok=True)
-    text = (ROOT / "tools/gnome" / desktop.name).read_text()
+    data_dir = ROOT / "gnome/data"
+    text = (data_dir / desktop.name).read_text()
     # Desktop Entry Exec quoting differs from shell quoting, including literal percent signs.
     quoted = (
         str(executable)
@@ -37,19 +46,19 @@ def main():
     desktop.write_text(text.replace("Exec=2ine-ball", 'Exec="' + quoted + '"'))
     icon = data / "icons/hicolor/scalable/apps" / (APP_ID + ".svg")
     icon.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / icon.name, icon)
+    shutil.copyfile(data_dir / "icons" / icon.name, icon)
     symbolic = data / "icons/hicolor/symbolic/apps" / (APP_ID + "-symbolic.svg")
     symbolic.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / symbolic.name, symbolic)
+    shutil.copyfile(data_dir / "icons" / symbolic.name, symbolic)
     document_icon = data / "icons/hicolor/scalable/mimetypes/application-x-2ine-ball.svg"
     document_icon.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / "tools/icons/TwoineBall.svg", document_icon)
     mime = data / "mime/packages" / (APP_ID + ".xml")
     mime.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / (APP_ID + ".mime.xml"), mime)
+    shutil.copyfile(data_dir / (APP_ID + ".mime.xml"), mime)
     metadata = data / "metainfo" / (APP_ID + ".metainfo.xml")
     metadata.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "tools/gnome" / metadata.name, metadata)
+    shutil.copyfile(data_dir / metadata.name, metadata)
     for tool, directory in (
         ("update-mime-database", data / "mime"),
         ("update-desktop-database", data / "applications"),
