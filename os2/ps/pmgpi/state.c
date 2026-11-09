@@ -1,9 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* GPI attributes and saved-state stack belong to each presentation space. */
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
 #include "emulator/abi.h"
+#include "os2/include/pmerr.h"
+#include "os2/include/pmsei.h"
+#include <math.h>
+#include "os2/ps/pmgpi/internal.h"
 
 BOOL GpiSetMix(HPS handle, LONG mode)
 {
@@ -441,4 +444,160 @@ BOOL GpiQueryPatternRefPoint(HPS handle, PPOINTL point)
         return FALSE;
     *point = ps->pattern_reference;
     return TRUE;
+}
+
+BOOL GpiSetArcParams(HPS h, PLONG arc)
+{
+    PresentationSpace *p = gpi_space(h);
+    if (!p || !arc)
+        return FALSE;
+    memcpy(p->gpi.arc, arc, 16);
+    return TRUE;
+}
+
+#define ATTRIBUTE(Name, field, min, max, def)                                                      \
+    BOOL GpiSet##Name(HPS h, LONG v)                                                               \
+    {                                                                                              \
+        PresentationSpace *p = gpi_space(h);                                                       \
+        if (!p || v < min || v > max)                                                              \
+            return FALSE;                                                                          \
+        p->gpi.field = v ? v : def;                                                                \
+        return TRUE;                                                                               \
+    }                                                                                              \
+    LONG GpiQuery##Name(HPS h)                                                                     \
+    {                                                                                              \
+        PresentationSpace *p = gpi_space(h);                                                       \
+        return p ? p->gpi.field : -1;                                                              \
+    }
+ATTRIBUTE(LineEnd, line_end, 0, 3, 1)
+ATTRIBUTE(LineJoin, line_join, 0, 3, 1)
+
+BOOL GpiSetLineWidthGeom(HPS h, LONG v)
+{
+    PresentationSpace *p = gpi_space(h);
+    if (!p || v < 0 || p->record_path)
+        return FALSE;
+    p->gpi.line_width = v;
+    return TRUE;
+}
+
+LONG GpiQueryLineWidthGeom(HPS h)
+{
+    PresentationSpace *p = gpi_space(h);
+    return p ? p->gpi.line_width : -1;
+}
+
+BOOL GpiSetCharExtra(HPS h, LONG v)
+{
+    PresentationSpace *p = gpi_space(h);
+    if (!p || p->area_recording)
+        return FALSE;
+    p->gpi.char_extra = v;
+    return TRUE;
+}
+
+LONG GpiQueryAttrs(HPS h, LONG primitive, ULONG mask, PVOID output)
+{
+    PresentationSpace *p = gpi_space(h);
+    if (!p || primitive < 1 || primitive > 5 || (mask && !output))
+        return -1;
+    if (!mask)
+        return 0;
+    uint8 *b = output;
+    unsigned k = primitive - 1;
+    ULONG defaults = 0;
+#define DEFAULTED(bit, test)                                                                       \
+    if (test)                                                                                      \
+    defaults |= (bit)
+    if (mask & 1)
+        lx_guest_store_u32(b, p->primitive_color[k]);
+    DEFAULTED(1, p->primitive_color[k] == CLR_BLACK);
+    if (mask & 2)
+        lx_guest_store_u32(b + 4, p->primitive_back[k]);
+    DEFAULTED(2, p->primitive_back[k] == CLR_WHITE);
+    if (mask & 4)
+        lx_guest_store_u16(b + 8, p->primitive_mix[k]);
+    DEFAULTED(4, p->primitive_mix[k] == 2);
+    if (mask & 8)
+        lx_guest_store_u16(b + 10, p->primitive_back_mix[k]);
+    DEFAULTED(8, p->primitive_back_mix[k] == 5);
+    if (primitive == 1)
+    {
+        if (mask & 16)
+            lx_guest_store_u32(b + 12, 65536);
+        defaults |= 16;
+        if (mask & 32)
+            lx_guest_store_u32(b + 16, p->gpi.line_width);
+        DEFAULTED(32, p->gpi.line_width == 1);
+        if (mask & 64)
+            lx_guest_store_u16(b + 20, p->line_type);
+        DEFAULTED(64, p->line_type == 7);
+        if (mask & 128)
+            lx_guest_store_u16(b + 22, p->gpi.line_end);
+        DEFAULTED(128, p->gpi.line_end == 1);
+        if (mask & 256)
+            lx_guest_store_u16(b + 24, p->gpi.line_join);
+        DEFAULTED(256, p->gpi.line_join == 1);
+    }
+    if (primitive == 2)
+    {
+        if (mask & 16)
+            lx_guest_store_u16(b + 12, p->charset);
+        DEFAULTED(16, !p->charset);
+        if (mask & 32)
+            lx_guest_store_u16(b + 14, p->char_mode);
+        DEFAULTED(32, p->char_mode <= 1);
+        if (mask & 64)
+        {
+            lx_guest_store_u32(b + 16, p->char_width);
+            lx_guest_store_u32(b + 20, p->char_height);
+        }
+        DEFAULTED(64, !p->char_width && !p->char_height);
+        if (mask & 128)
+            memcpy(b + 24, &p->char_angle, 8);
+        DEFAULTED(128, !p->char_angle.x && !p->char_angle.y);
+        if (mask & 256)
+            memcpy(b + 32, &p->char_shear, 8);
+        DEFAULTED(256, !p->char_shear.x && !p->char_shear.y);
+        if (mask & 512)
+            lx_guest_store_u16(b + 40, p->char_direction);
+        DEFAULTED(512, p->char_direction <= 1);
+        if (mask & 1024)
+            lx_guest_store_u16(b + 42, p->text_horizontal | p->text_vertical);
+        DEFAULTED(1024, !p->text_horizontal && !p->text_vertical);
+        if (mask & 2048)
+            lx_guest_store_u32(b + 44, p->gpi.char_extra);
+        DEFAULTED(2048, !p->gpi.char_extra);
+        if (mask & 4096)
+            lx_guest_store_u32(b + 48, 0);
+        defaults |= 4096;
+    }
+    if (primitive == 3)
+    {
+        /* Markers have no settable set, symbol or box in this PS. */
+        if (mask & 16)
+            lx_guest_store_u16(b + 12, 0);
+        if (mask & 32)
+            lx_guest_store_u16(b + 14, 0);
+        if (mask & 64)
+        {
+            lx_guest_store_u32(b + 16, 0);
+            lx_guest_store_u32(b + 20, 0);
+        }
+        defaults |= 16 | 32 | 64;
+    }
+    if (primitive == 4)
+    {
+        if (mask & 16)
+            lx_guest_store_u16(b + 12, p->pattern_set);
+        DEFAULTED(16, !p->pattern_set);
+        if (mask & 32)
+            lx_guest_store_u16(b + 14, p->pattern);
+        DEFAULTED(32, p->pattern == 16);
+        if (mask & 64)
+            memcpy(b + 16, &p->pattern_reference, 8);
+        DEFAULTED(64, !p->pattern_reference.x && !p->pattern_reference.y);
+    }
+#undef DEFAULTED
+    return (LONG)(defaults & mask);
 }

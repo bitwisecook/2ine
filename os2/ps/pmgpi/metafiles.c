@@ -3,8 +3,12 @@
    handle or range never dereferences an application supplied resource value. */
 #include "os2/include/pmgpi.h"
 #include "os2/include/private/pmgpip.h"
-#include "os2/ps/pmmerge/pmwin/internal.h"
 #include "host/fs.h"
+#include "os2/include/pmerr.h"
+#include "os2/include/pmsei.h"
+#include "os2/ps/pmmerge/pmgre/graphics.h"
+#include "emulator/abi.h"
+#include "os2/ps/pmgpi/internal.h"
 
 typedef struct PmMetaFile
 {
@@ -147,4 +151,18 @@ BOOL GpiSaveMetaFile(ULONG h, PSZ name)
     if (ok)
         lx_handle_close(h, LX_HANDLE_PM_METAFILE);
     return ok;
+}
+
+LONG GpiPlayMetaFile(HPS ps, ULONG handle, LONG count, PLONG options, PLONG segments,
+                     LONG description_length, PSZ description)
+{
+    (void)ps;
+    (void)handle;
+    (void)count;
+    (void)options;
+    (void)segments;
+    (void)description_length;
+    (void)description;
+    gpi_unsupported();
+    return -1;
 }

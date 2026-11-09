@@ -78,7 +78,7 @@ OS2_CROSS_DLL_ALLOWANCES = {
     ("os2/opengl/opengl", "os2/ps/pmmerge"): 1,
     ("os2/ps/awe", "os2/ps/pmmerge"): 39,
     ("os2/ps/controls/pmctls", "os2/ps/pmmerge"): 4,
-    ("os2/ps/pmgpi", "os2/ps/pmmerge"): 22,
+    ("os2/ps/pmgpi", "os2/ps/pmmerge"): 21,
     ("os2/wpsh/pmwp", "os2/ps/pmmerge"): 1,
 }
 

@@ -3,7 +3,6 @@
 twoine_os2_dll(
     pmgpi
     pmgpi/module.c
-    pmgpi/help.c
     pmgpi/fonts.c
     pmgpi/device.c
     pmgpi/state.c
@@ -11,7 +10,10 @@ twoine_os2_dll(
     pmgpi/regions.c
     pmgpi/text.c
     pmgpi/shapes.c
-    pmgpi/extensions.c
+    pmgpi/presentation_space.c
+    pmgpi/transforms.c
+    pmgpi/correlation.c
+    pmgpi/color.c
     pmgpi/paths.c
     pmgpi/metafiles.c
     pmgpi/public_fonts.c
