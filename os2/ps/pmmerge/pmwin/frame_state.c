@@ -1,10 +1,19 @@
-/* Public domain. No rights reserved. Wholly AI-authored. */
+/**
+ * 2ine; an OS/2 emulator for Linux.
+ *
+ * Please see the file LICENSE.txt in the source's root directory.
+ *
+ *  This file written by Ryan C. Gordon.
+ */
 /* Frame restore geometry uses the public QWS_*RESTORE words. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "os2/ps/pmmerge/pmwin/menus.h"
 #include "os2/ps/pmmerge/pmwin/controls.h"
 #include "emulator/features.h"
+#include "emulator/launch_record.h"
+#include "os2/ps/pmmerge/pmwin/video_frames.h"
+#include "os2/include/private/pmp.h"
 
 enum
 {
@@ -564,4 +573,13 @@ BOOL WinCreateFrameControls(HWND handle, PFRAMECDATA data, PSZ title)
     formatFrame(window);
     lx_handle_release(&resource_lease);
     return TRUE;
+}
+
+BOOL WinCalcFrameRect(HWND handle, PRECTL rect, BOOL client)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    if (!window || !rect)
+        return FALSE;
+    return frameClientRect(window, rect, client);
 }

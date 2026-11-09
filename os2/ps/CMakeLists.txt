@@ -29,6 +29,8 @@ twoine_os2_dll(
     pmmerge/pmwin/context.c
     pmmerge/pmwin/codepages.c
     pmmerge/pmwin/windows.c
+    pmmerge/pmwin/classes.c
+    pmmerge/pmwin/defwndproc.c
     pmmerge/pmwin/frame_state.c
     pmmerge/pmwin/messages.c
     pmmerge/pmwin/winloop.c

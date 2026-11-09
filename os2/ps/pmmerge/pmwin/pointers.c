@@ -1,9 +1,20 @@
-/* Public domain. No rights reserved. Wholly AI-authored. */
+/**
+ * 2ine; an OS/2 emulator for Linux.
+ *
+ * Please see the file LICENSE.txt in the source's root directory.
+ *
+ *  This file written by Ryan C. Gordon.
+ */
 /* System cursor handles retain the host cursor and distinguish shared resources from copies. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/pointer_image.h"
 #include "os2/include/private/pmp.h"
 #include "host/fs.h"
+#include "emulator/launch_record.h"
+#include "os2/ps/pmmerge/pmwin/video_frames.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/controls.h"
+#include "os2/ps/pmmerge/pmwin/menus.h"
 
 typedef struct PmPointer
 {
@@ -703,4 +714,23 @@ HPOINTER lx_pm_pointer_file(const char *filename)
     p->next = a->pointers;
     a->pointers = p;
     return p->handle;
+}
+
+BOOL WinQueryPointerPos(HWND hwnd, PPOINTL point)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *win = anchor ? getWindowFromHWND(anchor, hwnd) : NULL;
+    if (!win || !point)
+        return FALSE;
+    int x, y;
+    lx_host_mouse_position(&x, &y);
+    y = desktop_window.h - 1 - y;
+    for (Window *w = win; w && w != &desktop_window; w = w->parent)
+    {
+        x -= w->x;
+        y -= w->y;
+    }
+    point->x = x;
+    point->y = y;
+    return TRUE;
 }
