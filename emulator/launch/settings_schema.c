@@ -39,7 +39,8 @@ int launch_validate_system(TbBall *c)
         {
             char *end = NULL;
             long number = strtol(v, &end, 10);
-            if (end == v || *end || number < 72 || number > 384)
+            if (end == v || *end || number < LAUNCH_MIN_DISPLAY_DPI ||
+                number > LAUNCH_MAX_DISPLAY_DPI)
                 return tb_ball_fail(c, "display_dpi must be a whole number between 72 and 384");
         }
         else if (!strcmp(entry->string, "display_depth"))
