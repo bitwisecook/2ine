@@ -73,7 +73,7 @@ let package = Package(
             ],
             path: "Sources/BallEngine",
             exclude: [
-                "CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md",
+                "CMakeLists.txt", "vendor/cjson/LICENSE", "vendor/sha256/README.md",
             ],
             publicHeadersPath: "include", cSettings: ballBuildSettings,
             linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),

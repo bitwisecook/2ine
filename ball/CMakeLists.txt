@@ -142,12 +142,7 @@ set_target_properties(
         POSITION_INDEPENDENT_CODE ON
         ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
 )
-add_executable(twoine_ball_cli cli.c vendor/cjson/cJSON.c)
-target_link_libraries(twoine_ball_cli PRIVATE twoine_ball)
-target_include_directories(twoine_ball_cli PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
-target_compile_features(twoine_ball_cli PRIVATE c_std_11)
-target_compile_definitions(twoine_ball_cli PRIVATE CJSON_HIDE_SYMBOLS)
-set_target_properties(
-    twoine_ball_cli
-    PROPERTIES OUTPUT_NAME "2ine-ball" RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-)
+# The command-line client of the JSON facade.
+if(NOT TARGET twoine_ball_cli)
+    add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/apps/cli" apps/cli)
+endif()

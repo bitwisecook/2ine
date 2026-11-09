@@ -14,7 +14,7 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 # Every top-level directory that holds sources has a role, so a new component is
 # placed under the rules below before it can pass.
 PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "os2"}
-HOST_COMPONENTS = {"host", "ball", "environment"}
+HOST_COMPONENTS = {"host", "ball", "environment", "apps"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
 FOREIGN_DIRECTORIES = {"ports", "research"}
@@ -71,6 +71,16 @@ LAYERED_INCLUDES = {
         STORE_CLIENT_BALL_INCLUDES,
     ),
     "emulator/": (r"emulator/launch/", r"environment/"),
+    # Applications talk to the engine through its JSON ABI only.
+    "apps/": (
+        r"ball/(?!include/|vendor/)",
+        r"environment/",
+        r"emulator/",
+        r"host/",
+        r"os2/",
+        r"storage/",
+        r"formats/",
+    ),
 }
 
 # os2/ follows IBM's component build trees. include/ holds the Toolkit-shaped
