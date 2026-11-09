@@ -3,7 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/include/os2me.h"
 #include "os2/mm/video/decode/video_decode.h"
-#include "os2/mm/mmpm/mci/mdm/mdm_video.h"
+#include "os2/mm/mmpm/mci/svmc/digital_video.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/private/pmp.h"
 #include "host/clock.h"

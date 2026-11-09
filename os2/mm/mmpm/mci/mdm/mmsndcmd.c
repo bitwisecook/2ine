@@ -4,7 +4,7 @@
 #include "os2/mm/mmpm/mci/mdm/mdm.h"
 #include "os2/mm/mmpm/mci/admc/admc.h"
 #include "os2/mm/mmpm/mci/mimc/mimc.h"
-#include "os2/mm/mmpm/mci/mdm/mdm_video.h"
+#include "os2/mm/mmpm/mci/svmc/digital_video.h"
 
 #if TWOINE_PORTABLE_LOADER
 size_t lx_mci_parameter_size(USHORT message, ULONG flags)

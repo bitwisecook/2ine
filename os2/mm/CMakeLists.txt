@@ -39,7 +39,11 @@ twoine_os2_dll(
     mmpm/mci/mdm/minit.c
     mmpm/mci/mdm/mmsndcmd.c
     mmpm/mci/mdm/mmsndstr.c
-    mmpm/mci/mdm/mdm_video.c
+    mmpm/mci/svmc/video_device.c
+    mmpm/mci/svmc/video_audio.c
+    mmpm/mci/svmc/video_play.c
+    mmpm/mci/svmc/video_command.c
+    mmpm/mci/svmc/video_string.c
     mmpm/mci/admc/dart.c
     mmpm/mci/mimc/sequencer.c
     mmpm/mmio/mmio/mmio.c

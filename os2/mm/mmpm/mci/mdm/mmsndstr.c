@@ -2,7 +2,7 @@
 /* mciSendString and mciGetErrorString. Only the digital-video device accepts
    string commands. */
 #include "os2/mm/mmpm/mci/mdm/mdm.h"
-#include "os2/mm/mmpm/mci/mdm/mdm_video.h"
+#include "os2/mm/mmpm/mci/svmc/digital_video.h"
 
 ULONG mciSendString(PSZ command, PSZ output, USHORT length, ULONG window, USHORT user)
 {

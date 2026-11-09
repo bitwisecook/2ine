@@ -1,5 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* MCI text commands share the same device state and checked wire parameters. */
+/* MCI string commands for the digital-video device, parsed into the same
+   parameter blocks mciSendCommand takes. */
+#include "os2/mm/mmpm/mci/svmc/video.h"
+#include <ctype.h>
+#include <errno.h>
+
 static int video_number(const char *text, ULONG *value)
 {
     char *end;
@@ -11,15 +16,15 @@ static int video_number(const char *text, ULONG *value)
     return 1;
 }
 
-static VideoDevice *video_alias(const char *text)
+static LxDgvDevice *video_alias(const char *text)
 {
     ULONG id;
     if (video_number(text, &id) && id <= UINT16_MAX)
-        return find((USHORT)id);
+        return lx_dgv_find((USHORT)id);
     for (unsigned i = 0; i < VIDEO_DEVICES; i++)
-        if (devices[i].id && !devices[i].closing && *devices[i].alias &&
-            !strcasecmp(text, devices[i].alias))
-            return &devices[i];
+        if (lx_dgv_devices[i].id && !lx_dgv_devices[i].closing && *lx_dgv_devices[i].alias &&
+            !strcasecmp(text, lx_dgv_devices[i].alias))
+            return &lx_dgv_devices[i];
     return NULL;
 }
 
@@ -92,11 +97,11 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
         return MCIERR_INVALID_BUFFER;
     }
     int opening = !strcasecmp(tokens[0], "open");
-    VideoDevice *d = count >= 2 && !opening ? video_alias(tokens[1]) : NULL;
+    LxDgvDevice *d = count >= 2 && !opening ? video_alias(tokens[1]) : NULL;
     int empty =
         opening && count >= 2 &&
         (!strcasecmp(tokens[1], "digitalvideo") || !strcasecmp(tokens[1], "digitalvideo01"));
-    int video = empty || (opening && count >= 2 && video_name(tokens[1]));
+    int video = empty || (opening && count >= 2 && lx_dgv_video_name(tokens[1]));
     for (unsigned i = 2; opening && i + 1 < count; i++)
         if (!strcasecmp(tokens[i], "type") && !strcasecmp(tokens[i + 1], "digitalvideo"))
             video = 1;

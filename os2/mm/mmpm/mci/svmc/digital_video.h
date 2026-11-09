@@ -1,6 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_MDM_VIDEO_H
-#define TWOINE_MDM_VIDEO_H
+/* The digital-video device as seen by mciSendCommand, mciSendString and MDM
+   termination. A command for another device returns with *handled 0. */
+#ifndef TWOINE_MMPM_DIGITAL_VIDEO_H
+#define TWOINE_MMPM_DIGITAL_VIDEO_H
 #include "os2/include/os2def.h"
 ULONG lx_mci_video_command(USHORT device, USHORT message, ULONG flags, PVOID parameters,
                            USHORT user, int *handled);
