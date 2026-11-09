@@ -4,7 +4,7 @@ The reference set uses a stock OS/2 Warp 4.52 VM and the original SmartSuite
 1.7 installer followed by Fixpack 3. The VM disk and application/font binaries
 are private fixtures. `manifest.json` records the exact artifacts and stages.
 
-The matching 2ine harness is `tests/integration/smartsuite.py`. Its cycle enters
+The matching 2ine harness is `tests/integration/applications/smartsuite.py`. Its cycle enters
 `word pro editing test`, chooses Courier and adds ` courier text`, saves,
 closes/reopens, chooses Helv on a new paragraph, adds `edited after reopen`,
 saves and closes/reopens again. The screenshots cover the blank page, editing,

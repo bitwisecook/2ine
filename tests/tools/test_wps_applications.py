@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.integration.images import linear_image
+from tests.integration.harness.images import linear_image
 from tests.tools.test_configuration import profile
 from tools.ball import engine as api
 

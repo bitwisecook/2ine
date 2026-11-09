@@ -46,7 +46,7 @@ gnome-packages:
 	$(PYTHON) apps/gnome/package.py --build "$(GNOME_RUNTIME_BUILD)" --output "$(GNOME_OUTPUT)"
 
 gnome-test:
-	dbus-run-session -- xvfb-run -a $(PYTHON) tests/integration/gnome_ball.py --build "$(GNOME_RUNTIME_BUILD)"
+	dbus-run-session -- xvfb-run -a $(PYTHON) tests/integration/apps/gnome/gnome_ball.py --build "$(GNOME_RUNTIME_BUILD)"
 
 gnome-snap:
 	snapcraft pack --use-lxd --output "$(CURDIR)/build-gnome-snap"

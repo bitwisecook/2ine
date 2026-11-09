@@ -98,10 +98,10 @@ backend without changing the ball's settings.
 
 ```sh
 make macos-test
-python3 tests/integration/macos_ball.py \
+python3 tests/integration/apps/macos/macos_ball.py \
   --app 'build-macos/2ine.app' --work build-macos/relocation-check
 TWOINE_KOSMICKRISP_ICD="$PWD/build-macos/2ine.app/Contents/Resources/Runtime/vulkan/icd.d/kosmickrisp.json" \
-  python3 tests/integration/opengl.py \
+  python3 tests/integration/os2/opengl/opengl.py \
     --build 'build-macos/2ine.app/Contents/Resources/Runtime' \
     --backend unicorn --work build-macos/bundle-gl-tests
 ```

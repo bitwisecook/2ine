@@ -220,9 +220,9 @@ python3 -m unittest discover -s tests/tools
 python3 tools/codegen/lxapigen.py --check
 desktop-file-validate apps/gnome/data/*.desktop
 appstreamcli validate --no-net apps/gnome/data/*.metainfo.xml
-xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_ball.py --build build-portable
-xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_features.py --build build-portable
-dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-ball_0.3_amd64.deb
+xvfb-run -a dbus-run-session -- python3 tests/integration/apps/gnome/gnome_ball.py --build build-portable
+xvfb-run -a dbus-run-session -- python3 tests/integration/apps/gnome/gnome_features.py --build build-portable
+dbus-run-session -- xvfb-run -a python3 tests/integration/apps/gnome/gnome_package.py build-gnome/packages/2ine-ball_0.3_amd64.deb
 ```
 
 The GTK integration executes a generated LX installer and saved launcher using
@@ -236,14 +236,14 @@ a full SmartSuite reinstall or every installed suite application.
 
 ## Screenshot gallery
 
-`tests/integration/gnome_screenshots.py` captures the actual GTK application,
+`tests/integration/apps/gnome/gnome_screenshots.py` captures the actual GTK application,
 not mockups, in both appearances. It covers the five views, installation media,
 application tabs, drive/program pickers, creation/protection/export dialogs and
 the adaptive layout. It writes PNGs, an HTML gallery, a JSON index and a ZIP:
 
 ```sh
 xvfb-run -a -s '-screen 0 1440x1000x24' dbus-run-session -- \
-  python3 tests/integration/gnome_screenshots.py --build build-portable \
+  python3 tests/integration/apps/gnome/gnome_screenshots.py --build build-portable \
   --ball '/path/to/preview.2ineball' --output build-gnome/screenshots
 ```
 
@@ -294,5 +294,5 @@ code passes Python syntax and Ruff checks; its new controls still need Linux
 runtime, keyboard and visual acceptance with:
 
 ```sh
-xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_configuration.py --build build-portable
+xvfb-run -a dbus-run-session -- python3 tests/integration/apps/gnome/gnome_configuration.py --build build-portable
 ```

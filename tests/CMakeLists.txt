@@ -92,15 +92,16 @@ if(TARGET twoine_runtime)
     add_test(
         NAME image_drives
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/image_drives.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball/image_drives.py"
             --program $<TARGET_FILE:twoine_image_fs_tests> --work
             "${PROJECT_BINARY_DIR}/image-drive-tests"
     )
     add_test(
         NAME filesystem_images
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/filesystem_images.py"
-            --program $<TARGET_FILE:twoine_image_fs_tests> --work
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball/filesystem_images.py" --program
+            $<TARGET_FILE:twoine_image_fs_tests> --work
             "${PROJECT_BINARY_DIR}/filesystem-image-tests"
     )
     set_tests_properties(
@@ -110,7 +111,7 @@ if(TARGET twoine_runtime)
     add_test(
         NAME floppy_drives
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/floppy_drives.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball/floppy_drives.py"
             --program $<TARGET_FILE:twoine_image_fs_tests> --work
             "${PROJECT_BINARY_DIR}/floppy-drive-tests"
     )
@@ -150,7 +151,7 @@ if(TARGET twoine_runtime)
             NAME host_operation_lifecycle
             COMMAND
                 "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/integration/operation_lifecycle.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/emulator/operation_lifecycle.py"
                 "$<TARGET_FILE:twoine_operation_fixture>"
         )
         set_tests_properties(host_operation_lifecycle PROPERTIES TIMEOUT 45)
@@ -198,7 +199,7 @@ if(TARGET twoine_runtime)
     add_test(
         NAME host_tls
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/host_tls.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/host/host_tls.py"
             "$<TARGET_FILE:twoine_tls_tests>" "${TWOINE_OPENSSL_TOOL}"
     )
     set_tests_properties(host_tls PROPERTIES TIMEOUT 40)
@@ -212,7 +213,7 @@ if(TARGET 2ine)
     add_test(
         NAME os2_tls_shim
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/host_tls.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/host/host_tls.py"
             "$<TARGET_FILE:twoine_ssl_shim_tests>" "${TWOINE_OPENSSL_TOOL}"
     )
     set_tests_properties(os2_tls_shim PROPERTIES TIMEOUT 40)
@@ -243,7 +244,7 @@ if(TARGET 2ine)
         add_test(
             NAME host_fullscreen
             COMMAND
-                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/fullscreen.py"
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/host/fullscreen.py"
                 --program $<TARGET_FILE:twoine_fullscreen_tests> --work
                 "${PROJECT_BINARY_DIR}/fullscreen-results"
         )
@@ -382,8 +383,8 @@ if(TARGET pmmerge)
     add_test(
         NAME printer_output
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/printing.py" --build
-            "${PROJECT_BINARY_DIR}" --backend
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/ps/printing.py"
+            --build "${PROJECT_BINARY_DIR}" --backend
             "$<IF:$<BOOL:${TWOINE_PORTABLE_LOADER}>,unicorn,native>"
     )
     set_tests_properties(
@@ -407,15 +408,16 @@ if(TARGET lx_loader)
         add_test(
             NAME network_guest
             COMMAND
-                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/network_guest.py"
-                --build "${PROJECT_BINARY_DIR}" --openssl "${TWOINE_OPENSSL_TOOL}"
+                "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/mptn/network_guest.py" --build
+                "${PROJECT_BINARY_DIR}" --openssl "${TWOINE_OPENSSL_TOOL}"
         )
         set_tests_properties(network_guest PROPERTIES TIMEOUT 60)
         add_test(
             NAME network_diagnostics_guest
             COMMAND
                 "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/integration/network_diagnostics.py" --build
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/mptn/network_diagnostics.py" --build
                 "${PROJECT_BINARY_DIR}"
         )
         set_tests_properties(network_diagnostics_guest PROPERTIES TIMEOUT 45)
@@ -435,7 +437,7 @@ if(TARGET lx_loader)
             NAME os2_network_tools
             COMMAND
                 "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/integration/network_diagnostics.py" --build
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/mptn/network_diagnostics.py" --build
                 "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --os2-tools
                 "${TWOINE_OS2_NETWORK_TOOLS}"
         )
@@ -445,7 +447,8 @@ if(TARGET lx_loader)
         add_test(
             NAME opengl_guest
             COMMAND
-                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/opengl.py" --build
+                "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/opengl/opengl.py" --build
                 "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work
                 "${PROJECT_BINARY_DIR}/opengl-results/guest"
         )
@@ -457,7 +460,7 @@ if(TARGET lx_loader)
                     NAME opengl_desktop_guest
                     COMMAND
                         "${TWOINE_XVFB_RUN}" -a "${Python3_EXECUTABLE}"
-                        "${CMAKE_CURRENT_SOURCE_DIR}/integration/opengl.py" --build
+                        "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/opengl/opengl.py" --build
                         "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --video-driver
                         x11 --render-driver opengl --work
                         "${PROJECT_BINARY_DIR}/opengl-results/desktop"
@@ -491,8 +494,9 @@ if(TARGET lx_loader)
             add_test(
                 NAME opengl_sdk
                 COMMAND
-                    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/opengl_sdk.py"
-                    --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --sdk
+                    "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/opengl/opengl_sdk.py" --build
+                    "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --sdk
                     "${TWOINE_OPENGL_SDK}" --watcom "${TWOINE_OPENGL_WATCOM}" --work
                     "${PROJECT_BINARY_DIR}/opengl-results/sdk"
             )
@@ -502,22 +506,22 @@ if(TARGET lx_loader)
     add_test(
         NAME pm_dialog_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/dialogs.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/ps/dialogs.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(pm_dialog_apis PROPERTIES TIMEOUT 20)
     add_test(
         NAME legacy_file_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/legacy.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/legacy.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(legacy_file_apis PROPERTIES TIMEOUT 40)
     add_test(
         NAME lx_forwarded_exports
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/lx_exports.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/emulator/lx_exports.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(lx_forwarded_exports PROPERTIES TIMEOUT 30)
     # Kept out of the build directory, whose lib*.so files form the runtime.
@@ -533,37 +537,39 @@ if(TARGET lx_loader)
     add_test(
         NAME native_forwarded_exports
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/native_forwarders.py"
-            --build "${PROJECT_BINARY_DIR}" --modules "$<TARGET_FILE_DIR:natfwd>" --backend
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/emulator/native_forwarders.py" --build
+            "${PROJECT_BINARY_DIR}" --modules "$<TARGET_FILE_DIR:natfwd>" --backend
             "${_twoine_legacy_backend}"
     )
     set_tests_properties(native_forwarded_exports PROPERTIES TIMEOUT 30)
     add_test(
         NAME desktop_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/desktop.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/ps/desktop.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(desktop_apis PROPERTIES TIMEOUT 40)
     add_test(
         NAME mux_wait_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/mux_wait.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/mux_wait.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(mux_wait_apis PROPERTIES TIMEOUT 40)
     add_test(
         NAME queue_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/queues.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/queues.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(queue_apis PROPERTIES TIMEOUT 40)
     add_test(
         NAME legacy_session_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/legacy_sessions.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/legacy_sessions.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(legacy_session_apis PROPERTIES TIMEOUT 20)
     if(UNIX)
@@ -571,7 +577,7 @@ if(TARGET lx_loader)
             NAME installer_operation_apis
             COMMAND
                 "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/integration/installer_lifecycle.py" --build
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/installer_lifecycle.py" --build
                 "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
         )
         set_tests_properties(installer_operation_apis PROPERTIES TIMEOUT 35)
@@ -579,71 +585,77 @@ if(TARGET lx_loader)
     add_test(
         NAME exception_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/exceptions.py" --build
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/exceptions.py" --build
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(exception_apis PROPERTIES TIMEOUT 20)
     add_test(
         NAME rexx_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/rexx_apis.py" --build
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/rexx_apis.py" --build
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(rexx_apis PROPERTIES TIMEOUT 60)
     add_test(
         NAME critical_section_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/critical_sections.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/critical_sections.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(critical_section_apis PROPERTIES TIMEOUT 40)
     add_test(
         NAME titlebar_subclass_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/titlebar.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/ps/titlebar.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(titlebar_subclass_apis PROPERTIES TIMEOUT 20)
     add_test(
         NAME open32_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(open32_apis PROPERTIES TIMEOUT 40)
     add_test(
         NAME fatal_report
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/fatal_report.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/emulator/fatal_report.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(fatal_report PROPERTIES TIMEOUT 120)
     add_test(
         NAME missing_import_exit
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/missing_import.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/emulator/missing_import.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(missing_import_exit PROPERTIES TIMEOUT 40)
     add_test(
         NAME open32_semaphores
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_semaphores.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_semaphores.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(open32_semaphores PROPERTIES TIMEOUT 30)
     add_test(
         NAME clipboard_guest
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/clipboard.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/ps/clipboard.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(clipboard_guest PROPERTIES TIMEOUT 20)
     add_test(
         NAME pm_window_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/windows.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/ps/windows.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(pm_window_apis PROPERTIES TIMEOUT 40)
 endif()
@@ -668,7 +680,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmmerge)
             add_test(
                 NAME gui_${profile}
                 COMMAND
-                    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/gui.py" --build
+                    "${Python3_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/integration/applications/gui.py" --build
                     "${PROJECT_BINARY_DIR}" --program "${TWOINE_${_twoine_gui_name}_EXE}" --backend
                     "${_twoine_gui_backend}" --profile "${profile}" --expected-exit
                     "${_twoine_gui_exit}" --work "${PROJECT_BINARY_DIR}/gui-results/${profile}"
@@ -720,8 +733,9 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_atomic
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_atomic.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_atomic.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work
             "${PROJECT_BINARY_DIR}/open32-atomic-tests"
     )
     set_tests_properties(open32_atomic PROPERTIES TIMEOUT 30)
@@ -743,8 +757,9 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_load_menu
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_load_menu.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work-dir
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_load_menu.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work-dir
             "${PROJECT_BINARY_DIR}/open32-load-menu-tests"
     )
     set_tests_properties(open32_load_menu PROPERTIES TIMEOUT 30)
@@ -855,7 +870,7 @@ if(TARGET dive)
     add_test(
         NAME dive_guest_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/dive.py" --build
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/mm/dive.py" --build
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
 endif()
@@ -877,7 +892,8 @@ if(TARGET doscalls)
     add_test(
         NAME guest_file_compat
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/file_compat.py" --build
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/file_compat.py" --build
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(guest_file_compat PROPERTIES TIMEOUT 20)
@@ -897,8 +913,9 @@ if(TARGET mmpm AND TWOINE_MIDI_SYNTH)
         add_test(
             NAME midi_bank_formats
             COMMAND
-                "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/midi_banks.py"
-                --build "${PROJECT_BINARY_DIR}"
+                "${Python3_EXECUTABLE}"
+                "${PROJECT_SOURCE_DIR}/tests/integration/os2/mm/midi_banks.py" --build
+                "${PROJECT_BINARY_DIR}"
         )
         set_tests_properties(midi_bank_formats PROPERTIES TIMEOUT 120)
     endif()
@@ -918,8 +935,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET dive)
         add_test(
             NAME doom_gameplay
             COMMAND
-                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/doom.py" --build
-                "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --program
+                "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ports/doom.py"
+                --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --program
                 "${TWOINE_DOOM_EXE}" --wad "${TWOINE_DOOM_WAD}" --source-built --work
                 "${PROJECT_BINARY_DIR}/doom-results" --seconds 70
         )
@@ -952,7 +969,7 @@ if(TARGET pmwinx)
     add_test(
         NAME image_install
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/image_install.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball/image_install.py"
             --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/image-install-tests"
     )
     set_tests_properties(
@@ -962,7 +979,7 @@ if(TARGET pmwinx)
     add_test(
         NAME ball
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball.py" --build
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball/ball.py" --build
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(ball PROPERTIES TIMEOUT 60)
@@ -971,8 +988,9 @@ if(TARGET quecalls)
     add_test(
         NAME installer_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/install_apis.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/install_apis.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(installer_apis PROPERTIES TIMEOUT 60)
 endif()
@@ -1001,8 +1019,9 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_unicode
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_unicode.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_unicode.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work
             "${PROJECT_BINARY_DIR}/open32-unicode-tests"
     )
     set_tests_properties(open32_unicode PROPERTIES TIMEOUT 45)
@@ -1013,8 +1032,9 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_menu_metrics
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_menu_metrics.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work-dir
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_menu_metrics.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work-dir
             "${PROJECT_BINARY_DIR}/open32-menu-metric-tests"
     )
     set_tests_properties(open32_menu_metrics PROPERTIES TIMEOUT 30)
@@ -1025,8 +1045,9 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_pointers
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_pointers.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work-dir
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_pointers.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work-dir
             "${PROJECT_BINARY_DIR}/open32-pointer-tests"
     )
     set_tests_properties(open32_pointers PROPERTIES TIMEOUT 30)
@@ -1038,8 +1059,9 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_priority
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_priority.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_priority.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}" --work
             "${PROJECT_BINARY_DIR}/open32-priority-tests"
     )
     set_tests_properties(open32_priority PROPERTIES TIMEOUT 30)
@@ -1075,8 +1097,9 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_accelerators
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_accelerators.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_accelerators.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(open32_accelerators PROPERTIES TIMEOUT 30)
     add_executable(twoine_open32_accelerator_tests os2/test_open32_accelerators.c)
@@ -1090,8 +1113,8 @@ if(TARGET pmwinx)
     add_test(
         NAME open32_tls
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_tls.py" --build
-            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/awe/open32_tls.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(open32_tls PROPERTIES TIMEOUT 30)
     add_executable(twoine_open32_tls_cleanup_tests os2/test_open32_tls_cleanup.c)
@@ -1106,15 +1129,16 @@ if(TARGET doscalls)
         NAME allocation_alignment
         COMMAND
             "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/integration/allocation_alignment.py" --build
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/allocation_alignment.py" --build
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(allocation_alignment PROPERTIES TIMEOUT 45)
     add_test(
         NAME shared_memory_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/shared_memory.py"
-            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/shared_memory.py" --build
+            "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(shared_memory_apis PROPERTIES TIMEOUT 60)
 endif()
@@ -1123,7 +1147,8 @@ if(TARGET doscalls)
     add_test(
         NAME named_mutex_apis
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/named_mutex.py" --build
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/baseos/named_mutex.py" --build
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(named_mutex_apis PROPERTIES TIMEOUT 60)
@@ -1133,8 +1158,9 @@ if(TARGET lx_loader)
     add_test(
         NAME loader_startup
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/loader_startup.py"
-            --build "${PROJECT_BINARY_DIR}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/emulator/loader_startup.py" --build
+            "${PROJECT_BINARY_DIR}"
     )
     set_tests_properties(loader_startup PROPERTIES TIMEOUT 10)
 endif()
@@ -1157,17 +1183,17 @@ if(TARGET mmpm AND TWOINE_VIDEO)
     add_test(
         NAME digital_video
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/video.py" --build
-            "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/video-tests" --backend
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/mm/video.py"
+            --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/video-tests" --backend
             "${_twoine_legacy_backend}"
     )
     set_tests_properties(digital_video PROPERTIES TIMEOUT 40)
     add_test(
         NAME digital_video_audio
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/video.py" --build
-            "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/video-audio-tests" --backend
-            "${_twoine_legacy_backend}" --audio-driver disk
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/mm/video.py"
+            --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/video-audio-tests"
+            --backend "${_twoine_legacy_backend}" --audio-driver disk
     )
     set_tests_properties(digital_video_audio PROPERTIES TIMEOUT 40)
 endif()
@@ -1176,17 +1202,19 @@ if(TARGET lx_loader AND TARGET twoine_ball_cli)
     add_test(
         NAME runtime_features
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/runtime_features.py"
-            --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/runtime-feature-tests"
-            --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/emulator/runtime_features.py" --build
+            "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/runtime-feature-tests" --backend
+            "${_twoine_legacy_backend}"
     )
     set_tests_properties(runtime_features PROPERTIES TIMEOUT 40)
     add_test(
         NAME ball_relocation
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball_relocation.py"
-            --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/ball-relocation-tests"
-            --backend "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball/ball_relocation.py" --build
+            "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/ball-relocation-tests" --backend
+            "${_twoine_legacy_backend}"
     )
     set_tests_properties(ball_relocation PROPERTIES TIMEOUT 40)
     if(APPLE)
@@ -1194,7 +1222,7 @@ if(TARGET lx_loader AND TARGET twoine_ball_cli)
             NAME macos_native_cache
             COMMAND
                 "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/integration/macos_native_cache.py" --build
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/apps/macos/macos_native_cache.py" --build
                 "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/macos-native-cache-tests"
         )
         set_tests_properties(macos_native_cache PROPERTIES TIMEOUT 60)
@@ -1217,9 +1245,9 @@ if(TARGET lx_loader AND TARGET pmgpi)
     add_test(
         NAME bitmap_bits_guest
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/bitmap_bits.py" --build
-            "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/bitmap-bits-tests" --backend
-            "${_twoine_legacy_backend}"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/os2/ps/bitmap_bits.py"
+            --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/bitmap-bits-tests"
+            --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(bitmap_bits_guest PROPERTIES TIMEOUT 30)
 endif()

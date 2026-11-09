@@ -12,7 +12,7 @@ from pathlib import Path
 from tools.ball import engine as ball_api
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
-from disk_images import fat_image, iso_image
+from tests.integration.harness.disk_images import fat_image, iso_image
 
 
 class ReferenceTests(unittest.TestCase):

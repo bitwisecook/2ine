@@ -311,7 +311,7 @@ func installerIsExclusiveButAnotherBallCanRun(installFirst: Bool) async throws {
         let generator = try await ProcessRunner().run(
             executable: URL(filePath: "/usr/bin/python3"),
             arguments: [
-                repository.appending(path: "tests/integration/session_guests.py").path,
+                repository.appending(path: "tests/integration/harness/session_guests.py").path,
                 fixture.ball.appending(path: "drive_c/OS2").path,
             ],
             log: fixture.root.appending(path: "generate.log"))
@@ -385,7 +385,7 @@ func installerIsExclusiveButAnotherBallCanRun(installFirst: Bool) async throws {
         let generator = try await ProcessRunner().run(
             executable: URL(filePath: "/usr/bin/python3"),
             arguments: [
-                repository.appending(path: "tests/integration/session_guests.py").path,
+                repository.appending(path: "tests/integration/harness/session_guests.py").path,
                 fixture.ball.appending(path: "drive_c/OS2").path,
             ],
             log: fixture.root.appending(path: "generate.log"))

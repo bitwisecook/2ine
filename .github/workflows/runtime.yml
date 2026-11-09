@@ -23,7 +23,7 @@ jobs:
         run: brew install glib libsndfile pkgconf
       - name: Fetch hash-verified archived PMStars fixture
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: python3 tests/integration/fetch_gui_fixture.py --destination "$RUNNER_TEMP/hobbes"
+        run: python3 tests/integration/harness/fetch_gui_fixture.py --destination "$RUNNER_TEMP/hobbes"
       - name: Fetch pinned Unicorn source
         shell: bash
         run: |
@@ -47,19 +47,19 @@ jobs:
         run: ctest --test-dir build-runtime -C Release --output-on-failure
       - name: Test native GNOME ball manager
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_ball.py --build build-runtime
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_ball.py --build build-runtime
       - name: Test native GNOME drive and application editors
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_features.py --build build-runtime
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_features.py --build build-runtime
       - name: Test native bank import, channel mapping and source credits
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_audio.py --build build-runtime
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_audio.py --build build-runtime
       - name: Test native configuration, ball lifecycle and adaptive navigation
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: |
-          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_configuration.py --build build-runtime
-          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_ball_management.py --build build-runtime
-          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_native.py --build build-runtime
+          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_configuration.py --build build-runtime
+          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_ball_management.py --build build-runtime
+          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_native.py --build build-runtime
       - name: Validate GNOME metadata and build native packages
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: |
@@ -68,7 +68,7 @@ jobs:
           python3 apps/gnome/package.py --build build-runtime
       - name: Test relocated Debian package
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_package.py build-gnome/packages/*.deb
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_package.py build-gnome/packages/*.deb
       - name: Upload native Linux packages
         if: runner.os == 'Linux' && matrix.profile == 'application'
         uses: actions/upload-artifact@v4
@@ -97,4 +97,4 @@ jobs:
       - name: Install RPM on GNOME 51 libraries
         run: dnf install -y packages/*.rpm mesa-dri-drivers xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon patchelf cpio
       - name: Exercise installed frontend and relocated RPM
-        run: xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_package.py packages/*.rpm
+        run: xvfb-run -a dbus-run-session -- python3 tests/integration/apps/gnome/gnome_package.py packages/*.rpm

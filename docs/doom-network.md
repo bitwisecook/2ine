@@ -36,7 +36,7 @@ directories, records both players' actual commands, and verifies remote input,
 rendered movement, network departure and process exits:
 
 ```sh
-python3 tests/integration/doom_network.py --build /path/2ine/build \
+python3 tests/integration/ports/doom_network.py --build /path/2ine/build \
   --backend native --program /path/doom-build/os2doom.exe \
   --wad /path/DOOM1.WAD --work /path/network-results
 ```

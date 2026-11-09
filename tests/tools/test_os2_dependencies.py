@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from tests.integration.disk_images import iso_image
+from tests.integration.harness.disk_images import iso_image
 from tools.ball import engine as ball_api
 
 

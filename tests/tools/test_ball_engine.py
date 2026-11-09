@@ -414,7 +414,7 @@ class WorkspaceTests(unittest.TestCase):
         import sys
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
-        from images import linear_image
+        from tests.integration.harness.images import linear_image
 
         # Two bottom-up XOR rows followed by the AND rows; white, black,
         # transparent and inverse pixels exercise mask interpretation.

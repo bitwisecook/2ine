@@ -49,7 +49,7 @@ They are guest fixtures, not host runtime dependencies.
 
 ## Developer tools
 
-Supply the historical tools yourself. Copy `tests/integration/devtools-fixtures.example.json`
+Supply the historical tools yourself. Copy `tests/integration/harness/devtools-fixtures.example.json`
 and set these paths:
 
 | Key | Contents |
@@ -63,7 +63,7 @@ and set these paths:
 | `os2386` | OS/2 import library; recipes use Open Watcom 1.9 |
 
 ```sh
-python3 tests/integration/devtools.py --build build --backend unicorn \
+python3 tests/integration/applications/devtools.py --build build --backend unicorn \
   --fixtures /path/fixtures.json --work /path/new-results
 ```
 
@@ -123,7 +123,7 @@ LX fixture with a real dialog resource and guest WM_INITDLG callback; it checks
 modal results, stock subclass procedure calls and invalid portable spans.
 The media test verifies transparent, half-coverage and opaque glyph blending.
 
-The optional `tests/integration/smartsuite.py` harness exercises Word Pro's real
+The optional `tests/integration/applications/smartsuite.py` harness exercises Word Pro's real
 new/edit/font/save/reopen/edit/save/reopen/exit cycle using separately supplied
 installation files and settings. It records screenshots and document hashes;
 see [GUI applications](gui.md) for invocation and limits. The native Linux

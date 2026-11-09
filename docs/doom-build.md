@@ -56,9 +56,9 @@ and matching Watcom runtime libraries.
 controlled time samples and concurrent callers. It also executes the patched
 shutdown and save routines with delayed callbacks, concurrent close callers,
 large archives and allocation canaries. The real GUI verifier is
-`tests/integration/doom.py`; use `--source-built` to identify this variant and
+`tests/integration/ports/doom.py`; use `--source-built` to identify this variant and
 `--seconds 70` to exercise gameplay beyond a minute.
-`tests/integration/doom_network.py` runs two local peers with genuine UDP,
+`tests/integration/ports/doom_network.py` runs two local peers with genuine UDP,
 checks rendered movement and both players' recorded commands, and verifies
 network departure and normal process exits.
 

@@ -26,12 +26,12 @@ Build an [application profile](build.md). A normal desktop session uses its SDL3
 video backend; no OS/2 desktop or virtual machine is involved.
 
 ```sh
-python3 tests/integration/fetch_gui_fixture.py --destination build/fixtures/pmstars
+python3 tests/integration/harness/fetch_gui_fixture.py --destination build/fixtures/pmstars
 TWOINE_LIBPATH="$PWD/build" build/lx_loader build/fixtures/pmstars/PMStars.exe
 ```
 
 The fetcher verifies both the archive and extracted executable against
-`tests/integration/gui-fixtures.json`. Guest binaries are supplied separately
+`tests/integration/harness/gui-fixtures.json`. Guest binaries are supplied separately
 and are not committed to this repository. Keep an application's companion DLLs
 and data files beside its executable when they are required.
 
@@ -43,7 +43,7 @@ request. It writes a receipt with program, worker, library and screenshot hashes
 Install Xvfb, libX11 and libXtst for the host Python architecture.
 
 ```sh
-python3 tests/integration/gui.py --build build --backend native \
+python3 tests/integration/applications/gui.py --build build --backend native \
   --program build/fixtures/pmstars/PMStars.exe --profile pmstars --expected-exit 1 \
   --work build/gui-results/pmstars
 ```
@@ -108,7 +108,7 @@ and launch/foreground behavior remains under investigation.
 1-2-3 is the next application; other suite applications are deferred.
 
 ```sh
-python3 tests/integration/smartsuite.py --build build --backend native \
+python3 tests/integration/applications/smartsuite.py --build build --backend native \
   --installation /private/LOTUSW4 --settings /private/wordpro-settings \
   --work /private/wordpro-results
 ```

@@ -107,7 +107,7 @@ worker directories. Your saves and configuration stay in the game directory.
 On Linux, the real application harness needs Xvfb, X11/XTest and the game files:
 
 ```sh
-python3 tests/integration/doom.py --build /path/2ine/build --backend native \
+python3 tests/integration/ports/doom.py --build /path/2ine/build --backend native \
   --program /path/doom-build/os2doom.exe --wad /path/DOOM1.WAD \
   --source-built --work /path/fresh-results --seconds 70
 ```

@@ -138,7 +138,7 @@ With separately supplied SDK and Watcom fixtures, the SDK's unchanged `SIMPLE.C`
 can be compiled and run with a minimal AUX setup adapter:
 
 ```sh
-python3 tests/integration/opengl_sdk.py --build build/gl --backend unicorn \
+python3 tests/integration/os2/opengl/opengl_sdk.py --build build/gl --backend unicorn \
   --watcom /path/to/open-watcom --sdk /path/to/os2tk45 \
   --work "$PWD/sdk-opengl-results"
 ```

@@ -172,7 +172,7 @@ views, sends real keyboard events, checks Quake's screenshot file and confirms
 normal exit. Both CPU workers and the forced GL 1.0 texture path use this test:
 
 ```sh
-xvfb-run -a python3 tests/integration/glquake.py \
+xvfb-run -a python3 tests/integration/ports/glquake.py \
   --build /path/to/2ine-build --backend native \
   --program /path/to/glquake.exe --data /path/to/id1/pak0.pak \
   --work /path/to/isolated-test
@@ -191,12 +191,12 @@ server, exchanges chat and checks server-reported player movement in recorded
 Quake demos:
 
 ```sh
-python3 tests/integration/glquake_audio.py \
+python3 tests/integration/ports/glquake_audio.py \
   --build /path/to/2ine-build --backend native \
   --program /path/to/glquake.exe --data /path/to/id1/pak0.pak \
   --work /path/to/audio-test
 xvfb-run -a -s '-screen 0 1024x768x24' \
-  python3 tests/integration/glquake_network.py \
+  python3 tests/integration/ports/glquake_network.py \
   --build /path/to/2ine-build --backend native \
   --program /path/to/glquake.exe --data /path/to/id1/pak0.pak \
   --work /path/to/network-test

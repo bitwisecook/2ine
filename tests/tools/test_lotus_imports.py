@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.integration.images import linear_image
+from tests.integration.harness.images import linear_image
 from tools.binary import lotus_imports as inventory
 
 
