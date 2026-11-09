@@ -3,6 +3,28 @@
 #include "ball/ball_internal.h"
 #include "storage/volume.h"
 
+/* Disk image sizes the volume formatter supports, in MiB. */
+enum
+{
+    DISK_IMAGE_MIN_MIB = 8,
+    DISK_IMAGE_MAX_MIB = 2 * 1024 * 1024,
+    /* Smaller disks are better served by FAT16 or exFAT. */
+    FAT32_IMAGE_MIN_MIB = 64,
+    HPFS_IMAGE_MAX_MIB = 64 * 1024,
+    /* The HPFS formatter works in whole 8 MiB free-space bands. */
+    HPFS_IMAGE_GRANULE_MIB = 8,
+};
+
+/* The standard PC floppy capacities, in KiB. */
+enum
+{
+    FLOPPY_360K = 360,
+    FLOPPY_720K = 720,
+    FLOPPY_1200K = 1200,
+    FLOPPY_1440K = 1440,
+    FLOPPY_2880K = 2880,
+};
+
 int tb_ball_command(TbBall *c, const cJSON *request)
 {
     cJSON *args = get(request, "arguments");
@@ -61,14 +83,16 @@ int tb_ball_command(TbBall *c, const cJSON *request)
                        *size = str(cJSON_GetArrayItem(args, 4));
             char *end = NULL;
             unsigned long long mib = size ? strtoull(size, &end, 10) : 0;
-            if (!source || !filesystem || !size || !end || *end || mib < 8 || mib > 2097152)
+            if (!source || !filesystem || !size || !end || *end || mib < DISK_IMAGE_MIN_MIB ||
+                mib > DISK_IMAGE_MAX_MIB)
                 return tb_ball_fail(c, "Choose an image size from 8 MiB to 2 TiB");
             if (strcmp(filesystem, "fat32") && strcmp(filesystem, "exfat") &&
                 strcmp(filesystem, "hpfs"))
                 return tb_ball_fail(c, "Choose FAT32, exFAT or HPFS");
-            if (!strcmp(filesystem, "fat32") && mib < 64)
+            if (!strcmp(filesystem, "fat32") && mib < FAT32_IMAGE_MIN_MIB)
                 return tb_ball_fail(c, "FAT32 images need at least 64 MiB");
-            if (!strcmp(filesystem, "hpfs") && (mib > 65536 || mib % 8))
+            if (!strcmp(filesystem, "hpfs") &&
+                (mib > HPFS_IMAGE_MAX_MIB || mib % HPFS_IMAGE_GRANULE_MIB))
                 return tb_ball_fail(
                     c, "Choose an HPFS size from 8 MiB to 64 GiB, in multiples of 8 MiB");
             if (existing &&
@@ -93,7 +117,8 @@ int tb_ball_command(TbBall *c, const cJSON *request)
             char *end = NULL;
             unsigned long kib = size ? strtoul(size, &end, 10) : 0;
             if (!source || !size || !end || *end ||
-                (kib != 360 && kib != 720 && kib != 1200 && kib != 1440 && kib != 2880))
+                (kib != FLOPPY_360K && kib != FLOPPY_720K && kib != FLOPPY_1200K &&
+                 kib != FLOPPY_1440K && kib != FLOPPY_2880K))
                 return tb_ball_fail(c, "Choose a 360, 720, 1200, 1440 or 2880 KiB floppy image");
             if (existing &&
                 (!field(existing, "device") || strcmp(field(existing, "device"), "floppy")))

@@ -23,6 +23,8 @@ extern "C"
  * os2-component-state and cancellation may run concurrently with those jobs;
  * their progress reads never wait for the mutation lock.
  */
+#define TB_REQUEST_SUCCESS 0
+#define TB_REQUEST_FAILURE 2
     TB_API int tb_request(const char *request_json, char **result_json, char **error_utf8);
     TB_API void tb_free(void *allocation);
     TB_API unsigned tb_abi_version(void);

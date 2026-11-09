@@ -92,7 +92,32 @@ cJSON *configuration_parse(TbBall *c, const unsigned char *p, size_t n)
 #define TB_CONFIGURATION_FILES_LIMIT 2048u
 #define TB_CONFIGURATION_SCAN_LIMIT 100000u
 #define TB_CONFIGURATION_DIRECTORY_LIMIT 4096u
-#define TB_CONFIGURATION_GUEST_SEPARATOR 92
+#define TB_CONFIGURATION_DEPTH_LIMIT 64u
+#define TB_CONFIGURATION_GUEST_SEPARATOR '\\'
+/* The runtime's own DLL cache is regenerated; editing it would be lost. */
+#define TB_CONFIGURATION_RUNTIME_DIRECTORY "OS2/DLL/2INE"
+/* Longest guest path the editor accepts. */
+#define TB_CONFIGURATION_GUEST_PATH_LIMIT 32768u
+/* Open32 registry records: a key path, then a "v:" value name over a
+   little-endian type word and its data. */
+#define TB_REGISTRY_PATH_LIMIT 32767u
+#define TB_REGISTRY_VALUE_PREFIX "v:"
+#define TB_REGISTRY_TYPE_SIZE 4u
+#define TB_REGISTRY_TYPE_DWORD 4u /* Win32 REG_DWORD */
+#define TB_REGISTRY_DWORD_RECORD_SIZE (TB_REGISTRY_TYPE_SIZE + 4u)
+/* Registry key timestamps are Win32 FILETIMEs: 100 ns ticks since 1601. */
+#define FILETIME_UNIX_EPOCH_SECONDS UINT64_C(11644473600)
+#define FILETIME_TICKS_PER_SECOND UINT64_C(10000000)
+#define FILETIME_SIZE 8u
+#define ASCII_DELETE 127
+
+static void registry_now(unsigned char timestamp[FILETIME_SIZE])
+{
+    uint64_t ticks =
+        ((uint64_t)time(NULL) + FILETIME_UNIX_EPOCH_SECONDS) * FILETIME_TICKS_PER_SECOND;
+    tb_put_le32(timestamp, (uint32_t)ticks);
+    tb_put_le32(timestamp + 4, (uint32_t)(ticks >> 32));
+}
 
 static int configuration_part_equal(const char *a, size_t n, const char *b)
 {
@@ -106,9 +131,11 @@ static int configuration_part_equal(const char *a, size_t n, const char *b)
 
 static int configuration_excluded(const char *guest)
 {
-    const char *part = guest + 3;
-    if (strlen(part) >= 12 && configuration_part_equal(part, 12, "OS2/DLL/2INE") &&
-        (!part[12] || part[12] == '/'))
+    const char *part = guest + TB_GUEST_ROOT_LENGTH;
+    size_t runtime = strlen(TB_CONFIGURATION_RUNTIME_DIRECTORY);
+    if (strlen(part) >= runtime &&
+        configuration_part_equal(part, runtime, TB_CONFIGURATION_RUNTIME_DIRECTORY) &&
+        (!part[runtime] || part[runtime] == '/'))
         return 1;
     while (*part)
     {
@@ -162,7 +189,7 @@ static char *configuration_private_root(TbBall *c)
 static int configuration_suffix(const char *name)
 {
     size_t n = strlen(name);
-    return n >= 4 && equal_case(name + n - 4, ".INI");
+    return n >= strlen(".INI") && equal_case(name + n - strlen(".INI"), ".INI");
 }
 
 static char *configuration_private_path(TbBall *c, const char *guest)
@@ -171,7 +198,8 @@ static char *configuration_private_path(TbBall *c, const char *guest)
     if (!root)
         return NULL;
     if (!guest || toupper((unsigned char)guest[0]) != 'C' || guest[1] != ':' ||
-        (guest[2] != TB_CONFIGURATION_GUEST_SEPARATOR && guest[2] != '/') || strlen(guest) > 32768)
+        (guest[2] != TB_CONFIGURATION_GUEST_SEPARATOR && guest[2] != '/') ||
+        strlen(guest) > TB_CONFIGURATION_GUEST_PATH_LIMIT)
     {
         tb_ball_fail(c, "Choose an existing INI file on the ball's private C: drive");
         return NULL;
@@ -189,7 +217,7 @@ static char *configuration_private_path(TbBall *c, const char *guest)
             c, "Choose an INI file or CONFIG.SYS outside temporary and runtime-cache directories");
         return NULL;
     }
-    char *path = root, *at = normalized + 3;
+    char *path = root, *at = normalized + TB_GUEST_ROOT_LENGTH;
     while (*at)
     {
         char *end = strchr(at, '/');
@@ -250,7 +278,7 @@ static char *configuration_private_path(TbBall *c, const char *guest)
 static int configuration_is_text(const unsigned char *p, size_t n)
 {
     for (size_t i = 0; i < n; i++)
-        if ((p[i] < 32 && p[i] != '\t' && p[i] != '\r' && p[i] != '\n') || p[i] == 127)
+        if ((p[i] < ' ' && p[i] != '\t' && p[i] != '\r' && p[i] != '\n') || p[i] == ASCII_DELETE)
             return 0;
     return 1;
 }
@@ -306,7 +334,7 @@ cJSON *configuration_read(TbBall *c, const cJSON *request)
     if (!entries)
         return NULL;
     SHA256_CTX state;
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     sha256_init(&state);
     sha256_update(&state, bytes, n);
     sha256_final(&state, digest);
@@ -405,13 +433,16 @@ cJSON *configuration_write(TbBall *c, const cJSON *request)
                 *p += 'a' - 'A';
         app = normalized_app;
         key = normalized_key;
-        size_t root = !strncmp(app, "hku", 3) && (app[3] == '\\' || !app[3]) ? 3 : 4;
-        int valid_root = (root == 3 || !strncmp(app, "hkcr", 4) || !strncmp(app, "hkcu", 4) ||
-                          !strncmp(app, "hklm", 4)) &&
+        size_t root = has_prefix(app, "hku") && (app[3] == '\\' || !app[3]) ? 3 : 4;
+        int valid_root = (root == 3 || has_prefix(app, "hkcr") || has_prefix(app, "hkcu") ||
+                          has_prefix(app, "hklm")) &&
                          (!app[root] || app[root] == '\\');
-        if (strncmp(key, "v:", 2) || !valid_root || strlen(app) > 32767 || strlen(key) > 32769 ||
+        if (!has_prefix(key, TB_REGISTRY_VALUE_PREFIX) || !valid_root ||
+            strlen(app) > TB_REGISTRY_PATH_LIMIT ||
+            strlen(key) > strlen(TB_REGISTRY_VALUE_PREFIX) + TB_REGISTRY_PATH_LIMIT ||
             strstr(app, "\\\\") || app[strlen(app) - 1] == '\\' ||
-            (!remove && (n < 4 || (tb_le32(data) == 4 && n != 8))))
+            (!remove && (n < TB_REGISTRY_TYPE_SIZE || (tb_le32(data) == TB_REGISTRY_TYPE_DWORD &&
+                                                       n != TB_REGISTRY_DWORD_RECORD_SIZE))))
         {
             cJSON_Delete(current);
             tb_ball_fail(
@@ -465,18 +496,16 @@ cJSON *configuration_write(TbBall *c, const cJSON *request)
                 if (!has_key)
                 {
                     const char *names[] = {"k:", "c:", "t:"};
-                    unsigned char timestamp[8];
-                    uint64_t ticks =
-                        ((uint64_t)time(NULL) + UINT64_C(11644473600)) * UINT64_C(10000000);
-                    tb_put_le32(timestamp, (uint32_t)ticks);
-                    tb_put_le32(timestamp + 4, (uint32_t)(ticks >> 32));
+                    unsigned char timestamp[FILETIME_SIZE];
+                    registry_now(timestamp);
                     for (size_t i = 0; i < 3; i++)
                     {
                         cJSON *marker = cJSON_CreateObject();
                         cJSON_AddStringToObject(marker, "application", prefix);
                         cJSON_AddStringToObject(marker, "key", names[i]);
-                        cJSON_AddStringToObject(marker, "data",
-                                                i == 2 ? configuration_hex(c, timestamp, 8) : "00");
+                        cJSON_AddStringToObject(
+                            marker, "data",
+                            i == 2 ? configuration_hex(c, timestamp, sizeof timestamp) : "00");
                         cJSON_AddItemToArray(entries, marker);
                     }
                 }
@@ -489,10 +518,8 @@ cJSON *configuration_write(TbBall *c, const cJSON *request)
 
     if (registry)
     {
-        unsigned char timestamp[8];
-        uint64_t ticks = ((uint64_t)time(NULL) + UINT64_C(11644473600)) * UINT64_C(10000000);
-        tb_put_le32(timestamp, (uint32_t)ticks);
-        tb_put_le32(timestamp + 4, (uint32_t)(ticks >> 32));
+        unsigned char timestamp[FILETIME_SIZE];
+        registry_now(timestamp);
         cJSON *stamp = NULL;
         cJSON_ArrayForEach(entry, entries) if (!strcmp(field(entry, "application"), app) &&
                                                !strcmp(field(entry, "key"), "t:")) stamp = entry;
@@ -503,7 +530,7 @@ cJSON *configuration_write(TbBall *c, const cJSON *request)
             cJSON_AddStringToObject(stamp, "key", "t:");
             cJSON_AddItemToArray(entries, stamp);
         }
-        put(stamp, "data", cJSON_CreateString(configuration_hex(c, timestamp, 8)));
+        put(stamp, "data", cJSON_CreateString(configuration_hex(c, timestamp, sizeof timestamp)));
     }
     int ok = configuration_serialize(c, field(current, "path"), entries);
     cJSON_Delete(current);
@@ -517,7 +544,7 @@ static char *configuration_guest_file(TbBall *c, const char *host)
         part++;
     char *guest = tb_ball_format(c, "C:%c%s", TB_CONFIGURATION_GUEST_SEPARATOR, part);
     if (guest)
-        for (char *p = guest + 3; *p; p++)
+        for (char *p = guest + TB_GUEST_ROOT_LENGTH; *p; p++)
             if (*p == '/')
                 *p = TB_CONFIGURATION_GUEST_SEPARATOR;
     return guest;
@@ -534,7 +561,7 @@ static cJSON *configuration_aliases(TbBall *c)
     const char *roles[] = {"config", "user", "system", "registry"};
     const char *paths[] = {"C:/CONFIG.SYS", field(env, "USER_INI"), field(env, "SYSTEM_INI"),
                            "C:/OS2/REGISTRY.INI"};
-    for (unsigned i = 0; i < 4; i++)
+    for (unsigned i = 0; i < sizeof roles / sizeof *roles; i++)
     {
         if (!paths[i])
             continue;
@@ -601,7 +628,8 @@ cJSON *configuration_file_read(TbBall *c, const cJSON *request)
         {
             kind = "profile";
             format = !n ? "empty"
-                     : n >= 8 && !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE)
+                     : n >= TB_PROFILE_MAGIC_SIZE &&
+                             !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE)
                          ? "2INEPRF1"
                          : "OS/2 INI";
         }
@@ -623,7 +651,7 @@ cJSON *configuration_file_read(TbBall *c, const cJSON *request)
     }
     if (!strcmp(kind, "binary") && !*reason)
         reason = "Unsupported binary format; bytes are read-only";
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     SHA256_CTX hash;
     sha256_init(&hash);
     sha256_update(&hash, bytes, n);
@@ -758,7 +786,8 @@ static int configuration_file_catalogue(TbBall *c, cJSON *files, const cJSON *al
                 kind = "profile";
                 editable = 1;
                 format = !size ? "empty"
-                         : size >= 8 && !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE)
+                         : size >= TB_PROFILE_MAGIC_SIZE &&
+                                 !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE)
                              ? "2INEPRF1"
                              : "OS/2 INI";
             }
@@ -920,7 +949,8 @@ cJSON *configuration_files(TbBall *c, const cJSON *request)
             }
             if (tb_is_dir(child))
             {
-                if (depth >= 64 || cJSON_GetArraySize(queue) >= TB_CONFIGURATION_DIRECTORY_LIMIT)
+                if (depth >= TB_CONFIGURATION_DEPTH_LIMIT ||
+                    cJSON_GetArraySize(queue) >= TB_CONFIGURATION_DIRECTORY_LIMIT)
                 {
                     truncated = 1;
                     skipped++;

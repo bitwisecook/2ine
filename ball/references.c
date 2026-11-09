@@ -16,7 +16,13 @@
 #define REFERENCE_BUNDLE_DIRECTORY "bundled-media"
 /* Relocation search looks at most this deep below each search root. */
 #define REFERENCE_SEARCH_DEPTH 4
+/* Relocation search gives up after this many directory entries in total. */
 #define REFERENCE_SEARCH_ENTRIES 20000u
+
+enum
+{
+    REFERENCE_HASH_BUFFER_SIZE = 65536
+};
 
 static const char *leaf_name(const char *path)
 {
@@ -58,14 +64,14 @@ static char *reference_host_path(TbBall *c, const cJSON *record)
                                          : tb_ball_keep(c, strdup(path));
 }
 
-static int digest(const char *path, unsigned char hash[32])
+static int digest(const char *path, unsigned char hash[TB_BALL_DIGEST_SIZE])
 {
     FILE *file = tb_fopen(path, "rb");
     if (!file)
         return 0;
     SHA256_CTX state;
     sha256_init(&state);
-    unsigned char buffer[65536];
+    unsigned char buffer[REFERENCE_HASH_BUFFER_SIZE];
     size_t n;
     while ((n = fread(buffer, 1, sizeof buffer, file)))
         sha256_update(&state, buffer, n);
@@ -108,7 +114,7 @@ static cJSON *reference_hint(TbBall *c, const char *kind, const char *host, int 
             if (label)
                 cJSON_AddStringToObject(hint, "volumeLabel", label);
         }
-        unsigned char sum[32];
+        unsigned char sum[TB_BALL_DIGEST_SIZE];
         if (hash && digest(host, sum))
             cJSON_AddStringToObject(hint, "sha256", tb_ball_hex(c, sum));
     }
@@ -196,8 +202,7 @@ int tb_ball_set_media_references(TbBall *c, const cJSON *sources)
     for (cJSON *entry = references->child, *following; entry; entry = following)
     {
         following = entry->next;
-        if (entry->string &&
-            !strncmp(entry->string, REFERENCE_MEDIA_PREFIX, strlen(REFERENCE_MEDIA_PREFIX)))
+        if (entry->string && has_prefix(entry->string, REFERENCE_MEDIA_PREFIX))
             cJSON_Delete(cJSON_DetachItemViaPointer(references, entry));
     }
     cJSON *media = cJSON_CreateArray(), *source;
@@ -319,7 +324,7 @@ static int hint_matches(TbBall *c, const cJSON *record, const char *host, int ve
             return 0;
     }
     const char *sum = field(hint, "sha256");
-    unsigned char hash[32];
+    unsigned char hash[TB_BALL_DIGEST_SIZE];
     if (verify && sum && (!digest(host, hash) || strcmp(sum, tb_ball_hex(c, hash))))
         return 0;
     return 1;
@@ -503,7 +508,7 @@ static int capture_hash(TbBall *c, const char *id)
 {
     cJSON *record = get(get(c->manifest, "references"), id);
     char *host = reference_host_path(c, record);
-    unsigned char sum[32];
+    unsigned char sum[TB_BALL_DIGEST_SIZE];
     if (!host || !digest(host, sum))
         return tb_ball_fail(c, "Cannot hash reference %s", id);
     put(object(record, "hint"), "sha256", cJSON_CreateString(tb_ball_hex(c, sum)));
@@ -515,7 +520,7 @@ int tb_ball_relink_reference(TbBall *c, const cJSON *request)
     const char *id = field(request, "id"), *path = field(request, "path");
     if (!id || !path || !*path)
         return tb_ball_fail(c, "A reference and its new path are required");
-    if (!strncmp(id, REFERENCE_MEDIA_PREFIX, strlen(REFERENCE_MEDIA_PREFIX)))
+    if (has_prefix(id, REFERENCE_MEDIA_PREFIX))
     {
         cJSON *record = get(get(c->manifest, "references"), id);
         char *resolved = tb_ball_resolve_path(c, path, 1);

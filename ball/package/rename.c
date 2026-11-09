@@ -15,6 +15,18 @@ static int rename_same_bytes(TbBall *c, const char *path, const char *expected, 
     return current && count == length && !memcmp(current, expected, count);
 }
 
+#define BALL_SUFFIX ".2ineball"
+
+enum
+{
+    BALL_SUFFIX_LENGTH = sizeof BALL_SUFFIX - 1,
+    /* The longest file name the common host filesystems accept. */
+    BALL_NAME_LIMIT = 255,
+    ASCII_DELETE = 127,
+};
+
+#define SOUND_BANK_DIRECTORY "soundfonts/"
+
 static char *rename_leaf(TbBall *c, const char *name)
 {
     if (!name || !*name || !strcmp(name, ".") || !strcmp(name, ".."))
@@ -23,7 +35,7 @@ static char *rename_leaf(TbBall *c, const char *name)
         return NULL;
     }
     for (const unsigned char *p = (const unsigned char *)name; *p; p++)
-        if (*p < 32 || *p == 127 || strchr("/\\:<>\"|?*", *p))
+        if (*p < ' ' || *p == ASCII_DELETE || strchr("/\\:<>\"|?*", *p))
         {
             tb_ball_fail(
                 c,
@@ -36,8 +48,11 @@ static char *rename_leaf(TbBall *c, const char *name)
         tb_ball_fail(c, "A ball name cannot end in a period or space");
         return NULL;
     }
-    size_t stem = length >= 9 && !strcasecmp(name + length - 9, ".2ineball") ? length - 9 : length;
-    if (!stem || stem + 9 > 255)
+    size_t stem =
+        length >= BALL_SUFFIX_LENGTH && !strcasecmp(name + length - BALL_SUFFIX_LENGTH, BALL_SUFFIX)
+            ? length - BALL_SUFFIX_LENGTH
+            : length;
+    if (!stem || stem + BALL_SUFFIX_LENGTH > BALL_NAME_LIMIT)
     {
         tb_ball_fail(c, "The ball name is empty or too long");
         return NULL;
@@ -99,7 +114,8 @@ static int rename_manifest_paths(TbBall *c, const char *old, const char *destina
                 const char *relative = absolute + strlen(old);
                 while (*relative == '/' || *relative == '\\')
                     relative++;
-                if (strncmp(relative, "soundfonts/", 11) || !cJSON_SetValuestring(value, relative))
+                if (!has_prefix(relative, SOUND_BANK_DIRECTORY) ||
+                    !cJSON_SetValuestring(value, relative))
                     return tb_ball_fail(c, "Installed sound banks must remain inside soundfonts");
                 *changed = 1;
             }
@@ -172,7 +188,7 @@ cJSON *tb_ball_rename(TbBall *c, const cJSON *request)
     const char *expected = field(request, "expected");
     if (expected)
     {
-        unsigned char digest[32];
+        unsigned char digest[TB_BALL_DIGEST_SIZE];
         if (!tb_ball_digest_file(c, manifest_path, digest) ||
             strcmp(expected, tb_ball_hex(c, digest)))
         {

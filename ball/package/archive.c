@@ -5,6 +5,18 @@
 #include "third_party/libarchive/archive_entry.h"
 #include "ball/include/twoine_ball.h"
 #include <time.h>
+
+/* Bounds a hostile or corrupt archive and a ball tree with directory cycles. */
+enum
+{
+    ARCHIVE_PATH_DEPTH_LIMIT = 128
+};
+
+enum
+{
+    ARCHIVE_COPY_BUFFER_SIZE = 65536
+};
+
 #ifndef TB_SOURCE_VERSION
 #define TB_SOURCE_VERSION "unversioned"
 #endif
@@ -77,9 +89,9 @@ static int archive_relative(const char *path)
         if (!strcmp(base, "CON") || !strcmp(base, "PRN") || !strcmp(base, "AUX") ||
             !strcmp(base, "NUL") ||
             (b == 4 && base[3] >= '1' && base[3] <= '9' &&
-             (!strncmp(base, "COM", 3) || !strncmp(base, "LPT", 3))))
+             (has_prefix(base, "COM") || has_prefix(base, "LPT"))))
             return 0;
-        if (++depth > 128)
+        if (++depth > ARCHIVE_PATH_DEPTH_LIMIT)
             return 0;
         if (!end)
             break;
@@ -124,7 +136,7 @@ static char *archive_host_path(TbBall *c, const char *path)
             {
                 char *last = strrchr(result, '/');
                 const char *tail = last ? last + 1 : result;
-                if (length == 2 && !strncmp(part, "..", 2) && used && strcmp(tail, ".."))
+                if (length == 2 && has_prefix(part, "..") && used && strcmp(tail, ".."))
                 {
                     if (last)
                         *last = 0;
@@ -219,6 +231,7 @@ static int archive_add(TbBall *c, struct archive *archive, const char *name, con
         return tb_ball_fail(c, "Cannot export non-regular file: %s", source);
     FILE *file = source && !directory ? tb_fopen(source, "rb") : NULL;
     int64_t size = text ? (int64_t)strlen(text) : 0;
+    /* Ball contents are private to their owner. */
     int mode = directory ? 0700 : 0600;
     if (source && !directory && (!file || !tb_file_info(file, &size, &mode)))
     {
@@ -241,7 +254,7 @@ static int archive_add(TbBall *c, struct archive *archive, const char *name, con
     archive_entry_free(entry);
     if (ok && text)
         ok = archive_write_data(archive, text, (size_t)size) == size;
-    unsigned char buffer[65536];
+    unsigned char buffer[ARCHIVE_COPY_BUFFER_SIZE];
     size_t n;
     while (ok && file && (n = fread(buffer, 1, sizeof(buffer), file)))
         ok = archive_write_data(archive, buffer, n) == (la_ssize_t)n;
@@ -257,7 +270,7 @@ static int archive_add(TbBall *c, struct archive *archive, const char *name, con
 static int archive_tree(TbBall *c, struct archive *archive, const char *relative, int images,
                         const cJSON *image_sources, unsigned depth)
 {
-    if (depth > 128)
+    if (depth > ARCHIVE_PATH_DEPTH_LIMIT)
         return tb_ball_fail(c, "Ball folders are nested too deeply");
     char *path = *relative ? tb_ball_join(c, c->ball, relative) : c->ball;
     if (!path)
@@ -431,7 +444,8 @@ static int extract_ball(TbBall *c, const char *source, const char *destination)
     int ok = file && archive;
     if (ok)
         ok = archive_read_support_format_zip(archive) == ARCHIVE_OK &&
-             archive_read_open_fd(archive, tb_file_descriptor(file), 65536) == ARCHIVE_OK;
+             archive_read_open_fd(archive, tb_file_descriptor(file), ARCHIVE_COPY_BUFFER_SIZE) ==
+                 ARCHIVE_OK;
     struct archive_entry *entry;
     int status = ARCHIVE_FATAL;
     while (ok && (status = archive_read_next_header(archive, &entry)) == ARCHIVE_OK)
@@ -478,7 +492,7 @@ static int extract_ball(TbBall *c, const char *source, const char *destination)
             ok = tb_ball_fail(c, "Duplicate or inaccessible ZIP entry: %s", name);
             break;
         }
-        unsigned char buffer[65536];
+        unsigned char buffer[ARCHIVE_COPY_BUFFER_SIZE];
         la_ssize_t n;
         while ((n = archive_read_data(archive, buffer, sizeof(buffer))) > 0)
             if (fwrite(buffer, 1, (size_t)n, out) != (size_t)n)

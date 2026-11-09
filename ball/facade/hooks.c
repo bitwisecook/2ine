@@ -71,7 +71,7 @@ static void facade_describe_runtime(TbBall *c, const char *build, cJSON *runtime
         if (identity)
             cJSON_AddStringToObject(runtime, "identitySHA256", identity);
         const char *loader = runtime_loader_name(c, build);
-        unsigned char hash[32];
+        unsigned char hash[TB_BALL_DIGEST_SIZE];
         if (loader && tb_ball_digest_file(c, tb_ball_join(c, build, loader), hash))
             cJSON_AddStringToObject(runtime, "loaderSHA256", tb_ball_hex(c, hash));
         char *path = tb_ball_join(c, build, "2ine-build.json");

@@ -11,6 +11,20 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+
+/* Host permissions: ball state is private to its owner. */
+enum
+{
+    HOST_PERMISSION_BITS = 0777,
+    PRIVATE_DIRECTORY_MODE = 0700,
+    PRIVATE_FILE_MODE = 0600,
+};
+
+enum
+{
+    COPY_BUFFER_SIZE = 65536
+};
+
 #ifdef __linux__
 #include <fcntl.h>
 #include <sys/syscall.h>
@@ -353,7 +367,7 @@ FILE *tb_fopen(const char *p, const char *m)
 
 static int mkdir_one(const char *p)
 {
-    return !mkdir(p, 0700) || errno == EEXIST;
+    return !mkdir(p, PRIVATE_DIRECTORY_MODE) || errno == EEXIST;
 }
 
 char **tb_names(const char *dir, size_t *count)
@@ -453,7 +467,7 @@ static int write_atomic(const char *path, const void *data, size_t length, const
                tb_image_write(path, NULL, 0, data, length);
     }
     size_t n = strlen(path);
-    char *tmp = malloc(n + 16);
+    char *tmp = malloc(n + 16); /* room for the temporary-name suffix */
     if (!tmp)
         return 0;
     FILE *out = NULL;
@@ -494,7 +508,7 @@ static int write_atomic(const char *path, const void *data, size_t length, const
     {
         FILE *in = tb_fopen(source, "rb");
         ok = in != NULL;
-        unsigned char buffer[65536];
+        unsigned char buffer[COPY_BUFFER_SIZE];
         size_t got;
         if (in)
         {
@@ -510,7 +524,7 @@ static int write_atomic(const char *path, const void *data, size_t length, const
         }
 #ifndef _WIN32
         struct stat status;
-        if (!stat(source, &status) && fchmod(fileno(out), status.st_mode & 0777))
+        if (!stat(source, &status) && fchmod(fileno(out), status.st_mode & HOST_PERMISSION_BITS))
             ok = 0;
 #endif
     }
@@ -557,7 +571,7 @@ int tb_file_info(FILE *file, int64_t *size, int *mode)
         return 0;
 #endif
     *size = info.st_size;
-    *mode = info.st_mode & 0777;
+    *mode = info.st_mode & HOST_PERMISSION_BITS;
     return 1;
 }
 
@@ -574,7 +588,7 @@ char *tb_archive_workspace(const char *parent)
     free(w);
     return result;
 #else
-    size_t length = strlen(parent) + 24;
+    size_t length = strlen(parent) + 24; /* room for the mkdtemp template */
     char *result = malloc(length);
     if (!result)
         return NULL;
@@ -640,7 +654,7 @@ int tb_file_mode(FILE *file, int mode)
     (void)mode;
     return 1;
 #else
-    return !fchmod(fileno(file), mode & 0777);
+    return !fchmod(fileno(file), mode & HOST_PERMISSION_BITS);
 #endif
 }
 
@@ -707,7 +721,7 @@ int tb_mkdir_new(const char *path)
     free(w);
     return ok;
 #else
-    return !mkdir(path, 0700);
+    return !mkdir(path, PRIVATE_DIRECTORY_MODE);
 #endif
 }
 
@@ -732,7 +746,7 @@ int tb_copy_new(const char *source, const char *destination)
     FILE *in = fopen(source, "rb");
     if (!in)
         return 0;
-    int fd = open(destination, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    int fd = open(destination, O_WRONLY | O_CREAT | O_EXCL, PRIVATE_FILE_MODE);
     FILE *out = fd >= 0 ? fdopen(fd, "wb") : NULL;
     if (!out)
     {
@@ -742,7 +756,7 @@ int tb_copy_new(const char *source, const char *destination)
         return 0;
     }
     int ok = 1;
-    unsigned char buffer[65536];
+    unsigned char buffer[COPY_BUFFER_SIZE];
     size_t n;
     while ((n = fread(buffer, 1, sizeof(buffer), in)))
         if (fwrite(buffer, 1, n, out) != n)
@@ -753,7 +767,7 @@ int tb_copy_new(const char *source, const char *destination)
     if (ferror(in))
         ok = 0;
     struct stat info;
-    if (!fstat(fileno(in), &info) && fchmod(fd, info.st_mode & 0777))
+    if (!fstat(fileno(in), &info) && fchmod(fd, info.st_mode & HOST_PERMISSION_BITS))
         ok = 0;
     fclose(in);
     if (fclose(out))
@@ -995,7 +1009,7 @@ TbMutationLock *tb_mutation_lock(const char *directory)
 #else
     int parent = directory_nofollow(directory);
     lock->file = parent >= 0 ? openat(parent, ".component-mutation.lock",
-                                      O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600)
+                                      O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, PRIVATE_FILE_MODE)
                              : -1;
     int error = errno;
     if (parent >= 0)
@@ -1134,7 +1148,68 @@ int tb_remove_managed_file(const char *path, const TbFileIdentity *expected)
 #endif
 }
 
-/* Host runtime selection probes headers only; guest executables are not run. */
+/* Host runtime selection probes headers only; guest executables are not run.
+   The header fields below are the ones that tell whether this host can exec
+   the file directly. */
+enum RuntimeFormat
+{
+    RUNTIME_ELF = 1,
+    RUNTIME_MACHO = 2,
+    RUNTIME_PE = 3,
+};
+
+#define RUNTIME_HEADER_PROBE_SIZE 64u
+/* ELF identification and header. */
+#define ELF_CLASS_OFFSET 4u   /* EI_CLASS */
+#define ELF_DATA_OFFSET 5u    /* EI_DATA */
+#define ELF_VERSION_OFFSET 6u /* EI_VERSION */
+#define ELF_OSABI_OFFSET 7u   /* EI_OSABI */
+#define ELF_TYPE_OFFSET 16u   /* e_type, followed by e_machine */
+#define ELF_CLASS_32 1u       /* ELFCLASS32 */
+#define ELF_CLASS_64 2u       /* ELFCLASS64 */
+#define ELF_DATA_LSB 1u       /* ELFDATA2LSB */
+#define ELF_VERSION_CURRENT 1u
+#define ELF_OSABI_SYSV 0u
+#define ELF_OSABI_GNU 3u
+#define ELF_TYPE_EXEC 2u /* ET_EXEC */
+#define ELF_TYPE_DYN 3u  /* ET_DYN: position-independent executables */
+#define ELF_MACHINE_I386 3u
+#define ELF_MACHINE_X86_64 62u
+#define ELF_MACHINE_AARCH64 183u
+/* Mach-O, with magics read as big-endian words from little-endian files. */
+#define MACHO_MAGIC_32_BYTES 0xcefaedfeu /* MH_MAGIC */
+#define MACHO_MAGIC_64_BYTES 0xcffaedfeu /* MH_MAGIC_64 */
+#define MACHO_FAT_MAGIC 0xcafebabeu
+#define MACHO_FAT_CIGAM 0xbebafecau
+#define MACHO_FAT_MAGIC_64 0xcafebabfu
+#define MACHO_FAT_CIGAM_64 0xbfbafecau
+#define MACHO_CPU_OFFSET 4u
+#define MACHO_FILETYPE_OFFSET 12u
+#define MACHO_FILETYPE_EXECUTE 2u /* MH_EXECUTE */
+#define MACHO_CPU_ARCH_ABI64 0x01000000u
+#define MACHO_CPU_X86 7u
+#define MACHO_CPU_X86_64 0x01000007u
+#define MACHO_CPU_ARM64 0x0100000cu
+#define MACHO_FAT_HEADER_SIZE 8u
+#define MACHO_FAT_ARCH_SIZE 20u
+#define MACHO_FAT_ARCH_OFFSET_FIELD 8u
+#define MACHO_FAT_ARCH_SIZE_FIELD 12u
+#define MACHO_FAT_ARCH_64_SIZE_FIELD 16u
+/* Magic, CPU type, CPU subtype and file type of a slice's mach_header. */
+#define MACHO_HEADER_PROBE_SIZE 16u
+#define MACHO_FAT_ARCH_64_SIZE 32u
+/* A universal binary with more slices than this is not a real host build. */
+#define MACHO_FAT_ARCH_LIMIT 64u
+/* PE/COFF. */
+#define PE_HEADER_POINTER_OFFSET 60u /* e_lfanew */
+#define PE_MACHINE_OFFSET 4u
+#define PE_CHARACTERISTICS_OFFSET 22u
+#define PE_EXECUTABLE_IMAGE 0x0002u /* IMAGE_FILE_EXECUTABLE_IMAGE */
+#define PE_DLL 0x2000u              /* IMAGE_FILE_DLL */
+#define PE_MACHINE_I386 0x014cu
+#define PE_MACHINE_AMD64 0x8664u
+#define PE_MACHINE_ARM64 0xaa64u
+
 static uint32_t runtime_word(const unsigned char *p, int big)
 {
     return big ? (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]
@@ -1154,16 +1229,22 @@ static int runtime_read(FILE *file, uint64_t size, uint64_t at, void *buffer, si
     return fread(buffer, 1, length, file) == length;
 }
 
-static int runtime_cpu(uint32_t cpu, int format)
+static int runtime_cpu(uint32_t cpu, enum RuntimeFormat format)
 {
 #if defined(__aarch64__) || defined(__arm64__) || defined(_M_ARM64)
-    return cpu == (format == 1 ? 183u : format == 2 ? 0x0100000cu : 0xaa64u);
+    return cpu == (format == RUNTIME_ELF     ? ELF_MACHINE_AARCH64
+                   : format == RUNTIME_MACHO ? MACHO_CPU_ARM64
+                                             : PE_MACHINE_ARM64);
 #elif defined(__x86_64__) || defined(_M_X64)
-    if (format == 1)
-        return cpu == 62 || cpu == 3; /* Native i386 workers also run on Linux x86-64. */
-    return cpu == (format == 2 ? 0x01000007u : 0x8664u) || (format == 3 && cpu == 0x14c);
+    if (format == RUNTIME_ELF)
+        /* Native i386 workers also run on Linux x86-64. */
+        return cpu == ELF_MACHINE_X86_64 || cpu == ELF_MACHINE_I386;
+    return cpu == (format == RUNTIME_MACHO ? MACHO_CPU_X86_64 : PE_MACHINE_AMD64) ||
+           (format == RUNTIME_PE && cpu == PE_MACHINE_I386);
 #elif defined(__i386__) || defined(_M_IX86)
-    return cpu == (format == 1 ? 3u : format == 2 ? 7u : 0x14cu);
+    return cpu == (format == RUNTIME_ELF     ? ELF_MACHINE_I386
+                   : format == RUNTIME_MACHO ? MACHO_CPU_X86
+                                             : PE_MACHINE_I386);
 #else
     (void)cpu;
     (void)format;
@@ -1202,8 +1283,8 @@ int tb_host_executable(const char *path)
         return 0;
     int64_t signed_size;
     int mode, ok = 0;
-    unsigned char header[64];
-    if (!tb_file_info(file, &signed_size, &mode) || signed_size < 64)
+    unsigned char header[RUNTIME_HEADER_PROBE_SIZE];
+    if (!tb_file_info(file, &signed_size, &mode) || signed_size < RUNTIME_HEADER_PROBE_SIZE)
         goto done;
     uint64_t size = (uint64_t)signed_size;
     if (!runtime_read(file, size, 0, header, sizeof header))
@@ -1212,55 +1293,77 @@ int tb_host_executable(const char *path)
     if (header[0] == 'M' && header[1] == 'Z')
     {
         unsigned char pe[24];
-        uint32_t at = runtime_word(header + 60, 0);
+        uint32_t at = runtime_word(header + PE_HEADER_POINTER_OFFSET, 0);
         if (runtime_read(file, size, at, pe, sizeof pe) && !memcmp(pe, "PE\0\0", 4))
         {
-            unsigned machine = pe[4] | pe[5] << 8, flags = pe[22] | pe[23] << 8;
-            ok = runtime_cpu(machine, 3) && (flags & 2) && !(flags & 0x2000);
+            unsigned machine = pe[PE_MACHINE_OFFSET] | pe[PE_MACHINE_OFFSET + 1] << 8,
+                     flags = pe[PE_CHARACTERISTICS_OFFSET] | pe[PE_CHARACTERISTICS_OFFSET + 1] << 8;
+            ok = runtime_cpu(machine, RUNTIME_PE) && (flags & PE_EXECUTABLE_IMAGE) &&
+                 !(flags & PE_DLL);
         }
     }
 #elif defined(__APPLE__)
     uint32_t magic = runtime_word(header, 1);
-    if (magic == 0xcffaedfe || magic == 0xcefaedfe)
-        ok = runtime_cpu(runtime_word(header + 4, 0), 2) && runtime_word(header + 12, 0) == 2 &&
-             ((magic == 0xcffaedfe) == !!(runtime_word(header + 4, 0) & 0x01000000));
-    else if (magic == 0xcafebabe || magic == 0xbebafeca || magic == 0xcafebabf ||
-             magic == 0xbfbafeca)
+    if (magic == MACHO_MAGIC_64_BYTES || magic == MACHO_MAGIC_32_BYTES)
+        ok = runtime_cpu(runtime_word(header + MACHO_CPU_OFFSET, 0), RUNTIME_MACHO) &&
+             runtime_word(header + MACHO_FILETYPE_OFFSET, 0) == MACHO_FILETYPE_EXECUTE &&
+             ((magic == MACHO_MAGIC_64_BYTES) ==
+              !!(runtime_word(header + MACHO_CPU_OFFSET, 0) & MACHO_CPU_ARCH_ABI64));
+    else if (magic == MACHO_FAT_MAGIC || magic == MACHO_FAT_CIGAM || magic == MACHO_FAT_MAGIC_64 ||
+             magic == MACHO_FAT_CIGAM_64)
     {
-        int big = magic == 0xcafebabe || magic == 0xcafebabf;
-        int wide = magic == 0xcafebabf || magic == 0xbfbafeca;
+        int big = magic == MACHO_FAT_MAGIC || magic == MACHO_FAT_MAGIC_64;
+        int wide = magic == MACHO_FAT_MAGIC_64 || magic == MACHO_FAT_CIGAM_64;
         uint32_t count = runtime_word(header + 4, big);
-        for (uint32_t i = 0; !ok && count <= 64 && i < count; i++)
+        for (uint32_t i = 0; !ok && count <= MACHO_FAT_ARCH_LIMIT && i < count; i++)
         {
-            unsigned char arch[32], image[16];
-            if (!runtime_read(file, size, 8 + (uint64_t)i * (wide ? 32 : 20), arch, wide ? 32 : 20))
+            unsigned char arch[MACHO_FAT_ARCH_64_SIZE], image[MACHO_HEADER_PROBE_SIZE];
+            if (!runtime_read(file, size,
+                              MACHO_FAT_HEADER_SIZE + (uint64_t)i * (wide ? MACHO_FAT_ARCH_64_SIZE
+                                                                          : MACHO_FAT_ARCH_SIZE),
+                              arch, wide ? MACHO_FAT_ARCH_64_SIZE : MACHO_FAT_ARCH_SIZE))
                 break;
-            uint64_t offset = runtime_word(arch + 8, big);
+            /* fat_arch_64 widens the slice offset and size to two-word fields. */
+            uint64_t offset = runtime_word(arch + MACHO_FAT_ARCH_OFFSET_FIELD, big);
             if (wide)
-                offset = big ? offset << 32 | runtime_word(arch + 12, big)
-                             : (uint64_t)runtime_word(arch + 12, big) << 32 | offset;
-            uint64_t slice_size = runtime_word(arch + (wide ? 16 : 12), big);
+                offset =
+                    big ? offset << 32 | runtime_word(arch + MACHO_FAT_ARCH_OFFSET_FIELD + 4, big)
+                        : (uint64_t)runtime_word(arch + MACHO_FAT_ARCH_OFFSET_FIELD + 4, big)
+                                  << 32 |
+                              offset;
+            uint64_t slice_size = runtime_word(
+                arch + (wide ? MACHO_FAT_ARCH_64_SIZE_FIELD : MACHO_FAT_ARCH_SIZE_FIELD), big);
             if (wide)
-                slice_size = big ? slice_size << 32 | runtime_word(arch + 20, big)
-                                 : (uint64_t)runtime_word(arch + 20, big) << 32 | slice_size;
-            if (runtime_cpu(runtime_word(arch, big), 2) && slice_size >= sizeof image &&
+                slice_size =
+                    big ? slice_size << 32 |
+                              runtime_word(arch + MACHO_FAT_ARCH_64_SIZE_FIELD + 4, big)
+                        : (uint64_t)runtime_word(arch + MACHO_FAT_ARCH_64_SIZE_FIELD + 4, big)
+                                  << 32 |
+                              slice_size;
+            if (runtime_cpu(runtime_word(arch, big), RUNTIME_MACHO) && slice_size >= sizeof image &&
                 offset <= size && slice_size <= size - offset &&
                 runtime_read(file, size, offset, image, sizeof image))
-                ok = (runtime_word(image, 1) == 0xcffaedfe ||
-                      runtime_word(image, 1) == 0xcefaedfe) &&
-                     runtime_cpu(runtime_word(image + 4, 0), 2) &&
-                     runtime_word(image + 12, 0) == 2 &&
-                     ((runtime_word(image, 1) == 0xcffaedfe) ==
-                      !!(runtime_word(image + 4, 0) & 0x01000000));
+                ok = (runtime_word(image, 1) == MACHO_MAGIC_64_BYTES ||
+                      runtime_word(image, 1) == MACHO_MAGIC_32_BYTES) &&
+                     runtime_cpu(runtime_word(image + MACHO_CPU_OFFSET, 0), RUNTIME_MACHO) &&
+                     runtime_word(image + MACHO_FILETYPE_OFFSET, 0) == MACHO_FILETYPE_EXECUTE &&
+                     ((runtime_word(image, 1) == MACHO_MAGIC_64_BYTES) ==
+                      !!(runtime_word(image + MACHO_CPU_OFFSET, 0) & MACHO_CPU_ARCH_ABI64));
         }
     }
 #else
-    if (!memcmp(header, "\177ELF", 4) && header[5] == 1 && header[6] == 1)
+    if (!memcmp(header, "\177ELF", 4) && header[ELF_DATA_OFFSET] == ELF_DATA_LSB &&
+        header[ELF_VERSION_OFFSET] == ELF_VERSION_CURRENT)
     {
-        uint32_t identity = runtime_word(header + 16, 0);
+        uint32_t identity = runtime_word(header + ELF_TYPE_OFFSET, 0);
         unsigned type = identity & 0xffff, cpu = identity >> 16;
-        ok = header[4] == (cpu == 62 || cpu == 183 ? 2 : 1) && (type == 2 || type == 3) &&
-             (header[7] == 0 || header[7] == 3) && runtime_cpu(cpu, 1);
+        ok = header[ELF_CLASS_OFFSET] == (cpu == ELF_MACHINE_X86_64 || cpu == ELF_MACHINE_AARCH64
+                                              ? ELF_CLASS_64
+                                              : ELF_CLASS_32) &&
+             (type == ELF_TYPE_EXEC || type == ELF_TYPE_DYN) &&
+             (header[ELF_OSABI_OFFSET] == ELF_OSABI_SYSV ||
+              header[ELF_OSABI_OFFSET] == ELF_OSABI_GNU) &&
+             runtime_cpu(cpu, RUNTIME_ELF);
     }
 #endif
 done:

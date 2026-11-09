@@ -28,7 +28,8 @@ char *tb_ball_case_path(TbBall *c, const char *path)
     {
         char *name = tb_ball_keep(c, strdup(slash + 1));
         *slash = 0;
-        if (strlen(copy) == 2 && copy[1] == ':')
+        /* A bare "C:" names the drive's current directory, not its root. */
+        if (strlen(copy) == TB_GUEST_DRIVE_LENGTH && copy[1] == ':')
             copy[2] = '\\', copy[3] = 0;
         char *parent = tb_ball_case_path(c, copy);
         return parent && name ? tb_ball_join(c, parent, name) : NULL;
@@ -83,7 +84,7 @@ int tb_ball_current_drive(TbBall *c)
     return letter && strlen(letter) == 1 && letter[0] >= 'A' && letter[0] <= 'Z' &&
                    c->roots[letter[0] - 'A']
                ? letter[0] - 'A'
-               : 2;
+               : TB_BALL_DRIVE_C;
 }
 
 const char *tb_ball_drive_directory(TbBall *c, int drive)
@@ -129,7 +130,7 @@ char *tb_ball_host_path(TbBall *c, const char *name, int explicit_host)
             tb_ball_fail(c, "Drive %c: is not mapped", drive + 'A');
             return NULL;
         }
-        const char *tail = name + (named_drive ? 2 : 0);
+        const char *tail = name + (named_drive ? TB_GUEST_DRIVE_LENGTH : 0);
         int rooted = *tail == '\\' || *tail == '/';
         while (*tail == '\\' || *tail == '/')
             tail++;
@@ -138,13 +139,14 @@ char *tb_ball_host_path(TbBall *c, const char *name, int explicit_host)
             return NULL;
         if (*base)
         {
-            if (strlen(base) < 3 || toupper((unsigned char)base[0]) != drive + 'A' ||
-                base[1] != ':' || (base[2] != '\\' && base[2] != '/'))
+            if (strlen(base) < TB_GUEST_ROOT_LENGTH ||
+                toupper((unsigned char)base[0]) != drive + 'A' || base[1] != ':' ||
+                (base[2] != '\\' && base[2] != '/'))
             {
                 tb_ball_fail(c, "Invalid working directory for drive %c:", drive + 'A');
                 return NULL;
             }
-            base += 3;
+            base += TB_GUEST_ROOT_LENGTH;
         }
         char *relative = tb_ball_format(c, "%s/%s", base, tail);
         if (!relative)
@@ -189,7 +191,7 @@ char *tb_ball_guest_path(TbBall *c, const char *host)
         relative++;
     char *result = tb_ball_format(c, "%c:\\%s", best + 'A', relative);
     if (result)
-        for (char *p = result + 3; *p; p++)
+        for (char *p = result + TB_GUEST_ROOT_LENGTH; *p; p++)
             if (*p == '/')
                 *p = '\\';
     return result;
@@ -228,7 +230,8 @@ int tb_ball_validate_directories(TbBall *c, const cJSON *directories)
         const char *path = str(entry), *key = entry->string;
         if (!key || strlen(key) != 1 || key[0] < 'A' || key[0] > 'Z' ||
             (!c->roots[key[0] - 'A'] && !c->unavailable[key[0] - 'A']) || !path ||
-            strlen(path) < 3 || path[0] != key[0] || path[1] != ':' || path[2] != '\\')
+            strlen(path) < TB_GUEST_ROOT_LENGTH || path[0] != key[0] || path[1] != ':' ||
+            path[2] != '\\')
             return tb_ball_fail(c, "Use a mapped drive letter and its absolute OS/2 directory");
         if (c->unavailable[key[0] - 'A'])
             continue;

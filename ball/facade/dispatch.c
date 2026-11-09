@@ -25,6 +25,9 @@
 #include "environment/wps_sync.h"
 #include "ball/facade/project_sources.h"
 
+/* A full git commit id; anything shorter is not a published revision. */
+#define GIT_REVISION_HEX_LENGTH 40
+
 static void dependency_refresh_mutation(TbBall *c, const cJSON *request)
 {
     cJSON *audit = audit_dependencies(c, request, 0);
@@ -93,7 +96,7 @@ static cJSON *dispatch(TbBall *c, const cJSON *request)
         }
         cJSON *catalogue = cJSON_Parse(tb_project_sources);
         cJSON *project = cJSON_GetArrayItem(get(catalogue, "projects"), 0);
-        if (project && strlen(TB_SOURCE_REVISION) == 40)
+        if (project && strlen(TB_SOURCE_REVISION) == GIT_REVISION_HEX_LENGTH)
         {
             put(project, "version", cJSON_CreateString(TB_SOURCE_VERSION));
             put(project, "source",
@@ -219,7 +222,7 @@ static cJSON *dispatch(TbBall *c, const cJSON *request)
         const char *id = field(request, "id");
         if (!tb_ball_relink_reference(c, request))
             return NULL;
-        if (id && !strncmp(id, "media-", 6) && !os2_media_follow_references(c))
+        if (id && has_prefix(id, "media-") && !os2_media_follow_references(c))
             return NULL;
         return facade_snapshot(c);
     }
@@ -349,7 +352,7 @@ void tb_free(void *p)
 int tb_request(const char *text, char **result, char **error)
 {
     if (!result || !error)
-        return 2;
+        return TB_REQUEST_FAILURE;
     *result = NULL;
     *error = NULL;
     TbBall c = {0};
@@ -373,5 +376,5 @@ int tb_request(const char *text, char **result, char **error)
     free(c.allocations);
     *error = c.error;
     tb_media_session_end();
-    return c.error || !*result ? 2 : 0;
+    return c.error || !*result ? TB_REQUEST_FAILURE : TB_REQUEST_SUCCESS;
 }

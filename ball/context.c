@@ -6,6 +6,17 @@
 #include "third_party/sha256/sha256.h"
 #include <time.h>
 
+/* Whole-file reads hold the file in memory; larger files are not ball metadata. */
+enum
+{
+    BALL_READ_FILE_LIMIT = 64 * 1024 * 1024
+};
+
+enum
+{
+    BALL_HASH_BUFFER_SIZE = 65536
+};
+
 int tb_ball_fail(TbBall *c, const char *format, ...)
 {
     if (!c->error)
@@ -139,7 +150,7 @@ char *tb_ball_read_file(TbBall *c, const char *path, size_t *length, int optiona
     }
     long size = ftell(f);
     rewind(f);
-    if (size < 0 || size > 64 * 1024 * 1024)
+    if (size < 0 || size > BALL_READ_FILE_LIMIT)
     {
         fclose(f);
         tb_ball_fail(c, "File is too large: %s", path);
@@ -173,7 +184,7 @@ int tb_ball_write_json(TbBall *c, const char *path, cJSON *value)
     if (!text)
         return tb_ball_fail(c, "Cannot serialize JSON");
     size_t n = strlen(text);
-    char *line = malloc(n + 2);
+    char *line = malloc(n + 2); /* trailing newline and terminator */
     if (!line)
     {
         cJSON_free(text);
@@ -190,7 +201,7 @@ int tb_ball_write_json(TbBall *c, const char *path, cJSON *value)
 
 char *tb_ball_latin1_to_utf8(TbBall *c, const char *bytes, size_t n)
 {
-    char *text = malloc(n * 2 + 1);
+    char *text = malloc(n * 2 + 1); /* each Latin-1 byte becomes at most two UTF-8 bytes */
     if (!text)
     {
         tb_ball_fail(c, "Out of memory");
@@ -217,14 +228,14 @@ char *tb_ball_utf8_to_latin1(TbBall *c, const char *text, size_t *length)
     return tb_ball_keep(c, bytes);
 }
 
-int tb_ball_digest_file(TbBall *c, const char *path, unsigned char hash[32])
+int tb_ball_digest_file(TbBall *c, const char *path, unsigned char hash[TB_BALL_DIGEST_SIZE])
 {
     FILE *f = tb_fopen(path, "rb");
     if (!f)
         return tb_ball_fail(c, "Cannot hash runtime file: %s", path);
     SHA256_CTX state;
     sha256_init(&state);
-    unsigned char buffer[65536];
+    unsigned char buffer[BALL_HASH_BUFFER_SIZE];
     size_t n;
     while ((n = fread(buffer, 1, sizeof(buffer), f)))
         sha256_update(&state, buffer, n);
@@ -236,15 +247,15 @@ int tb_ball_digest_file(TbBall *c, const char *path, unsigned char hash[32])
     return 1;
 }
 
-char *tb_ball_hex(TbBall *c, const unsigned char hash[32])
+char *tb_ball_hex(TbBall *c, const unsigned char hash[TB_BALL_DIGEST_SIZE])
 {
-    char *out = malloc(65);
+    char *out = malloc(TB_BALL_DIGEST_HEX_LENGTH + 1);
     if (!out)
     {
         tb_ball_fail(c, "Out of memory");
         return NULL;
     }
-    for (int i = 0; i < 32; i++)
+    for (int i = 0; i < TB_BALL_DIGEST_SIZE; i++)
         sprintf(out + i * 2, "%02x", hash[i]);
     return tb_ball_keep(c, out);
 }
