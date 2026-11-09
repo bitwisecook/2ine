@@ -166,7 +166,8 @@ static uint32 bridge32_RegQueryValueEx(uint8 *a)
     uint32 result = ERROR_INVALID_PARAMETER;
     if ((!np || name) && !rp &&
         (!tp || lx_execution_borrow(GProcessState.execution, tp, 4, LX_GUEST_WRITE, &type)) &&
-        (!sp || lx_execution_borrow(GProcessState.execution, sp, 4, 3, &size)))
+        (!sp || lx_execution_borrow(GProcessState.execution, sp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                                    &size)))
     {
         ULONG count = sp ? lx_guest_load_u32(size.host) : 0, kind = 0;
         uint8 empty = 0;
@@ -201,9 +202,11 @@ static uint32 bridge32_RegEnumValue(uint8 *a)
     LxGuestBorrow name = {0}, length = {0}, type = {0}, data = {0}, size = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if (!np || lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GProcessState.execution, sp, 4, 3, &length) ||
+        !lx_execution_borrow(GProcessState.execution, sp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                             &length) ||
         (tp && !lx_execution_borrow(GProcessState.execution, tp, 4, LX_GUEST_WRITE, &type)) ||
-        (cp && !lx_execution_borrow(GProcessState.execution, cp, 4, 3, &size)))
+        (cp && !lx_execution_borrow(GProcessState.execution, cp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                                    &size)))
         goto done;
     ULONG characters = lx_guest_load_u32(length.host),
           count = cp ? lx_guest_load_u32(size.host) : 0, kind = 0;
@@ -246,8 +249,11 @@ static uint32 bridge32_RegEnumKeyEx(uint8 *a)
     uint32 tp = lx_guest_load_u32(a + 28), result = ERROR_INVALID_PARAMETER;
     LxGuestBorrow name = {0}, size = {0}, class_name = {0}, class_size = {0}, timestamp = {0};
     if (!np || lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GProcessState.execution, sp, 4, 3, &size) || (cp && !cs) ||
-        (cs && !lx_execution_borrow(GProcessState.execution, cs, 4, 3, &class_size)) ||
+        !lx_execution_borrow(GProcessState.execution, sp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                             &size) ||
+        (cp && !cs) ||
+        (cs && !lx_execution_borrow(GProcessState.execution, cs, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                                    &class_size)) ||
         (tp && !lx_execution_borrow(GProcessState.execution, tp, 8, LX_GUEST_WRITE, &timestamp)))
         goto done;
     ULONG length = lx_guest_load_u32(size.host);

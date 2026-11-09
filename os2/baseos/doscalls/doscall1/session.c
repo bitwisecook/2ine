@@ -7,10 +7,7 @@
  */
 /* Sessions: DosStartSession and its 16-bit form, session titles and termination queues. */
 
-#include "os2/include/private/export16.h"
-#include "os2/include/bsedos.h"
-#include "os2/include/bsedos16.h"
-#include "os2/include/private/bsep.h"
+#include "os2/baseos/doscalls/internal.h"
 #include "emulator/launch_record.h"
 #include "host/thread.h"
 #include "host/sync.h"
@@ -19,40 +16,10 @@
 #include "host/library.h"
 #include "os2/include/pmwin.h"
 
-/* STARTDATA as callers pass it: the fields through TermQ are required, and later
-   fields are present when Length covers them. */
 enum
 {
-    STARTDATA_RELATED_OFFSET = 2,
-    STARTDATA_FGBG_OFFSET = 4,
-    STARTDATA_TRACEOPT_OFFSET = 6,
-    STARTDATA_TITLE_OFFSET = 8,
-    STARTDATA_NAME_OFFSET = 12,
-    STARTDATA_INPUTS_OFFSET = 16,
-    STARTDATA_TERMQ_OFFSET = 20,
-    STARTDATA_ENVIRONMENT_OFFSET = 24,
-    STARTDATA_INHERITOPT_OFFSET = 28,
-    STARTDATA_SESSIONTYPE_OFFSET = 30,
-    STARTDATA_ICONFILE_OFFSET = 32,
-    STARTDATA_PGMHANDLE_OFFSET = 36,
-    STARTDATA_PGMCONTROL_OFFSET = 40,
-    STARTDATA_INITXPOS_OFFSET = 42,
-    STARTDATA_INITYPOS_OFFSET = 44,
-    STARTDATA_INITXSIZE_OFFSET = 46,
-    STARTDATA_INITYSIZE_OFFSET = 48,
-    STARTDATA_RESERVED_OFFSET = 50,
-    STARTDATA_OBJECTBUFFER_OFFSET = 52,
-    STARTDATA_OBJECTBUFFLEN_OFFSET = 56,
-    STARTDATA_MINIMUM_LENGTH = 24,
-    STARTDATA_MAXIMUM_LENGTH = 60,
-    /* PgmTitle, PgmName, PgmInputs, TermQ and IconFile. */
-    STARTDATA_STRING_COUNT = 5,
     /* Strings are read from at most one 64 KB segment. */
-    STARTDATA_STRING_LIMIT = 0x10000
-};
-
-enum
-{
+    STARTDATA_STRING_LIMIT = 0x10000,
     /* Session IDs run from 1 to 0xFFFE. */
     SESSION_ID_COUNT = 0xFFFE,
     /* lx_host_mailbox_open's result for a name another session holds. */
