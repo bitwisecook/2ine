@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Private, portable bank installation and per-ball MIDI preferences. */
 #include "ball/store.h"
+#include "formats/audio/soundbank.h"
 #include "environment/audio.h"
 #include "storage/container.h"
 #include "ball/vendor/sha256/sha256.h"
@@ -33,23 +34,6 @@ cJSON *audio_defaults(void)
     return settings;
 }
 
-static const char *audio_format(const char *path)
-{
-    const char *dot = strrchr(path, '.');
-    if (!dot)
-        return NULL;
-    const char *formats[] = {"sf2", "sf3", "sfz", "dls", NULL};
-    for (int i = 0; formats[i]; i++)
-        if (equal_case(dot + 1, formats[i]))
-            return formats[i];
-    return NULL;
-}
-
-static uint32_t audio_u32(const unsigned char *p)
-{
-    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
 static int audio_header(TbBall *c, const char *path, const char *kind)
 {
     if (!tb_is_file(path) || tb_is_link(path))
@@ -59,12 +43,11 @@ static int audio_header(TbBall *c, const char *path, const char *kind)
         return tb_ball_fail(c, "Cannot read sound bank: %s", path);
     int64_t size = 0;
     int mode;
-    unsigned char header[12];
-    int ok = tb_file_info(file, &size, &mode) && size > 0 && size <= INT64_C(2147483648);
+    unsigned char header[TB_SOUNDBANK_HEADER_SIZE];
+    int ok = tb_file_info(file, &size, &mode) && size > 0 && size <= TB_SOUNDBANK_SIZE_LIMIT;
     if (ok && strcmp(kind, "sfz"))
-        ok = fread(header, 1, 12, file) == 12 && !memcmp(header, "RIFF", 4) &&
-             !memcmp(header + 8, !strcmp(kind, "dls") ? "DLS " : "sfbk", 4) &&
-             audio_u32(header + 4) >= 4 && (uint64_t)audio_u32(header + 4) + 8 <= (uint64_t)size;
+        ok = fread(header, 1, sizeof header, file) == sizeof header &&
+             tb_soundbank_header_valid(kind, header, (uint64_t)size);
     fclose(file);
     return ok ? 1 : tb_ball_fail(c, "Invalid, empty or oversized %s sound bank", kind);
 }
@@ -268,7 +251,7 @@ static cJSON *audio_import(TbBall *c, const cJSON *request)
         return NULL;
     }
     char *source = tb_ball_resolve_path(c, raw, 1);
-    const char *kind = source ? audio_format(source) : NULL;
+    const char *kind = source ? tb_soundbank_format(source) : NULL;
     if (!kind || !audio_header(c, source, kind))
     {
         if (!c->error)
@@ -444,7 +427,7 @@ static int audio_extract(TbBall *c, const char *source, const char *destination,
             }
             if (output && fclose(output))
                 ok = 0;
-            if (ok && audio_format(name))
+            if (ok && tb_soundbank_format(name))
                 cJSON_AddItemToArray(banks, cJSON_CreateString(path));
             if (!ok)
                 tb_ball_fail(

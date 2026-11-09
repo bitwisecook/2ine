@@ -7,6 +7,7 @@ function(twoine_add_formats target)
     add_library(
         ${target}
         STATIC
+        "${_formats}/audio/soundbank.c"
         "${_formats}/encoding/base64.c"
         "${_formats}/executable/lx_exepack.c"
         "${_formats}/executable/os2_executable.c"
