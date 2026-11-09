@@ -51,9 +51,14 @@ names and `../` paths are rejected. Host-OS preprocessor branches (`_WIN32`,
 `__APPLE__`, `__linux__`) appear only in `host/linux/`, `host/macos/`, `host/win/`
 and `emulator/execution/native_i386/`, and in the storage host adapters `storage/common/host*` (file open/lock/sync,
 identity, local time and locks), apart from the named temporary allowances in the
-checker. `formats/` includes no other component, `storage/` only `formats/`, and
-only `ball/` includes `ball/`; `emulator/` does not include `os2/`, and its layers (execution, ABI, process, loader) include
-only downwards. Inside `os2/`, sources use only the known IBM groups; each DLL directory has
+checker. `formats/` includes no other component, `storage/` only `formats/`.
+The ball store (`ball/`) keeps settings, files and references and includes no
+installation or launch code; the installation manager (`environment/`) and
+launch planning (`emulator/launch/`) reach it only through `ball/store.h`, and
+only the JSON facade (`ball/facade/`) composes them. Applications (`apps/`) use
+the engine's JSON ABI only. `emulator/` outside `emulator/launch/` does not
+include `ball/`, `environment/` or `os2/`, and its layers (execution, ABI,
+process, loader) include only downwards. Inside `os2/`, sources use only the known IBM groups; each DLL directory has
 one module definition, and its generated table is included only by its
 `module.c`. A DLL reaches another DLL's internals through
 `os2/include/private/`; the remaining direct includes of another DLL's
@@ -78,6 +83,12 @@ the checker, so a new component is covered by these rules.
 |---|---|
 | `formats/executable/` | Packed NE/LX definitions and LX EXEPACK decompression, without process state; built as `twoine_formats` (OS/2 application ABI) and `twoine_formats_host` (host ABI) |
 | `formats/resources/` | OS/2 and Windows icon bitmaps and NE/LX resource extraction |
+| `formats/audio/` | Sound bank recognition (SoundFont, DLS, SFZ) |
+| `ball/` | The ball store: manifest, settings, drive table and references, guest/host paths, files, launcher records, configuration-file editing and packages; `store.h` is its C interface, `facade/` the JSON `tb_request` facade (library `twoine_ball`). See [ball.md](ball.md) and `ball/README.md` |
+| `environment/` | The OS/2 installation manager: installation media, the component ledger and operations, dependency audits, install receipts, Workplace Shell launchers and sound banks. See [environment.md](environment.md) |
+| `emulator/launch/` | Launch planning for a ball: runtime selection and features, the guest and host environments, the `system.*` schema, `2ine.cfg` and `audio.conf`, arguments, prerequisites and the launch plan |
+| `os2/config/` | Codecs for OS/2's configuration files: INI profiles (native and 2INEPRF1), CONFIG.SYS statements and search lists, Workplace Shell object records and setup strings; shared by PMSHAPI, PMWP and the ball |
+| `apps/cli/` | `2ine-ball`, the command-line client of the JSON facade |
 | `storage/` | Disk images, filesystems (ISO 9660, FAT, HPFS) and archive containers shared by the host services and ball; public interface in `storage/include/storage/`; built per ABI by `twoine_add_storage` |
 | `emulator/loader/` | Entry, imports/relocations, NE/LX loading, module lifetime, module diagnostics and the REXX service worker |
 | `emulator/process/` | Bootstrap, PIB, process peers, threads/TIBs, 16-bit segments, configuration, drives and paths, resolver files, launch record and audio generator mixer |

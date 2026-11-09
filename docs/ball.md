@@ -404,7 +404,10 @@ python3 tools/ball.py --ball ImportedOffice.2ineball map E /path/to/replacement-
 Export includes installed files, settings, launchers and `2ine-export.json`
 build/version information. Select **Include disk images** to bundle attached
 media and image files stored inside the ball. Without that option, image files
-are omitted and media devices import as ejected. Import creates a new ball;
+are omitted and each media device keeps its image path as a reconnect hint: it
+imports as unavailable until the image is attached again, or found and relinked
+(the engine's `reference-status`, `search-references` and `relink-reference`
+actions, described in [the engine README](../ball/README.md#references)). Import creates a new ball;
 it never overwrites an existing ball. Paths inside the ball become relative.
 Unavailable external folders retain their drive letters and appear ejected;
 select the drive and use Change Mountpoint to choose a replacement folder.

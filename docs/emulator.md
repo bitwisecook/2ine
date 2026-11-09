@@ -26,6 +26,7 @@ flowchart TD
 | `emulator/execution/native_i386/`, `unicorn/` | The execution backends, built into the host services object of the worker that runs them | host objects |
 | `emulator/abi/` | Checked USE16 argument marshalling and generation-checked OS/2 handles; `twoine_add_abi_arguments()` and `twoine_add_abi_handles()` add them to a consumer | |
 | `emulator/process/` | The OS/2 process: bootstrap, PIB (`pib.c`), process peers, threads and TIBs, 16-bit segments, configuration, features, drives (host to OS/2 paths) and `paths.c` (OS/2 to host), resolver files, the audio generator mixer and the launch record | `lib2ine` (`2ine`) |
+| `emulator/launch/` | Launch planning for a ball, run by the ball engine rather than the guest: runtime selection and capabilities, the guest and host environments of a launch, the `system.*` settings schema, the `2ine.cfg` and `audio.conf` projections, argument quoting, prerequisites, cached dependency checks and the launch plan. It reads the ball through `ball/store.h` and the installation manager (`environment/`); nothing else in `emulator/` includes it | `twoine_launch` (in `libtwoine_ball`) |
 | `emulator/loader/` | `lx_loader`: NE/LX loading, fixups, imports and forwarders, module lifetime, entry, module diagnostics and the REXX service worker | `lx_loader` |
 
 The layers are checked by `tests/architecture/check_boundaries.py`: execution

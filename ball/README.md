@@ -1,8 +1,32 @@
 # Shared C ball engine
 
-This library owns the cross-platform ball format and behavior. macOS SwiftUI
-calls its C ABI directly. The CLI and GTK adapters use the same library via
+A ball is a directory that stores settings, files and references. This
+library is the ball store and the JSON facade over it. macOS SwiftUI calls its
+C ABI directly. The CLI (`apps/cli`) and GTK adapters use the same library via
 ctypes. No Python interpreter or script is shipped in the macOS application.
+
+| Path | Owns |
+| --- | --- |
+| `store.h` | The store's C interface for the components layered on it |
+| `ball_internal.h` | Private to the store: running the layered components' hooks |
+| `context.c` | Request context: owned allocations, the first error, files, digests |
+| `manifest.c`, `settings.c` | Opening, creating, discovering and saving `ball.json`; the working directory and runtime reference |
+| `drives.c`, `paths.c` | The drive table, published device control files and guest/host path mapping |
+| `references.c` | References to images, folders and installation media outside the ball |
+| `guest_environment.c` | The guest environment from CONFIG.SYS and the environment settings |
+| `files.c`, `applications.c`, `commands.c` | Browsing and importing files, launcher records, ball commands |
+| `configuration.c` | The user-editable INI profiles and CONFIG.SYS: catalogue and revision-checked edits |
+| `snapshot.c` | The store's part of the client snapshot |
+| `package/` | ZIP export/import and rename |
+| `facade/` | `tb_request`: the action table, and the hooks that compose the installation manager (`environment/`) and launch planning (`emulator/launch/`) |
+| `platform.c` | Host file services for the engine (see below) |
+
+The store contains no installation or launch logic: ball commands call hooks
+the facade installs (regenerate `2ine.cfg`, validate settings, compose the
+snapshot, detach Workplace Shell registrations, describe a runtime for export),
+and `check_boundaries.py` keeps `ball/` from including `environment/` and
+`emulator/`. Format codecs come from `os2/config/` (INI, CONFIG.SYS, Workplace
+Shell objects), `formats/` and `storage/`.
 
 Build independently of the OS/2 runtime and UI dependencies:
 
@@ -12,7 +36,10 @@ cmake --build build-ball-engine --config Release
 ```
 
 Outputs: `twoine_ball` shared library, `libtwoine_ball_core.a` static archive
-(`twoine_ball_core.lib` on MSVC), and the `2ine-ball` native JSON helper.
+(`twoine_ball_core.lib` on MSVC), and the `2ine-ball` native JSON helper. The
+standalone build adds `formats/`, `os2/config/`, `storage/`, `environment/`,
+`emulator/launch/` and `apps/cli/`; the static archive embeds all their
+objects, so the Xcode app links one archive.
 The public header is `include/twoine_ball.h`. ABI version 1 has no C structs
 crossing language boundaries. Inputs/results are UTF-8 JSON; errors and results
 are owned allocations that the caller frees with `tb_free`. `tb_request` is
@@ -39,6 +66,12 @@ Request actions:
 | `application-icon` | `ball`, app `name` or guest `program` | `source` (`embedded`, `custom`, `none`), optional base64 `rgba` with dimensions or native image bytes in `image` |
 | `image-preview` | Host image `path` | Native image data for frontend preview |
 | `parse-arguments` / `format-arguments` | `text` / `arguments` | Structured argv / losslessly quoted display text |
+| `reference-status` | `ball`, optional `id`, `verify`, `searchRoots` | `references` (id → record with `state`, `resolved`, optional `candidate`) and `media` |
+| `search-references` | `ball`, `searchRoots` | As `reference-status`, searching the roots for moved files |
+| `relink-reference` | `ball`, `id`, `path`, optional `hash` | Snapshot after pointing the reference at `path` |
+| `bundle-reference` / `unbundle-reference` | `ball`, `id` / `ball`, `id`, `path` | Snapshot after copying the image into `bundled-media/` / moving it out |
+| `set-reference-host-data` | `ball`, `id`, `host`, `data` (null removes) | The reference's status |
+| `reference-remaps` | optional `from`, `to`, `remove` | This host's remap table and its `path` |
 
 Commands are arrays such as `["init"]`, `["map", "D", "/media"]`,
 `["config", "env.LANG", "en_US"]`, `["unset", "system.trace_events"]`,
@@ -59,7 +92,11 @@ with explicit CRT-compatible argument quoting. Native frontends can handle
 process presentation themselves while reusing the C launch plan.
 
 `platform.c` provides POSIX and Win32 file adapters. Windows paths use wide
-filesystem APIs. Disk images, filesystems and archive containers come from the
+filesystem APIs. It stays with the engine rather than in `host/`: the macOS
+SwiftPM package compiles the engine directories directly, while `host/` selects
+one adapter per function and platform through CMake and brings the runtime's
+SDL, OpenSSL and process-supervisor dependencies. Canonical paths and file
+identity already come from `storage/common/host*`. Disk images, filesystems and archive containers come from the
 shared `storage/` component, and executable, icon and profile formats from `formats/`. Library/CLI builds are covered by the Linux/macOS/Windows CI
 matrix; the full OS/2 runtime's supported hosts remain separately documented.
 
@@ -198,8 +235,10 @@ native managers. The CLI exposes `export archive.zip [--include-images]` and
 Archives contain `ball.json` and the ball's private files at their root.
 Bundled attached images live under `bundled-media/` and use ball-relative
 manifest paths; unattached image files already inside the ball are included
-when requested. Without images, mapped media devices remain allocated but
-are ejected, and common image extensions inside the ball are omitted. External
+when requested. Without images, mapped media devices keep their image paths as
+reconnect hints (the receiver shows them as unavailable until the image is
+attached or relinked), and common image extensions inside the ball are
+omitted. Per-host reference data, such as macOS bookmarks, is never exported. External
 mapped folders retain their previous paths as reconnect hints. Missing or
 foreign-host paths keep their drive letters but are ejected until reconnected.
 Folder paths inside the ball are normalized to relative paths with forward
@@ -289,3 +328,42 @@ complete `settings` object; its `channels` array contains all 16 inputs. Known
 fields are validated and unknown settings/channel fields are preserved. Launch
 preparation resolves ball-relative bank paths and writes the worker audio file.
 [Sound-bank interface and channel semantics](../docs/sound-banks.md).
+
+## References
+
+Every drive image, drive folder and remembered installation medium has a record
+in the manifest's `references` object, beside the version 1 fields it mirrors
+(`drives.<L>.image`, folder strings, `os2-media.json`). `ball.json` stays at
+version 1; older engines ignore the additive `references` and `media` keys.
+
+```jsonc
+"references": {
+  "drive-D": { "kind": "image", "path": "/media/x.iso", "base": "absolute",
+               "hint": { "name": "x.iso", "size": 681574400, "mtime": 1700000000,
+                         "volumeLabel": "SMARTSUITE", "sha256": "…" },
+               "readonly": true, "host": { "<host>": "opaque" } },
+  "drive-A": { "kind": "image", "path": "bundled-media/A.img", "base": "ball", … },
+  "media-1": { "kind": "media", "path": "/media/os2.iso", "base": "absolute", … }
+},
+"media": [ "media-1" ]
+```
+
+- Paths inside the ball are stored relative to it (`base: ball`) and move with
+  it. The size, modification time and volume label are captured when a
+  reference is attached; a SHA-256 only on request (`hash`).
+- `reference-status` reports one state per reference: `available`, `missing`,
+  `unreadable`, `mismatch` (the hints no longer match), `foreign` (a path for
+  another host), `ejected` (a device slot without media) or
+  `relocation-candidate` (with `candidate`, found next to the ball, in
+  `bundled-media/`, in the ball's parent, in `searchRoots` or through this
+  host's remap table). An unavailable reference never stops the ball opening.
+- A reference moves only on request: `relink-reference`, `bundle-reference` or
+  `unbundle-reference`. Locked device slots refuse all three.
+- `host` data (macOS security-scoped bookmarks) belongs to one host and is
+  stripped from exported packages. The remap table (`reference-remaps`) is per
+  host as well: `$XDG_CONFIG_HOME/2ine/remap.json`,
+  `~/Library/Application Support/2ine/remap.json` on macOS.
+- Exporting without images keeps each image path as a reconnect hint; the
+  receiver shows the drive as unavailable until it is attached or relinked.
+- Device control files (`devices/<L>.media`) are rewritten only when their
+  contents change.

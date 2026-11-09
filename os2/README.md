@@ -10,6 +10,7 @@ debug data and kernel MAPs. 2ine builds one shared library per DLL
 | Directory | IBM build tree | Product area |
 |---|---|---|
 | `include/` | `rel\os2c\include\base\os2` | Public API headers, named like the OS/2 Toolkit's `h/` |
+| `config/` | not an IBM tree | Codecs for OS/2's configuration files, shared by PMSHAPI, PMWP and the ball's configuration editor: INI profiles (`os2_ini`: native and 2INEPRF1), CONFIG.SYS (`config_sys`: Latin-1 text, statements, search lists, a new ball's defaults) and Workplace Shell objects (`wps_objects`: object records, setup strings). Built per ABI as `twoine_os2_config` and `twoine_os2_config_host` |
 | `include/private/` | DDK private companions (`bsep.h`, `pmp.h`, …) | Cross-DLL internals, the export framework (`export*.h`) and the guest binding policies (`api16.json`, `api32.json`) |
 | `baseos/` | `w45baseos` | Base OS: DOSCALLS, and the queue, session, NLS, message, Vio and Kbd DLLs that forward to it |
 | `ps/` | `w45ps\src\ps` | Presentation Manager: PMMERGE (`pmmerge/`, which implements PMWIN, PMGRE and PMSHAPI), the PMWIN, PMGRE and PMSHAPI forwarders, PMGPI, the controls (`controls/`: PMCTLS and the PMDRAG forwarder), HELPMGR and Open32 (`awe/` = PMWINX) |
