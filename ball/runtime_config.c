@@ -1,16 +1,15 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The 2ine.cfg projection of the drive table and system settings. */
-#include "ball/ball_internal.h"
-#include "ball/drives.h"
+#include "ball/store.h"
 #include "ball/runtime_config.h"
 #include "ball/settings_schema.h"
 
-int launch_write_runtime_config(Context *c)
+int launch_write_runtime_config(TbBall *c)
 {
     if (!tb_ball_roots(c) || !launch_validate_system(c))
         return 0;
     char *text = tb_ball_keep(c, strdup(""));
-    for (int i = 0; i < 26 && text; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT && text; i++)
         text = tb_ball_format(c, "%smountpoint.%c = %s\n", text, 'A' + i,
                               c->roots[i] ? c->roots[i] : "");
     cJSON *entry;

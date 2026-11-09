@@ -1,10 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest and host path translation over the ball's drive table. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/paths.h"
+#include "storage/volume.h"
 
-char *tb_ball_case_path(Context *c, const char *path)
+char *tb_ball_case_path(TbBall *c, const char *path)
 {
     if (tb_image_path(path))
     {
@@ -78,7 +77,7 @@ int tb_ball_inside(const char *path, const char *root)
     return !path[n] || path[n] == '/' || path[n] == '\\' || (n == 1 && root[0] == '/');
 }
 
-int tb_ball_current_drive(Context *c)
+int tb_ball_current_drive(TbBall *c)
 {
     const char *letter = field(c->manifest, "currentDrive");
     return letter && strlen(letter) == 1 && letter[0] >= 'A' && letter[0] <= 'Z' &&
@@ -87,7 +86,7 @@ int tb_ball_current_drive(Context *c)
                : 2;
 }
 
-const char *tb_ball_drive_directory(Context *c, int drive)
+const char *tb_ball_drive_directory(TbBall *c, int drive)
 {
     char key[2] = {(char)('A' + drive), 0};
     const char *path = field(get(c->application, "workingDirectories"), key);
@@ -96,7 +95,7 @@ const char *tb_ball_drive_directory(Context *c, int drive)
     return path ? path : tb_ball_format(c, "%c:\\", 'A' + drive);
 }
 
-char *tb_ball_host_path(Context *c, const char *name, int explicit_host)
+char *tb_ball_host_path(TbBall *c, const char *name, int explicit_host)
 {
     if (!name || !*name)
     {
@@ -163,18 +162,18 @@ char *tb_ball_host_path(Context *c, const char *name, int explicit_host)
     char *path = tb_ball_case_path(c, name);
     if (!path)
         return NULL;
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT; i++)
         if (c->roots[i] && tb_ball_inside(path, c->roots[i]))
             return path;
     tb_ball_fail(c, "Path is outside mapped drives: %s; map its directory first", name);
     return NULL;
 }
 
-char *tb_ball_guest_path(Context *c, const char *host)
+char *tb_ball_guest_path(TbBall *c, const char *host)
 {
     int best = -1;
     size_t length = 0;
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT; i++)
         if (c->roots[i] && tb_ball_inside(host, c->roots[i]) && strlen(c->roots[i]) >= length)
         {
             length = strlen(c->roots[i]);
@@ -196,7 +195,7 @@ char *tb_ball_guest_path(Context *c, const char *host)
     return result;
 }
 
-char *tb_ball_guest_for_input(Context *c, const char *host, const char *input)
+char *tb_ball_guest_for_input(TbBall *c, const char *host, const char *input)
 {
     if (input && isalpha((unsigned char)input[0]) && input[1] == ':')
     {
@@ -217,7 +216,7 @@ char *tb_ball_guest_for_input(Context *c, const char *host, const char *input)
     return tb_ball_guest_path(c, host);
 }
 
-int tb_ball_validate_directories(Context *c, const cJSON *directories)
+int tb_ball_validate_directories(TbBall *c, const cJSON *directories)
 {
     if (!directories)
         return 1;

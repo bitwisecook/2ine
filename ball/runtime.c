@@ -1,7 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Runtime build identity and the per-ball runtime snapshot. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/runtime.h"
+#include "ball/vendor/sha256/sha256.h"
 
 static int runtime_name(const char *s)
 {
@@ -12,7 +13,7 @@ static int runtime_name(const char *s)
             ((n > 3 && !strcmp(s + n - 3, ".so")) || (n > 6 && !strcmp(s + n - 6, ".dylib"))));
 }
 
-const char *runtime_loader_name(Context *c, const char *build)
+const char *runtime_loader_name(TbBall *c, const char *build)
 {
     if (tb_is_file(tb_ball_join(c, build, "lx_loader")))
         return "lx_loader";
@@ -40,7 +41,7 @@ char **runtime_names(const char *build, size_t *count)
     return names;
 }
 
-char *runtime_id(Context *c, const char *build)
+char *runtime_id(TbBall *c, const char *build)
 {
     size_t n = 0;
     char **names = runtime_names(build, &n);
@@ -64,7 +65,7 @@ char *runtime_id(Context *c, const char *build)
     return ok ? tb_ball_hex(c, out) : NULL;
 }
 
-int runtime_sync(Context *c, const char *build, const char *directory)
+int runtime_sync(TbBall *c, const char *build, const char *directory)
 {
     if (!tb_mkdirs(directory))
         return tb_ball_fail(c, "Cannot create runtime snapshot");

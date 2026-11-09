@@ -1,11 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The host environment for the loader of a launch. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/audio.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
 #include "ball/host_environment.h"
-#include "ball/paths.h"
 #include "ball/runtime.h"
 #include "ball/settings_schema.h"
 
@@ -33,7 +30,7 @@ const char *launch_unset_environment_keys[] = {"IS_2INE",
                                                "DYLD_LIBRARY_PATH",
                                                NULL};
 
-cJSON *launch_host_environment(Context *c, const char *build, const char *override,
+cJSON *launch_host_environment(TbBall *c, const char *build, const char *override,
                                const cJSON *app_env)
 {
     cJSON *env = tb_ball_guest_environment(c, app_env);
@@ -61,7 +58,8 @@ cJSON *launch_host_environment(Context *c, const char *build, const char *overri
     char *identity = runtime_id(c, build);
     if (!identity)
         goto failed;
-    char *runtime = tb_ball_format(c, "%s/OS2/DLL/2INE/%s/%.16s", c->roots[2], selected, identity);
+    char *runtime = tb_ball_format(c, "%s/OS2/DLL/2INE/%s/%.16s", c->roots[TB_BALL_DRIVE_C],
+                                   selected, identity);
     if (!runtime)
         goto failed;
     char *libpath = tb_ball_format(c, "%s%s%s", runtime, PATH_SEPARATOR, build);
@@ -98,8 +96,8 @@ cJSON *launch_host_environment(Context *c, const char *build, const char *overri
         tb_ball_join(c, c->ball, "2ine.cfg"),
         tb_ball_host_path(c, field(env, "USER_INI"), 0),
         tb_ball_host_path(c, field(env, "SYSTEM_INI"), 0),
-        tb_ball_join(c, c->roots[2], "OS2/REGISTRY.INI"),
-        tb_ball_join(c, c->roots[2], "OS2/OBJECTS.INI"),
+        tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/REGISTRY.INI"),
+        tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/OBJECTS.INI"),
         libpath,
         identity,
         get(get(c->manifest, "system"), "display_dpi")

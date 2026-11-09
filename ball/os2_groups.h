@@ -2,7 +2,7 @@
 /* Stable media group identifiers shared by extraction and dependency reports. */
 #ifndef TB_BALL_OS2_GROUPS_H
 #define TB_BALL_OS2_GROUPS_H
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Stable media group identifiers shared by extraction and dependency reports. */

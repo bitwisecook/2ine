@@ -1,19 +1,16 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Normal launches read the stored graph. No executable parsing, directory
    enumeration, media inspection, recovery, or database writes happen here. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/dependency_database.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
 #include "ball/launch_dependencies.h"
 #include "ball/launch_prerequisites.h"
 #include "ball/os2_component_store.h"
 #include "ball/os2_dependencies.h"
 #include "ball/os2_extract.h"
-#include "ball/paths.h"
 #include "ball/system_modules.h"
 
-static const cJSON *dependency_cached_binary(Context *c, const cJSON *database, const char *path)
+static const cJSON *dependency_cached_binary(TbBall *c, const cJSON *database, const char *path)
 {
     const char *key = component_key(c, path);
     const cJSON *binary;
@@ -22,14 +19,14 @@ static const cJSON *dependency_cached_binary(Context *c, const cJSON *database, 
     return NULL;
 }
 
-static char *dependency_cached_join(Context *c, const char *directory, const char *name)
+static char *dependency_cached_join(TbBall *c, const char *directory, const char *name)
 {
     return component_key(c, tb_ball_format(c, "%s%s%s", directory,
                                            directory[strlen(directory) - 1] == '\\' ? "" : "\\",
                                            name));
 }
 
-static char *dependency_cached_program(Context *c, const cJSON *database, const char *program,
+static char *dependency_cached_program(TbBall *c, const cJSON *database, const char *program,
                                        const cJSON *env, const char *cwd, int host_program)
 {
     if (host_program)
@@ -56,7 +53,7 @@ static char *dependency_cached_program(Context *c, const cJSON *database, const 
     return path;
 }
 
-static const cJSON *dependency_cached_find(Context *c, const cJSON *database, const char *binary,
+static const cJSON *dependency_cached_find(TbBall *c, const cJSON *database, const char *binary,
                                            const char *module, const cJSON *paths)
 {
     char *folder = tb_ball_keep(c, strdup(binary)), *slash = folder ? strrchr(folder, '\\') : NULL;
@@ -77,7 +74,7 @@ static const cJSON *dependency_cached_find(Context *c, const cJSON *database, co
     return found;
 }
 
-static void dependency_cached_process(Context *c, const cJSON *database, const cJSON *application,
+static void dependency_cached_process(TbBall *c, const cJSON *database, const cJSON *application,
                                       const cJSON *request, const char *program, const char *cwd,
                                       cJSON *report)
 {
@@ -226,16 +223,16 @@ static void dependency_cached_process(Context *c, const cJSON *database, const c
     cJSON_Delete(env);
 }
 
-cJSON *launch_dependencies(Context *parent, const cJSON *request)
+cJSON *launch_dependencies(TbBall *parent, const cJSON *request)
 {
     const cJSON *arguments = get(request, "arguments");
     if (!tb_ball_array_strings(parent, arguments) || !cJSON_GetArraySize(arguments))
         return NULL;
-    Context storage = *parent;
+    TbBall storage = *parent;
     storage.allocations = NULL;
     storage.count = 0;
     storage.error = NULL;
-    Context *c = &storage;
+    TbBall *c = &storage;
     cJSON *database = dependency_database_load(c), *report = cJSON_CreateObject();
     const char *arrays[] = {"roots",       "binaries",    "imports",  "missing",
                             "unreachable", "disabled",    "imported", "componentFiles",

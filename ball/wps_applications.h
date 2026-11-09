@@ -2,10 +2,10 @@
 /* Project persistent WPProgram registrations into independently managed launchers. */
 #ifndef TB_BALL_WPS_APPLICATIONS_H
 #define TB_BALL_WPS_APPLICATIONS_H
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 
-void wps_hide(Context *c, const cJSON *app);
-void wps_detach(Context *c, cJSON *app);
-int wps_sync(Context *c);
-cJSON *wps_latest(Context *c);
+void wps_hide(TbBall *c, const cJSON *app);
+void wps_detach(TbBall *c, cJSON *app);
+int wps_sync(TbBall *c);
+cJSON *wps_latest(TbBall *c);
 #endif

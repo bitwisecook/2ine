@@ -1,14 +1,13 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Binary-safe profile inspection and revision-checked value replacement. */
 #include "ball/ball_internal.h"
-#include "ball/configuration.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
-#include "ball/paths.h"
-
+#include "formats/endian.h"
+#include "formats/profile/os2_ini.h"
+#include "ball/vendor/sha256/sha256.h"
+#include <time.h>
 #define TB_PROFILE_LIMIT (32u * 1024u * 1024u)
 
-static char *configuration_hex(Context *c, const unsigned char *p, size_t n)
+static char *configuration_hex(TbBall *c, const unsigned char *p, size_t n)
 {
     char *out = tb_ball_keep(c, malloc(n * 2 + 1));
     if (out)
@@ -28,7 +27,7 @@ static int configuration_nibble(char c)
                                   : -1;
 }
 
-unsigned char *configuration_unhex(Context *c, const char *text, size_t *n)
+unsigned char *configuration_unhex(TbBall *c, const char *text, size_t *n)
 {
     if (!text || strlen(text) % 2 || strlen(text) > TB_PROFILE_LIMIT * 2)
     {
@@ -52,7 +51,7 @@ unsigned char *configuration_unhex(Context *c, const char *text, size_t *n)
     return out;
 }
 
-static int configuration_entry(Context *c, cJSON *entries, const unsigned char *app, size_t a,
+static int configuration_entry(TbBall *c, cJSON *entries, const unsigned char *app, size_t a,
                                const unsigned char *key, size_t k, const unsigned char *data,
                                size_t n)
 {
@@ -69,7 +68,7 @@ static int configuration_entry(Context *c, cJSON *entries, const unsigned char *
 
 typedef struct ConfigurationParse
 {
-    Context *context;
+    TbBall *context;
     cJSON *entries;
 } ConfigurationParse;
 
@@ -81,7 +80,7 @@ static int configuration_visit(void *opaque, const unsigned char *app, size_t a,
     return configuration_entry(parse->context, parse->entries, app, a, key, k, data, n);
 }
 
-cJSON *configuration_parse(Context *c, const unsigned char *p, size_t n)
+cJSON *configuration_parse(TbBall *c, const unsigned char *p, size_t n)
 {
     ConfigurationParse parse = {c, cJSON_CreateArray()};
     if (tb_profile_walk(p, n, configuration_visit, &parse))
@@ -92,11 +91,8 @@ cJSON *configuration_parse(Context *c, const unsigned char *p, size_t n)
 }
 
 #define TB_CONFIGURATION_FILES_LIMIT 2048u
-
 #define TB_CONFIGURATION_SCAN_LIMIT 100000u
-
 #define TB_CONFIGURATION_DIRECTORY_LIMIT 4096u
-
 #define TB_CONFIGURATION_GUEST_SEPARATOR 92
 
 static int configuration_part_equal(const char *a, size_t n, const char *b)
@@ -126,7 +122,7 @@ static int configuration_excluded(const char *guest)
     return 0;
 }
 
-static int configuration_links(Context *c, const char *root, const char *path)
+static int configuration_links(TbBall *c, const char *root, const char *path)
 {
     if (!tb_ball_inside(path, root))
         return tb_ball_fail(c, "Choose an existing INI file on the ball's private C: drive");
@@ -149,19 +145,19 @@ static int configuration_links(Context *c, const char *root, const char *path)
     return 1;
 }
 
-static char *configuration_private_root(Context *c)
+static char *configuration_private_root(TbBall *c)
 {
     char *ball = tb_ball_keep(c, tb_canonical(c->ball));
     const char *mapping = str(get(get(c->manifest, "drives"), "C"));
     const char *raw =
         mapping ? host_absolute(mapping) ? mapping : tb_ball_join(c, ball, mapping) : NULL;
-    if (!ball || !raw || tb_is_link(c->ball) || !c->roots[2] ||
-        !tb_ball_inside(c->roots[2], ball) || !configuration_links(c, ball, raw))
+    if (!ball || !raw || tb_is_link(c->ball) || !c->roots[TB_BALL_DRIVE_C] ||
+        !tb_ball_inside(c->roots[TB_BALL_DRIVE_C], ball) || !configuration_links(c, ball, raw))
     {
         tb_ball_fail(c, "C: must be a private directory inside this ball");
         return NULL;
     }
-    return c->roots[2];
+    return c->roots[TB_BALL_DRIVE_C];
 }
 
 static int configuration_suffix(const char *name)
@@ -170,7 +166,7 @@ static int configuration_suffix(const char *name)
     return n >= 4 && equal_case(name + n - 4, ".INI");
 }
 
-static char *configuration_private_path(Context *c, const char *guest)
+static char *configuration_private_path(TbBall *c, const char *guest)
 {
     char *root = configuration_private_root(c);
     if (!root)
@@ -260,7 +256,7 @@ static int configuration_is_text(const unsigned char *p, size_t n)
     return 1;
 }
 
-static unsigned char *configuration_file_bytes(Context *c, const char *path, size_t *length)
+static unsigned char *configuration_file_bytes(TbBall *c, const char *path, size_t *length)
 {
     uint64_t size = 0;
     int64_t modified = 0;
@@ -272,12 +268,12 @@ static unsigned char *configuration_file_bytes(Context *c, const char *path, siz
     return (unsigned char *)tb_ball_read_file(c, path, length, 0);
 }
 
-static char *configuration_path(Context *c, const char *area)
+static char *configuration_path(TbBall *c, const char *area)
 {
     if (!area)
         return NULL;
     if (!strcmp(area, "registry"))
-        return tb_ball_join(c, c->roots[2], "OS2/REGISTRY.INI");
+        return tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/REGISTRY.INI");
     if (strcmp(area, "user") && strcmp(area, "system"))
         return NULL;
     cJSON *env = tb_ball_guest_environment(c, NULL);
@@ -289,7 +285,7 @@ static char *configuration_path(Context *c, const char *area)
     return path;
 }
 
-cJSON *configuration_read(Context *c, const cJSON *request)
+cJSON *configuration_read(TbBall *c, const cJSON *request)
 {
     const char *area = field(request, "name");
     char *path = area && !strcmp(area, "file")
@@ -327,7 +323,7 @@ cJSON *configuration_read(Context *c, const cJSON *request)
     return out;
 }
 
-static int configuration_serialize(Context *c, const char *path, cJSON *entries)
+static int configuration_serialize(TbBall *c, const char *path, cJSON *entries)
 {
     size_t total = TB_PROFILE_HEADER_SIZE;
     cJSON *entry;
@@ -363,7 +359,7 @@ static int configuration_serialize(Context *c, const char *path, cJSON *entries)
                : tb_ball_fail(c, "Cannot save profile: %s", strerror(errno));
 }
 
-cJSON *configuration_write(Context *c, const cJSON *request)
+cJSON *configuration_write(TbBall *c, const cJSON *request)
 {
     cJSON *current = configuration_read(c, request);
     if (!current)
@@ -515,9 +511,9 @@ cJSON *configuration_write(Context *c, const cJSON *request)
     return ok ? configuration_read(c, request) : NULL;
 }
 
-static char *configuration_guest_file(Context *c, const char *host)
+static char *configuration_guest_file(TbBall *c, const char *host)
 {
-    const char *part = host + strlen(c->roots[2]);
+    const char *part = host + strlen(c->roots[TB_BALL_DRIVE_C]);
     while (*part == '/' || *part == TB_CONFIGURATION_GUEST_SEPARATOR)
         part++;
     char *guest = tb_ball_format(c, "C:%c%s", TB_CONFIGURATION_GUEST_SEPARATOR, part);
@@ -528,7 +524,7 @@ static char *configuration_guest_file(Context *c, const char *host)
     return guest;
 }
 
-static cJSON *configuration_aliases(Context *c)
+static cJSON *configuration_aliases(TbBall *c)
 {
     cJSON *aliases = cJSON_CreateArray(), *env = tb_ball_guest_environment(c, NULL);
     if (!env)
@@ -559,7 +555,7 @@ static cJSON *configuration_aliases(Context *c)
         cJSON_AddStringToObject(alias, "role", roles[i]);
         cJSON_AddStringToObject(alias, "host", host ? host : paths[i]);
         cJSON_AddStringToObject(alias, "path",
-                                host && tb_ball_inside(host, c->roots[2])
+                                host && tb_ball_inside(host, c->roots[TB_BALL_DRIVE_C])
                                     ? configuration_guest_file(c, host)
                                     : paths[i]);
         cJSON_AddBoolToObject(alias, "exists", host && tb_is_file(host));
@@ -583,7 +579,7 @@ static int configuration_profile_magic(const unsigned char *p, size_t n)
     return tb_profile_recognised(p, n);
 }
 
-cJSON *configuration_file_read(Context *c, const cJSON *request)
+cJSON *configuration_file_read(TbBall *c, const cJSON *request)
 {
     char *path = configuration_private_path(c, field(request, "path"));
     size_t n = 0;
@@ -654,7 +650,7 @@ cJSON *configuration_file_read(Context *c, const cJSON *request)
     return out;
 }
 
-cJSON *configuration_file_write(Context *c, const cJSON *request)
+cJSON *configuration_file_write(TbBall *c, const cJSON *request)
 {
     cJSON *current = configuration_file_read(c, request);
     if (!current)
@@ -729,7 +725,7 @@ static int configuration_same_path(const char *a, const char *b)
     return !*a && !*b;
 }
 
-static int configuration_file_catalogue(Context *c, cJSON *files, const cJSON *aliases,
+static int configuration_file_catalogue(TbBall *c, cJSON *files, const cJSON *aliases,
                                         const char *host)
 {
     char *guest = configuration_guest_file(c, host);
@@ -807,7 +803,7 @@ static int configuration_file_catalogue(Context *c, cJSON *files, const cJSON *a
     return 1;
 }
 
-cJSON *configuration_files(Context *c, const cJSON *request)
+cJSON *configuration_files(TbBall *c, const cJSON *request)
 {
     char *root = configuration_private_root(c);
     if (!root)

@@ -1,11 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Browsing guest directories and copying host files into a drive. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/files.h"
-#include "ball/paths.h"
+#include "storage/volume.h"
 
-cJSON *tb_ball_browse(Context *c, const char *path)
+cJSON *tb_ball_browse(TbBall *c, const char *path)
 {
     char *host = tb_ball_host_path(c, path, 0);
     if (host && tb_is_file(host))
@@ -96,7 +94,7 @@ cJSON *tb_ball_browse(Context *c, const char *path)
     return result;
 }
 
-int tb_ball_plan_copy(Context *c, cJSON *plan, const char *source, const char *destination,
+int tb_ball_plan_copy(TbBall *c, cJSON *plan, const char *source, const char *destination,
                       unsigned depth)
 {
     if (depth > 64 || cJSON_GetArraySize(plan) > 100000)
@@ -147,7 +145,7 @@ int tb_ball_plan_copy(Context *c, cJSON *plan, const char *source, const char *d
     return 1;
 }
 
-cJSON *tb_ball_import_files(Context *c, const cJSON *request)
+cJSON *tb_ball_import_files(TbBall *c, const cJSON *request)
 {
     const char *directory = field(request, "path");
     char *destination = directory ? tb_ball_host_path(c, directory, 0) : NULL;

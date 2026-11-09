@@ -2,10 +2,10 @@
 /* Private, portable bank installation and per-ball MIDI preferences. */
 #ifndef TB_BALL_AUDIO_H
 #define TB_BALL_AUDIO_H
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 
-cJSON *audio_snapshot(Context *c);
-cJSON *audio_save(Context *c, const cJSON *request);
-int audio_config(Context *c, const char *build, cJSON *env);
-cJSON *audio_import_archive(Context *c, const cJSON *request);
+cJSON *audio_snapshot(TbBall *c);
+cJSON *audio_save(TbBall *c, const cJSON *request);
+int audio_config(TbBall *c, const char *build, cJSON *env);
+cJSON *audio_import_archive(TbBall *c, const cJSON *request);
 #endif

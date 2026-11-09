@@ -1,11 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Add installed component directories to OS/2's configuration search lists. */
-#include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
-#include "ball/manifest.h"
+#include "ball/store.h"
 #include "ball/os2_paths.h"
-#include "ball/paths.h"
 
 static int os2_path_equal(const char *first, size_t length, const char *second)
 {
@@ -29,7 +25,7 @@ static int os2_path_equal(const char *first, size_t length, const char *second)
     return 1;
 }
 
-static char *os2_path_append(Context *c, const char *value, const char *directory)
+static char *os2_path_append(TbBall *c, const char *value, const char *directory)
 {
     if (!value)
         value = "";
@@ -47,7 +43,7 @@ static char *os2_path_append(Context *c, const char *value, const char *director
     return tb_ball_format(c, "%s%s%s", value, n && value[n - 1] != ';' ? ";" : "", directory);
 }
 
-static void os2_path_want(Context *c, cJSON *wanted, const char *key, const char *directory)
+static void os2_path_want(TbBall *c, cJSON *wanted, const char *key, const char *directory)
 {
     char *value = os2_path_append(c, field(wanted, key), directory);
     if (value)
@@ -93,7 +89,7 @@ static int os2_component_directory(const char *directory)
     return 0;
 }
 
-static cJSON *os2_component_paths(Context *c, const cJSON *files)
+static cJSON *os2_component_paths(TbBall *c, const cJSON *files)
 {
     cJSON *wanted = cJSON_CreateObject();
     const cJSON *file;
@@ -142,7 +138,7 @@ static cJSON *os2_component_paths(Context *c, const cJSON *files)
 
 /* Preserve every original byte and append only changed effective assignments.
    CONFIG.SYS permits later assignments to replace earlier search lists. */
-int os2_configure_paths(Context *c, const cJSON *files)
+int os2_configure_paths(TbBall *c, const cJSON *files)
 {
     cJSON *wanted = os2_component_paths(c, files);
     if (!cJSON_GetArraySize(wanted))
@@ -150,7 +146,7 @@ int os2_configure_paths(Context *c, const cJSON *files)
         cJSON_Delete(wanted);
         return !c->error;
     }
-    char *path = tb_ball_join(c, c->roots[2], "CONFIG.SYS");
+    char *path = tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS");
     size_t n = 0;
     char *bytes = tb_ball_read_file(c, path, &n, 1);
     char *copy = bytes ? tb_ball_keep(c, strdup(bytes)) : NULL;

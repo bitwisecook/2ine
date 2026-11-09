@@ -1,16 +1,13 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Project persistent WPProgram registrations into independently managed launchers. */
-#include "ball/ball_internal.h"
-#include "ball/configuration.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
+#include "ball/store.h"
 #include "ball/host_environment.h"
-#include "ball/manifest.h"
-#include "ball/paths.h"
 #include "ball/wps_applications.h"
-
+#include "formats/endian.h"
+#include "formats/profile/os2_ini.h"
+#include "formats/resources/icon.h"
+#include "ball/vendor/sha256/sha256.h"
 #define TB_WPS_PROFILE_LIMIT (8u * 1024u * 1024u)
-
 #define TB_WPS_OBJECT_LIMIT 8192u
 
 static void wps_digest(const unsigned char *bytes, size_t size, unsigned char digest[32])
@@ -21,7 +18,7 @@ static void wps_digest(const unsigned char *bytes, size_t size, unsigned char di
     sha256_final(&hash, digest);
 }
 
-static char *wps_property(Context *c, const char *setup, const char *wanted)
+static char *wps_property(TbBall *c, const char *setup, const char *wanted)
 {
     char *result = NULL;
     while (setup && *setup)
@@ -57,7 +54,7 @@ static char *wps_property(Context *c, const char *setup, const char *wanted)
     return result;
 }
 
-static char *wps_title(Context *c, const char *raw)
+static char *wps_title(TbBall *c, const char *raw)
 {
     char *value = tb_ball_keep(c, strdup(raw ? raw : ""));
     if (!value)
@@ -80,7 +77,7 @@ static char *wps_title(Context *c, const char *raw)
     return value;
 }
 
-static cJSON *wps_arguments(Context *c, const char *text)
+static cJSON *wps_arguments(TbBall *c, const char *text)
 {
     cJSON *args = cJSON_CreateArray();
     size_t length = strlen(text ? text : "");
@@ -123,7 +120,7 @@ static cJSON *wps_arguments(Context *c, const char *text)
     return args;
 }
 
-static char *wps_resolve(Context *c, const char *name, const char *cwd, const char *paths)
+static char *wps_resolve(TbBall *c, const char *name, const char *cwd, const char *paths)
 {
     if (!name || !*name)
         return NULL;
@@ -162,7 +159,7 @@ static char *wps_resolve(Context *c, const char *name, const char *cwd, const ch
     return plain;
 }
 
-void wps_hide(Context *c, const cJSON *app)
+void wps_hide(TbBall *c, const cJSON *app)
 {
     const char *handle = field(get(app, "wpsRegistration"), "handle");
     if (handle)
@@ -178,7 +175,7 @@ void wps_hide(Context *c, const cJSON *app)
     }
 }
 
-static int wps_hidden(Context *c, const char *handle, const cJSON *record)
+static int wps_hidden(TbBall *c, const char *handle, const cJSON *record)
 {
     const cJSON *hidden = get(get(c->manifest, "wpsHidden"), handle);
     if (cJSON_IsTrue(hidden))
@@ -189,13 +186,13 @@ static int wps_hidden(Context *c, const char *handle, const cJSON *record)
     return hash && *hash && equal_case(hash, field(record, "hash"));
 }
 
-void wps_detach(Context *c, cJSON *app)
+void wps_detach(TbBall *c, cJSON *app)
 {
     wps_hide(c, app);
     cJSON_DeleteItemFromObjectCaseSensitive(app, "wpsRegistration");
 }
 
-static void wps_icon_beside_program(Context *c, cJSON *icon, const char *program)
+static void wps_icon_beside_program(TbBall *c, cJSON *icon, const char *program)
 {
     const char *declared = field(icon, "path"), *base = declared, *directory = NULL;
     if (!declared || !program || get(icon, "resource"))
@@ -244,7 +241,7 @@ static const cJSON *wps_previous(const cJSON *apps, const char *handle)
     return NULL;
 }
 
-static cJSON *wps_objects(Context *c, const unsigned char *bytes, size_t size)
+static cJSON *wps_objects(TbBall *c, const unsigned char *bytes, size_t size)
 {
     if (size > TB_WPS_PROFILE_LIMIT ||
         (size >= 12 && !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE) &&
@@ -323,7 +320,7 @@ static cJSON *wps_objects(Context *c, const unsigned char *bytes, size_t size)
     return objects;
 }
 
-static cJSON *wps_folders(Context *c, const cJSON *objects, const char *location)
+static cJSON *wps_folders(TbBall *c, const cJSON *objects, const char *location)
 {
     cJSON *folders = cJSON_CreateArray();
     for (unsigned depth = 0; location && depth < 256; depth++)
@@ -349,11 +346,12 @@ static cJSON *wps_folders(Context *c, const cJSON *objects, const char *location
     return NULL;
 }
 
-int wps_sync(Context *c)
+int wps_sync(TbBall *c)
 {
-    if (!c->roots[2])
+    if (!c->roots[TB_BALL_DRIVE_C])
         return 1;
-    char *path = tb_ball_case_path(c, tb_ball_join(c, c->roots[2], "OS2/OBJECTS.INI"));
+    char *path =
+        tb_ball_case_path(c, tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/OBJECTS.INI"));
     int managed = 0;
     const cJSON *existing;
     cJSON_ArrayForEach(existing, get(c->manifest, "applications")) managed |=
@@ -538,7 +536,7 @@ int wps_sync(Context *c)
     return !c->error;
 }
 
-cJSON *wps_latest(Context *c)
+cJSON *wps_latest(TbBall *c)
 {
     char *path = tb_ball_join(c, c->ball, "logs/wps-registration-latest.json");
     char *bytes = path ? tb_ball_read_file(c, path, NULL, 1) : NULL;

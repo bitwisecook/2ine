@@ -1,8 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Category-based OS/2 media planning and staged extraction into a ball. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "storage/container.h"
-#include "ball/drives.h"
 #include "ball/os2_component_store.h"
 #include "ball/os2_extract.h"
 #include "ball/os2_groups.h"
@@ -10,8 +9,8 @@
 #include "ball/os2_som.h"
 #include "ball/os2_support.h"
 #include "ball/os2_tree.h"
-#include "ball/paths.h"
 #include "ball/system_modules.h"
+#include "ball/vendor/sha256/sha256.h"
 
 int extract_extension(const char *name, const char *extension)
 {
@@ -59,7 +58,7 @@ static int extract_host_driver(const char *path)
     return network_driver && extract_extension(base, ".OS2");
 }
 
-static char *extract_child(Context *c, const char *directory, const char *name)
+static char *extract_child(TbBall *c, const char *directory, const char *name)
 {
     return tb_media_path(directory) ? tb_ball_keep(c, tb_media_child(directory, name))
                                     : tb_ball_join(c, directory, name);
@@ -86,7 +85,7 @@ static void extract_queue(cJSON *queue, const char *source, const char *layout, 
     cJSON_AddItemToArray(queue, entry);
 }
 
-static int extract_children(Context *c, cJSON *queue, const char *source, const char *layout)
+static int extract_children(TbBall *c, cJSON *queue, const char *source, const char *layout)
 {
     if (!tb_media_path(source) && tb_is_dir(source))
     {
@@ -125,7 +124,7 @@ static int extract_children(Context *c, cJSON *queue, const char *source, const 
 
 /* Optional sibling component trees are discovered by exact installed-root
    paths inside the same container. Direct folder plans never call this. */
-static char *extract_optional_directory(Context *c, const char *parent, const char *relative)
+static char *extract_optional_directory(TbBall *c, const char *parent, const char *relative)
 {
     char *current = tb_ball_keep(c, strdup(parent)), *parts = tb_ball_keep(c, strdup(relative));
     for (char *part = parts; current && part && *part;)
@@ -156,7 +155,7 @@ static char *extract_optional_directory(Context *c, const char *parent, const ch
     return current;
 }
 
-int extract_expand_installation_roots(Context *c, cJSON *sources)
+int extract_expand_installation_roots(TbBall *c, cJSON *sources)
 {
     if (cJSON_GetArraySize(sources) != 1)
         return 0;
@@ -178,7 +177,7 @@ int extract_expand_installation_roots(Context *c, cJSON *sources)
     return 1;
 }
 
-cJSON *open_os2_source(Context *c, const cJSON *request)
+cJSON *open_os2_source(TbBall *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");
     if (!tb_ball_array_strings(c, sources) || !cJSON_GetArraySize(sources))
@@ -303,7 +302,7 @@ cJSON *open_os2_source(Context *c, const cJSON *request)
     return result;
 }
 
-static char *extract_extra_path(Context *c, const char *layout, const char *source)
+static char *extract_extra_path(TbBall *c, const char *layout, const char *source)
 {
     char *label = tb_ball_keep(c, tb_media_label(source));
     const char *relative = layout;
@@ -333,7 +332,7 @@ static char *extract_extra_path(Context *c, const char *layout, const char *sour
 
 /* Match the actual installation layout rather than placing an ISO's setup
    tree under C:. PACK/PACK2 members retain their original target directories. */
-static char *extract_destination(Context *c, const char *layout, const char *source, int *category,
+static char *extract_destination(TbBall *c, const char *layout, const char *source, int *category,
                                  int *provided, int *priority)
 {
     *priority = 1;
@@ -548,7 +547,7 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
     return destination;
 }
 
-cJSON *plan_os2_extraction(Context *c, const cJSON *request)
+cJSON *plan_os2_extraction(TbBall *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");
     if (!tb_ball_array_strings(c, sources) || !cJSON_GetArraySize(sources))
@@ -660,7 +659,7 @@ static int extraction_wants_module(const cJSON *modules, const char *path)
     return 0;
 }
 
-static char *extract_destination_key(Context *c, const char *path)
+static char *extract_destination_key(TbBall *c, const char *path)
 {
     char *key = tb_ball_keep(c, strdup(path));
     if (key)
@@ -672,7 +671,7 @@ static char *extract_destination_key(Context *c, const char *path)
 /* A complete distribution contains mutually exclusive language/display
    payloads. Keep every distinct ambiguous version without guessing which
    should become the executable at the shared destination. */
-static int extract_preserve_variant(Context *c, cJSON *staged, cJSON *file)
+static int extract_preserve_variant(TbBall *c, cJSON *staged, cJSON *file)
 {
     const char *original = field(file, "path"), *digest = field(file, "sha256");
     const char *base = strrchr(original, '\\');
@@ -693,7 +692,7 @@ static int extract_preserve_variant(Context *c, cJSON *staged, cJSON *file)
     return 1;
 }
 
-static cJSON *extract_os2_categories_impl(Context *c, const cJSON *request)
+static cJSON *extract_os2_categories_impl(TbBall *c, const cJSON *request)
 {
     const cJSON *categories = get(request, "categories"), *category;
     const cJSON *modules = get(request, "modules");
@@ -1091,7 +1090,7 @@ static cJSON *extract_os2_categories_impl(Context *c, const cJSON *request)
 }
 
 /* Dependency recovery uses the same ownership and cooperative locking contract. */
-cJSON *extract_os2_categories(Context *c, const cJSON *request)
+cJSON *extract_os2_categories(TbBall *c, const cJSON *request)
 {
     int owns_job = c->component_operation == NULL;
     cJSON *result = NULL;

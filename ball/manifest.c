@@ -1,17 +1,14 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Opening, creating and saving a ball's manifest. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
-#include "ball/manifest.h"
 #include "ball/runtime_config.h"
 
-int tb_ball_save_manifest(Context *c)
+int tb_ball_save_manifest(TbBall *c)
 {
     return tb_ball_write_json(c, tb_ball_join(c, c->ball, "ball.json"), c->manifest);
 }
 
-int tb_ball_load(Context *c, const cJSON *request)
+int tb_ball_load(TbBall *c, const cJSON *request)
 {
     const char *path = field(request, "ball");
     if (!path)
@@ -41,7 +38,7 @@ int tb_ball_load(Context *c, const cJSON *request)
     return tb_ball_roots(c);
 }
 
-int tb_ball_create(Context *c, const char *path)
+int tb_ball_create(TbBall *c, const char *path)
 {
     if (!path)
         return tb_ball_fail(c, "A ball path is required");

@@ -1,11 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Original DSOM package companions and ball-owned service configuration. */
-#include "ball/ball_internal.h"
-#include "ball/guest_environment.h"
+#include "ball/store.h"
 #include "ball/host_environment.h"
-#include "ball/manifest.h"
 #include "ball/os2_som.h"
-#include "ball/paths.h"
 
 const char *os2_som_companions[] = {"C:\\OS2\\SOMDD.EXE",
                                     "C:\\OS2\\SOMDSVR.EXE",
@@ -27,13 +24,13 @@ int os2_som_companion(const char *path)
     return 0;
 }
 
-int os2_som_present(Context *c, const char *guest)
+int os2_som_present(TbBall *c, const char *guest)
 {
     char *host = tb_ball_host_path(c, guest, 0);
     return host && tb_is_file(host);
 }
 
-int os2_som_complete(Context *c)
+int os2_som_complete(TbBall *c)
 {
     if (!os2_som_present(c, "C:\\OS2\\DLL\\SOMD.DLL"))
         return 0;
@@ -43,7 +40,7 @@ int os2_som_complete(Context *c)
     return 1;
 }
 
-int os2_som_provision(Context *c, int *changed)
+int os2_som_provision(TbBall *c, int *changed)
 {
     if (changed)
         *changed = 0;

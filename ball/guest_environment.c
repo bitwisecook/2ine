@@ -1,9 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The guest environment: CONFIG.SYS assignments and ball overrides. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
-#include "ball/paths.h"
 
 const char *os2_default_environment_names[] = {"LANG", "OS2PATH", "LIBPATH",  "DPATH",      "HELP",
                                                "TEMP", "TMP",     "USER_INI", "SYSTEM_INI", NULL};
@@ -64,7 +61,7 @@ static int reserved_env(const char *key)
 /* Overlay expressions resolve against the complete inherited layer. A
    self-reference appends to the inherited value; other overrides resolve
    recursively so JSON key ordering cannot affect results. */
-static char *expand_env(Context *c, const cJSON *base, const cJSON *overlay, const char *key,
+static char *expand_env(TbBall *c, const cJSON *base, const cJSON *overlay, const char *key,
                         const char **stack, unsigned depth)
 {
     if (depth >= 64)
@@ -119,7 +116,7 @@ static char *expand_env(Context *c, const cJSON *base, const cJSON *overlay, con
     return out;
 }
 
-static int overlay_environment(Context *c, cJSON *env, const cJSON *settings)
+static int overlay_environment(TbBall *c, cJSON *env, const cJSON *settings)
 {
     if (!settings)
         return 1;
@@ -168,7 +165,7 @@ static int overlay_environment(Context *c, cJSON *env, const cJSON *settings)
     return !c->error;
 }
 
-cJSON *tb_ball_guest_environment(Context *c, const cJSON *overrides)
+cJSON *tb_ball_guest_environment(TbBall *c, const cJSON *overrides)
 {
     cJSON *env = cJSON_CreateObject();
     for (int i = 0; os2_default_environment_names[i]; i++)
@@ -180,7 +177,8 @@ cJSON *tb_ball_guest_environment(Context *c, const cJSON *overrides)
     if (tb_is_file(interpreter))
         cJSON_AddStringToObject(env, "COMSPEC", "C:\\OS2\\CMD.EXE");
     size_t n = 0;
-    char *bytes = tb_ball_read_file(c, tb_ball_join(c, c->roots[2], "CONFIG.SYS"), &n, 1);
+    char *bytes =
+        tb_ball_read_file(c, tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS"), &n, 1);
     if (!bytes)
         goto failed;
     char *text = tb_ball_latin1_to_utf8(c, bytes, n);

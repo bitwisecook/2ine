@@ -1,10 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The drive table: folder and device roots and published device control files. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
+#include "storage/volume.h"
 
-static char *tb_ball_device_root(Context *c, const char *letter, const char *kind,
-                                 const char *image, int readonly)
+static char *tb_ball_device_root(TbBall *c, const char *letter, const char *kind, const char *image,
+                                 int readonly)
 {
     char *directory = tb_ball_join(c, c->ball, "devices");
     char *control = tb_ball_join(c, directory, tb_ball_format(c, "%s.media", letter));
@@ -44,7 +44,7 @@ static char *tb_ball_device_root(Context *c, const char *letter, const char *kin
     return tb_ball_keep(c, tb_image_device_root(control));
 }
 
-int tb_ball_roots(Context *c)
+int tb_ball_roots(TbBall *c)
 {
     cJSON *drives = get(c->manifest, "drives");
     if (!cJSON_IsObject(drives) || !get(drives, "C"))

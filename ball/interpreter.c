@@ -1,12 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Locating the original OS/2 command interpreter. */
-#include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
+#include "ball/store.h"
 #include "ball/interpreter.h"
-#include "ball/paths.h"
 
-char *launch_find_command_interpreter(Context *c)
+char *launch_find_command_interpreter(TbBall *c)
 {
     cJSON *env = tb_ball_guest_environment(c, get(c->application, "environment"));
     if (!env)
@@ -22,7 +19,7 @@ char *launch_find_command_interpreter(Context *c)
         return NULL;
     }
     cJSON_Delete(env);
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT; i++)
     {
         int drive = i == 0 ? 2 : i <= 2 ? i - 1 : i;
         if (!c->roots[drive])
@@ -43,7 +40,7 @@ char *launch_find_command_interpreter(Context *c)
     return NULL;
 }
 
-char *launch_command_interpreter(Context *c)
+char *launch_command_interpreter(TbBall *c)
 {
     char *host = launch_find_command_interpreter(c);
     if (!host && !c->error)

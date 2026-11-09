@@ -2,7 +2,7 @@
 /* Launch planning: the command, environment and receipt of a launch. */
 #ifndef TB_BALL_PREPARE_H
 #define TB_BALL_PREPARE_H
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 
-cJSON *launch_prepare(Context *c, const cJSON *request);
+cJSON *launch_prepare(TbBall *c, const cJSON *request);
 #endif

@@ -1,9 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Validation of the runtime's system.* settings. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/settings_schema.h"
+#include <math.h>
 
-const char *launch_setting_text(Context *c, const cJSON *v)
+const char *launch_setting_text(TbBall *c, const cJSON *v)
 {
     if (cJSON_IsString(v))
         return str(v);
@@ -15,7 +16,7 @@ const char *launch_setting_text(Context *c, const cJSON *v)
     return NULL;
 }
 
-int launch_validate_system(Context *c)
+int launch_validate_system(TbBall *c)
 {
     cJSON *settings = get(c->manifest, "system"), *entry;
     if (settings && !cJSON_IsObject(settings))

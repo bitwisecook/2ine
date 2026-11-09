@@ -1,12 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Private, portable bank installation and per-ball MIDI preferences. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/audio.h"
-#include "ball/files.h"
-#include "ball/manifest.h"
-#include "ball/paths.h"
-
 #include "storage/container.h"
+#include "ball/vendor/sha256/sha256.h"
+#include <math.h>
 
 static const char *audio_profiles[][2] = {{"gm", "General MIDI"},
                                           {"gm2", "General MIDI 2"},
@@ -52,7 +50,7 @@ static uint32_t audio_u32(const unsigned char *p)
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
 }
 
-static int audio_header(Context *c, const char *path, const char *kind)
+static int audio_header(TbBall *c, const char *path, const char *kind)
 {
     if (!tb_is_file(path) || tb_is_link(path))
         return tb_ball_fail(c, "A sound bank must be a regular file");
@@ -71,7 +69,7 @@ static int audio_header(Context *c, const char *path, const char *kind)
     return ok ? 1 : tb_ball_fail(c, "Invalid, empty or oversized %s sound bank", kind);
 }
 
-static const cJSON *audio_bank(Context *c, const char *id)
+static const cJSON *audio_bank(TbBall *c, const char *id)
 {
     cJSON *bank;
     cJSON_ArrayForEach(
@@ -80,7 +78,7 @@ static const cJSON *audio_bank(Context *c, const char *id)
     return NULL;
 }
 
-static char *audio_bank_path(Context *c, const char *id, const char *build)
+static char *audio_bank_path(TbBall *c, const char *id, const char *build)
 {
     if (!id || !*id || !strcmp(id, "default"))
         return tb_ball_join(c, build, "soundfonts/FluidR3_GM.sf2");
@@ -108,9 +106,9 @@ static char *audio_bank_path(Context *c, const char *id, const char *build)
     return tb_ball_join(c, c->ball, relative);
 }
 
-static int audio_validate(Context *c, const cJSON *settings);
+static int audio_validate(TbBall *c, const cJSON *settings);
 
-cJSON *audio_snapshot(Context *c)
+cJSON *audio_snapshot(TbBall *c)
 {
     if (get(c->manifest, "soundBanks") && !cJSON_IsArray(get(c->manifest, "soundBanks")))
     {
@@ -158,7 +156,7 @@ cJSON *audio_snapshot(Context *c)
     return result;
 }
 
-static int audio_number(Context *c, const cJSON *object, const char *key, int min, int max)
+static int audio_number(TbBall *c, const cJSON *object, const char *key, int min, int max)
 {
     const cJSON *value = get(object, key);
     if (!cJSON_IsNumber(value) || !isfinite(value->valuedouble) ||
@@ -167,7 +165,7 @@ static int audio_number(Context *c, const cJSON *object, const char *key, int mi
     return 1;
 }
 
-static int audio_validate(Context *c, const cJSON *settings)
+static int audio_validate(TbBall *c, const cJSON *settings)
 {
     const char *profile = field(settings, "profile"), *bank = field(settings, "bank");
     int known = 0;
@@ -195,7 +193,7 @@ static int audio_validate(Context *c, const cJSON *settings)
     return 1;
 }
 
-cJSON *audio_save(Context *c, const cJSON *request)
+cJSON *audio_save(TbBall *c, const cJSON *request)
 {
     const cJSON *settings = get(request, "settings");
     if (!audio_validate(c, settings))
@@ -222,7 +220,7 @@ cJSON *audio_save(Context *c, const cJSON *request)
     return tb_ball_save_manifest(c) ? audio_snapshot(c) : NULL;
 }
 
-int audio_config(Context *c, const char *build, cJSON *env)
+int audio_config(TbBall *c, const char *build, cJSON *env)
 {
     cJSON *defaults = NULL;
     const cJSON *settings = get(c->manifest, "audio");
@@ -266,7 +264,7 @@ int audio_config(Context *c, const char *build, cJSON *env)
     return 1;
 }
 
-static int audio_tree_hash(Context *c, const char *path, const char *relative, SHA256_CTX *state,
+static int audio_tree_hash(TbBall *c, const char *path, const char *relative, SHA256_CTX *state,
                            unsigned depth, unsigned *count, uint64_t *bytes)
 {
     if (depth > 64 || ++*count > 10000 || tb_is_link(path))
@@ -307,7 +305,7 @@ static int audio_tree_hash(Context *c, const char *path, const char *relative, S
     return 1;
 }
 
-static cJSON *audio_import(Context *c, const cJSON *request)
+static cJSON *audio_import(TbBall *c, const cJSON *request)
 {
     const char *raw = field(request, "path");
     if (!raw || tb_is_link(raw))
@@ -445,7 +443,7 @@ static cJSON *audio_import(Context *c, const cJSON *request)
     return audio_snapshot(c);
 }
 
-static int audio_extract(Context *c, const char *source, const char *destination, cJSON *banks,
+static int audio_extract(TbBall *c, const char *source, const char *destination, cJSON *banks,
                          unsigned depth, unsigned *files, uint64_t *bytes)
 {
     if (depth > 64 || !tb_mkdirs(destination))
@@ -504,7 +502,7 @@ static int audio_extract(Context *c, const char *source, const char *destination
     return ok;
 }
 
-cJSON *audio_import_archive(Context *c, const cJSON *request)
+cJSON *audio_import_archive(TbBall *c, const cJSON *request)
 {
     const char *raw = field(request, "path");
     const char *dot = raw ? strrchr(raw, '.') : NULL;

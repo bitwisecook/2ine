@@ -1,31 +1,20 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Internal ZIP operations; included after the ball context and manifest helpers. */
 #include "ball/ball_internal.h"
-#include "ball/ball_archive.h"
-#include "ball/drives.h"
-#include "ball/manifest.h"
-#include "ball/paths.h"
 #include "ball/runtime.h"
 #include "ball/runtime_config.h"
-#include "ball/snapshot.h"
-
 #include "storage/vendor/libarchive/archive.h"
-
 #include "storage/vendor/libarchive/archive_entry.h"
-
+#include "ball/include/twoine_ball.h"
+#include <time.h>
 #ifndef TB_SOURCE_VERSION
-
 #define TB_SOURCE_VERSION "unversioned"
-
 #endif
-
 #ifndef TB_SOURCE_REVISION
-
 #define TB_SOURCE_REVISION "unknown"
-
 #endif
 
-static cJSON *archive_build_info(Context *c, const cJSON *request, int images)
+static cJSON *archive_build_info(TbBall *c, const cJSON *request, int images)
 {
     cJSON *info = cJSON_CreateObject();
     cJSON_AddNumberToObject(info, "formatVersion", 1);
@@ -112,7 +101,7 @@ static int archive_image(const char *path)
     return 0;
 }
 
-static char *archive_host_path(Context *c, const char *path)
+static char *archive_host_path(TbBall *c, const char *path)
 {
     char *normalized = tb_ball_keep(c, strdup(path));
     if (!normalized)
@@ -162,7 +151,7 @@ static char *archive_host_path(Context *c, const char *path)
 }
 
 /* Internal directories travel with the package; external paths are reconnect hints. */
-static int archive_normalize(Context *c, cJSON *manifest, int exporting)
+static int archive_normalize(TbBall *c, cJSON *manifest, int exporting)
 {
     cJSON *entry;
     cJSON_ArrayForEach(entry, get(manifest, "drives"))
@@ -215,13 +204,13 @@ static int archive_normalize(Context *c, cJSON *manifest, int exporting)
     return 1;
 }
 
-static int archive_error(Context *c, struct archive *archive)
+static int archive_error(TbBall *c, struct archive *archive)
 {
     const char *message = archive_error_string(archive);
     return tb_ball_fail(c, "ZIP operation failed: %s", message ? message : "invalid archive");
 }
 
-static int archive_add(Context *c, struct archive *archive, const char *name, const char *source,
+static int archive_add(TbBall *c, struct archive *archive, const char *name, const char *source,
                        const char *text, int directory)
 {
     if (!archive_relative(name))
@@ -267,7 +256,7 @@ static int archive_add(Context *c, struct archive *archive, const char *name, co
     return ok ? 1 : archive_error(c, archive);
 }
 
-static int archive_tree(Context *c, struct archive *archive, const char *relative, int images,
+static int archive_tree(TbBall *c, struct archive *archive, const char *relative, int images,
                         const cJSON *image_sources, unsigned depth)
 {
     if (depth > 128)
@@ -283,7 +272,9 @@ static int archive_tree(Context *c, struct archive *archive, const char *relativ
             !strcmp(relative, "devices") || !strcmp(relative, "ipc") ||
             !strcmp(relative, "cache/desktop-sessions"))
             return 1;
-        char *cache = c->roots[2] ? tb_ball_join(c, c->roots[2], "OS2/DLL/2INE") : NULL;
+        char *cache = c->roots[TB_BALL_DRIVE_C]
+                          ? tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/DLL/2INE")
+                          : NULL;
         if (cache && !strcmp(path, cache))
             return 1;
         cJSON *source;
@@ -312,7 +303,7 @@ static int archive_tree(Context *c, struct archive *archive, const char *relativ
     return ok;
 }
 
-static int archive_private_drive(Context *c, const cJSON *manifest)
+static int archive_private_drive(TbBall *c, const cJSON *manifest)
 {
     const char *drive = field(get(manifest, "drives"), "C");
     if (!drive || !archive_relative(drive))
@@ -320,7 +311,7 @@ static int archive_private_drive(Context *c, const cJSON *manifest)
     return 1;
 }
 
-cJSON *export_ball(Context *c, const cJSON *request)
+cJSON *tb_ball_export(TbBall *c, const cJSON *request)
 {
     const char *destination = field(request, "path");
     if (!destination)
@@ -436,7 +427,7 @@ cJSON *export_ball(Context *c, const cJSON *request)
     return cJSON_CreateString(target);
 }
 
-static int extract_ball(Context *c, const char *source, const char *destination)
+static int extract_ball(TbBall *c, const char *source, const char *destination)
 {
     FILE *file = tb_fopen(source, "rb");
     struct archive *archive = archive_read_new();
@@ -518,7 +509,7 @@ static int extract_ball(Context *c, const char *source, const char *destination)
     return ok ? 1 : tb_ball_fail(c, "Cannot import ZIP: %s", strerror(errno));
 }
 
-cJSON *import_ball(Context *c, const cJSON *request)
+cJSON *tb_ball_import(TbBall *c, const cJSON *request)
 {
     const char *source = field(request, "path"), *destination = field(request, "ball");
     if (!source || !destination)
@@ -552,7 +543,7 @@ cJSON *import_ball(Context *c, const cJSON *request)
                 if ((tb_is_file(path) || tb_is_dir(path)) && !tb_remove_tree(path))
                     tb_ball_fail(c, "Cannot reset imported runtime state");
             }
-            char *cache = tb_ball_join(c, c->roots[2], "OS2/DLL/2INE");
+            char *cache = tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/DLL/2INE");
             if (cache && tb_is_dir(cache) && !tb_remove_tree(cache))
                 tb_ball_fail(c, "Cannot reset imported runtime snapshots");
             if (!c->error && tb_ball_regenerate(c))

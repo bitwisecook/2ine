@@ -1,12 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared installation-media browser and original OS/2 support-file import. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/os2_component_store.h"
 #include "ball/os2_paths.h"
 #include "ball/os2_support.h"
-#include "ball/paths.h"
-
 #include "storage/container.h"
+#include "formats/executable/os2_executable.h"
+#include "ball/vendor/sha256/sha256.h"
 
 const char *support_names[] = {"CMD.EXE",     "SYSLEVEL.OS2", "OSO001.MSG",   "REXX.DLL",
                                "REXXAPI.DLL", "REXXUTIL.DLL", "REXXINIT.DLL", "REX.MSG",
@@ -18,7 +18,7 @@ const char *support_paths[] = {
     "C:\\OS2\\DLL\\REXXINIT.DLL", "C:\\OS2\\SYSTEM\\REX.MSG",  "C:\\OS2\\SYSTEM\\REXH.MSG",
     "C:\\OS2\\RXQUEUE.EXE",       "C:\\OS2\\RXSUBCOM.EXE"};
 
-cJSON *os2_support(Context *c)
+cJSON *os2_support(TbBall *c)
 {
     cJSON *result = cJSON_CreateObject(), *files = cJSON_AddArrayToObject(result, "files");
     int complete = 1, rexx_complete = 1;
@@ -61,7 +61,7 @@ cJSON *os2_support(Context *c)
     return result;
 }
 
-void os2_preserve_media_selection(Context *c, cJSON *media)
+void os2_preserve_media_selection(TbBall *c, cJSON *media)
 {
     size_t length = 0;
     char *bytes = tb_ball_read_file(c, tb_ball_join(c, c->ball, "os2-media.json"), &length, 1);
@@ -72,7 +72,7 @@ void os2_preserve_media_selection(Context *c, cJSON *media)
     cJSON_Delete(previous);
 }
 
-cJSON *remember_os2_media(Context *c, const cJSON *request)
+cJSON *remember_os2_media(TbBall *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");
     if (!tb_ball_array_strings(c, sources))
@@ -119,7 +119,7 @@ cJSON *extraction_read_stats(void)
     return result;
 }
 
-cJSON *browse_media(Context *c, const char *input)
+cJSON *browse_media(TbBall *c, const char *input)
 {
     if (!input)
     {
@@ -212,7 +212,7 @@ cJSON *browse_media(Context *c, const char *input)
     return result;
 }
 
-int support_read(Context *c, const char *source, int index, SupportFile *file)
+int support_read(TbBall *c, const char *source, int index, SupportFile *file)
 {
     if (component_cancelled(c))
         return 0;
@@ -265,7 +265,7 @@ int support_read(Context *c, const char *source, int index, SupportFile *file)
     return file->source != NULL || tb_ball_fail(c, "Out of memory");
 }
 
-cJSON *import_os2_support(Context *c, const cJSON *request)
+cJSON *import_os2_support(TbBall *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");
     if (!tb_ball_array_strings(c, sources) || !cJSON_GetArraySize(sources))

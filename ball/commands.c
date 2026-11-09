@@ -1,14 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Ball commands: drive mappings, settings and launcher records. */
 #include "ball/ball_internal.h"
-#include "ball/commands.h"
 #include "ball/host_environment.h"
-#include "ball/manifest.h"
-#include "ball/paths.h"
 #include "ball/runtime_config.h"
 #include "ball/wps_applications.h"
+#include "storage/volume.h"
 
-int tb_ball_command(Context *c, const cJSON *request)
+int tb_ball_command(TbBall *c, const cJSON *request)
 {
     cJSON *args = get(request, "arguments");
     if (!tb_ball_array_strings(c, args))

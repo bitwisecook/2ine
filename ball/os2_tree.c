@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Hierarchical media choices and exact planned-source selection. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/os2_extract.h"
 #include "ball/os2_groups.h"
 #include "ball/os2_tree.h"
@@ -37,7 +37,7 @@ static int extract_tree_file_destination_order(const void *first, const void *se
     return priority > 0 ? 1 : priority < 0 ? -1 : extract_tree_file_source_order(first, second);
 }
 
-static void extract_tree_prepare(Context *c, cJSON *files)
+static void extract_tree_prepare(TbBall *c, cJSON *files)
 {
     int count = cJSON_GetArraySize(files), at = 0, kept = 0;
     cJSON **ordered = (cJSON **)tb_ball_keep(c, calloc((size_t)count + 1, sizeof *ordered));
@@ -64,7 +64,7 @@ static void extract_tree_prepare(Context *c, cJSON *files)
     }
 }
 
-int extract_selection(Context *c, const cJSON *request, const cJSON *plan,
+int extract_selection(TbBall *c, const cJSON *request, const cJSON *plan,
                       ExtractFileSelection *selection)
 {
     const cJSON *requested = get(request, "fileSelection");
@@ -177,7 +177,7 @@ static void extract_tree_provider_policy(cJSON *group)
     extract_tree_disable(group, cJSON_IsTrue(get(provider, "nativeSelected")));
 }
 
-static cJSON *extract_tree_directories(Context *c, cJSON *parent, const char *path,
+static cJSON *extract_tree_directories(TbBall *c, cJSON *parent, const char *path,
                                        const char *category)
 {
     const char *name_space = field(parent, "id");
@@ -209,7 +209,7 @@ static cJSON *extract_tree_directories(Context *c, cJSON *parent, const char *pa
     return parent;
 }
 
-cJSON *extract_tree(Context *c, cJSON *files)
+cJSON *extract_tree(TbBall *c, cJSON *files)
 {
     extract_tree_prepare(c, files);
     cJSON *root = extract_group(EXTRACT_FULL);

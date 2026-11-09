@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Module services supplied by 2ine. Optional original SOM and HELPMGR are not
    substitutes for empty/fallback native modules and remain media dependencies. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/system_modules.h"
 
 int os2_module_matches(const char *name, const char *module)
@@ -17,7 +17,7 @@ int os2_module_matches(const char *name, const char *module)
     return 1;
 }
 
-int os2_module_disabled(Context *c, const char *name)
+int os2_module_disabled(TbBall *c, const char *name)
 {
     const cJSON *settings = get(c->manifest, "system");
     const char *provider = c->opengl_policy ? c->opengl_policy : field(settings, "opengl");
@@ -35,7 +35,7 @@ int os2_module_disabled(Context *c, const char *name)
     return 0;
 }
 
-int os2_module_provided(Context *c, const char *name)
+int os2_module_provided(TbBall *c, const char *name)
 {
     static const char *modules[] = {
         "DOSCALLS", "DOSCALL1", "MSG",     "NLS",   "QUECALLS", "VIOCALLS", "KBDCALLS",

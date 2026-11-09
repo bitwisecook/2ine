@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Component jobs persist progress atomically and journal each committed file. */
-#include "ball/ball_internal.h"
-#include "ball/drives.h"
+#include "ball/store.h"
 #include "ball/os2_component_store.h"
-#include "ball/paths.h"
+#include "storage/volume.h"
+#include "ball/vendor/sha256/sha256.h"
 
 int component_token(const char *token)
 {
@@ -16,7 +16,7 @@ int component_token(const char *token)
     return 1;
 }
 
-char *component_key(Context *c, const char *guest)
+char *component_key(TbBall *c, const char *guest)
 {
     char *key = tb_ball_keep(c, strdup(guest));
     for (char *at = key; at && *at; at++)
@@ -24,7 +24,7 @@ char *component_key(Context *c, const char *guest)
     return key;
 }
 
-cJSON *component_read(Context *c, const char *path)
+cJSON *component_read(TbBall *c, const char *path)
 {
     TbFileIdentity identity;
     uint64_t record_size = 0;
@@ -43,7 +43,7 @@ cJSON *component_read(Context *c, const char *path)
     return value;
 }
 
-int component_storage(Context *c, const char *relative)
+int component_storage(TbBall *c, const char *relative)
 {
     char *path = tb_ball_keep(c, strdup(relative)), *current = c->ball;
     if (tb_is_link(c->ball))
@@ -61,7 +61,7 @@ int component_storage(Context *c, const char *relative)
     return 1;
 }
 
-static cJSON *component_ledger_once(Context *c)
+static cJSON *component_ledger_once(TbBall *c)
 {
     cJSON *ledger = component_read(c, tb_ball_join(c, c->ball, "os2-components.json"));
     if (!ledger)
@@ -108,7 +108,7 @@ static cJSON *component_ledger_once(Context *c)
 
 /* Finalizing a job replaces the snapshot and then truncates its journal. Retry
    if that snapshot changed around our read, so polling cannot miss that handoff. */
-cJSON *component_ledger(Context *c)
+cJSON *component_ledger(TbBall *c)
 {
     char *path = tb_ball_join(c, c->ball, "os2-components.json");
     cJSON *ledger = NULL;
@@ -125,7 +125,7 @@ cJSON *component_ledger(Context *c)
     return ledger;
 }
 
-static cJSON *component_identity(Context *c, const TbFileIdentity *identity)
+static cJSON *component_identity(TbBall *c, const TbFileIdentity *identity)
 {
     cJSON *value = cJSON_CreateObject();
     const uint64_t fields[] = {
@@ -140,7 +140,7 @@ static cJSON *component_identity(Context *c, const TbFileIdentity *identity)
     return value;
 }
 
-int component_same_identity(Context *c, const cJSON *record, const TbFileIdentity *identity)
+int component_same_identity(TbBall *c, const cJSON *record, const TbFileIdentity *identity)
 {
     cJSON *current = component_identity(c, identity);
     int same = cJSON_Compare(current, get(record, "identity"), 1);
@@ -148,7 +148,7 @@ int component_same_identity(Context *c, const cJSON *record, const TbFileIdentit
     return same;
 }
 
-void component_progress(Context *c, const char *phase, const char *source, const char *path)
+void component_progress(TbBall *c, const char *phase, const char *source, const char *path)
 {
     ComponentOperation *job = c->component_operation;
     if (!job || c->error)
@@ -165,7 +165,7 @@ void component_progress(Context *c, const char *phase, const char *source, const
     tb_ball_write_json(c, job->progress_path, job->progress);
 }
 
-int component_cancelled(Context *c)
+int component_cancelled(TbBall *c)
 {
     ComponentOperation *job = c->component_operation;
     if (job && tb_is_file(job->cancel_path))
@@ -177,7 +177,7 @@ int component_cancelled(Context *c)
     return c->error != NULL;
 }
 
-int component_journal(Context *c, cJSON *entry)
+int component_journal(TbBall *c, cJSON *entry)
 {
     ComponentOperation *job = c->component_operation;
     if (!job)
@@ -208,7 +208,7 @@ int component_journal(Context *c, cJSON *entry)
     return 1;
 }
 
-int component_record(Context *c, const char *guest, const char *source, const char *category,
+int component_record(TbBall *c, const char *guest, const char *source, const char *category,
                      const char *hash)
 {
     ComponentOperation *job = c->component_operation;
@@ -216,7 +216,8 @@ int component_record(Context *c, const char *guest, const char *source, const ch
         return 1;
     char *host = tb_ball_host_path(c, guest, 0);
     TbFileIdentity identity;
-    if (!host || !tb_ball_inside(host, c->roots[2]) || !tb_path_identity(host, &identity))
+    if (!host || !tb_ball_inside(host, c->roots[TB_BALL_DRIVE_C]) ||
+        !tb_path_identity(host, &identity))
         return tb_ball_fail(c, "Cannot record installed component: %s", guest);
     cJSON *entry = cJSON_CreateObject();
     cJSON_AddStringToObject(entry, "path", guest);
@@ -230,7 +231,7 @@ int component_record(Context *c, const char *guest, const char *source, const ch
     return ok;
 }
 
-int component_begin(Context *c, const cJSON *request, const char *kind)
+int component_begin(TbBall *c, const cJSON *request, const char *kind)
 {
     if (!component_storage(c, "cache/component-operations") ||
         !component_storage(c, "logs/os2-components") ||
@@ -305,7 +306,7 @@ int component_begin(Context *c, const cJSON *request, const char *kind)
     return !c->error;
 }
 
-void component_finish(Context *c, cJSON *result)
+void component_finish(TbBall *c, cJSON *result)
 {
     ComponentOperation *job = c->component_operation;
     if (!job)
@@ -362,13 +363,13 @@ void component_finish(Context *c, cJSON *result)
 
 /* Resolve a guest destination without following symbolic links, including case aliases.
    Missing regular paths are allowed; mapped/external drives and cache internals are not. */
-char *component_private_path(Context *c, const char *guest)
+char *component_private_path(TbBall *c, const char *guest)
 {
     if (!guest || strlen(guest) < 4 || strlen(guest) > 32768 ||
         toupper((unsigned char)guest[0]) != 'C' || guest[1] != ':' ||
-        (guest[2] != '\\' && guest[2] != '/') || !c->roots[2] ||
-        !tb_ball_inside(c->roots[2], c->ball) || tb_image_path(c->roots[2]) ||
-        tb_is_link(c->roots[2]))
+        (guest[2] != '\\' && guest[2] != '/') || !c->roots[TB_BALL_DRIVE_C] ||
+        !tb_ball_inside(c->roots[TB_BALL_DRIVE_C], c->ball) ||
+        tb_image_path(c->roots[TB_BALL_DRIVE_C]) || tb_is_link(c->roots[TB_BALL_DRIVE_C]))
     {
         tb_ball_fail(c, "Component files must be on this ball's private C: drive");
         return NULL;
@@ -379,7 +380,7 @@ char *component_private_path(Context *c, const char *guest)
         tb_ball_fail(c, "Runtime cache files cannot be managed as OS/2 components");
         return NULL;
     }
-    char *parts = tb_ball_keep(c, strdup(guest + 3)), *path = c->roots[2];
+    char *parts = tb_ball_keep(c, strdup(guest + 3)), *path = c->roots[TB_BALL_DRIVE_C];
     for (char *at = parts; at && *at;)
     {
         char *end = strpbrk(at, "/\\");

@@ -1,7 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Receiving-host capability resolution is read-only; saved preferences stay portable. */
-#include "ball/ball_internal.h"
-#include "ball/guest_environment.h"
+#include "ball/store.h"
 #include "ball/os2_dependencies.h"
 #include "ball/runtime_features.h"
 #include "ball/settings_schema.h"
@@ -19,7 +18,7 @@ static int runtime_feature_bool(const cJSON *value, int fallback)
            equal_case(text, "true") || equal_case(text, "t") || equal_case(text, "on");
 }
 
-cJSON *runtime_feature_metadata(Context *c, const char *build)
+cJSON *runtime_feature_metadata(TbBall *c, const char *build)
 {
     const char *path = tb_ball_join(c, build, "runtime-capabilities.json");
     if (!tb_is_file(path))
@@ -44,12 +43,12 @@ cJSON *runtime_feature_metadata(Context *c, const char *build)
     return metadata;
 }
 
-static int runtime_has_module(Context *c, const char *build, const char *module)
+static int runtime_has_module(TbBall *c, const char *build, const char *module)
 {
     return tb_is_file(tb_ball_join(c, build, tb_ball_format(c, "lib%s.so", module)));
 }
 
-void runtime_feature_policy(Context *c, const char *build)
+void runtime_feature_policy(TbBall *c, const char *build)
 {
     (void)build;
     c->opengl_policy = field(get(c->manifest, "system"), "opengl");
@@ -57,7 +56,7 @@ void runtime_feature_policy(Context *c, const char *build)
         c->opengl_policy = "mesa";
 }
 
-cJSON *runtime_features(Context *c, const char *build)
+cJSON *runtime_features(TbBall *c, const char *build)
 {
     if (!launch_validate_system(c))
         return NULL;
@@ -151,7 +150,7 @@ cJSON *runtime_features(Context *c, const char *build)
     return result;
 }
 
-int runtime_features_validate(Context *c, const char *build)
+int runtime_features_validate(TbBall *c, const char *build)
 {
     cJSON *features = runtime_features(c, build), *feature;
     if (!features)

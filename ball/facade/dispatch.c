@@ -1,44 +1,34 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The JSON tb_request entry point and its action dispatch. */
 #include "ball/ball_internal.h"
+#include "ball/include/twoine_ball.h"
+#include "formats/encoding/base64.h"
 #include "storage/container.h"
 #include "ball/application_icon.h"
-#include "ball/applications.h"
 #include "ball/audio.h"
-#include "ball/ball_archive.h"
-#include "ball/ball_rename.h"
-#include "ball/commands.h"
-#include "ball/configuration.h"
 #include "ball/facade/facade.h"
-#include "ball/drives.h"
-#include "ball/files.h"
-#include "ball/guest_environment.h"
 #include "ball/host_environment.h"
 #include "ball/launch_dependencies.h"
 #include "ball/launch_prerequisites.h"
-#include "ball/manifest.h"
 #include "ball/os2_component_operations.h"
 #include "ball/os2_dependencies.h"
 #include "ball/os2_extract.h"
 #include "ball/os2_support.h"
-#include "ball/paths.h"
 #include "ball/prepare.h"
 #include "ball/runtime.h"
 #include "ball/runtime_config.h"
 #include "ball/runtime_features.h"
 #include "ball/runtime_selection.h"
-#include "ball/snapshot.h"
 #include "ball/wps_applications.h"
-
 #include "ball/project_sources.h"
 
-static void dependency_refresh_mutation(Context *c, const cJSON *request)
+static void dependency_refresh_mutation(TbBall *c, const cJSON *request)
 {
     cJSON *audit = audit_dependencies(c, request, 0);
     cJSON_Delete(audit);
 }
 
-static cJSON *dispatch(Context *c, const cJSON *request)
+static cJSON *dispatch(TbBall *c, const cJSON *request)
 {
     const char *action = field(request, "action");
     if (!action)
@@ -280,9 +270,9 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return list;
     }
     if (!strcmp(action, "import-ball"))
-        return import_ball(c, request);
+        return tb_ball_import(c, request);
     if (!strcmp(action, "rename-ball"))
-        return rename_ball(c, request);
+        return tb_ball_rename(c, request);
     cJSON *args = get(request, "arguments");
     const char *first = str(cJSON_GetArrayItem(args, 0));
     if (!strcmp(action, "command") && first && !strcmp(first, "init"))
@@ -311,7 +301,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "config-sys"))
     {
         size_t n = 0;
-        char *bytes = tb_ball_read_file(c, tb_ball_join(c, c->roots[2], "CONFIG.SYS"), &n, 1);
+        char *bytes =
+            tb_ball_read_file(c, tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS"), &n, 1);
         return bytes ? cJSON_CreateString(tb_ball_latin1_to_utf8(c, bytes, n)) : NULL;
     }
     if (!strcmp(action, "configuration-files"))
@@ -331,7 +322,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "import-soundfont"))
         return audio_import_archive(c, request);
     if (!strcmp(action, "export-ball"))
-        return export_ball(c, request);
+        return tb_ball_export(c, request);
     if (!strcmp(action, "os2-support"))
         return os2_support(c);
     if (!strcmp(action, "launch-prerequisites"))
@@ -457,7 +448,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             tb_ball_fail(c, "Expected and edited CONFIG.SYS text are required");
             return NULL;
         }
-        char *path = tb_ball_join(c, c->roots[2], "CONFIG.SYS");
+        char *path = tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS");
         size_t n = 0;
         char *bytes = tb_ball_read_file(c, path, &n, 1);
         if (!bytes)
@@ -589,7 +580,7 @@ int tb_request(const char *text, char **result, char **error)
         return 2;
     *result = NULL;
     *error = NULL;
-    Context c = {0};
+    TbBall c = {0};
     c.hooks = &facade_hooks;
     tb_media_session_begin();
     cJSON *request = text ? cJSON_ParseWithOpts(text, NULL, 1) : NULL;

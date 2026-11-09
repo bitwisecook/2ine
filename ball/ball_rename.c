@@ -1,32 +1,22 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Package moves stage manifest changes and never replace another host item. */
 #include "ball/ball_internal.h"
-#include "ball/ball_rename.h"
-#include "ball/drives.h"
 #include "ball/host_environment.h"
-#include "ball/paths.h"
-#include "ball/snapshot.h"
-
 #ifdef _WIN32
-
 #define strcasecmp _stricmp
-
 #define strncasecmp _strnicmp
-
 #else
-
 #include <strings.h>
-
 #endif
 
-static int rename_same_bytes(Context *c, const char *path, const char *expected, size_t length)
+static int rename_same_bytes(TbBall *c, const char *path, const char *expected, size_t length)
 {
     size_t count = 0;
     char *current = tb_ball_read_file(c, path, &count, 0);
     return current && count == length && !memcmp(current, expected, count);
 }
 
-static char *rename_leaf(Context *c, const char *name)
+static char *rename_leaf(TbBall *c, const char *name)
 {
     if (!name || !*name || !strcmp(name, ".") || !strcmp(name, ".."))
     {
@@ -65,7 +55,7 @@ static char *rename_leaf(Context *c, const char *name)
     return tb_ball_format(c, "%.*s.2ineball", (int)stem, name);
 }
 
-static int rename_host_field(Context *c, cJSON *entry, const char *key, const char *old,
+static int rename_host_field(TbBall *c, cJSON *entry, const char *key, const char *old,
                              const char *destination, int *changed)
 {
     cJSON *value = key ? get(entry, key) : entry;
@@ -84,7 +74,7 @@ static int rename_host_field(Context *c, cJSON *entry, const char *key, const ch
     return 1;
 }
 
-static int rename_manifest_paths(Context *c, const char *old, const char *destination, int *changed)
+static int rename_manifest_paths(TbBall *c, const char *old, const char *destination, int *changed)
 {
     cJSON *entry;
     cJSON_ArrayForEach(entry, get(c->manifest, "drives"))
@@ -119,7 +109,7 @@ static int rename_manifest_paths(Context *c, const char *old, const char *destin
     return 1;
 }
 
-static int rename_profile_environment(Context *c, cJSON *environment, const char *old,
+static int rename_profile_environment(TbBall *c, cJSON *environment, const char *old,
                                       const char *destination, int *changed)
 {
     cJSON *entry;
@@ -132,7 +122,7 @@ static int rename_profile_environment(Context *c, cJSON *environment, const char
     return 1;
 }
 
-cJSON *rename_ball(Context *c, const cJSON *request)
+cJSON *tb_ball_rename(TbBall *c, const cJSON *request)
 {
     const char *source = field(request, "ball");
     char *leaf = rename_leaf(c, field(request, "text"));
@@ -198,7 +188,7 @@ cJSON *rename_ball(Context *c, const cJSON *request)
         tb_ball_fail(c, "Unsupported or invalid ball.json");
         return NULL;
     }
-    if (!tb_ball_inside(c->roots[2], old))
+    if (!tb_ball_inside(c->roots[TB_BALL_DRIVE_C], old))
     {
         tb_ball_fail(c, "The C: drive must be private to this ball");
         return NULL;

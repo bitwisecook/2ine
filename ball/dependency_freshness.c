@@ -1,11 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Metadata freshness for installed imports and their configuration/media inputs. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "storage/container.h"
 #include "ball/dependency_freshness.h"
-#include "ball/drives.h"
 #include "ball/os2_dependencies.h"
-#include "ball/paths.h"
+#include "ball/vendor/sha256/sha256.h"
 
 static void dependency_token_text(SHA256_CTX *state, const char *text)
 {
@@ -18,7 +17,7 @@ static int dependency_token_order(const void *a, const void *b)
     return strcmp(*(const char *const *)a, *(const char *const *)b);
 }
 
-static int dependency_token_file(Context *c, SHA256_CTX *state, const char *path)
+static int dependency_token_file(TbBall *c, SHA256_CTX *state, const char *path)
 {
     TbFileIdentity identity;
     dependency_token_text(state, path);
@@ -41,7 +40,7 @@ static int dependency_token_file(Context *c, SHA256_CTX *state, const char *path
     return value != NULL;
 }
 
-static int dependency_token_tree(Context *c, SHA256_CTX *state, const char *root, int installed,
+static int dependency_token_tree(TbBall *c, SHA256_CTX *state, const char *root, int installed,
                                  int recursive, unsigned *visited, unsigned *binaries)
 {
     cJSON *queue = cJSON_CreateArray();
@@ -79,7 +78,7 @@ static int dependency_token_tree(Context *c, SHA256_CTX *state, const char *root
             }
             else if (tb_is_dir(child))
             {
-                char *cache = tb_ball_join(c, c->roots[2], "OS2/DLL/2INE");
+                char *cache = tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "OS2/DLL/2INE");
                 if (recursive && (!installed || !equal_case(child, cache)))
                     cJSON_AddItemToArray(queue, cJSON_CreateString(child));
             }
@@ -97,7 +96,7 @@ static int dependency_token_tree(Context *c, SHA256_CTX *state, const char *root
     return ok;
 }
 
-static int dependency_token_contents(Context *c, SHA256_CTX *state, const char *path)
+static int dependency_token_contents(TbBall *c, SHA256_CTX *state, const char *path)
 {
     dependency_token_text(state, path);
     uint64_t length = 0;
@@ -115,20 +114,20 @@ static int dependency_token_contents(Context *c, SHA256_CTX *state, const char *
 
 /* A failed/limited metadata pass cannot establish freshness. It is isolated
    from the caller so a stale report does not break snapshot or app launch. */
-char *dependency_fingerprint(Context *parent, const cJSON *sources, const char *build,
+char *dependency_fingerprint(TbBall *parent, const cJSON *sources, const char *build,
                              const cJSON *component_files)
 {
-    Context storage = *parent;
+    TbBall storage = *parent;
     storage.allocations = NULL;
     storage.count = 0;
     storage.error = NULL;
-    Context *c = &storage;
+    TbBall *c = &storage;
     SHA256_CTX state;
     unsigned char digest[32];
     sha256_init(&state);
     dependency_token_text(&state, "2ine-installed-dependencies-v3");
     unsigned visited = 0, binaries = 0;
-    int ok = dependency_token_tree(c, &state, c->roots[2], 1, 1, &visited, &binaries);
+    int ok = dependency_token_tree(c, &state, c->roots[TB_BALL_DRIVE_C], 1, 1, &visited, &binaries);
     static const char *keys[] = {"environment", "system",          "runtime",
                                  "drives",      "startupPrograms", NULL};
     for (int i = 0; ok && keys[i]; i++)
@@ -138,7 +137,9 @@ char *dependency_fingerprint(Context *parent, const cJSON *sources, const char *
         dependency_token_text(&state, encoded);
         cJSON_free(encoded);
     }
-    ok = ok && dependency_token_contents(c, &state, tb_ball_join(c, c->roots[2], "CONFIG.SYS")) &&
+    ok = ok &&
+         dependency_token_contents(c, &state,
+                                   tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS")) &&
          dependency_token_contents(c, &state, tb_ball_join(c, c->ball, "os2-media.json"));
     cJSON *errors = cJSON_CreateArray(), *paths = dependency_search_paths(c, errors);
     const cJSON *item;
@@ -195,7 +196,7 @@ char *dependency_fingerprint(Context *parent, const cJSON *sources, const char *
     return result;
 }
 
-static void dependency_mark_freshness(Context *c, cJSON *report)
+static void dependency_mark_freshness(TbBall *c, cJSON *report)
 {
     const char *recorded = field(report, "fingerprint");
     char *current =

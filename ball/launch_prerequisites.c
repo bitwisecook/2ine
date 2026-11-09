@@ -1,18 +1,17 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read-only bootstrap requirements and existing-ball navigation facts. */
-#include "ball/ball_internal.h"
-#include "ball/commands.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
+#include "ball/store.h"
+#include "formats/executable/lx.h"
+#include "formats/executable/ne.h"
 #include "ball/host_environment.h"
 #include "ball/interpreter.h"
 #include "ball/launch_prerequisites.h"
 #include "ball/os2_component_store.h"
 #include "ball/os2_groups.h"
 #include "ball/os2_support.h"
-#include "ball/paths.h"
+#include "formats/executable/os2_executable.h"
 
-int installer_support_required(Context *c, const char *host)
+int installer_support_required(TbBall *c, const char *host)
 {
     char *folder = tb_ball_keep(c, strdup(host)), *slash = folder ? strrchr(folder, '/') : NULL;
     if (!slash)
@@ -34,7 +33,7 @@ int launch_command_file(const char *program)
     return suffix && (equal_case(suffix, ".CMD") || equal_case(suffix, ".BAT"));
 }
 
-cJSON *launch_prerequisites(Context *c, const cJSON *request)
+cJSON *launch_prerequisites(TbBall *c, const cJSON *request)
 {
     const cJSON *arguments = get(request, "arguments");
     if (!tb_ball_array_strings(c, arguments) || !cJSON_GetArraySize(arguments))
@@ -159,7 +158,7 @@ cJSON *launch_prerequisites(Context *c, const cJSON *request)
     return result;
 }
 
-static void launch_discard_error(Context *c)
+static void launch_discard_error(TbBall *c)
 {
     free(c->error);
     c->error = NULL;
@@ -202,7 +201,7 @@ static int navigation_payload(const char *name)
     return 0;
 }
 
-cJSON *ball_navigation_state(Context *c)
+cJSON *ball_navigation_state(TbBall *c)
 {
     cJSON *result = cJSON_CreateObject(),
           *valid = cJSON_AddArrayToObject(result, "validApplications");
@@ -264,8 +263,9 @@ cJSON *ball_navigation_state(Context *c)
             break;
         }
         char *host = tb_ball_host_path(c, str(directory), 0);
-        if (!host || !c->roots[2] || !tb_ball_inside(c->roots[2], c->ball) ||
-            !tb_ball_inside(host, c->roots[2]) || tb_is_link(host))
+        if (!host || !c->roots[TB_BALL_DRIVE_C] ||
+            !tb_ball_inside(c->roots[TB_BALL_DRIVE_C], c->ball) ||
+            !tb_ball_inside(host, c->roots[TB_BALL_DRIVE_C]) || tb_is_link(host))
         {
             launch_discard_error(c);
             continue;

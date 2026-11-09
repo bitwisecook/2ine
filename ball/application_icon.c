@@ -1,10 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Launcher icons and the desktop identity of a launch. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/application_icon.h"
-#include "ball/paths.h"
+#include "formats/encoding/base64.h"
+#include "formats/executable/os2_executable.h"
+#include "formats/resources/icon.h"
 
-cJSON *launch_application_icon(Context *c, const cJSON *request)
+cJSON *launch_application_icon(TbBall *c, const cJSON *request)
 {
     const char *name = field(request, "name"), *program = field(request, "program");
     cJSON *app = name ? get(get(c->manifest, "applications"), name) : NULL;
@@ -145,13 +147,13 @@ cJSON *launch_application_icon(Context *c, const cJSON *request)
 }
 
 /* Presentation metadata is optional and cannot prevent a valid guest launch. */
-cJSON *launch_desktop_identity(Context *parent, const char *program, const char *name)
+cJSON *launch_desktop_identity(TbBall *parent, const char *program, const char *name)
 {
-    Context storage = *parent;
+    TbBall storage = *parent;
     storage.allocations = NULL;
     storage.count = 0;
     storage.error = NULL;
-    Context *c = &storage;
+    TbBall *c = &storage;
     cJSON *request = cJSON_CreateObject();
     cJSON_AddStringToObject(request, "program", program);
     if (name)

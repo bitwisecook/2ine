@@ -2,23 +2,21 @@
 /* The work the facade layers on the ball store for each request: derived
    files, settings validation, shell registrations and the client snapshot. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
 #include "ball/facade/facade.h"
 #include "ball/host_environment.h"
 #include "ball/os2_dependencies.h"
 #include "ball/os2_support.h"
 #include "ball/runtime.h"
 #include "ball/runtime_config.h"
-#include "ball/snapshot.h"
 #include "ball/wps_applications.h"
 
-static int facade_regenerate(Context *c)
+static int facade_regenerate(TbBall *c)
 {
     return launch_write_runtime_config(c);
 }
 
 /* Settings are checked by composing the launch environment they produce. */
-static int facade_validate_settings(Context *c, const cJSON *request)
+static int facade_validate_settings(TbBall *c, const cJSON *request)
 {
     const char *build = field(request, "build");
     char *absolute = tb_ball_resolve_path(c, build && *build ? build : ".", 0);
@@ -33,7 +31,7 @@ static int facade_validate_settings(Context *c, const cJSON *request)
 
 /* The store's fields, with the Workplace Shell projection, the OS/2 support
    state and the last dependency audit inserted after the manifest. */
-cJSON *facade_snapshot(Context *c)
+cJSON *facade_snapshot(TbBall *c)
 {
     if (!tb_ball_roots(c) || !wps_sync(c))
         return NULL;
@@ -62,7 +60,7 @@ cJSON *facade_snapshot(Context *c)
     return value;
 }
 
-static void facade_describe_runtime(Context *c, const char *build, cJSON *runtime)
+static void facade_describe_runtime(TbBall *c, const char *build, cJSON *runtime)
 {
     int available = build && (tb_is_file(tb_ball_join(c, build, "lx_loader")) ||
                               tb_is_file(tb_ball_join(c, build, "lx_loader.exe")));

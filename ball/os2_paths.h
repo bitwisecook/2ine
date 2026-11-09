@@ -2,7 +2,7 @@
 /* Add installed component directories to OS/2's configuration search lists. */
 #ifndef TB_BALL_OS2_PATHS_H
 #define TB_BALL_OS2_PATHS_H
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 
-int os2_configure_paths(Context *c, const cJSON *files);
+int os2_configure_paths(TbBall *c, const cJSON *files);
 #endif

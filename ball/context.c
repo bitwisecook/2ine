@@ -1,10 +1,11 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Request context: owned allocations, the first error, paths and JSON files. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/snapshot.h"
+#include "storage/volume.h"
+#include "ball/vendor/sha256/sha256.h"
+#include <time.h>
 
-int tb_ball_fail(Context *c, const char *format, ...)
+int tb_ball_fail(TbBall *c, const char *format, ...)
 {
     if (!c->error)
     {
@@ -25,7 +26,7 @@ int tb_ball_fail(Context *c, const char *format, ...)
     return 0;
 }
 
-char *tb_ball_keep(Context *c, char *p)
+char *tb_ball_keep(TbBall *c, char *p)
 {
     if (!p)
     {
@@ -44,7 +45,7 @@ char *tb_ball_keep(Context *c, char *p)
     return p;
 }
 
-char *tb_ball_resolve_path(Context *c, const char *path, int existing)
+char *tb_ball_resolve_path(TbBall *c, const char *path, int existing)
 {
     if (!path)
         return NULL;
@@ -88,7 +89,7 @@ char *tb_ball_resolve_path(Context *c, const char *path, int existing)
     return tb_ball_keep(c, result);
 }
 
-char *tb_ball_format(Context *c, const char *fmt, ...)
+char *tb_ball_format(TbBall *c, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -103,7 +104,7 @@ char *tb_ball_format(Context *c, const char *fmt, ...)
     return tb_ball_keep(c, p);
 }
 
-char *tb_ball_join(Context *c, const char *a, const char *b)
+char *tb_ball_join(TbBall *c, const char *a, const char *b)
 {
     char *path = a && b ? tb_ball_format(c, "%s/%s", a, b) : NULL;
 #ifdef _WIN32
@@ -115,7 +116,7 @@ char *tb_ball_join(Context *c, const char *a, const char *b)
     return path;
 }
 
-char *tb_ball_read_file(Context *c, const char *path, size_t *length, int optional)
+char *tb_ball_read_file(TbBall *c, const char *path, size_t *length, int optional)
 {
     FILE *f = tb_fopen(path, "rb");
     if (!f)
@@ -165,7 +166,7 @@ char *tb_ball_read_file(Context *c, const char *path, size_t *length, int option
     return tb_ball_keep(c, p);
 }
 
-int tb_ball_write_json(Context *c, const char *path, cJSON *value)
+int tb_ball_write_json(TbBall *c, const char *path, cJSON *value)
 {
     char *text = cJSON_Print(value);
     if (!text)
@@ -186,7 +187,7 @@ int tb_ball_write_json(Context *c, const char *path, cJSON *value)
     return ok ? 1 : tb_ball_fail(c, "Cannot save %s", path);
 }
 
-char *tb_ball_latin1_to_utf8(Context *c, const char *bytes, size_t n)
+char *tb_ball_latin1_to_utf8(TbBall *c, const char *bytes, size_t n)
 {
     char *text = malloc(n * 2 + 1);
     if (!text)
@@ -210,7 +211,7 @@ char *tb_ball_latin1_to_utf8(Context *c, const char *bytes, size_t n)
     return tb_ball_keep(c, text);
 }
 
-char *tb_ball_utf8_to_latin1(Context *c, const char *text, size_t *length)
+char *tb_ball_utf8_to_latin1(TbBall *c, const char *text, size_t *length)
 {
     char *bytes = malloc(strlen(text) + 1);
     if (!bytes)
@@ -240,7 +241,7 @@ char *tb_ball_utf8_to_latin1(Context *c, const char *text, size_t *length)
     return tb_ball_keep(c, bytes);
 }
 
-int tb_ball_digest_file(Context *c, const char *path, unsigned char hash[32])
+int tb_ball_digest_file(TbBall *c, const char *path, unsigned char hash[32])
 {
     FILE *f = tb_fopen(path, "rb");
     if (!f)
@@ -259,7 +260,7 @@ int tb_ball_digest_file(Context *c, const char *path, unsigned char hash[32])
     return 1;
 }
 
-char *tb_ball_hex(Context *c, const unsigned char hash[32])
+char *tb_ball_hex(TbBall *c, const unsigned char hash[32])
 {
     char *out = malloc(65);
     if (!out)
@@ -282,7 +283,7 @@ char *tb_ball_trim(char *s)
     return s;
 }
 
-char *tb_ball_now(Context *c)
+char *tb_ball_now(TbBall *c)
 {
     time_t value = time(NULL);
     struct tm parts;
@@ -296,7 +297,7 @@ char *tb_ball_now(Context *c)
     return tb_ball_keep(c, strdup(date));
 }
 
-int tb_ball_array_strings(Context *c, const cJSON *array)
+int tb_ball_array_strings(TbBall *c, const cJSON *array)
 {
     if (!cJSON_IsArray(array))
         return tb_ball_fail(c, "Arguments must be an array of strings");
@@ -305,28 +306,28 @@ int tb_ball_array_strings(Context *c, const cJSON *array)
     return 1;
 }
 
-int tb_ball_regenerate(Context *c)
+int tb_ball_regenerate(TbBall *c)
 {
     return c->hooks && c->hooks->regenerate ? c->hooks->regenerate(c) : tb_ball_roots(c);
 }
 
-int tb_ball_validate_settings(Context *c, const cJSON *request)
+int tb_ball_validate_settings(TbBall *c, const cJSON *request)
 {
     return c->hooks && c->hooks->validate_settings ? c->hooks->validate_settings(c, request) : 1;
 }
 
-cJSON *tb_ball_client_snapshot(Context *c)
+cJSON *tb_ball_client_snapshot(TbBall *c)
 {
     return c->hooks && c->hooks->snapshot ? c->hooks->snapshot(c) : tb_ball_snapshot(c);
 }
 
-void tb_ball_detach_application(Context *c, cJSON *application)
+void tb_ball_detach_application(TbBall *c, cJSON *application)
 {
     if (c->hooks && c->hooks->detach_application)
         c->hooks->detach_application(c, application);
 }
 
-void tb_ball_hide_application(Context *c, const cJSON *application)
+void tb_ball_hide_application(TbBall *c, const cJSON *application)
 {
     if (c->hooks && c->hooks->hide_application)
         c->hooks->hide_application(c, application);

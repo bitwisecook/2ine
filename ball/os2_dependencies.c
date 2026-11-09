@@ -1,35 +1,26 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Static OS/2 import auditing and media-backed dependency recovery. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "storage/container.h"
-#include "ball/commands.h"
 #include "ball/dependency_database.h"
 #include "ball/dependency_freshness.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
 #include "ball/os2_component_store.h"
 #include "ball/os2_dependencies.h"
 #include "ball/os2_extract.h"
 #include "ball/os2_groups.h"
 #include "ball/os2_som.h"
 #include "ball/os2_support.h"
-#include "ball/paths.h"
 #include "ball/system_modules.h"
-
+#include "formats/executable/os2_executable.h"
+#include "ball/vendor/sha256/sha256.h"
+#include <time.h>
 #include <limits.h>
-
 #include <sys/stat.h>
-
 #ifndef _WIN32
-
 #include <unistd.h>
-
 #else
-
 #include <io.h>
-
 #endif
-
 #define DEPENDENCY_ROUND_LIMIT 16u
 
 static int dependency_read_at(FILE *file, uint64_t length, uint64_t offset, void *output,
@@ -39,7 +30,7 @@ static int dependency_read_at(FILE *file, uint64_t length, uint64_t offset, void
            !fseek(file, (long)offset, SEEK_SET) && fread(output, 1, count, file) == count;
 }
 
-char *dependency_module(Context *c, const char *name)
+char *dependency_module(TbBall *c, const char *name)
 {
     size_t length = strlen(name);
     if (length > 4 && equal_case(name + length - 4, ".dll"))
@@ -72,7 +63,7 @@ void dependency_error(cJSON *errors, const char *path, const char *message)
     cJSON_AddItemToArray(errors, error);
 }
 
-void dependency_take_error(Context *c, cJSON *errors, const char *path)
+void dependency_take_error(TbBall *c, cJSON *errors, const char *path)
 {
     if (c->error)
     {
@@ -84,7 +75,7 @@ void dependency_take_error(Context *c, cJSON *errors, const char *path)
 
 typedef struct DependencyImports
 {
-    Context *context;
+    TbBall *context;
     cJSON *modules;
 } DependencyImports;
 
@@ -123,7 +114,7 @@ static const char *dependency_import_error(TbExecutableFormat format, TbExecutab
 
 /* Only the counted import tables are read; no object pages, relocations or
    guest code are executed. */
-static cJSON *dependency_read_binary(Context *c, const char *host, const char *guest, cJSON *errors)
+static cJSON *dependency_read_binary(TbBall *c, const char *host, const char *guest, cJSON *errors)
 {
     FILE *file = tb_media_path(host) ? tb_media_fopen(host) : tb_fopen(host, "rb");
     int64_t length = 0;
@@ -207,7 +198,7 @@ void dependency_array_unique(cJSON *array, const char *value)
     cJSON_AddItemToArray(array, cJSON_CreateString(value));
 }
 
-char *dependency_basename(Context *c, const char *path)
+char *dependency_basename(TbBall *c, const char *path)
 {
     const char *base = strrchr(path, '\\');
     if (!base)
@@ -215,7 +206,7 @@ char *dependency_basename(Context *c, const char *path)
     return dependency_module(c, base ? base + 1 : path);
 }
 
-static void dependency_index_binary(Context *c, cJSON *binaries, cJSON *index, cJSON *seen,
+static void dependency_index_binary(TbBall *c, cJSON *binaries, cJSON *index, cJSON *seen,
                                     cJSON *errors, const char *host, const char *guest)
 {
     char *identity = tb_ball_keep(c, strdup(guest));
@@ -240,7 +231,7 @@ static void dependency_index_binary(Context *c, cJSON *binaries, cJSON *index, c
     }
 }
 
-static void dependency_index_script(Context *c, cJSON *binaries, cJSON *seen, cJSON *errors,
+static void dependency_index_script(TbBall *c, cJSON *binaries, cJSON *seen, cJSON *errors,
                                     const char *host, const char *guest)
 {
     const char *key = component_key(c, guest);
@@ -264,7 +255,7 @@ static void dependency_index_script(Context *c, cJSON *binaries, cJSON *seen, cJ
     cJSON_AddItemToArray(binaries, entry);
 }
 
-static cJSON *dependency_scan(Context *c, cJSON *index, cJSON *seen, cJSON *errors, cJSON *limits)
+static cJSON *dependency_scan(TbBall *c, cJSON *index, cJSON *seen, cJSON *errors, cJSON *limits)
 {
     cJSON *binaries = cJSON_CreateArray(), *queue = cJSON_CreateArray();
     cJSON_AddItemToArray(queue, cJSON_CreateString("C:\\"));
@@ -326,7 +317,7 @@ static cJSON *dependency_scan(Context *c, cJSON *index, cJSON *seen, cJSON *erro
     return binaries;
 }
 
-static void dependency_add_path(Context *c, cJSON *paths, const char *path)
+static void dependency_add_path(TbBall *c, cJSON *paths, const char *path)
 {
     if (!path || !*path || !strcmp(path, "."))
         return;
@@ -339,7 +330,7 @@ static void dependency_add_path(Context *c, cJSON *paths, const char *path)
     dependency_array_unique(paths, copy);
 }
 
-void dependency_split_paths(Context *c, cJSON *paths, const char *value)
+void dependency_split_paths(TbBall *c, cJSON *paths, const char *value)
 {
     char *copy = value ? tb_ball_keep(c, strdup(value)) : NULL;
     for (char *at = copy; at && *at;)
@@ -352,7 +343,7 @@ void dependency_split_paths(Context *c, cJSON *paths, const char *value)
     }
 }
 
-cJSON *dependency_search_paths(Context *c, cJSON *errors)
+cJSON *dependency_search_paths(TbBall *c, cJSON *errors)
 {
     cJSON *paths = cJSON_CreateArray();
     cJSON *env = tb_ball_guest_environment(c, NULL);
@@ -367,8 +358,8 @@ cJSON *dependency_search_paths(Context *c, cJSON *errors)
     return paths;
 }
 
-char *dependency_find(Context *c, const char *binary, const char *module, cJSON *paths,
-                      cJSON *cache, cJSON *errors)
+char *dependency_find(TbBall *c, const char *binary, const char *module, cJSON *paths, cJSON *cache,
+                      cJSON *errors)
 {
     char *directory = tb_ball_keep(c, strdup(binary));
     if (!directory)
@@ -413,7 +404,7 @@ char *dependency_find(Context *c, const char *binary, const char *module, cJSON 
     return found;
 }
 
-static cJSON *dependency_resolve(Context *c, cJSON *binaries, cJSON *index, cJSON *seen,
+static cJSON *dependency_resolve(TbBall *c, cJSON *binaries, cJSON *index, cJSON *seen,
                                  cJSON *paths, cJSON *errors, cJSON *missing, cJSON *unreachable,
                                  cJSON *unresolved)
 {
@@ -524,7 +515,7 @@ static void dependency_source(cJSON *sources, const char *path, int remembered)
     cJSON_AddItemToArray(sources, item);
 }
 
-static cJSON *dependency_sources(Context *c, const cJSON *request, cJSON *errors)
+static cJSON *dependency_sources(TbBall *c, const cJSON *request, cJSON *errors)
 {
     cJSON *sources = cJSON_CreateArray();
     size_t size = 0;
@@ -554,7 +545,8 @@ static cJSON *dependency_sources(Context *c, const cJSON *request, cJSON *errors
         else if (str(item) && *str(item))
         {
             int drive = item->string[0] - 'A';
-            if (drive >= 0 && drive < 26 && c->roots[drive] && !c->unavailable[drive])
+            if (drive >= 0 && drive < TB_BALL_DRIVE_COUNT && c->roots[drive] &&
+                !c->unavailable[drive])
                 dependency_source(sources, c->roots[drive], 0);
         }
     }
@@ -562,7 +554,7 @@ static cJSON *dependency_sources(Context *c, const cJSON *request, cJSON *errors
     return sources;
 }
 
-static int dependency_possible_media(Context *c, const char *source)
+static int dependency_possible_media(TbBall *c, const char *source)
 {
     cJSON *listing = browse_media(c, source);
     if (!listing)
@@ -604,7 +596,7 @@ static int dependency_source_accessible(const char *source)
     return found;
 }
 
-static char *dependency_installation_root(Context *c, const char *source)
+static char *dependency_installation_root(TbBall *c, const char *source)
 {
     cJSON *listing = browse_media(c, source);
     if (!listing)
@@ -626,7 +618,7 @@ static char *dependency_installation_root(Context *c, const char *source)
     return result ? result : tb_ball_keep(c, strdup(source));
 }
 
-static void dependency_index_media(Context *c, cJSON *index, const cJSON *plan)
+static void dependency_index_media(TbBall *c, cJSON *index, const cJSON *plan)
 {
     const cJSON *file;
     cJSON_ArrayForEach(file, get(plan, "files"))
@@ -673,7 +665,7 @@ static void dependency_merge_media(cJSON *destination, const cJSON *source)
 /* Image indexes are only an optimization. Bind them to the physical media's
    size, timestamp and both end blocks, then check each chosen OS/2 binary
    again before extraction. Folder trees remain request-scoped. */
-static char *dependency_media_fingerprint(Context *c, const char *source)
+static char *dependency_media_fingerprint(TbBall *c, const char *source)
 {
     if (tb_media_path(source) && !tb_media_container(source))
         return NULL;
@@ -730,7 +722,7 @@ static char *dependency_media_fingerprint(Context *c, const char *source)
                           nanoseconds, tb_ball_hex(c, digest));
 }
 
-static char *dependency_cache_path(Context *c, const char *source, const char *variant)
+static char *dependency_cache_path(TbBall *c, const char *source, const char *variant)
 {
     SHA256_CTX state;
     unsigned char digest[32];
@@ -741,7 +733,7 @@ static char *dependency_cache_path(Context *c, const char *source, const char *v
                           tb_ball_hex(c, digest), variant);
 }
 
-static cJSON *dependency_cached_media(Context *c, const char *source, const char *variant,
+static cJSON *dependency_cached_media(TbBall *c, const char *source, const char *variant,
                                       const char *fingerprint, int *command, int *level)
 {
     if (!fingerprint)
@@ -795,7 +787,7 @@ static cJSON *dependency_cached_media(Context *c, const char *source, const char
     return index;
 }
 
-static void dependency_cache_media(Context *c, const char *source, const char *variant,
+static void dependency_cache_media(TbBall *c, const char *source, const char *variant,
                                    const char *fingerprint, int command, int level,
                                    const cJSON *index)
 {
@@ -818,7 +810,7 @@ static void dependency_cache_media(Context *c, const char *source, const char *v
     }
 }
 
-static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *errors,
+static cJSON *dependency_verified_sources(TbBall *c, cJSON *sources, cJSON *errors,
                                           cJSON *media_index, int cache_media)
 {
     cJSON *eligible = cJSON_CreateArray(), *indexes = cJSON_CreateObject();
@@ -928,7 +920,7 @@ static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *err
     return eligible;
 }
 
-cJSON *validate_os2_media(Context *c, const cJSON *request)
+cJSON *validate_os2_media(TbBall *c, const cJSON *request)
 {
     const cJSON *requested = get(request, "sources"), *source;
     if (!tb_ball_array_strings(c, requested) || !cJSON_GetArraySize(requested))
@@ -1017,7 +1009,7 @@ cJSON *validate_os2_media(Context *c, const cJSON *request)
     return result;
 }
 
-static int dependency_secondary_sources(Context *c, cJSON *sources, cJSON *media_index,
+static int dependency_secondary_sources(TbBall *c, cJSON *sources, cJSON *media_index,
                                         cJSON *errors)
 {
     int expanded = 0;
@@ -1059,7 +1051,7 @@ static int dependency_secondary_sources(Context *c, cJSON *sources, cJSON *media
     return expanded;
 }
 
-static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON *seen,
+static void dependency_recovery(TbBall *c, cJSON *binaries, cJSON *index, cJSON *seen,
                                 cJSON *media_index, cJSON *modules, cJSON *imported, cJSON *errors)
 {
     cJSON *wanted = cJSON_Duplicate(modules, 1);
@@ -1200,7 +1192,7 @@ cJSON *dependency_compact(const cJSON *report)
     return value;
 }
 
-cJSON *dependency_audit_latest(Context *c)
+cJSON *dependency_audit_latest(TbBall *c)
 {
     char *path = tb_ball_join(c, c->ball, "logs/dependencies-latest.json");
     FILE *file = path ? tb_fopen(path, "rb") : NULL;
@@ -1302,7 +1294,7 @@ static int dependency_write_text(const cJSON *report, const char *path)
     return ok;
 }
 
-static void dependency_save_report(Context *c, cJSON *report)
+static void dependency_save_report(TbBall *c, cJSON *report)
 {
     cJSON *errors = get(report, "errors");
     char *logs = tb_ball_join(c, c->ball, "logs"), *directory = NULL;
@@ -1342,7 +1334,7 @@ static void dependency_save_report(Context *c, cJSON *report)
     cJSON_Delete(latest);
 }
 
-static int dependency_som_required(Context *c, const cJSON *report)
+static int dependency_som_required(TbBall *c, const cJSON *report)
 {
     const cJSON *entry;
     cJSON_ArrayForEach(entry, get(report, "imports")) if (os2_module_matches(field(entry, "module"),
@@ -1350,7 +1342,7 @@ static int dependency_som_required(Context *c, const cJSON *report)
     return os2_som_present(c, "C:\\OS2\\DLL\\SOMD.DLL");
 }
 
-static int dependency_som_files(Context *c, cJSON *report, cJSON *unresolved)
+static int dependency_som_files(TbBall *c, cJSON *report, cJSON *unresolved)
 {
     cJSON *files = cJSON_CreateArray();
     int missing = 0;
@@ -1426,15 +1418,15 @@ cJSON *dependency_component_groups(const cJSON *report)
     return groups;
 }
 
-cJSON *audit_dependencies(Context *parent, const cJSON *request, int automatic_recovery)
+cJSON *audit_dependencies(TbBall *parent, const cJSON *request, int automatic_recovery)
 {
     /* Auditing failures belong to the audit, never to the installer's exit
-       result or the parent Context's successful receipt transaction. */
-    Context storage = *parent;
+       result or the parent request's successful receipt transaction. */
+    TbBall storage = *parent;
     storage.allocations = NULL;
     storage.count = 0;
     storage.error = NULL;
-    Context *c = &storage;
+    TbBall *c = &storage;
     cJSON *report = cJSON_CreateObject(), *errors = cJSON_AddArrayToObject(report, "errors"),
           *limits = cJSON_AddArrayToObject(report, "limits"),
           *imported = cJSON_AddArrayToObject(report, "imported"), *index = cJSON_CreateObject(),
@@ -1637,7 +1629,7 @@ cJSON *audit_dependencies(Context *parent, const cJSON *request, int automatic_r
 
 /* Compatibility query only. Explicit audit-dependencies is the rescan action;
    normal preflight must never discover or recover files as a side effect. */
-cJSON *ensure_dependencies(Context *c, const cJSON *request)
+cJSON *ensure_dependencies(TbBall *c, const cJSON *request)
 {
     (void)request;
     cJSON *latest = dependency_audit_latest(c);

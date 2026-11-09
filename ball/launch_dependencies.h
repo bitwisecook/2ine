@@ -3,7 +3,7 @@
    enumeration, media inspection, recovery, or database writes happen here. */
 #ifndef TB_BALL_LAUNCH_DEPENDENCIES_H
 #define TB_BALL_LAUNCH_DEPENDENCIES_H
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 
-cJSON *launch_dependencies(Context *parent, const cJSON *request);
+cJSON *launch_dependencies(TbBall *parent, const cJSON *request);
 #endif

@@ -1,7 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read-only live state is independent of the per-ball mutation guard. */
-#include "ball/ball_internal.h"
-#include "ball/manifest.h"
+#include "ball/store.h"
 #include "ball/os2_component_operations.h"
 #include "ball/os2_component_store.h"
 #include "ball/os2_extract.h"
@@ -10,7 +9,7 @@
 #include "ball/os2_support.h"
 #include "ball/os2_tree.h"
 
-static cJSON *component_current_progress(Context *c, const cJSON *request)
+static cJSON *component_current_progress(TbBall *c, const cJSON *request)
 {
     const char *id = field(request, "operationID");
     if (get(request, "operationID") && !id)
@@ -43,7 +42,7 @@ static cJSON *component_current_progress(Context *c, const cJSON *request)
     return progress;
 }
 
-static int component_hash_matches(Context *c, const char *host, const cJSON *record,
+static int component_hash_matches(TbBall *c, const char *host, const cJSON *record,
                                   TbFileIdentity *identity)
 {
     const char *expected = field(record, "sha256");
@@ -62,7 +61,7 @@ static int component_hash_matches(Context *c, const char *host, const cJSON *rec
 /* A read-only polling request may revisit a touched file whose bytes are
    unchanged. Cache only hash-verified verdicts bound to its complete stat identity;
    removal always performs a fresh hash and never uses this bounded thread cache. */
-static int component_poll_hash(Context *c, const char *host, const cJSON *record)
+static int component_poll_hash(TbBall *c, const char *host, const cJSON *record)
 {
     typedef struct ComponentHashVerdict
     {
@@ -96,7 +95,7 @@ static int component_poll_hash(Context *c, const char *host, const cJSON *record
     return matches;
 }
 
-static cJSON *component_file_state_record(Context *c, const char *guest, const cJSON *record,
+static cJSON *component_file_state_record(TbBall *c, const char *guest, const cJSON *record,
                                           int verify)
 {
     cJSON *file = cJSON_CreateObject();
@@ -158,7 +157,7 @@ static cJSON *component_file_state_record(Context *c, const char *guest, const c
     return file;
 }
 
-static cJSON *component_file_state(Context *c, const char *guest, const cJSON *ledger, int verify)
+static cJSON *component_file_state(TbBall *c, const char *guest, const cJSON *ledger, int verify)
 {
     return component_file_state_record(c, guest, get(ledger, component_key(c, guest)), verify);
 }
@@ -192,7 +191,7 @@ static void component_state_add(cJSON *result, cJSON *file)
         cJSON_AddItemToArray(get(result, key), cJSON_CreateString(path));
 }
 
-cJSON *os2_component_state(Context *c, const cJSON *request)
+cJSON *os2_component_state(TbBall *c, const cJSON *request)
 {
     const cJSON *paths = get(request, "paths"), *selection = get(request, "selection"), *item;
     if (paths && (!tb_ball_array_strings(c, paths) || cJSON_GetArraySize(paths) > 100000))
@@ -323,7 +322,7 @@ cJSON *os2_component_state(Context *c, const cJSON *request)
     return result;
 }
 
-cJSON *component_import(Context *c, const cJSON *request)
+cJSON *component_import(TbBall *c, const cJSON *request)
 {
     cJSON *result = NULL;
     if (component_begin(c, request, "install") && !component_cancelled(c))
@@ -358,7 +357,7 @@ static int component_som_essential(const char *path)
     return 0;
 }
 
-cJSON *remove_os2_components(Context *c, const cJSON *request)
+cJSON *remove_os2_components(TbBall *c, const cJSON *request)
 {
     cJSON *result = cJSON_CreateObject(), *removed = cJSON_AddArrayToObject(result, "removedPaths"),
           *preserved = cJSON_AddArrayToObject(result, "preserved");
@@ -566,7 +565,7 @@ finished:
     return result;
 }
 
-cJSON *cancel_os2_component_operation(Context *c, const cJSON *request)
+cJSON *cancel_os2_component_operation(TbBall *c, const cJSON *request)
 {
     const char *id = field(request, "operationID");
     if (!component_token(id))

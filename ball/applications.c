@@ -1,13 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Saving launcher records and their custom icon assets. */
 #include "ball/ball_internal.h"
-#include "ball/applications.h"
-#include "ball/guest_environment.h"
-#include "ball/manifest.h"
-#include "ball/paths.h"
 #include "ball/wps_applications.h"
 
-int tb_ball_save_application(Context *c, const cJSON *request)
+int tb_ball_save_application(TbBall *c, const cJSON *request)
 {
     const char *name = field(request, "name"), *program = field(request, "program"),
                *previous = field(request, "originalName");

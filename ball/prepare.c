@@ -1,22 +1,20 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Launch planning: the command, environment and receipt of a launch. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/application_icon.h"
-#include "ball/commands.h"
-#include "ball/drives.h"
 #include "ball/host_environment.h"
 #include "ball/interpreter.h"
 #include "ball/launch_prerequisites.h"
 #include "ball/os2_support.h"
-#include "ball/paths.h"
 #include "ball/prepare.h"
 #include "ball/runtime.h"
 #include "ball/runtime_config.h"
 #include "ball/runtime_features.h"
 #include "ball/runtime_selection.h"
 #include "ball/wps_applications.h"
+#include "storage/volume.h"
 
-cJSON *launch_prepare(Context *c, const cJSON *request)
+cJSON *launch_prepare(TbBall *c, const cJSON *request)
 {
     if (!wps_sync(c))
         return NULL;
@@ -167,7 +165,7 @@ cJSON *launch_prepare(Context *c, const cJSON *request)
                                          get(c->application, "environment"));
     if (!env)
         goto failed;
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT; i++)
         if (c->roots[i])
         {
             const char *directory = tb_ball_drive_directory(c, i);
@@ -196,7 +194,8 @@ cJSON *launch_prepare(Context *c, const cJSON *request)
         selected = getenv("TWOINE_BACKEND");
     if (!selected || !*selected)
         selected = "default";
-    char *runtime = tb_ball_format(c, "%s/OS2/DLL/2INE/%s/%.16s", c->roots[2], selected, identity);
+    char *runtime = tb_ball_format(c, "%s/OS2/DLL/2INE/%s/%.16s", c->roots[TB_BALL_DRIVE_C],
+                                   selected, identity);
     if (!runtime || !runtime_sync(c, build, runtime))
     {
         cJSON_Delete(env);
@@ -222,7 +221,8 @@ cJSON *launch_prepare(Context *c, const cJSON *request)
     cJSON *result = cJSON_CreateObject();
     cJSON_AddBoolToObject(result, "operationSupervised", supervised);
     cJSON_AddItemToObject(result, "command", command);
-    cJSON_AddStringToObject(result, "cwd", tb_image_path(working) ? c->roots[2] : working);
+    cJSON_AddStringToObject(result, "cwd",
+                            tb_image_path(working) ? c->roots[TB_BALL_DRIVE_C] : working);
     cJSON_AddStringToObject(result, "programHost", original_host);
     cJSON_AddItemToObject(
         result, "desktopIdentity",

@@ -3,9 +3,9 @@
    substitutes for empty/fallback native modules and remain media dependencies. */
 #ifndef TB_BALL_SYSTEM_MODULES_H
 #define TB_BALL_SYSTEM_MODULES_H
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 
 int os2_module_matches(const char *name, const char *module);
-int os2_module_disabled(Context *c, const char *name);
-int os2_module_provided(Context *c, const char *name);
+int os2_module_disabled(TbBall *c, const char *name);
+int os2_module_provided(TbBall *c, const char *name);
 #endif

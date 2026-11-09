@@ -1,16 +1,13 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The ball snapshot returned to clients. */
 #include "ball/ball_internal.h"
-#include "ball/drives.h"
-#include "ball/guest_environment.h"
-#include "ball/paths.h"
-#include "ball/snapshot.h"
+#include "storage/volume.h"
 
-cJSON *tb_ball_snapshot(Context *c)
+cJSON *tb_ball_snapshot(TbBall *c)
 {
     if (!tb_ball_roots(c))
         return NULL;
-    char *path = tb_ball_join(c, c->roots[2], "CONFIG.SYS");
+    char *path = tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS");
     size_t size = 0;
     char *bytes = tb_ball_read_file(c, path, &size, 1);
     if (!bytes)
@@ -38,7 +35,7 @@ cJSON *tb_ball_snapshot(Context *c)
         }
     }
     cJSON *image_sources = cJSON_AddObjectToObject(value, "imageSources");
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT; i++)
         if (c->roots[i] && tb_image_path(c->roots[i]))
         {
             char *source = tb_image_source(c->roots[i]);
@@ -55,14 +52,14 @@ cJSON *tb_ball_snapshot(Context *c)
                        get(c->manifest, "drives")) if (c->unavailable[drive_entry->string[0] - 'A'])
         cJSON_AddStringToObject(unavailable, drive_entry->string,
                                 str(drive_entry) ? str(drive_entry) : field(drive_entry, "image"));
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT; i++)
         if (c->roots[i])
         {
             char letter[2] = {(char)('A' + i), 0};
             cJSON_AddStringToObject(mapping, letter, c->roots[i]);
         }
     cJSON *directories = cJSON_AddObjectToObject(value, "workingDirectories");
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < TB_BALL_DRIVE_COUNT; i++)
         if (c->roots[i] || c->unavailable[i])
         {
             char key[2] = {(char)('A' + i), 0};

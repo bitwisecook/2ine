@@ -1,11 +1,11 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Portable metadata only: no host paths, executable bytes, or media contents. */
-#include "ball/ball_internal.h"
+#include "ball/store.h"
 #include "ball/dependency_database.h"
 #include "ball/os2_component_store.h"
 #include "ball/os2_dependencies.h"
 
-static cJSON *dependency_database_from_report(Context *c, const cJSON *report)
+static cJSON *dependency_database_from_report(TbBall *c, const cJSON *report)
 {
     if (!cJSON_IsArray(get(report, "binaries")) || !cJSON_IsArray(get(report, "imports")))
         return NULL;
@@ -57,7 +57,7 @@ static cJSON *dependency_database_from_report(Context *c, const cJSON *report)
     return database;
 }
 
-void dependency_database_save(Context *c, const cJSON *report)
+void dependency_database_save(TbBall *c, const cJSON *report)
 {
     cJSON *database = dependency_database_from_report(c, report);
     if (database)
@@ -70,7 +70,7 @@ void dependency_database_save(Context *c, const cJSON *report)
     }
 }
 
-static cJSON *dependency_database_json(Context *c, const char *path)
+static cJSON *dependency_database_json(TbBall *c, const char *path)
 {
     uint64_t length = 0;
     int64_t modified = 0;
@@ -81,7 +81,7 @@ static cJSON *dependency_database_json(Context *c, const char *path)
     return bytes && size ? cJSON_ParseWithLength(bytes, size) : NULL;
 }
 
-cJSON *dependency_database_load(Context *c)
+cJSON *dependency_database_load(TbBall *c)
 {
     cJSON *database =
         dependency_database_json(c, tb_ball_join(c, c->ball, "cache/dependency-index.json"));
