@@ -25,7 +25,6 @@ twoine_os2_dll(
     pmmerge/ishapi/readini.c
     pmmerge/ishapi/switches.c
     pmmerge/ishapi/startapp.c
-    pmmerge/pmwin/cptype.c
     pmmerge/pmwin/strings.c
     pmmerge/pmwin/scroll.c
     pmmerge/pmwin/context.c
@@ -40,7 +39,8 @@ twoine_os2_dll(
     pmmerge/pmwin/present.c
     pmmerge/pmwin/paint.c
     pmmerge/pmwin/timers.c
-    pmmerge/pmwin/graphics.c
+    pmmerge/pmwin/winps.c
+    pmmerge/pmwin/winclr.c
     pmmerge/pmgre/raster.c
     pmmerge/pmgre/rasterize.c
     pmmerge/pmgre/32xform.c

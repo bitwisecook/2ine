@@ -97,8 +97,7 @@ void destroyDeviceContexts(AnchorBlock *anchor)
 
 HDC lx_pm_query_dc(HPS handle)
 {
-    AnchorBlock *anchor = getAnchorBlockNoHAB();
-    PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, handle) : NULL;
+    PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->dc : (HDC)-1;
 }
 
@@ -142,4 +141,15 @@ BOOL lx_pm_associate_dc(HPS handle, HDC dc)
         page->selected++;
     }
     return TRUE;
+}
+
+HDC WinOpenWindowDC(HWND hwnd)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    return anchor && getWindowFromHWND(anchor, hwnd) ? hwnd : 0;
+}
+
+HDC WinQueryWindowDC(HWND hwnd)
+{
+    return WinOpenWindowDC(hwnd);
 }

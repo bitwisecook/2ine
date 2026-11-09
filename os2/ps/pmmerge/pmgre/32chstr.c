@@ -271,3 +271,69 @@ BOOL lx_pm_mask(HPS handle, LONG x, LONG y, int width, int height, const uint8_t
     free(visible.rects);
     return result;
 }
+
+LxHostFont *lx_pm_font(HPS hps)
+{
+    PresentationSpace *ps = lx_pm_font_space(hps);
+    if (!ps)
+        return NULL;
+    unsigned dpi = lx_pm_dc_dpi(ps->dc);
+    unsigned index = 0, pixels = (16 * dpi + 48) / 96;
+    char attribute[128] = {0};
+    ULONG bytes = ps->window ? WinQueryPresParam(ps->window->hwnd, 15, 0, NULL,
+                                                 sizeof attribute - 1, attribute, 0)
+                             : 0;
+    if (bytes && memchr(attribute, 0, bytes))
+    {
+        char *end;
+        unsigned long points = strtoul(attribute, &end, 10);
+        if (points && points <= 384 && *end == '.')
+        {
+            const char *family = end + 1;
+            pixels = (unsigned)(points * dpi + 36) / 72;
+            if (!strncasecmp(family, "Courier", 7) || !strncasecmp(family, "System Monospaced", 17))
+                index = 8;
+            else if (!strncasecmp(family, "Tms Rmn", 7) ||
+                     !strncasecmp(family, "Times New Roman", 15))
+                index = 4;
+            unsigned style = 0;
+            for (const char *p = family; *p; p++)
+            {
+                if (!strncasecmp(p, "Bold", 4))
+                    style |= 1;
+                if (!strncasecmp(p, "Italic", 6))
+                    style |= 2;
+            }
+            index += style;
+        }
+    }
+    if (ps->logical_fonts[ps->charset].defined)
+    {
+        index = ps->logical_fonts[ps->charset].index;
+        pixels = ps->logical_fonts[ps->charset].pixels;
+    }
+    if (ps->char_height > 0)
+        pixels = (unsigned)((ps->char_height + 32768LL) / 65536);
+    if (!pixels)
+        pixels = 1;
+    if (!ps->font || ps->font_index != index || ps->font_pixels != pixels)
+    {
+        LxHostFont *font = lx_host_font_open(index, pixels);
+        if (!font)
+            return NULL;
+        lx_host_font_close(ps->font);
+        ps->font = font;
+        ps->font_index = index;
+        ps->font_pixels = pixels;
+    }
+
+    return ps->font;
+}
+
+unsigned lx_pm_font_index(HPS hps)
+{
+    PresentationSpace *ps = lx_pm_font_space(hps);
+    return ps ? ps->logical_fonts[ps->charset].defined ? ps->logical_fonts[ps->charset].metric_index
+                                                       : ps->font_index
+              : 0;
+}

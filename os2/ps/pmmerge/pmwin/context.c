@@ -205,17 +205,6 @@ ERRORID WinSetErrorInfo(ERRORID error, ULONG flags, ...)
     return previous;
 }
 
-ULONG WinQueryCp(HMQ queue)
-{
-    TRACE_NATIVE("WinQueryCp(%u)", queue);
-    AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor)
-        return 0;
-    if (!queue || anchor->message_queue.hmq != queue)
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HMQ, 0);
-    return anchor->message_queue.codepage ? anchor->message_queue.codepage : 437;
-}
-
 typedef struct ErrorAllocation
 {
     LxGuestMapping *mapping;
