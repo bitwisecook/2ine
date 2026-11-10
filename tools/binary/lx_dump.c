@@ -25,29 +25,18 @@ enum
     EXE_HEADER_MINIMUM = 62,
 
     /* LX header. */
-    E32LEBO = 0x00,
-    E32LEWO = 0x00,
-    E32LEVEL = 0,
-    E32CPU486 = 0x003,
     OBJPAGELEN = 4096,
     /* LX module flags. */
     E32LIBINIT = 0x0004,
-    E32NOINTFIX = 0x0010,
     E32NOEXTFIX = 0x0020,
     E32NOPMW = 0x0100,
     E32PMW = 0x0200,
     E32PMAPI = 0x0300,
-    E32NOLOAD = 0x2000,
-    E32MODDLL = 0x08000,
     E32MODPROTDLL = 0x18000,
     E32MODPDEV = 0x20000,
     E32MODVDEV = 0x28000,
     E32LIBTERM = 0x40000000,
     /* LX object flags. */
-    OBJREAD = 0x0001,
-    OBJWRITE = 0x0002,
-    OBJEXEC = 0x0004,
-    OBJRSRC = 0x0008,
     OBJDISCARD = 0x0010,
     OBJSHARED = 0x0020,
     OBJPRELOAD = 0x0040,
@@ -57,8 +46,6 @@ enum
     OBJCONTIG = 0x0300,
     OBJDYNAMIC = 0x0400,
     OBJRESERVED = 0x0800,
-    OBJALIAS16 = 0x1000,
-    OBJBIGDEF = 0x2000,
     OBJCONFORM = 0x4000,
     OBJIOPL = 0x8000,
     /* LX object page flags. */
@@ -68,29 +55,6 @@ enum
     ZEROED = 0x0003,
     RANGE = 0x0004,
     ITERDATA2 = 0x0005,
-    /* LX and NE fixup source types and flags. */
-    NRSTYP = 0x0f,
-    NRSBYT = 0x00,
-    NRSSEG = 0x02,
-    NRSPTR = 0x03,
-    NRSOFF = 0x05,
-    NRPTR48 = 0x06,
-    NROFF32 = 0x07,
-    NRSOFF32 = 0x08,
-    NRALIAS = 0x10,
-    NRCHAIN = 0x20,
-    NRRTYP = 0x03,
-    NRRINT = 0x00,
-    NRRORD = 0x01,
-    NRRNAM = 0x02,
-    NRRENT = 0x03, /* LX: internal reference via the entry table */
-    NRROSF = 0x03, /* NE: operating-system fixup */
-    NRADD = 0x04,
-    NRICHAIN = 0x08,
-    NR32BITOFF = 0x10,
-    NR32BITADD = 0x20,
-    NR16OBJMOD = 0x40,
-    NR8BITORD = 0x80,
     /* Length-prefixed names keep their length in the low seven bits. */
     NAME_LENGTH_MASK = 0x7F,
     /* LX entry table bundles. */
@@ -104,16 +68,12 @@ enum
     E32SHARED = 0x02,
     E32PARAMS = 0xf8,
     E32PARAMS_SHIFT = 3,
-    FWD_ORDINAL = 0x01,
 
     /* NE header. */
-    NE_OS2 = 0x1,
     NESOLO = 0x0001,
     NEINST = 0x0002,
     NEPPLI = 0x0004,
-    NEIERR = 0x2000,
     NENOTMPSAFE = 0x4000,
-    NENOTP = 0x8000,
     NE_APPTYPE_SHIFT = 8,
     NE_APPTYPE_BITS = 0x3,
     NELONGNAMES = 0x01,
@@ -123,21 +83,15 @@ enum
     /* NE segment table: a zero size or allocation means 64 KiB. */
     NE_SEGMENT_64K = 0x10000,
     NE_SEGMENT_TYPE_BITS = 0x3,
-    NSCODE = 0x0000,
     NSDATA = 0x0001,
     NE_SEGMENT_REALMODE = 0x0004,
-    NSITER = 0x0008,
     NSMOVE = 0x0010,
     NSSHARED = 0x0020,
-    NSPRELOAD = 0x0040,
-    NSEXRD = 0x0080,
-    NSRELOC = 0x0100,
     NE_SEGMENT_DEBUGINFO = 0x0200,
     NE_SEGMENT_DISCARD_PRIORITY = 0xF000,
     NE_DISCARD_PRIORITY_SHIFT = 13,
     NE_DISCARD_PRIORITY_BITS = 0x7,
     /* An internal fixup to segment 0xFF names a movable entry by ordinal. */
-    NE_MOVABLE_SEGMENT = 0xFF,
     /* Resource type and name ids with the high bit set are integers. */
     NE_RESOURCE_INTEGER_ID = 0x8000,
 };
