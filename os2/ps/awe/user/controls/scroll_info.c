@@ -6,7 +6,7 @@
 static Open32Scroll *scroll_state(ULONG handle, LONG bar, Open32Window **owner)
 {
     Open32Window *window = open32FindWindow(handle);
-    if (!window || bar < 0 || bar > 2)
+    if (!window || bar < WIN32_SB_HORZ || bar > WIN32_SB_CTL)
     {
         open32SetError(window ? ERROR_INVALID_PARAMETER : ERROR_INVALID_WINDOW_HANDLE);
         return NULL;
@@ -26,7 +26,9 @@ static LONG clamp_position(Open32Scroll *state, LONG position)
 static void scroll_visibility(Open32Window *window, LONG bar, BOOL show, BOOL redraw)
 {
     window->scroll[bar].visible = show;
-    ULONG style = bar == 0 ? 0x00100000u : bar == 1 ? 0x00200000u : 0;
+    ULONG style = bar == WIN32_SB_HORZ   ? WIN32_WS_HSCROLL
+                  : bar == WIN32_SB_VERT ? WIN32_WS_VSCROLL
+                                         : 0;
     if (show)
         window->style |= style;
     else
@@ -89,15 +91,15 @@ LONG GetScrollPos(ULONG handle, LONG bar)
 BOOL ShowScrollBar(ULONG handle, LONG bar, BOOL show)
 {
     Open32Window *window = open32FindWindow(handle);
-    if (!window || bar < 0 || bar > 3)
+    if (!window || bar < WIN32_SB_HORZ || bar > WIN32_SB_BOTH)
     {
         open32SetError(window ? ERROR_INVALID_PARAMETER : ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
-    if (bar == 3)
+    if (bar == WIN32_SB_BOTH)
     {
-        scroll_visibility(window, 0, show, FALSE);
-        scroll_visibility(window, 1, show, TRUE);
+        scroll_visibility(window, WIN32_SB_HORZ, show, FALSE);
+        scroll_visibility(window, WIN32_SB_VERT, show, TRUE);
     }
     else
         scroll_visibility(window, bar, show, TRUE);

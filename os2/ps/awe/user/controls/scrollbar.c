@@ -3,6 +3,22 @@
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/ps/awe/internal.h"
 
+enum
+{
+    /* A system-colour brush handle is the COLOR_* index plus one. */
+    BRUSH_SCROLLBAR = WIN32_COLOR_SCROLLBAR + 1,
+    BRUSH_BTNFACE = WIN32_COLOR_BTNFACE + 1,
+    BRUSH_BTNSHADOW = WIN32_COLOR_BTNSHADOW + 1,
+    BRUSH_GRAYTEXT = WIN32_COLOR_GRAYTEXT + 1,
+    BRUSH_BTNTEXT = WIN32_COLOR_BTNTEXT + 1,
+    BRUSH_BTNHIGHLIGHT = WIN32_COLOR_BTNHIGHLIGHT + 1,
+    /* The arrow is a four-row triangle, drawn only when the button can hold it. */
+    ARROW_ROWS = 4,
+    ARROW_MIN_BUTTON = 6,
+    /* Keys without a scroll request leave the bar alone. */
+    SCROLL_REQUEST_NONE = 9
+};
+
 typedef struct ScrollLayout
 {
     BOOL vertical;
@@ -11,8 +27,8 @@ typedef struct ScrollLayout
 
 static ScrollLayout layout(Open32Window *window)
 {
-    Open32Scroll *state = &window->scroll[2];
-    BOOL vertical = (window->style & 1) != 0;
+    Open32Scroll *state = &window->scroll[WIN32_SB_CTL];
+    BOOL vertical = (window->style & WIN32_SBS_VERT) != 0;
     LONG extent = vertical ? window->height : window->width;
     LONG across = vertical ? window->width : window->height;
     LONG button = across < extent / 2 ? across : extent / 2;
@@ -26,7 +42,7 @@ static ScrollLayout layout(Open32Window *window)
 
 static void fill(ULONG dc, const ScrollLayout *s, LONG a, LONG b, LONG c, LONG d, ULONG brush)
 {
-    uint8 rect[16];
+    uint8 rect[WIN32_RECT_SIZE];
     LONG fields[4] = {s->vertical ? c : a, s->vertical ? a : c, s->vertical ? d : b,
                       s->vertical ? b : d};
     for (unsigned i = 0; i < 4; i++)
@@ -37,33 +53,33 @@ static void fill(ULONG dc, const ScrollLayout *s, LONG a, LONG b, LONG c, LONG d
 static void button(ULONG dc, const ScrollLayout *s, LONG first, LONG last, BOOL arrow, BOOL end,
                    BOOL enabled)
 {
-    fill(dc, s, first, last, 0, s->across, 16); /* COLOR_BTNFACE */
-    fill(dc, s, first, first + 1, 0, s->across, 21);
-    fill(dc, s, first, last, 0, 1, 21);
-    fill(dc, s, last - 1, last, 0, s->across, 17);
-    fill(dc, s, first, last, s->across - 1, s->across, 17);
-    if (arrow && last - first >= 6 && s->across >= 6)
+    fill(dc, s, first, last, 0, s->across, BRUSH_BTNFACE);
+    fill(dc, s, first, first + 1, 0, s->across, BRUSH_BTNHIGHLIGHT);
+    fill(dc, s, first, last, 0, 1, BRUSH_BTNHIGHLIGHT);
+    fill(dc, s, last - 1, last, 0, s->across, BRUSH_BTNSHADOW);
+    fill(dc, s, first, last, s->across - 1, s->across, BRUSH_BTNSHADOW);
+    if (arrow && last - first >= ARROW_MIN_BUTTON && s->across >= ARROW_MIN_BUTTON)
     {
         LONG middle = (first + last) / 2;
-        for (LONG row = 0; row < 4; row++)
+        for (LONG row = 0; row < ARROW_ROWS; row++)
         {
             LONG axis = end ? middle + 1 - row : middle - 2 + row;
             fill(dc, s, axis, axis + 1, s->across / 2 - row, s->across / 2 + row + 1,
-                 enabled ? 19 : 18);
+                 enabled ? BRUSH_BTNTEXT : BRUSH_GRAYTEXT);
         }
     }
 }
 
 static void paint(Open32Window *window)
 {
-    uint8 record[64];
+    uint8 record[WIN32_PAINTSTRUCT_SIZE];
     ULONG dc = BeginPaint(window->handle, record);
     if (!dc)
         return;
     ScrollLayout s = layout(window);
-    BOOL enabled =
-        IsWindowEnabled(window->handle) && window->scroll[2].minimum < window->scroll[2].maximum;
-    fill(dc, &s, 0, s.extent, 0, s.across, 1);
+    BOOL enabled = IsWindowEnabled(window->handle) &&
+                   window->scroll[WIN32_SB_CTL].minimum < window->scroll[WIN32_SB_CTL].maximum;
+    fill(dc, &s, 0, s.extent, 0, s.across, BRUSH_SCROLLBAR);
     if (s.button)
     {
         button(dc, &s, 0, s.button, TRUE, FALSE, enabled);
@@ -79,7 +95,8 @@ static void notify(ULONG handle, ULONG request, LONG position)
     Open32Window *window = open32FindWindow(handle);
     if (!window)
         return;
-    ULONG parent = window->parent, message = (window->style & 1) ? 0x115 : 0x114;
+    ULONG parent = window->parent,
+          message = (window->style & WIN32_SBS_VERT) ? WIN32_WM_VSCROLL : WIN32_WM_HSCROLL;
     if (parent)
         SendMessage(parent, message, request | ((ULONG)(USHORT)position << 16), handle);
 }
@@ -92,7 +109,7 @@ static LONG dragged(Open32Window *window, const ScrollLayout *s, LONG coordinate
         offset = 0;
     if (offset > travel)
         offset = travel;
-    Open32Scroll *state = &window->scroll[2];
+    Open32Scroll *state = &window->scroll[WIN32_SB_CTL];
     return travel > 0 ? (LONG)(state->minimum +
                                offset * ((int64_t)state->maximum - state->minimum) / travel)
                       : state->minimum;
@@ -103,20 +120,21 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
     Open32Window *window = open32FindWindow(handle);
     if (!window)
         return 0;
-    Open32Scroll *state = &window->scroll[2];
+    Open32Scroll *state = &window->scroll[WIN32_SB_CTL];
     switch (message)
     {
-        case 0x81:
+        case WIN32_WM_NCCREATE:
             state->maximum = 0;
             return 1;
-        case 0xe0:
-            return (ULONG)SetScrollPos(handle, 2, (LONG)first, second != 0);
-        case 0xe1:
+        case WIN32_SBM_SETPOS:
+            return (ULONG)SetScrollPos(handle, WIN32_SB_CTL, (LONG)first, second != 0);
+        case WIN32_SBM_GETPOS:
             return (ULONG)state->position;
-        case 0xe2:
-        case 0xe6:
-            return SetScrollRange(handle, 2, (LONG)first, (LONG)second, message == 0xe6);
-        case 0xe3:
+        case WIN32_SBM_SETRANGE:
+        case WIN32_SBM_SETRANGEREDRAW:
+            return SetScrollRange(handle, WIN32_SB_CTL, (LONG)first, (LONG)second,
+                                  message == WIN32_SBM_SETRANGEREDRAW);
+        case WIN32_SBM_GETRANGE:
         {
             uint8 minimum[4], maximum[4];
             lx_guest_store_u32(minimum, (ULONG)state->minimum);
@@ -131,16 +149,16 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
             lx_execution_write(GProcessState.execution, second, maximum, 4);
             return 0;
         }
-        case 0x87:
-            return 1; /* DLGC_WANTARROWS */
-        case 15:
+        case WIN32_WM_GETDLGCODE:
+            return WIN32_DLGC_WANTARROWS;
+        case WIN32_WM_PAINT:
             paint(window);
             return 0;
-        case 5:
-        case 10:
+        case WIN32_WM_SIZE:
+        case WIN32_WM_ENABLE:
             InvalidateRect(handle, NULL, FALSE);
             return 0;
-        case 0x201:
+        case WIN32_WM_LBUTTONDOWN:
         {
             if (!IsWindowEnabled(handle) || state->minimum == state->maximum)
                 return 0;
@@ -149,13 +167,13 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
             WinSetFocus(HWND_DESKTOP, handle);
             WinSetCapture(HWND_DESKTOP, handle);
             if (coordinate < s.button)
-                notify(handle, 0, 0);
+                notify(handle, WIN32_SB_LINEUP, 0);
             else if (coordinate >= s.extent - s.button)
-                notify(handle, 1, 0);
+                notify(handle, WIN32_SB_LINEDOWN, 0);
             else if (coordinate < s.position)
-                notify(handle, 2, 0);
+                notify(handle, WIN32_SB_PAGEUP, 0);
             else if (coordinate >= s.position + s.thumb)
-                notify(handle, 3, 0);
+                notify(handle, WIN32_SB_PAGEDOWN, 0);
             else
             {
                 window->scroll_dragging = TRUE;
@@ -164,7 +182,7 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
             }
             return 0;
         }
-        case 0x200:
+        case WIN32_WM_MOUSEMOVE:
             if (window->scroll_dragging && WinQueryCapture(HWND_DESKTOP) == handle)
             {
                 ScrollLayout s = layout(window);
@@ -172,10 +190,10 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
                 LONG position = dragged(window, &s, coordinate);
                 window->scroll_track_position = position;
                 InvalidateRect(handle, NULL, FALSE);
-                notify(handle, 5, position);
+                notify(handle, WIN32_SB_THUMBTRACK, position);
             }
             return 0;
-        case 0x202:
+        case WIN32_WM_LBUTTONUP:
             if (WinQueryCapture(HWND_DESKTOP) == handle)
             {
                 BOOL dragging = window->scroll_dragging;
@@ -183,24 +201,26 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
                 window->scroll_dragging = FALSE;
                 WinSetCapture(HWND_DESKTOP, 0);
                 if (dragging)
-                    notify(handle, 4, position);
+                    notify(handle, WIN32_SB_THUMBPOSITION, position);
                 if (open32FindWindow(handle))
-                    notify(handle, 8, 0);
+                    notify(handle, WIN32_SB_ENDSCROLL, 0);
                 if (open32FindWindow(handle))
                     InvalidateRect(handle, NULL, FALSE);
             }
             return 0;
-        case 0x100:
+        case WIN32_WM_KEYDOWN:
         {
-            BOOL vertical = (window->style & 1) != 0;
-            ULONG request = first == (vertical ? 0x26u : 0x25u)   ? 0
-                            : first == (vertical ? 0x28u : 0x27u) ? 1
-                            : first == 0x21                       ? 2
-                            : first == 0x22                       ? 3
-                            : first == 0x24                       ? 6
-                            : first == 0x23                       ? 7
-                                                                  : 9;
-            if (request != 9 && IsWindowEnabled(handle))
+            BOOL vertical = (window->style & WIN32_SBS_VERT) != 0;
+            ULONG request = first == (vertical ? (ULONG)WIN32_VK_UP : (ULONG)WIN32_VK_LEFT)
+                                ? WIN32_SB_LINEUP
+                            : first == (vertical ? (ULONG)WIN32_VK_DOWN : (ULONG)WIN32_VK_RIGHT)
+                                ? WIN32_SB_LINEDOWN
+                            : first == WIN32_VK_PRIOR ? WIN32_SB_PAGEUP
+                            : first == WIN32_VK_NEXT  ? WIN32_SB_PAGEDOWN
+                            : first == WIN32_VK_HOME  ? WIN32_SB_TOP
+                            : first == WIN32_VK_END   ? WIN32_SB_BOTTOM
+                                                      : SCROLL_REQUEST_NONE;
+            if (request != SCROLL_REQUEST_NONE && IsWindowEnabled(handle))
                 notify(handle, request, 0);
             return 0;
         }
