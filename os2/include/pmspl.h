@@ -10,6 +10,24 @@ extern "C"
 {
 #endif
 
+    /* INCL_SPLDOSPRINT: record name lengths, excluding the terminator */
+
+    enum
+    {
+        QNLEN = 12,
+        PDLEN = 8
+    };
+
+    /* INCL_SPLDOSPRINT: SplEnumPrinter and PRINTERINFO flType */
+
+    enum
+    {
+        SPL_PR_QUEUE = 0x00000001,
+        SPL_PR_DIRECT_DEVICE = 0x00000002,
+        SPL_PR_QUEUED_DEVICE = 0x00000004,
+        SPL_PR_LOCAL_ONLY = 0x00000100
+    };
+
     /* INCL_SPL: spooler queries */
 
     enum

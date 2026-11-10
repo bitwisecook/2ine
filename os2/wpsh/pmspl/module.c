@@ -20,7 +20,6 @@
    PRQINFO, 3 and 4 PRQINFO3, 5 a name pointer and 6 PRQINFO6. */
 enum
 {
-    QNLEN = 12,
     PRQINFO0_SIZE = QNLEN + 1,
     PRQINFO_SIZE = 44,
     PRQINFO_PRIORITY = 14,
@@ -41,6 +40,36 @@ enum
     QUEUE_PRIORITY = 1,
     /* DRIVDATA is ULONG-aligned within the caller's buffer. */
     DRIVDATA_ALIGNMENT = 4
+};
+
+/* Device records: level 0 is the bare name, 1 PRDINFO, 2 a name pointer, 3 PRDINFO3. */
+enum
+{
+    PRDINFO_MAX_LEVEL = 3,
+    PRDINFO0_SIZE = PDLEN + 1,
+    PRDINFO_SIZE = 44,
+    PRDINFO_STATUS = 36,
+    PRDINFO2_SIZE = 4,
+    PRDINFO3_SIZE = 32,
+    PRDINFO3_USER_NAME = 4,
+    PRDINFO3_LOG_ADDR = 8,
+    PRDINFO3_STATUS = 16,
+    PRDINFO3_COMMENT = 20,
+    PRDINFO3_DRIVERS = 24
+};
+
+/* PRINTERINFO records for SplEnumPrinter. */
+enum
+{
+    PRINTERINFO_SIZE = 20,
+    PRINTERINFO_COMPUTER_NAME = 4,
+    PRINTERINFO_DESTINATION_NAME = 8,
+    PRINTERINFO_DESCRIPTION = 12,
+    PRINTERINFO_LOCAL_NAME = 16,
+    SPL_PR_SUPPORTED_TYPES =
+        SPL_PR_QUEUE | SPL_PR_DIRECT_DEVICE | SPL_PR_QUEUED_DEVICE | SPL_PR_LOCAL_ONLY,
+    /* Each file printer is reported once as a queue and once as a queued device. */
+    PRINTER_ENTRIES_MAX = LX_PRINTER_COUNT * 2
 };
 
 static size_t queue_record_size(ULONG level)
@@ -85,8 +114,8 @@ ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capac
         *returned = *total = *needed = 0;
         return NERR_QNotFound;
     }
-    /* The catalogue holds two queues: the PDF and PCL file printers. */
-    unsigned count = queue ? 1 : 2;
+    /* The catalogue holds the PDF and PCL file printers' queues. */
+    unsigned count = queue ? 1 : LX_PRINTER_COUNT;
     size_t record = queue_record_size(level), bytes = record * count;
     for (unsigned i = 0; i < count && level; i++)
     {
@@ -182,7 +211,7 @@ ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity,
 {
     if (!needed)
         return ERROR_INVALID_PARAMETER;
-    if (level > 3)
+    if (level > PRDINFO_MAX_LEVEL)
         return ERROR_INVALID_LEVEL;
     int index = lx_printer_index(name);
     if (index < 0 || !lx_printer_queue_is(name, (unsigned)index))
@@ -190,15 +219,19 @@ ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity,
         *needed = 0;
         return NERR_DestNotFound;
     }
-    size_t record = level == 0 ? 9 : level == 1 ? 44 : level == 2 ? 4 : 32;
+    size_t record = level == 0   ? PRDINFO0_SIZE
+                    : level == 1 ? PRDINFO_SIZE
+                    : level == 2 ? PRDINFO2_SIZE
+                                 : PRDINFO3_SIZE;
     size_t bytes = record;
     if (level == 2 || level == 3)
         bytes += strlen(lx_printer_queues[index]) + 1;
+    /* The empty status string, and in PRDINFO3 the empty user name too. */
     if (level == 1)
-        bytes += 1;
+        bytes += sizeof "";
     if (level == 3)
         bytes += strlen("FILE") + 1 + strlen(lx_printer_descriptions[index]) + 1 +
-                 strlen(lx_printer_drivers[index]) + 1 + 2;
+                 strlen(lx_printer_drivers[index]) + 1 + 2 * sizeof "";
     *needed = (ULONG)bytes;
     if (capacity < bytes)
         return ERROR_MORE_DATA;
@@ -212,14 +245,16 @@ ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity,
     else
         queue_string(buffer, base, &tail, buffer, lx_printer_queues[index]);
     if (level == 1)
-        queue_string(buffer, base, &tail, buffer + 36, "");
+        queue_string(buffer, base, &tail, buffer + PRDINFO_STATUS, "");
     else if (level == 3)
     {
-        queue_string(buffer, base, &tail, buffer + 4, "");
-        queue_string(buffer, base, &tail, buffer + 8, "FILE");
-        queue_string(buffer, base, &tail, buffer + 16, "");
-        queue_string(buffer, base, &tail, buffer + 20, lx_printer_descriptions[index]);
-        queue_string(buffer, base, &tail, buffer + 24, lx_printer_drivers[index]);
+        queue_string(buffer, base, &tail, buffer + PRDINFO3_USER_NAME, "");
+        /* The file printers have no port; output goes to a host file. */
+        queue_string(buffer, base, &tail, buffer + PRDINFO3_LOG_ADDR, "FILE");
+        queue_string(buffer, base, &tail, buffer + PRDINFO3_STATUS, "");
+        queue_string(buffer, base, &tail, buffer + PRDINFO3_COMMENT,
+                     lx_printer_descriptions[index]);
+        queue_string(buffer, base, &tail, buffer + PRDINFO3_DRIVERS, lx_printer_drivers[index]);
     }
     return 0;
 }
@@ -237,23 +272,25 @@ ULONG lx_spl_printers(ULONG level, ULONG types, PVOID output, ULONG capacity, ui
 {
     if (level)
         return ERROR_INVALID_LEVEL;
-    if (!returned || !total || !needed || !(types & 0x107) || (types & ~0x107u))
+    if (!returned || !total || !needed || !(types & SPL_PR_SUPPORTED_TYPES) ||
+        (types & ~(ULONG)SPL_PR_SUPPORTED_TYPES))
         return ERROR_INVALID_PARAMETER;
-    ULONG selected[4], kinds[4], count = 0;
-    for (unsigned i = 0; i < 2; i++)
+    ULONG selected[PRINTER_ENTRIES_MAX], kinds[PRINTER_ENTRIES_MAX], count = 0;
+    for (unsigned i = 0; i < LX_PRINTER_COUNT; i++)
     {
-        if (types & 1)
+        if (types & SPL_PR_QUEUE)
         {
             selected[count] = i;
-            kinds[count++] = 1;
+            kinds[count++] = SPL_PR_QUEUE;
         }
-        if (types & 4)
+        if (types & SPL_PR_QUEUED_DEVICE)
         {
             selected[count] = i;
-            kinds[count++] = 4;
+            kinds[count++] = SPL_PR_QUEUED_DEVICE;
         }
     }
-    size_t bytes = count * 20;
+    size_t bytes = count * PRINTERINFO_SIZE;
+    /* Strings: empty computer name, queue name twice, and the description. */
     for (ULONG i = 0; i < count; i++)
         bytes += 2 + 2 * (strlen(lx_printer_queues[selected[i]]) + 1) +
                  strlen(lx_printer_descriptions[selected[i]]);
@@ -268,16 +305,19 @@ ULONG lx_spl_printers(ULONG level, ULONG types, PVOID output, ULONG capacity, ui
         return ERROR_INVALID_PARAMETER;
     uint8 *buffer = output;
     memset(buffer, 0, bytes);
-    size_t tail = count * 20;
+    size_t tail = count * PRINTERINFO_SIZE;
     for (ULONG i = 0; i < count; i++)
     {
-        uint8 *entry = buffer + i * 20;
+        uint8 *entry = buffer + i * PRINTERINFO_SIZE;
         ULONG printer = selected[i];
         lx_guest_store_u32(entry, kinds[i]);
-        queue_string(buffer, base, &tail, entry + 4, "");
-        queue_string(buffer, base, &tail, entry + 8, lx_printer_queues[printer]);
-        queue_string(buffer, base, &tail, entry + 12, lx_printer_descriptions[printer]);
-        queue_string(buffer, base, &tail, entry + 16, lx_printer_queues[printer]);
+        queue_string(buffer, base, &tail, entry + PRINTERINFO_COMPUTER_NAME, "");
+        queue_string(buffer, base, &tail, entry + PRINTERINFO_DESTINATION_NAME,
+                     lx_printer_queues[printer]);
+        queue_string(buffer, base, &tail, entry + PRINTERINFO_DESCRIPTION,
+                     lx_printer_descriptions[printer]);
+        queue_string(buffer, base, &tail, entry + PRINTERINFO_LOCAL_NAME,
+                     lx_printer_queues[printer]);
     }
     *returned = count;
     return 0;
