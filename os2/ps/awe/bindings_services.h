@@ -1,4 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* PMWINX bridges for the USER, KERNEL, DDEML and shell services: each borrows or copies its guest
+   records and strings, then calls the Open32 implementation. */
 #include "os2/ps/awe/internal.h"
 
 static BOOL o32_service_span(ULONG address, uint64_t size, unsigned access, BOOL optional,
@@ -6,25 +8,25 @@ static BOOL o32_service_span(ULONG address, uint64_t size, unsigned access, BOOL
 {
     if (!address && (optional || !size))
         return TRUE;
-    return size <= 16u * 1024u * 1024u && size <= UINT32_MAX &&
+    return size <= OPEN32_SERVICE_BUFFER_MAX && size <= UINT32_MAX &&
            (uint64_t)address + size <= (UINT64_C(1) << 32) &&
            lx_execution_borrow(GProcessState.execution, address, (size_t)size, access, borrow);
 }
 
 static BOOL o32_service_string(ULONG address, BOOL identity, PSZ *output)
 {
-    if (!address || (identity && address <= 0xFFFF))
+    if (!address || (identity && address <= OPEN32_INTEGER_ID_MAX))
     {
         *output = (PSZ)(uintptr_t)address;
         return TRUE;
     }
-    *output = lx_execution_copy_string(GProcessState.execution, address, 1024u * 1024u);
+    *output = lx_execution_copy_string(GProcessState.execution, address, OPEN32_LONG_STRING_MAX);
     return *output != NULL;
 }
 
 static void o32_service_free_string(PSZ value)
 {
-    if ((uintptr_t)value > 0xFFFF)
+    if ((uintptr_t)value > OPEN32_INTEGER_ID_MAX)
         free(value);
 }
 
@@ -51,7 +53,8 @@ static uint32 bridge32_AdjustWindowRect(uint8 *a)
     ULONG v1 = lx_guest_load_u32(a + 4);
     ULONG v2 = lx_guest_load_u32(a + 8);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 16, 3, FALSE, &b0) && valid;
+    valid =
+        o32_service_span(v0, WIN32_RECT_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b0) && valid;
     if (valid)
         result = (ULONG)AdjustWindowRect(b0.host, (ULONG)v1, (BOOL)v2);
     else
@@ -120,7 +123,9 @@ static uint32 bridge32_ChooseColor(uint8 *a)
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 36, 3, FALSE, &b0) && valid;
+    valid =
+        o32_service_span(v0, WIN32_CHOOSECOLOR_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b0) &&
+        valid;
     if (valid)
         result = (ULONG)ChooseColor(b0.host);
     else
@@ -135,7 +140,9 @@ static uint32 bridge32_ChooseFont(uint8 *a)
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 60, 3, FALSE, &b0) && valid;
+    valid =
+        o32_service_span(v0, WIN32_CHOOSEFONT_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b0) &&
+        valid;
     if (valid)
         result = (ULONG)ChooseFont(b0.host);
     else
@@ -150,7 +157,7 @@ static uint32 bridge32_ClipCursor(uint8 *a)
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 16, 1, TRUE, &b0) && valid;
+    valid = o32_service_span(v0, WIN32_RECT_SIZE, LX_GUEST_READ, TRUE, &b0) && valid;
     if (valid)
         result = (ULONG)ClipCursor(b0.host);
     else
@@ -166,9 +173,9 @@ static uint32 bridge32_CompareFileTime(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 8, 1, FALSE, &b0) && valid;
+    valid = o32_service_span(v0, WIN32_FILETIME_SIZE, LX_GUEST_READ, FALSE, &b0) && valid;
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 8, 1, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_FILETIME_SIZE, LX_GUEST_READ, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)CompareFileTime(b0.host, b1.host);
     else
@@ -244,7 +251,7 @@ static uint32 bridge32_CreateDirectory(uint8 *a)
     PSZ s0 = NULL;
     valid = o32_service_string(v0, FALSE, &s0) && valid;
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 12, 1, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_SECURITY_ATTRIBUTES_SIZE, LX_GUEST_READ, TRUE, &b1) && valid;
     if (valid)
         result = (ULONG)CreateDirectory(s0, b1.host);
     else
@@ -263,7 +270,7 @@ static uint32 bridge32_CreateEvent(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 12, 1, TRUE, &b0) && valid;
+    valid = o32_service_span(v0, WIN32_SECURITY_ATTRIBUTES_SIZE, LX_GUEST_READ, TRUE, &b0) && valid;
     PSZ s3 = NULL;
     valid = o32_service_string(v3, FALSE, &s3) && valid;
     if (valid)
@@ -283,7 +290,7 @@ static uint32 bridge32_CreateMutex(uint8 *a)
     ULONG v1 = lx_guest_load_u32(a + 4);
     ULONG v2 = lx_guest_load_u32(a + 8);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 12, 1, TRUE, &b0) && valid;
+    valid = o32_service_span(v0, WIN32_SECURITY_ATTRIBUTES_SIZE, LX_GUEST_READ, TRUE, &b0) && valid;
     PSZ s2 = NULL;
     valid = o32_service_string(v2, FALSE, &s2) && valid;
     if (valid)
@@ -316,7 +323,7 @@ static uint32 bridge32_DdeAccessData(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 4, 2, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_DWORD_SIZE, LX_GUEST_WRITE, TRUE, &b1) && valid;
     if (valid)
         result = (ULONG)DdeAccessData((ULONG)v0, b1.host);
     else
@@ -334,7 +341,7 @@ static uint32 bridge32_DdeAddData(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, v2, 1, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, v2, LX_GUEST_READ, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)DdeAddData((ULONG)v0, b1.host, (ULONG)v2, (ULONG)v3);
     else
@@ -356,7 +363,7 @@ static uint32 bridge32_DdeClientTransaction(uint8 *a)
     ULONG v6 = lx_guest_load_u32(a + 24);
     ULONG v7 = lx_guest_load_u32(a + 28);
     LxGuestBorrow b7 = {0};
-    valid = o32_service_span(v7, 4, 2, TRUE, &b7) && valid;
+    valid = o32_service_span(v7, WIN32_DWORD_SIZE, LX_GUEST_WRITE, TRUE, &b7) && valid;
     if (valid)
         result = (ULONG)DdeClientTransaction((ULONG)v0, (ULONG)v1, (ULONG)v2, (ULONG)v3, (ULONG)v4,
                                              (ULONG)v5, (ULONG)v6, b7.host);
@@ -375,7 +382,7 @@ static uint32 bridge32_DdeConnect(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b3 = {0};
-    valid = o32_service_span(v3, 40, 1, TRUE, &b3) && valid;
+    valid = o32_service_span(v3, WIN32_CONVCONTEXT_SIZE, LX_GUEST_READ, TRUE, &b3) && valid;
     if (valid)
         result = (ULONG)DdeConnect((ULONG)v0, (ULONG)v1, (ULONG)v2, b3.host);
     else
@@ -396,7 +403,7 @@ static uint32 bridge32_DdeCreateDataHandle(uint8 *a)
     ULONG v5 = lx_guest_load_u32(a + 20);
     ULONG v6 = lx_guest_load_u32(a + 24);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, v2, 1, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, v2, LX_GUEST_READ, TRUE, &b1) && valid;
     if (valid)
         result = (ULONG)DdeCreateDataHandle((ULONG)v0, b1.host, (ULONG)v2, (ULONG)v3, (ULONG)v4,
                                             (ULONG)v5, (ULONG)v6);
@@ -439,7 +446,7 @@ static uint32 bridge32_DdeGetData(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, v2, 2, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, v2, LX_GUEST_WRITE, TRUE, &b1) && valid;
     if (valid)
         result = (ULONG)DdeGetData((ULONG)v0, b1.host, (ULONG)v2, (ULONG)v3);
     else
@@ -470,7 +477,8 @@ static uint32 bridge32_DdeQueryConvInfo(uint8 *a)
     ULONG v1 = lx_guest_load_u32(a + 4);
     ULONG v2 = lx_guest_load_u32(a + 8);
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 100, 3, FALSE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_CONVINFO_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b2) &&
+            valid;
     if (valid)
         result = (ULONG)DdeQueryConvInfo((ULONG)v0, (ULONG)v1, b2.host);
     else
@@ -576,7 +584,7 @@ static uint32 bridge32_DlgDirSelectEx(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, v2, 2, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, v2, LX_GUEST_WRITE, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)DlgDirSelectEx((ULONG)v0, b1.host, (LONG)v2, (LONG)v3);
     else
@@ -593,7 +601,7 @@ static uint32 bridge32_DosDateTimeToFileTime(uint8 *a)
     ULONG v1 = lx_guest_load_u32(a + 4);
     ULONG v2 = lx_guest_load_u32(a + 8);
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 8, 2, FALSE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_FILETIME_SIZE, LX_GUEST_WRITE, FALSE, &b2) && valid;
     if (valid)
         result = (ULONG)DosDateTimeToFileTime((USHORT)v0, (USHORT)v1, b2.host);
     else
@@ -642,7 +650,7 @@ static uint32 bridge32_DragQueryFile(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, v3, 2, TRUE, &b2) && valid;
+    valid = o32_service_span(v2, v3, LX_GUEST_WRITE, TRUE, &b2) && valid;
     if (valid)
         result = (ULONG)DragQueryFile((ULONG)v0, (ULONG)v1, b2.host, (ULONG)v3);
     else
@@ -658,7 +666,7 @@ static uint32 bridge32_DragQueryPoint(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 8, 2, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_POINT_SIZE, LX_GUEST_WRITE, TRUE, &b1) && valid;
     if (valid)
         result = (ULONG)DragQueryPoint((ULONG)v0, b1.host);
     else
@@ -714,11 +722,11 @@ static uint32 bridge32_FileTimeToDosDateTime(uint8 *a)
     ULONG v1 = lx_guest_load_u32(a + 4);
     ULONG v2 = lx_guest_load_u32(a + 8);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 8, 1, FALSE, &b0) && valid;
+    valid = o32_service_span(v0, WIN32_FILETIME_SIZE, LX_GUEST_READ, FALSE, &b0) && valid;
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 2, 2, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_WORD_SIZE, LX_GUEST_WRITE, FALSE, &b1) && valid;
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 2, 2, FALSE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_WORD_SIZE, LX_GUEST_WRITE, FALSE, &b2) && valid;
     if (valid)
         result = (ULONG)FileTimeToDosDateTime(b0.host, b1.host, b2.host);
     else
@@ -787,13 +795,13 @@ static uint32 bridge32_GetDiskFreeSpace(uint8 *a)
     PSZ s0 = NULL;
     valid = o32_service_string(v0, FALSE, &s0) && valid;
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 4, 2, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_DWORD_SIZE, LX_GUEST_WRITE, TRUE, &b1) && valid;
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 4, 2, TRUE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_DWORD_SIZE, LX_GUEST_WRITE, TRUE, &b2) && valid;
     LxGuestBorrow b3 = {0};
-    valid = o32_service_span(v3, 4, 2, TRUE, &b3) && valid;
+    valid = o32_service_span(v3, WIN32_DWORD_SIZE, LX_GUEST_WRITE, TRUE, &b3) && valid;
     LxGuestBorrow b4 = {0};
-    valid = o32_service_span(v4, 4, 2, TRUE, &b4) && valid;
+    valid = o32_service_span(v4, WIN32_DWORD_SIZE, LX_GUEST_WRITE, TRUE, &b4) && valid;
     if (valid)
         result = (ULONG)GetDiskFreeSpace(s0, b1.host, b2.host, b3.host, b4.host);
     else
@@ -827,7 +835,7 @@ static uint32 bridge32_GetDlgItemInt(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 4, 2, TRUE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_DWORD_SIZE, LX_GUEST_WRITE, TRUE, &b2) && valid;
     if (valid)
         result = (ULONG)GetDlgItemInt((ULONG)v0, (LONG)v1, b2.host, (BOOL)v3);
     else
@@ -870,7 +878,7 @@ static uint32 bridge32_GetEnvironmentVariable(uint8 *a)
     PSZ s0 = NULL;
     valid = o32_service_string(v0, FALSE, &s0) && valid;
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, v2, 2, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, v2, LX_GUEST_WRITE, TRUE, &b1) && valid;
     if (valid)
         result = (ULONG)GetEnvironmentVariable(s0, b1.host, (ULONG)v2);
     else
@@ -889,11 +897,11 @@ static uint32 bridge32_GetFileTime(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 8, 2, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_FILETIME_SIZE, LX_GUEST_WRITE, TRUE, &b1) && valid;
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 8, 2, TRUE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_FILETIME_SIZE, LX_GUEST_WRITE, TRUE, &b2) && valid;
     LxGuestBorrow b3 = {0};
-    valid = o32_service_span(v3, 8, 2, TRUE, &b3) && valid;
+    valid = o32_service_span(v3, WIN32_FILETIME_SIZE, LX_GUEST_WRITE, TRUE, &b3) && valid;
     if (valid)
         result = (ULONG)GetFileTime((ULONG)v0, b1.host, b2.host, b3.host);
     else
@@ -914,7 +922,7 @@ static uint32 bridge32_GetFileTitle(uint8 *a)
     PSZ s0 = NULL;
     valid = o32_service_string(v0, FALSE, &s0) && valid;
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, (USHORT)v2, 2, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, (USHORT)v2, LX_GUEST_WRITE, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)GetFileTitle(s0, b1.host, (USHORT)v2);
     else
@@ -944,7 +952,7 @@ static uint32 bridge32_GetKeyNameText(uint8 *a)
     ULONG v1 = lx_guest_load_u32(a + 4);
     ULONG v2 = lx_guest_load_u32(a + 8);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, v2, 2, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, v2, LX_GUEST_WRITE, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)GetKeyNameText((ULONG)v0, b1.host, (LONG)v2);
     else
@@ -999,7 +1007,8 @@ static uint32 bridge32_GetPriorityClipboardFormat(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, (uint64_t)v1 * 4, 1, FALSE, &b0) && valid;
+    valid =
+        o32_service_span(v0, (uint64_t)v1 * WIN32_DWORD_SIZE, LX_GUEST_READ, FALSE, &b0) && valid;
     if (valid)
         result = (ULONG)GetPriorityClipboardFormat(b0.host, (LONG)v1);
     else
@@ -1039,7 +1048,7 @@ static uint32 bridge32_GetSystemDirectory(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, v1, 2, TRUE, &b0) && valid;
+    valid = o32_service_span(v0, v1, LX_GUEST_WRITE, TRUE, &b0) && valid;
     if (valid)
         result = (ULONG)GetSystemDirectory(b0.host, (ULONG)v1);
     else
@@ -1061,7 +1070,7 @@ static uint32 bridge32_GetTempFileName(uint8 *a)
     PSZ s1 = NULL;
     valid = o32_service_string(v1, FALSE, &s1) && valid;
     LxGuestBorrow b3 = {0};
-    valid = o32_service_span(v3, 260, 2, FALSE, &b3) && valid;
+    valid = o32_service_span(v3, WIN32_MAX_PATH, LX_GUEST_WRITE, FALSE, &b3) && valid;
     if (valid)
         result = (ULONG)GetTempFileName(s0, s1, (ULONG)v2, b3.host);
     else
@@ -1079,7 +1088,7 @@ static uint32 bridge32_GetTempPath(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, v0, 2, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, v0, LX_GUEST_WRITE, TRUE, &b1) && valid;
     if (valid)
         result = (ULONG)GetTempPath((ULONG)v0, b1.host);
     else
@@ -1094,7 +1103,8 @@ static uint32 bridge32_GetTimeZoneInformation(uint8 *a)
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 172, 2, FALSE, &b0) && valid;
+    valid =
+        o32_service_span(v0, WIN32_TIME_ZONE_INFORMATION_SIZE, LX_GUEST_WRITE, FALSE, &b0) && valid;
     if (valid)
         result = (ULONG)GetTimeZoneInformation(b0.host);
     else
@@ -1148,7 +1158,7 @@ static uint32 bridge32_GlobalMemoryStatus(uint8 *a)
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     LxGuestBorrow b0 = {0};
-    valid = o32_service_span(v0, 32, 2, FALSE, &b0) && valid;
+    valid = o32_service_span(v0, WIN32_MEMORYSTATUS_SIZE, LX_GUEST_WRITE, FALSE, &b0) && valid;
     if (valid)
     {
         GlobalMemoryStatus(b0.host);
@@ -1255,7 +1265,8 @@ static uint32 bridge32_IsDialogMessage(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 28, 3, FALSE, &b1) && valid;
+    valid =
+        o32_service_span(v1, WIN32_MSG_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)IsDialogMessage((ULONG)v0, b1.host);
     else
@@ -1283,7 +1294,8 @@ static uint32 bridge32_MapDialogRect(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 16, 3, FALSE, &b1) && valid;
+    valid =
+        o32_service_span(v1, WIN32_RECT_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)MapDialogRect((ULONG)v0, b1.host);
     else
@@ -1301,7 +1313,9 @@ static uint32 bridge32_MapWindowPoints(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, (uint64_t)v3 * 8, 3, FALSE, &b2) && valid;
+    valid = o32_service_span(v2, (uint64_t)v3 * WIN32_POINT_SIZE, LX_GUEST_READ | LX_GUEST_WRITE,
+                             FALSE, &b2) &&
+            valid;
     if (valid)
         result = (ULONG)MapWindowPoints((ULONG)v0, (ULONG)v1, b2.host, (ULONG)v3);
     else
@@ -1497,9 +1511,9 @@ static uint32 bridge32_SearchPath(uint8 *a)
     PSZ s2 = NULL;
     valid = o32_service_string(v2, FALSE, &s2) && valid;
     LxGuestBorrow b4 = {0};
-    valid = o32_service_span(v4, v3, 2, TRUE, &b4) && valid;
+    valid = o32_service_span(v4, v3, LX_GUEST_WRITE, TRUE, &b4) && valid;
     LxGuestBorrow b5 = {0};
-    valid = o32_service_span(v5, 4, 2, TRUE, &b5) && valid;
+    valid = o32_service_span(v5, WIN32_POINTER_SIZE, LX_GUEST_WRITE, TRUE, &b5) && valid;
     if (valid)
         result = (ULONG)SearchPath(s0, s1, s2, (ULONG)v3, b4.host, b5.host);
     else
@@ -1583,11 +1597,11 @@ static uint32 bridge32_SetFileTime(uint8 *a)
     ULONG v2 = lx_guest_load_u32(a + 8);
     ULONG v3 = lx_guest_load_u32(a + 12);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 8, 1, TRUE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_FILETIME_SIZE, LX_GUEST_READ, TRUE, &b1) && valid;
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 8, 1, TRUE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_FILETIME_SIZE, LX_GUEST_READ, TRUE, &b2) && valid;
     LxGuestBorrow b3 = {0};
-    valid = o32_service_span(v3, 8, 1, TRUE, &b3) && valid;
+    valid = o32_service_span(v3, WIN32_FILETIME_SIZE, LX_GUEST_READ, TRUE, &b3) && valid;
     if (valid)
         result = (ULONG)SetFileTime((ULONG)v0, b1.host, b2.host, b3.host);
     else
@@ -1648,7 +1662,7 @@ static uint32 bridge32_TrackPopupMenu(uint8 *a)
     ULONG v5 = lx_guest_load_u32(a + 20);
     ULONG v6 = lx_guest_load_u32(a + 24);
     LxGuestBorrow b6 = {0};
-    valid = o32_service_span(v6, 16, 1, TRUE, &b6) && valid;
+    valid = o32_service_span(v6, WIN32_RECT_SIZE, LX_GUEST_READ, TRUE, &b6) && valid;
     if (valid)
         result = (ULONG)TrackPopupMenu((ULONG)v0, (ULONG)v1, (LONG)v2, (LONG)v3, (LONG)v4,
                                        (ULONG)v5, b6.host);
@@ -1665,7 +1679,7 @@ static uint32 bridge32_TranslateMDISysAccel(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 28, 1, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, WIN32_MSG_SIZE, LX_GUEST_READ, FALSE, &b1) && valid;
     if (valid)
         result = (ULONG)TranslateMDISysAccel((ULONG)v0, b1.host);
     else
@@ -1716,7 +1730,7 @@ static uint32 bridge32_ZeroMemory(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b0 = {0};
-    valid = !v1 || lx_execution_borrow(GProcessState.execution, v0, v1, 2, &b0);
+    valid = !v1 || lx_execution_borrow(GProcessState.execution, v0, v1, LX_GUEST_WRITE, &b0);
     if (valid)
     {
         ZeroMemory(b0.host, (ULONG)v1);
@@ -1863,7 +1877,7 @@ static uint32 bridge32_GetStringTypeEx(uint8 *a)
         if (s2)
             effective_count = (LONG)strlen(s2) + 1;
     }
-    else if (effective_count > 0 && effective_count <= 1024 * 1024)
+    else if (effective_count > 0 && effective_count <= OPEN32_LONG_STRING_MAX)
     {
         s2 = malloc((size_t)effective_count);
         valid = s2 && lx_execution_read(GProcessState.execution, v2, s2, effective_count) && valid;
@@ -1871,7 +1885,9 @@ static uint32 bridge32_GetStringTypeEx(uint8 *a)
     else
         valid = FALSE;
     LxGuestBorrow b4 = {0};
-    valid = o32_service_span(v4, (uint64_t)effective_count * 2, 2, FALSE, &b4) && valid;
+    valid = o32_service_span(v4, (uint64_t)effective_count * WIN32_WORD_SIZE, LX_GUEST_WRITE, FALSE,
+                             &b4) &&
+            valid;
     if (valid)
         result = (ULONG)GetStringTypeEx((ULONG)v0, (ULONG)v1, s2, (LONG)v3, b4.host);
     else
@@ -1938,9 +1954,9 @@ static uint32 bridge32_WinXTranslateMsg(uint8 *a)
     ULONG v1 = lx_guest_load_u32(a + 4);
     ULONG v2 = lx_guest_load_u32(a + 8);
     LxGuestBorrow b1 = {0};
-    valid = o32_service_span(v1, 32, 1, FALSE, &b1) && valid;
+    valid = o32_service_span(v1, GUEST_QMSG_SIZE, LX_GUEST_READ, FALSE, &b1) && valid;
     LxGuestBorrow b2 = {0};
-    valid = o32_service_span(v2, 28, 2, FALSE, &b2) && valid;
+    valid = o32_service_span(v2, WIN32_MSG_SIZE, LX_GUEST_WRITE, FALSE, &b2) && valid;
     if (valid)
         result = (ULONG)WinXTranslateMsg((ULONG)v0, b1.host, b2.host);
     else

@@ -1,17 +1,49 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2/include/bsedos.h"
 #include "os2/ps/awe/bindings_unicode.h"
+#include "os2/ps/awe/gdi/metafiles/metafile_objects.h"
+
+/* PMWINX's guest entry bridges: each validates and borrows the guest's records, strings and
+   buffers, then calls the Open32 implementation with host pointers. */
+
+enum
+{
+    /* MAKEINTRESOURCE and MAKEINTATOM values occupy the low 64 KB, where no guest string lives. */
+    OPEN32_INTEGER_ID_MAX = 0xFFFF,
+    /* Bounds on guest-supplied counts, strings and buffers, so a bad argument cannot make the
+       host copy or borrow without limit. */
+    OPEN32_ELEMENT_COUNT_MAX = 65536,
+    OPEN32_STRING_MAX = 32768,
+    OPEN32_LONG_STRING_MAX = 1024 * 1024,
+    OPEN32_SERVICE_BUFFER_MAX = 16 * 1024 * 1024,
+    OPEN32_GUEST_BUFFER_MAX = 64 * 1024 * 1024,
+    /* Atom and DDE string handle names are at most 255 characters. */
+    OPEN32_ATOM_NAME_MAX = 256,
+    /* wsprintf output is limited to 1024 bytes. */
+    WSPRINTF_OUTPUT_MAX = 1024,
+    /* GetKeyboardState fills one byte per virtual key. */
+    KEYBOARD_STATE_SIZE = 256,
+    /* PM's QMSG as the guest lays it out: hwnd, msg, mp1, mp2, time, ptl, reserved. */
+    GUEST_QMSG_SIZE = 32
+};
+
+enum
+{
+    OPEN32_INTERLOCKED_INCREMENT,
+    OPEN32_INTERLOCKED_DECREMENT,
+    OPEN32_INTERLOCKED_EXCHANGE
+};
 
 static uint32 open32_interlocked_bridge(uint8 *a, unsigned operation)
 {
     LxGuestBorrow value = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 4,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_DWORD_SIZE,
                              LX_GUEST_READ | LX_GUEST_WRITE, &value))
         open32SetError(ERROR_INVALID_PARAMETER);
-    else if (operation == 0)
+    else if (operation == OPEN32_INTERLOCKED_INCREMENT)
         result = (uint32)InterlockedIncrement(value.host);
-    else if (operation == 1)
+    else if (operation == OPEN32_INTERLOCKED_DECREMENT)
         result = (uint32)InterlockedDecrement(value.host);
     else
         result = (uint32)InterlockedExchange(value.host, (LONG)lx_guest_load_u32(a + 4));
@@ -21,24 +53,24 @@ static uint32 open32_interlocked_bridge(uint8 *a, unsigned operation)
 
 static uint32 bridge32_InterlockedIncrement(uint8 *a)
 {
-    return open32_interlocked_bridge(a, 0);
+    return open32_interlocked_bridge(a, OPEN32_INTERLOCKED_INCREMENT);
 }
 
 static uint32 bridge32_InterlockedDecrement(uint8 *a)
 {
-    return open32_interlocked_bridge(a, 1);
+    return open32_interlocked_bridge(a, OPEN32_INTERLOCKED_DECREMENT);
 }
 
 static uint32 bridge32_InterlockedExchange(uint8 *a)
 {
-    return open32_interlocked_bridge(a, 2);
+    return open32_interlocked_bridge(a, OPEN32_INTERLOCKED_EXCHANGE);
 }
 
 static uint32 bridge32_AdjustWindowRectEx(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
                              LX_GUEST_READ | LX_GUEST_WRITE, &rectangle))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
@@ -54,14 +86,15 @@ static uint32 bridge32_LoadMenu(uint8 *a)
     ULONG module = lx_guest_load_u32(a);
     ULONG resource = lx_guest_load_u32(a + 4);
     PSZ name = (PSZ)(uintptr_t)resource;
-    if (resource > 0xFFFF &&
-        !(name = lx_execution_copy_string(GProcessState.execution, resource, 1024u * 1024u)))
+    if (resource > OPEN32_INTEGER_ID_MAX &&
+        !(name =
+              lx_execution_copy_string(GProcessState.execution, resource, OPEN32_LONG_STRING_MAX)))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG result = LoadMenu(module, name);
-    if (resource > 0xFFFF)
+    if (resource > OPEN32_INTEGER_ID_MAX)
         free(name);
     return result;
 }
@@ -75,8 +108,8 @@ static uint32 bridge32_GetCursorPos(uint8 *a)
 {
     LxGuestBorrow output = {0};
     ULONG result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_POINT_SIZE,
+                             LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = GetCursorPos(output.host);
@@ -100,11 +133,13 @@ static uint32 bridge32_GetTabbedTextExtent(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 8), tab_count = (LONG)lx_guest_load_u32(a + 12);
     LxGuestBorrow text = {0}, tabs = {0};
     ULONG result = 0;
-    if (count < 0 || count > 65536 || tab_count < 0 || tab_count > 65536 ||
+    if (count < 0 || count > OPEN32_ELEMENT_COUNT_MAX || tab_count < 0 ||
+        tab_count > OPEN32_ELEMENT_COUNT_MAX ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (size_t)count, LX_GUEST_READ, &text)) ||
-        (tab_count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16),
-                                           (size_t)tab_count * 4, LX_GUEST_READ, &tabs)))
+        (tab_count &&
+         !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16),
+                              (size_t)tab_count * WIN32_DWORD_SIZE, LX_GUEST_READ, &tabs)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = GetTabbedTextExtent(lx_guest_load_u32(a), text.host, count, tab_count, tabs.host);
@@ -123,20 +158,28 @@ static uint32 bridge32_GetObjectType(uint8 *a)
     return GetObjectType(lx_guest_load_u32(a));
 }
 
+enum
+{
+    OPEN32_VIEWPORT_ORIGIN,
+    OPEN32_WINDOW_ORIGIN,
+    OPEN32_VIEWPORT_EXTENT,
+    OPEN32_WINDOW_EXTENT
+};
+
 static uint32 o32_set_mapping(uint8 *a, unsigned kind)
 {
     ULONG handle = lx_guest_load_u32(a), address = lx_guest_load_u32(a + 12);
     LONG x = (LONG)lx_guest_load_u32(a + 4), y = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow previous = {0};
     ULONG result = 0;
-    if (address &&
-        !lx_execution_borrow(GProcessState.execution, address, 8, LX_GUEST_WRITE, &previous))
+    if (address && !lx_execution_borrow(GProcessState.execution, address, WIN32_POINT_SIZE,
+                                        LX_GUEST_WRITE, &previous))
         open32SetError(ERROR_INVALID_PARAMETER);
-    else if (kind == 0)
+    else if (kind == OPEN32_VIEWPORT_ORIGIN)
         result = SetViewportOrgEx(handle, x, y, previous.host);
-    else if (kind == 1)
+    else if (kind == OPEN32_WINDOW_ORIGIN)
         result = SetWindowOrgEx(handle, x, y, previous.host);
-    else if (kind == 2)
+    else if (kind == OPEN32_VIEWPORT_EXTENT)
         result = SetViewportExtEx(handle, x, y, previous.host);
     else
         result = SetWindowExtEx(handle, x, y, previous.host);
@@ -146,22 +189,22 @@ static uint32 o32_set_mapping(uint8 *a, unsigned kind)
 
 static uint32 bridge32_SetViewportOrgEx(uint8 *a)
 {
-    return o32_set_mapping(a, 0);
+    return o32_set_mapping(a, OPEN32_VIEWPORT_ORIGIN);
 }
 
 static uint32 bridge32_SetWindowOrgEx(uint8 *a)
 {
-    return o32_set_mapping(a, 1);
+    return o32_set_mapping(a, OPEN32_WINDOW_ORIGIN);
 }
 
 static uint32 bridge32_SetViewportExtEx(uint8 *a)
 {
-    return o32_set_mapping(a, 2);
+    return o32_set_mapping(a, OPEN32_VIEWPORT_EXTENT);
 }
 
 static uint32 bridge32_SetWindowExtEx(uint8 *a)
 {
-    return o32_set_mapping(a, 3);
+    return o32_set_mapping(a, OPEN32_WINDOW_EXTENT);
 }
 
 static uint32 bridge32_PlayMetaFile(uint8 *a)
@@ -178,20 +221,23 @@ static uint32 bridge32_EnumMetaFile(uint8 *a)
 static uint32 bridge32_PlayMetaFileRecord(uint8 *a)
 {
     ULONG address = lx_guest_load_u32(a + 8), count = lx_guest_load_u32(a + 12);
-    uint8 header[6];
+    uint8 header[WIN32_METARECORD_PARAMETERS];
     LxGuestBorrow record = {0}, table = {0};
     ULONG result = 0, words = 0;
     if (lx_execution_read(GProcessState.execution, address, header, sizeof header))
         words = lx_guest_load_u32(header);
-    if (words < 3 || words > 32u * 1024 * 1024 || count > 65535 ||
-        !lx_execution_borrow(GProcessState.execution, address, (size_t)words * 2, LX_GUEST_READ,
-                             &record) ||
+    /* The handle table size comes from METAHEADER.mtNoObjects, a WORD. */
+    if (words < WIN32_METARECORD_MIN_WORDS || words > METAFILE_SIZE_MAX / WIN32_WORD_SIZE ||
+        count > UINT16_MAX ||
+        !lx_execution_borrow(GProcessState.execution, address, (size_t)words * WIN32_WORD_SIZE,
+                             LX_GUEST_READ, &record) ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
-                                       (size_t)count * 4, LX_GUEST_READ | LX_GUEST_WRITE, &table)))
+                                       (size_t)count * WIN32_DWORD_SIZE,
+                                       LX_GUEST_READ | LX_GUEST_WRITE, &table)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
     {
-        size_t bytes = (size_t)words * 2;
+        size_t bytes = (size_t)words * WIN32_WORD_SIZE;
         uint8 *copy = malloc(bytes);
         if (!copy)
             open32SetError(ERROR_NOT_ENOUGH_MEMORY);
@@ -213,13 +259,13 @@ static uint32 bridge32_PlayMetaFileRecord(uint8 *a)
 static uint32 bridge32_StretchDIBits(uint8 *a)
 {
     ULONG info_address = lx_guest_load_u32(a + 40), usage = lx_guest_load_u32(a + 44);
-    uint8 header[40];
+    uint8 header[WIN32_BITMAPINFOHEADER_SIZE];
     size_t info_bytes, pixel_bytes;
     LxGuestBorrow info = {0}, bits = {0};
     ULONG result = 0;
     if (!lx_execution_read(GProcessState.execution, info_address, header, sizeof header) ||
         !open32DibBuffers(header, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
-        !pixel_bytes || pixel_bytes > 64u * 1024 * 1024 ||
+        !pixel_bytes || pixel_bytes > OPEN32_GUEST_BUFFER_MAX ||
         !lx_execution_borrow(GProcessState.execution, info_address, info_bytes, LX_GUEST_READ,
                              &info) ||
         !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 36), pixel_bytes,
@@ -258,16 +304,16 @@ static uint32 bridge32_GetTextExtentExPoint(uint8 *a)
     ULONG fit_address = lx_guest_load_u32(a + 16), advances_address = lx_guest_load_u32(a + 20);
     LxGuestBorrow text = {0}, fit = {0}, advances = {0}, size = {0};
     ULONG result = 0;
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > OPEN32_ELEMENT_COUNT_MAX ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (size_t)count, LX_GUEST_READ, &text)) ||
-        (fit_address &&
-         !lx_execution_borrow(GProcessState.execution, fit_address, 4, LX_GUEST_WRITE, &fit)) ||
+        (fit_address && !lx_execution_borrow(GProcessState.execution, fit_address, WIN32_DWORD_SIZE,
+                                             LX_GUEST_WRITE, &fit)) ||
         (advances_address && count &&
-         !lx_execution_borrow(GProcessState.execution, advances_address, (size_t)count * 4,
-                              LX_GUEST_WRITE, &advances)) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 24), 8, LX_GUEST_WRITE,
-                             &size))
+         !lx_execution_borrow(GProcessState.execution, advances_address,
+                              (size_t)count * WIN32_DWORD_SIZE, LX_GUEST_WRITE, &advances)) ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 24), WIN32_SIZE_SIZE,
+                             LX_GUEST_WRITE, &size))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = GetTextExtentExPoint(lx_guest_load_u32(a), text.host, count,
@@ -285,7 +331,7 @@ static uint32 bridge32_SetMetaFileBitsEx(uint8 *a)
     ULONG size = lx_guest_load_u32(a);
     LxGuestBorrow input = {0};
     ULONG result = 0;
-    if (size < 24 || size > 64u * 1024 * 1024 ||
+    if (size < WMF_SIZE_MIN || size > METAFILE_SIZE_MAX ||
         !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), size, LX_GUEST_READ,
                              &input))
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -325,8 +371,8 @@ static uint32 bridge32_SetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow input = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 44, LX_GUEST_READ,
-                             &input))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             WIN32_WINDOWPLACEMENT_SIZE, LX_GUEST_READ, &input))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = SetWindowPlacement(lx_guest_load_u32(a), input.host);
@@ -338,8 +384,8 @@ static uint32 bridge32_GetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 44,
-                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             WIN32_WINDOWPLACEMENT_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = GetWindowPlacement(lx_guest_load_u32(a), output.host);
@@ -366,9 +412,10 @@ static uint32 bridge32_lstrcmp(uint8 *a)
 
 static uint32 bridge32_CreateFile(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 32768);
+    char *name =
+        lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), OPEN32_STRING_MAX);
     uint32 security = lx_guest_load_u32(a + 12);
-    uint8 attributes[12];
+    uint8 attributes[WIN32_SECURITY_ATTRIBUTES_SIZE];
     uint32 result = UINT32_MAX;
     if (!name || (security && !lx_execution_read(GProcessState.execution, security, attributes,
                                                  sizeof attributes)))
@@ -385,7 +432,7 @@ static uint32 bridge32_SetFilePointer(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a + 8), result = UINT32_MAX;
     LxGuestBorrow high = {0};
-    if (address && !lx_execution_borrow(GProcessState.execution, address, 4,
+    if (address && !lx_execution_borrow(GProcessState.execution, address, WIN32_DWORD_SIZE,
                                         LX_GUEST_READ | LX_GUEST_WRITE, &high))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
@@ -404,7 +451,8 @@ static uint32 bridge32_GetFileSize(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a + 4), result = UINT32_MAX;
     LxGuestBorrow high = {0};
-    if (address && !lx_execution_borrow(GProcessState.execution, address, 4, LX_GUEST_WRITE, &high))
+    if (address && !lx_execution_borrow(GProcessState.execution, address, WIN32_DWORD_SIZE,
+                                        LX_GUEST_WRITE, &high))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
     {
@@ -492,12 +540,15 @@ static uint32 bridge32_CommDlgExtendedError(uint8 *a)
 static uint32 bridge32_GetProfileString(uint8 *a)
 {
     uint32 key_pointer = lx_guest_load_u32(a + 4), fallback_pointer = lx_guest_load_u32(a + 8);
-    char *section = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 32768);
-    char *key =
-        key_pointer ? lx_execution_copy_string(GProcessState.execution, key_pointer, 32768) : NULL;
-    char *fallback = fallback_pointer ? lx_execution_copy_string(GProcessState.execution,
-                                                                 fallback_pointer, 32768)
-                                      : NULL;
+    char *section =
+        lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), OPEN32_STRING_MAX);
+    char *key = key_pointer ? lx_execution_copy_string(GProcessState.execution, key_pointer,
+                                                       OPEN32_STRING_MAX)
+                            : NULL;
+    char *fallback =
+        fallback_pointer
+            ? lx_execution_copy_string(GProcessState.execution, fallback_pointer, OPEN32_STRING_MAX)
+            : NULL;
     uint32 capacity = lx_guest_load_u32(a + 16), result = 0;
     LxGuestBorrow output = {0};
     if (!section || (key_pointer && !key) || (fallback_pointer && !fallback) || !capacity ||
@@ -555,14 +606,16 @@ static uint32 bridge32_MulDiv(uint8 *arguments)
 
 static char *o32_string(uint32 pointer)
 {
-    return pointer ? lx_execution_copy_string(GProcessState.execution, pointer, 32768) : NULL;
+    return pointer ? lx_execution_copy_string(GProcessState.execution, pointer, OPEN32_STRING_MAX)
+                   : NULL;
 }
 
 static uint32 bridge32_WinXProcessMsg(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a);
     LxGuestBorrow message = {0};
-    if (!lx_execution_borrow(GProcessState.execution, address, 32, LX_GUEST_READ, &message))
+    if (!lx_execution_borrow(GProcessState.execution, address, GUEST_QMSG_SIZE, LX_GUEST_READ,
+                             &message))
         return 0;
     uint32 result = WinXProcessMsg(message.host);
     lx_execution_release(&message);
@@ -605,7 +658,7 @@ static uint32 bridge32_GetModuleHandle(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a);
     if (!pointer)
         return GetModuleHandle(NULL);
-    char *name = lx_execution_copy_string(GProcessState.execution, pointer, 32768);
+    char *name = lx_execution_copy_string(GProcessState.execution, pointer, OPEN32_STRING_MAX);
     if (!name)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -623,7 +676,7 @@ static uint32 bridge32_GetModuleFileName(uint8 *a)
     if (!capacity || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                           capacity, LX_GUEST_WRITE, &span))
     {
-        SetLastError(87);
+        SetLastError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG result = GetModuleFileName(lx_guest_load_u32(a), span.host, capacity);
@@ -636,7 +689,7 @@ static uint32 bridge32_LoadLibrary(uint8 *a)
     char *name = o32_string(lx_guest_load_u32(a));
     if (!name)
     {
-        SetLastError(87);
+        SetLastError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint32 result = LoadLibrary(name);
@@ -655,7 +708,7 @@ static uint32 bridge32_GetProcAddress(uint8 *a)
     char *name = pointer <= UINT16_MAX ? (char *)(uintptr_t)pointer : o32_string(pointer);
     if (!name)
     {
-        SetLastError(87);
+        SetLastError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     PFN function = GetProcAddress(lx_guest_load_u32(a), name);
@@ -678,8 +731,10 @@ static uint32 bridge32_GetUserDefaultLCID(uint8 *a)
 
 static uint32 bridge32_GetProfileInt(uint8 *a)
 {
-    char *section = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 32768);
-    char *key = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 32768);
+    char *section =
+        lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), OPEN32_STRING_MAX);
+    char *key = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4),
+                                         OPEN32_STRING_MAX);
     ULONG fallback = lx_guest_load_u32(a + 8);
     if (!section || !key)
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -692,10 +747,10 @@ static uint32 bridge32_GetProfileInt(uint8 *a)
 static uint32 open32_atom_string(uint8 *a, int add)
 {
     uint32 pointer = lx_guest_load_u32(a);
-    if (pointer <= 0xFFFF)
+    if (pointer <= OPEN32_INTEGER_ID_MAX)
         return add ? GlobalAddAtom((PSZ)(uintptr_t)pointer)
                    : GlobalFindAtom((PSZ)(uintptr_t)pointer);
-    char *name = lx_execution_copy_string(GProcessState.execution, pointer, 256);
+    char *name = lx_execution_copy_string(GProcessState.execution, pointer, OPEN32_ATOM_NAME_MAX);
     if (!name)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -739,8 +794,8 @@ static uint32 bridge32_GlobalGetAtomName(uint8 *a)
 static uint32 bridge32_RegisterClass(uint8 *a)
 {
     LxGuestBorrow record = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 40, LX_GUEST_READ,
-                             &record))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_WNDCLASS_SIZE,
+                             LX_GUEST_READ, &record))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -788,8 +843,8 @@ static uint32 bridge32_GetClassInfo(uint8 *a)
     char *name = pointer <= UINT16_MAX ? (char *)(uintptr_t)pointer : o32_string(pointer);
     LxGuestBorrow output = {0};
     if ((pointer > UINT16_MAX && !name) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 40, LX_GUEST_WRITE,
-                             &output))
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), WIN32_WNDCLASS_SIZE,
+                             LX_GUEST_WRITE, &output))
     {
         if (pointer > UINT16_MAX)
             free(name);
@@ -997,8 +1052,8 @@ static uint32 bridge32_BitBlt(uint8 *a)
 static uint32 bridge32_BeginPaint(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 64, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             WIN32_PAINTSTRUCT_SIZE, LX_GUEST_WRITE, &output))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1011,8 +1066,8 @@ static uint32 bridge32_BeginPaint(uint8 *a)
 static uint32 bridge32_EndPaint(uint8 *a)
 {
     LxGuestBorrow input = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 64, LX_GUEST_READ,
-                             &input))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             WIN32_PAINTSTRUCT_SIZE, LX_GUEST_READ, &input))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1040,8 +1095,8 @@ static uint32 bridge32_SetBkColor(uint8 *a)
 static uint32 bridge32_CreateFontIndirect(uint8 *a)
 {
     LxGuestBorrow input = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 60, LX_GUEST_READ,
-                             &input))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_LOGFONT_SIZE,
+                             LX_GUEST_READ, &input))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1062,8 +1117,9 @@ static uint32 bridge32_DrawText(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 4);
     char *text = NULL;
     if (count == -1)
-        text = lx_execution_copy_string(GProcessState.execution, pointer, 65537);
-    else if (count >= 0 && count <= 65536)
+        text = lx_execution_copy_string(GProcessState.execution, pointer,
+                                        OPEN32_ELEMENT_COUNT_MAX + 1);
+    else if (count >= 0 && count <= OPEN32_ELEMENT_COUNT_MAX)
     {
         text = malloc((size_t)count + 1);
         if (text && !lx_execution_read(GProcessState.execution, pointer, text, (ULONG)count))
@@ -1075,8 +1131,8 @@ static uint32 bridge32_DrawText(uint8 *a)
             text[count] = 0;
     }
     LxGuestBorrow rectangle = {0};
-    if (!text ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 16, 3, &rectangle))
+    if (!text || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12),
+                                      WIN32_RECT_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, &rectangle))
     {
         free(text);
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1092,7 +1148,7 @@ static uint32 bridge32_DrawText(uint8 *a)
 static uint32 bridge32_TextOut(uint8 *a)
 {
     LONG count = (LONG)lx_guest_load_u32(a + 16);
-    if (count < 0 || count > 65536)
+    if (count < 0 || count > OPEN32_ELEMENT_COUNT_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1127,10 +1183,11 @@ static uint32 bridge32_GetPixel(uint8 *a)
 static uint32 bridge32_OpenFile(uint8 *a)
 {
     ULONG flags = lx_guest_load_u32(a + 8);
-    char *name = flags & 0x8000 ? NULL : o32_string(lx_guest_load_u32(a));
+    char *name = flags & WIN32_OF_REOPEN ? NULL : o32_string(lx_guest_load_u32(a));
     LxGuestBorrow record = {0};
-    if ((!name && !(flags & 0x8000)) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 136, 3, &record))
+    if ((!name && !(flags & WIN32_OF_REOPEN)) ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_OFSTRUCT_SIZE,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &record))
     {
         free(name);
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1185,7 +1242,8 @@ static uint32 open32_file_io(uint8 *a, int writing)
     LxGuestBorrow data = {0}, actual = {0};
     ULONG result = 0;
     if (lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &actual))
+        !lx_execution_borrow(GProcessState.execution, pointer, WIN32_DWORD_SIZE, LX_GUEST_WRITE,
+                             &actual))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
@@ -1229,7 +1287,7 @@ static uint32 open32_format(uint8 *a, uint32 arguments)
         open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
-    char output[1024];
+    char output[WSPRINTF_OUTPUT_MAX];
     LONG count = open32FormatGuest(format, arguments, output);
     free(format);
     if (count >= 0 && !lx_execution_write(GProcessState.execution, lx_guest_load_u32(a), output,
@@ -1304,8 +1362,8 @@ static uint32 bridge32_GetDeviceCaps(uint8 *a)
 static uint32 bridge32_GetTextMetrics(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 56, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             WIN32_TEXTMETRIC_SIZE, LX_GUEST_WRITE, &output))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1384,8 +1442,8 @@ static uint32 bridge32_CreateThread(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 20);
     LxGuestBorrow output = {0};
-    if (pointer &&
-        !lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &output))
+    if (pointer && !lx_execution_borrow(GProcessState.execution, pointer, WIN32_DWORD_SIZE,
+                                        LX_GUEST_WRITE, &output))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1403,8 +1461,8 @@ static uint32 bridge32_CreateThread(uint8 *a)
 static uint32 bridge32_GetExitCodeThread(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_DWORD_SIZE,
+                             LX_GUEST_WRITE, &output))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1434,8 +1492,9 @@ static uint32 bridge32_CreateSemaphore(uint8 *a)
     char *name = name_pointer ? o32_string(name_pointer) : NULL;
     uint32 result = 0;
     if ((name_pointer && !name) ||
-        (security_pointer && !lx_execution_borrow(GProcessState.execution, security_pointer, 12,
-                                                  LX_GUEST_READ, &security)))
+        (security_pointer &&
+         !lx_execution_borrow(GProcessState.execution, security_pointer,
+                              WIN32_SECURITY_ATTRIBUTES_SIZE, LX_GUEST_READ, &security)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = CreateSemaphore(security.host, (LONG)lx_guest_load_u32(a + 4),
@@ -1462,8 +1521,8 @@ static uint32 bridge32_ReleaseSemaphore(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 8);
     LxGuestBorrow previous = {0};
-    if (pointer &&
-        !lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &previous))
+    if (pointer && !lx_execution_borrow(GProcessState.execution, pointer, WIN32_DWORD_SIZE,
+                                        LX_GUEST_WRITE, &previous))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
@@ -1501,8 +1560,8 @@ static uint32 bridge32_CreateSolidBrush(uint8 *a)
 static uint32 bridge32_FillRect(uint8 *a)
 {
     LxGuestBorrow rect = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                             &rect))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                             LX_GUEST_READ, &rect))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -1515,8 +1574,8 @@ static uint32 bridge32_FillRect(uint8 *a)
 static uint32 bridge32_GetSystemTime(uint8 *arguments)
 {
     LxGuestBorrow output = {0};
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments), 16,
-                            LX_GUEST_WRITE, &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments),
+                            WIN32_SYSTEMTIME_SIZE, LX_GUEST_WRITE, &output))
         GetSystemTime(output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1528,10 +1587,10 @@ static uint32 bridge32_SystemTimeToFileTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
-                            &input) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_SYSTEMTIME_SIZE,
+                            LX_GUEST_READ, &input) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_FILETIME_SIZE,
+                            LX_GUEST_WRITE, &output))
         result = SystemTimeToFileTime(input.host, output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1621,8 +1680,8 @@ static uint32 bridge32_GetUserDefaultLangID(uint8 *a)
 static uint32 bridge32_GetLocalTime(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_SYSTEMTIME_SIZE,
+                            LX_GUEST_WRITE, &output))
         GetLocalTime(output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1634,11 +1693,15 @@ static uint32 bridge32_CreatePalette(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a);
     LxGuestBorrow input = {0};
-    uint8 header[4];
+    uint8 header[WIN32_LOGPALETTE_ENTRIES];
     uint32 result = 0;
     if (lx_execution_read(GProcessState.execution, pointer, header, sizeof header) &&
-        lx_execution_borrow(GProcessState.execution, pointer,
-                            4 + 4u * lx_guest_load_u16(header + 2), LX_GUEST_READ, &input))
+        lx_execution_borrow(
+            GProcessState.execution, pointer,
+            WIN32_LOGPALETTE_ENTRIES +
+                WIN32_PALETTEENTRY_SIZE *
+                    (uint32)lx_guest_load_u16(header + WIN32_LOGPALETTE_ENTRY_COUNT),
+            LX_GUEST_READ, &input))
         result = CreatePalette(input.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1676,7 +1739,8 @@ static uint32 bridge32_GetPaletteEntries(uint8 *a)
         return 0;
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, pointer, count * 4, LX_GUEST_WRITE, &output))
+    if (lx_execution_borrow(GProcessState.execution, pointer, count * WIN32_PALETTEENTRY_SIZE,
+                            LX_GUEST_WRITE, &output))
         result = GetPaletteEntries(handle, start, count, output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1718,7 +1782,7 @@ static uint32 open32_menu_insert(uint8 *a, BOOL append)
 {
     uint32 flags = lx_guest_load_u32(a + (append ? 4 : 8)),
            pointer = lx_guest_load_u32(a + (append ? 12 : 16));
-    if (flags & (4 | 0x100))
+    if (flags & (WIN32_MF_BITMAP | WIN32_MF_OWNERDRAW))
     {
         open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
@@ -1816,8 +1880,8 @@ static uint32 bridge32_GetClientRect(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &output))
         result = GetClientRect(lx_guest_load_u32(a), output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1829,8 +1893,8 @@ static uint32 bridge32_GetWindowRect(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &output))
         result = GetWindowRect(lx_guest_load_u32(a), output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -1842,7 +1906,7 @@ static uint32 bridge32_ClientToScreen(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_POINT_SIZE,
                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
         result = ClientToScreen(lx_guest_load_u32(a), output.host);
     else
@@ -1855,7 +1919,7 @@ static uint32 bridge32_ScreenToClient(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_POINT_SIZE,
                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
         result = ScreenToClient(lx_guest_load_u32(a), output.host);
     else
@@ -1887,8 +1951,8 @@ static uint32 bridge32_SetRect(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &output))
         result =
             SetRect(output.host, (LONG)lx_guest_load_u32(a + 4), (LONG)lx_guest_load_u32(a + 8),
                     (LONG)lx_guest_load_u32(a + 12), (LONG)lx_guest_load_u32(a + 16));
@@ -1991,8 +2055,8 @@ static uint32 bridge32_GetRgnBox(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &output))
         result = (uint32)GetRgnBox(lx_guest_load_u32(a), output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2004,8 +2068,8 @@ static uint32 bridge32_CreateRectRgnIndirect(uint8 *a)
 {
     LxGuestBorrow input = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
-                            &input))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &input))
         result = CreateRectRgnIndirect(input.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2101,7 +2165,8 @@ static uint32 bridge32_RedrawWindow(uint8 *a)
 {
     LxGuestBorrow rect = {0};
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
-    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_READ, &rect))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, WIN32_RECT_SIZE,
+                                        LX_GUEST_READ, &rect))
         result = RedrawWindow(lx_guest_load_u32(a), rect.host, lx_guest_load_u32(a + 8),
                               lx_guest_load_u32(a + 12));
     else
@@ -2161,8 +2226,8 @@ static uint32 bridge32_FindFirstFile(uint8 *a)
     char *name = o32_string(lx_guest_load_u32(a));
     LxGuestBorrow output = {0};
     uint32 result = UINT32_MAX;
-    if (name && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 320,
-                                    LX_GUEST_WRITE, &output))
+    if (name && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                                    WIN32_FIND_DATA_SIZE, LX_GUEST_WRITE, &output))
         result = FindFirstFile(name, output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2175,8 +2240,8 @@ static uint32 bridge32_FindNextFile(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 320, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_FIND_DATA_SIZE,
+                            LX_GUEST_WRITE, &output))
         result = FindNextFile(lx_guest_load_u32(a), output.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2329,7 +2394,8 @@ static uint32 bridge32_GetDIBits(uint8 *a)
     LxGuestBorrow header = {0}, info = {0}, bits = {0};
     size_t info_bytes, pixel_bytes;
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, pointer, 40, LX_GUEST_READ, &header))
+    if (!lx_execution_borrow(GProcessState.execution, pointer, WIN32_BITMAPINFOHEADER_SIZE,
+                             LX_GUEST_READ, &header))
         open32SetError(ERROR_INVALID_PARAMETER);
     else if (open32DibBuffers(header.host, start, count, usage, &info_bytes, &pixel_bytes))
     {
@@ -2408,11 +2474,11 @@ static uint32 bridge32_GetTextExtentPoint32(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow text = {0}, output = {0};
     uint32 result = 0;
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > OPEN32_ELEMENT_COUNT_MAX ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (uint32)count, LX_GUEST_READ, &text)) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 8, LX_GUEST_WRITE,
-                             &output))
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), WIN32_SIZE_SIZE,
+                             LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = GetTextExtentPoint32(lx_guest_load_u32(a), text.host, count, output.host);
@@ -2445,7 +2511,8 @@ static uint32 bridge32_InvalidateRect(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow rect = {0};
-    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_READ, &rect))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, WIN32_RECT_SIZE,
+                                        LX_GUEST_READ, &rect))
         result = InvalidateRect(lx_guest_load_u32(a), rect.host, lx_guest_load_u32(a + 8));
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2457,7 +2524,8 @@ static uint32 bridge32_ValidateRect(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow rect = {0};
-    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_READ, &rect))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, WIN32_RECT_SIZE,
+                                        LX_GUEST_READ, &rect))
         result = ValidateRect(lx_guest_load_u32(a), rect.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2479,8 +2547,8 @@ static uint32 bridge32_GetUpdateRect(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow rect = {0};
-    if (!pointer ||
-        lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_WRITE, &rect))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, WIN32_RECT_SIZE,
+                                        LX_GUEST_WRITE, &rect))
         result = GetUpdateRect(lx_guest_load_u32(a), rect.host, lx_guest_load_u32(a + 8));
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2516,10 +2584,10 @@ static uint32 bridge32_GetScrollRange(uint8 *a)
 {
     LxGuestBorrow low = {0}, high = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
-                            &low) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
-                            &high))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), WIN32_DWORD_SIZE,
+                            LX_GUEST_WRITE, &low) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), WIN32_DWORD_SIZE,
+                            LX_GUEST_WRITE, &high))
         result = GetScrollRange(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4), low.host,
                                 high.host);
     else
@@ -2595,8 +2663,8 @@ static uint32 bridge32_GetCaretPos(uint8 *a)
 {
     LxGuestBorrow point = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
-                            &point))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_POINT_SIZE,
+                            LX_GUEST_WRITE, &point))
         result = GetCaretPos(point.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2630,8 +2698,8 @@ static uint32 bridge32_CreatePenIndirect(uint8 *a)
 {
     LxGuestBorrow record = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
-                            &record))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_LOGPEN_SIZE,
+                            LX_GUEST_READ, &record))
         result = CreatePenIndirect(record.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2643,8 +2711,8 @@ static uint32 bridge32_MoveToEx(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 12), result = 0;
     LxGuestBorrow previous = {0};
-    if (!pointer ||
-        lx_execution_borrow(GProcessState.execution, pointer, 8, LX_GUEST_WRITE, &previous))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, WIN32_POINT_SIZE,
+                                        LX_GUEST_WRITE, &previous))
         result = MoveToEx(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
                           (LONG)lx_guest_load_u32(a + 8), previous.host);
     else
@@ -2669,8 +2737,8 @@ static uint32 bridge32_PeekMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_WRITE,
-                            &message))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_MSG_SIZE,
+                            LX_GUEST_WRITE, &message))
         result =
             (uint32)PeekMessage(message.host, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                                 lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
@@ -2684,8 +2752,8 @@ static uint32 bridge32_GetMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = UINT32_MAX;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_WRITE,
-                            &message))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_MSG_SIZE,
+                            LX_GUEST_WRITE, &message))
         result = (uint32)GetMessage(message.host, lx_guest_load_u32(a + 4),
                                     lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
     else
@@ -2698,8 +2766,8 @@ static uint32 bridge32_TranslateMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_READ,
-                            &message))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_MSG_SIZE,
+                            LX_GUEST_READ, &message))
         result = (uint32)TranslateMessage(message.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2711,8 +2779,8 @@ static uint32 bridge32_DispatchMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_READ,
-                            &message))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_MSG_SIZE,
+                            LX_GUEST_READ, &message))
         result = (uint32)DispatchMessage(message.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2753,8 +2821,8 @@ static uint32 bridge32_GetWindowThreadProcessId(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow process = {0};
-    if (!pointer ||
-        lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &process))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, WIN32_DWORD_SIZE,
+                                        LX_GUEST_WRITE, &process))
         result = GetWindowThreadProcessId(lx_guest_load_u32(a), process.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2777,7 +2845,8 @@ static uint32 bridge32_SetRectEmpty(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE, &p0))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &p0))
         result = SetRectEmpty(p0.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2789,10 +2858,10 @@ static uint32 bridge32_CopyRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
-                            &p0) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                            &p1))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &p0) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p1))
         result = CopyRect(p0.host, p1.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2805,7 +2874,8 @@ static uint32 bridge32_IsRectEmpty(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ, &p0))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p0))
         result = IsRectEmpty(p0.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2817,10 +2887,10 @@ static uint32 bridge32_EqualRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
-                            &p0) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                            &p1))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p0) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p1))
         result = EqualRect(p0.host, p1.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2833,12 +2903,12 @@ static uint32 bridge32_UnionRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0}, p2 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
-                            &p0) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                            &p1) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
-                            &p2))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &p0) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p1) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p2))
         result = UnionRect(p0.host, p1.host, p2.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2852,12 +2922,12 @@ static uint32 bridge32_IntersectRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0}, p2 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
-                            &p0) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                            &p1) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
-                            &p2))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &p0) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p1) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p2))
         result = IntersectRect(p0.host, p1.host, p2.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2871,12 +2941,12 @@ static uint32 bridge32_SubtractRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0}, p2 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
-                            &p0) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                            &p1) &&
-        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
-                            &p2))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &p0) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p1) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &p2))
         result = SubtractRect(p0.host, p1.host, p2.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2890,7 +2960,7 @@ static uint32 bridge32_OffsetRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
                             LX_GUEST_READ | LX_GUEST_WRITE, &p0))
         result =
             OffsetRect(p0.host, (LONG)lx_guest_load_u32(a + 4), (LONG)lx_guest_load_u32(a + 8));
@@ -2904,7 +2974,7 @@ static uint32 bridge32_InflateRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
                             LX_GUEST_READ | LX_GUEST_WRITE, &p0))
         result =
             InflateRect(p0.host, (LONG)lx_guest_load_u32(a + 4), (LONG)lx_guest_load_u32(a + 8));
@@ -2918,8 +2988,8 @@ static uint32 bridge32_PtInRect(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
-                            &rectangle))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &rectangle))
         result = PtInRect(rectangle.host, (LONG)lx_guest_load_u32(a + 4),
                           (LONG)lx_guest_load_u32(a + 8));
     else
@@ -2932,8 +3002,8 @@ static uint32 bridge32_GetClipBox(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
-                            &rectangle))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_WRITE, &rectangle))
         result = (uint32)GetClipBox(lx_guest_load_u32(a), rectangle.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2945,8 +3015,8 @@ static uint32 bridge32_FrameRect(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                            &rectangle))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &rectangle))
         result = (uint32)FrameRect(lx_guest_load_u32(a), rectangle.host, lx_guest_load_u32(a + 8));
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2958,8 +3028,8 @@ static uint32 bridge32_InvertRect(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
-                            &rectangle))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_RECT_SIZE,
+                            LX_GUEST_READ, &rectangle))
         result = InvertRect(lx_guest_load_u32(a), rectangle.host);
     else
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -2995,7 +3065,8 @@ static uint32 bridge32_SetDIBits(uint8 *a)
     LxGuestBorrow header = {0}, info = {0}, bits = {0};
     size_t info_bytes, pixel_bytes;
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, pointer, 40, LX_GUEST_READ, &header))
+    if (!lx_execution_borrow(GProcessState.execution, pointer, WIN32_BITMAPINFOHEADER_SIZE,
+                             LX_GUEST_READ, &header))
         open32SetError(ERROR_INVALID_PARAMETER);
     else if (open32DibBuffers(header.host, start, count, usage, &info_bytes, &pixel_bytes))
     {
@@ -3029,13 +3100,15 @@ static uint32 bridge32_ExtTextOut(uint8 *a)
     ULONG flags = lx_guest_load_u32(a + 12), count = lx_guest_load_u32(a + 24);
     LxGuestBorrow rectangle = {0}, text = {0}, advances = {0};
     uint32 result = 0, rect = lx_guest_load_u32(a + 16), dx = lx_guest_load_u32(a + 28);
-    if (count > 65536 ||
-        ((flags & 6) && (!rect || !lx_execution_borrow(GProcessState.execution, rect, 16,
-                                                       LX_GUEST_READ, &rectangle))) ||
+    if (count > OPEN32_ELEMENT_COUNT_MAX ||
+        ((flags & (WIN32_ETO_OPAQUE | WIN32_ETO_CLIPPED)) &&
+         (!rect || !lx_execution_borrow(GProcessState.execution, rect, WIN32_RECT_SIZE,
+                                        LX_GUEST_READ, &rectangle))) ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 20), count,
                                        LX_GUEST_READ, &text)) ||
         (count && dx &&
-         !lx_execution_borrow(GProcessState.execution, dx, count * 4, LX_GUEST_READ, &advances)))
+         !lx_execution_borrow(GProcessState.execution, dx, count * WIN32_DWORD_SIZE, LX_GUEST_READ,
+                              &advances)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = ExtTextOut(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
@@ -3075,7 +3148,7 @@ static uint32 bridge32_GetTextFace(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 8);
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (capacity < 0 || capacity > 65536 ||
+    if (capacity < 0 || capacity > OPEN32_ELEMENT_COUNT_MAX ||
         (pointer && capacity &&
          !lx_execution_borrow(GProcessState.execution, pointer, capacity, LX_GUEST_WRITE, &output)))
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -3096,9 +3169,10 @@ static uint32 bridge32_WinTranslateDevicePoints(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 12);
     LxGuestBorrow points = {0};
     uint32 result = 0;
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > OPEN32_ELEMENT_COUNT_MAX ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
-                                       (uint32)count * 8, LX_GUEST_READ | LX_GUEST_WRITE, &points)))
+                                       (uint32)count * WIN32_POINT_SIZE,
+                                       LX_GUEST_READ | LX_GUEST_WRITE, &points)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = WinTranslateDevicePoints(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
@@ -3145,7 +3219,7 @@ static uint32 bridge32_GetDlgItemText(uint8 *a)
     LONG capacity = (LONG)lx_guest_load_u32(a + 12);
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (capacity <= 0 || capacity > 65536 ||
+    if (capacity <= 0 || capacity > OPEN32_ELEMENT_COUNT_MAX ||
         !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), capacity,
                              LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -3180,9 +3254,10 @@ static uint32 bridge32_DPtoLP(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow points = {0};
     uint32 result = 0;
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > OPEN32_ELEMENT_COUNT_MAX ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
-                                       (ULONG)count * 8, LX_GUEST_READ | LX_GUEST_WRITE, &points)))
+                                       (ULONG)count * WIN32_POINT_SIZE,
+                                       LX_GUEST_READ | LX_GUEST_WRITE, &points)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = DPtoLP(lx_guest_load_u32(a), points.host, count);
@@ -3195,9 +3270,10 @@ static uint32 bridge32_LPtoDP(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow points = {0};
     uint32 result = 0;
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > OPEN32_ELEMENT_COUNT_MAX ||
         (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
-                                       (ULONG)count * 8, LX_GUEST_READ | LX_GUEST_WRITE, &points)))
+                                       (ULONG)count * WIN32_POINT_SIZE,
+                                       LX_GUEST_READ | LX_GUEST_WRITE, &points)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = LPtoDP(lx_guest_load_u32(a), points.host, count);
@@ -3209,8 +3285,8 @@ static uint32 bridge32_GetKeyboardState(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 256, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), KEYBOARD_STATE_SIZE,
+                             LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = GetKeyboardState(output.host);
@@ -3223,9 +3299,9 @@ static uint32 bridge32_Polygon(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow points = {0};
     uint32 result = 0;
-    if (count < 2 || count > 65536 ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), (ULONG)count * 8,
-                             LX_GUEST_READ, &points))
+    if (count < 2 || count > OPEN32_ELEMENT_COUNT_MAX ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             (ULONG)count * WIN32_POINT_SIZE, LX_GUEST_READ, &points))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = Polygon(lx_guest_load_u32(a), points.host, count);
@@ -3238,9 +3314,9 @@ static uint32 bridge32_Polyline(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow points = {0};
     uint32 result = 0;
-    if (count < 2 || count > 65536 ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), (ULONG)count * 8,
-                             LX_GUEST_READ, &points))
+    if (count < 2 || count > OPEN32_ELEMENT_COUNT_MAX ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             (ULONG)count * WIN32_POINT_SIZE, LX_GUEST_READ, &points))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = Polyline(lx_guest_load_u32(a), points.host, count);
@@ -3263,8 +3339,8 @@ static uint32 bridge32_SetBrushOrgEx(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 12);
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (pointer &&
-        !lx_execution_borrow(GProcessState.execution, pointer, 8, LX_GUEST_WRITE, &output))
+    if (pointer && !lx_execution_borrow(GProcessState.execution, pointer, WIN32_POINT_SIZE,
+                                        LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = SetBrushOrgEx(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
@@ -3277,8 +3353,8 @@ static uint32 bridge32_GetBrushOrgEx(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_POINT_SIZE,
+                             LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = GetBrushOrgEx(lx_guest_load_u32(a), output.host);
@@ -3357,9 +3433,9 @@ static uint32 bridge32_GetFileAttributes(uint8 *a)
 static uint32 bridge32_DdeInitialize(uint8 *a)
 {
     LxGuestBorrow output;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 4,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_DWORD_SIZE,
                              LX_GUEST_READ | LX_GUEST_WRITE, &output))
-        return 0x4006;
+        return WIN32_DMLERR_INVALIDPARAMETER;
     ULONG id = lx_guest_load_u32(output.host);
     uint32 result = DdeInitialize(&id, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                                   lx_guest_load_u32(a + 12));
@@ -3381,7 +3457,8 @@ static uint32 bridge32_DdeUninitialize(uint8 *a)
 
 static uint32 bridge32_DdeCreateStringHandle(uint8 *a)
 {
-    char *text = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 256);
+    char *text = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4),
+                                          OPEN32_ATOM_NAME_MAX);
     uint32 result =
         DdeCreateStringHandle(lx_guest_load_u32(a), text, (LONG)lx_guest_load_u32(a + 8));
     free(text);
@@ -3408,10 +3485,11 @@ static uint32 bridge32_DdeQueryString(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 8), capacity = lx_guest_load_u32(a + 12);
     LxGuestBorrow output = {0};
     if (pointer && capacity &&
-        !lx_execution_borrow(GProcessState.execution, pointer, capacity < 256 ? capacity : 256,
+        !lx_execution_borrow(GProcessState.execution, pointer,
+                             capacity < OPEN32_ATOM_NAME_MAX ? capacity : OPEN32_ATOM_NAME_MAX,
                              LX_GUEST_WRITE, &output))
     {
-        open32DdeSetError(lx_guest_load_u32(a), 0x4006);
+        open32DdeSetError(lx_guest_load_u32(a), WIN32_DMLERR_INVALIDPARAMETER);
         return 0;
     }
     uint32 result = DdeQueryString(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), output.host,
@@ -3441,8 +3519,8 @@ static uint32 bridge32_GetFullPathName(uint8 *a)
     uint32 result = 0, part_pointer = lx_guest_load_u32(a + 12);
     if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), length + 1,
                              LX_GUEST_WRITE, &output) ||
-        (part_pointer &&
-         !lx_execution_borrow(GProcessState.execution, part_pointer, 4, LX_GUEST_WRITE, &part)))
+        (part_pointer && !lx_execution_borrow(GProcessState.execution, part_pointer,
+                                              WIN32_POINTER_SIZE, LX_GUEST_WRITE, &part)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
     {
@@ -3516,10 +3594,17 @@ static uint32 bridge32_GetLogicalDrives(uint8 *a)
     return GetLogicalDrives();
 }
 
+enum
+{
+    DRIVE_LETTER_COUNT = 26,
+    DRIVE_ROOT_STRING_SIZE = 4
+};
+
 static uint32 bridge32_GetLogicalDriveStrings(uint8 *a)
 {
     uint32 capacity = lx_guest_load_u32(a);
-    char roots[26 * 4 + 1];
+    /* "A:\\" plus NUL for each drive letter, then the closing NUL */
+    char roots[DRIVE_LETTER_COUNT * DRIVE_ROOT_STRING_SIZE + 1];
     uint32 length = GetLogicalDriveStrings(sizeof roots, roots);
     if (capacity <= length)
         return length + 1;
@@ -3541,7 +3626,8 @@ static uint32 bridge32_GetVolumeInformation(uint8 *a)
     char *root = root_address ? o32_string(root_address) : NULL;
     LxGuestBorrow buffers[5] = {0};
     const unsigned slots[] = {4, 12, 16, 20, 24};
-    const uint32 sizes[] = {lx_guest_load_u32(a + 8), 4, 4, 4, lx_guest_load_u32(a + 28)};
+    const uint32 sizes[] = {lx_guest_load_u32(a + 8), WIN32_DWORD_SIZE, WIN32_DWORD_SIZE,
+                            WIN32_DWORD_SIZE, lx_guest_load_u32(a + 28)};
     BOOL valid = !root_address || root;
     for (unsigned i = 0; valid && i < 5; i++)
     {
@@ -3581,10 +3667,10 @@ static uint32 bridge32_FileTimeToLocalFileTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
-                             &input) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_FILETIME_SIZE,
+                             LX_GUEST_READ, &input) ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_FILETIME_SIZE,
+                             LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = FileTimeToLocalFileTime(input.host, output.host);
@@ -3597,10 +3683,10 @@ static uint32 bridge32_LocalFileTimeToFileTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
-                             &input) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_FILETIME_SIZE,
+                             LX_GUEST_READ, &input) ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), WIN32_FILETIME_SIZE,
+                             LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = LocalFileTimeToFileTime(input.host, output.host);
@@ -3613,10 +3699,10 @@ static uint32 bridge32_FileTimeToSystemTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
-                             &input) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), WIN32_FILETIME_SIZE,
+                             LX_GUEST_READ, &input) ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             WIN32_SYSTEMTIME_SIZE, LX_GUEST_WRITE, &output))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = FileTimeToSystemTime(input.host, output.host);
@@ -3693,8 +3779,10 @@ static uint32 bridge32_StartDoc(uint8 *a)
     LxGuestBorrow info = {0};
     uint32 result = (uint32)-1;
     uint32 size = 0, address = lx_guest_load_u32(a + 4);
-    if (lx_execution_read(GProcessState.execution, address, &size, 4) &&
-        (size == 12 || size == 16 || size == 20) &&
+    /* cbSize may end the record after lpszOutput, lpszDatatype or fwType. */
+    if (lx_execution_read(GProcessState.execution, address, &size, sizeof size) &&
+        (size == WIN32_DOCINFO_DATATYPE || size == WIN32_DOCINFO_TYPE ||
+         size == WIN32_DOCINFO_EX_SIZE) &&
         lx_execution_borrow(GProcessState.execution, address, size, LX_GUEST_READ, &info))
         result = (uint32)StartDoc(lx_guest_load_u32(a), info.host);
     lx_execution_release(&info);
@@ -3795,9 +3883,9 @@ static uint32 bridge32_CreateAcceleratorTable(uint8 *a)
 {
     LONG count = (LONG)lx_guest_load_u32(a + 4);
     LxGuestBorrow data = {0};
-    if (count <= 0 || count > 32767 ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), (size_t)count * 6,
-                             LX_GUEST_READ, &data))
+    if (count <= 0 || count > INT16_MAX ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a),
+                             (size_t)count * WIN32_ACCEL_SIZE, LX_GUEST_READ, &data))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -3821,8 +3909,8 @@ static uint32 bridge32_CopyAcceleratorTable(uint8 *a)
     if (!count)
         return 0;
     LxGuestBorrow data = {0};
-    if (!lx_execution_borrow(GProcessState.execution, address, (size_t)count * 6, LX_GUEST_WRITE,
-                             &data))
+    if (!lx_execution_borrow(GProcessState.execution, address, (size_t)count * WIN32_ACCEL_SIZE,
+                             LX_GUEST_WRITE, &data))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -3839,7 +3927,7 @@ static uint32 bridge32_DestroyAcceleratorTable(uint8 *a)
 
 static uint32 bridge32_TranslateAccelerator(uint8 *a)
 {
-    uint8 message[28];
+    uint8 message[WIN32_MSG_SIZE];
     if (!lx_execution_read(GProcessState.execution, lx_guest_load_u32(a + 8), message,
                            sizeof message))
     {
