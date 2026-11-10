@@ -12,6 +12,28 @@ extern "C"
 #endif
 
     /* INCL_WINSTDFILE */
+    /* File dialog flags */
+    enum
+    {
+        FDS_CUSTOM = 0x00000002,
+        FDS_OPEN_DIALOG = 0x00000100,
+        FDS_SAVEAS_DIALOG = 0x00000200
+    };
+
+    /* File dialog messages */
+    enum
+    {
+        FDM_VALIDATE = WM_USER + 41
+    };
+
+    /* File dialog control IDs */
+    enum
+    {
+        DID_FILTER_CB = 262,
+        DID_HELP_PB = 267,
+        DID_READ_ONLY = 269,
+        DID_DIRECTORY_SELECTED = 270
+    };
 
 #pragma pack(push, 4)
 
@@ -37,6 +59,12 @@ extern "C"
     OS2EXPORT BOOL OS2API WinFreeFileDlgList(PVOID list);
 
     /* INCL_WINSTDFONT */
+    /* Font dialog flags */
+    enum
+    {
+        FNTS_CENTER = 0x00000001,
+        FNTS_CUSTOM = 0x00000002
+    };
 
 #pragma pack(push, 2)
 
@@ -65,7 +93,6 @@ extern "C"
                                                MPARAM second);
 
     /* INCL_WINSTDDRAG */
-
     OS2EXPORT ULONG OS2API DrgAddStrHandle(PSZ name);
 
     OS2EXPORT BOOL OS2API DrgDeleteStrHandle(ULONG string);

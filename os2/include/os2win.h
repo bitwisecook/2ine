@@ -5,6 +5,14 @@
 #define _INCL_OS2WIN_H_
 #include "os2/include/os2def.h"
 #include "os2/include/bseerr.h"
+
+/* Directions of Open32's PM/Win32 translations. */
+typedef enum
+{
+    WINX2PM,
+    PM2WINX
+} XLATEDIR;
+
 typedef LONG(OS2API *PFNWINMAIN)(ULONG instance, ULONG previous, PSZ command, LONG show);
 
 /* Error codes (GetLastError) that bseerr.h does not declare. Open32's
@@ -14,6 +22,9 @@ enum
 {
     ERROR_SUCCESS = 0,
     ERROR_CAN_NOT_COMPLETE = 1003,
+    ERROR_INVALID_FLAGS = 1004,
+    ERROR_NO_UNICODE_TRANSLATION = 1113,
+    ERROR_IO_DEVICE = 1117,
     ERROR_INTERNAL_ERROR = 1359,
     ERROR_INVALID_WINDOW_HANDLE = 1400,
     ERROR_INVALID_MENU_HANDLE = 1401,
@@ -92,6 +103,8 @@ enum
     BS_HATCHED = 2,
     BS_PATTERN = 3,
     BS_DIBPATTERN = 5,
+    BS_DIBPATTERNPT = 6,
+    BS_DIBPATTERN8X8 = 8,
     HS_HORIZONTAL = 0,
     HS_VERTICAL = 1,
     HS_FDIAGONAL = 2,

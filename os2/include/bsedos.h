@@ -575,6 +575,21 @@ extern "C"
     OS2EXPORT APIRET OS2API DosQueryProcType(HMODULE module, ULONG ordinal, PSZ name, PULONG type);
 
     /* INCL_DOSRESOURCES: resources */
+    /* Resource types */
+    enum
+    {
+        RT_POINTER = 1,
+        RT_BITMAP = 2,
+        RT_MENU = 3,
+        RT_DIALOG = 4,
+        RT_STRING = 5,
+        RT_FONTDIR = 6,
+        RT_FONT = 7,
+        RT_ACCELTABLE = 8,
+        RT_RCDATA = 9,
+        RT_MESSAGE = 10,
+        RT_DLGINCLUDE = 11
+    };
 
     OS2EXPORT APIRET OS2API DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output);
 

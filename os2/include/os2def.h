@@ -107,6 +107,29 @@ extern "C"
         LONG yTop;
     } RECTL, *PRECTL;
 
+    /* FATTRS selection flags */
+    enum
+    {
+        FATTR_SEL_ITALIC = 0x0001,
+        FATTR_SEL_UNDERSCORE = 0x0002,
+        FATTR_SEL_OUTLINE = 0x0008,
+        FATTR_SEL_STRIKEOUT = 0x0010,
+        FATTR_SEL_BOLD = 0x0020
+    };
+
+    /* FONTMETRICS selection flags */
+    enum
+    {
+        FM_SEL_ITALIC = 0x0001,
+        FM_SEL_BOLD = 0x0020
+    };
+
+    /* Font attribute use */
+    enum
+    {
+        FATTR_FONTUSE_NOMIX = 0x0002
+    };
+
 /* Mutable guest data exports: classObject followed by SOM method token words. The
    generated module glue maps them; guest SOM fills them when a class is built.
    pmwp.def gives each export's ordinal; lxapigen.py reads the size here. */

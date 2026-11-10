@@ -17,6 +17,22 @@ extern "C"
 #endif
 
     /* INCL_DEV */
+    /* DevOpenDC types */
+    enum
+    {
+        OD_QUEUED = 2,
+        OD_INFO = 6
+    };
+
+    /* Device escapes */
+    enum
+    {
+        DEVESC_STARTDOC = 8150,
+        DEVESC_ENDDOC = 8151,
+        DEVESC_ABORTDOC = 8153,
+        DEVESC_NEWFRAME = 16300,
+        DEVESC_RAWDATA = 16303
+    };
 
     OS2EXPORT BOOL OS2API DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output);
 
