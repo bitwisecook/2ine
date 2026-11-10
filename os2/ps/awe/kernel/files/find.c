@@ -5,6 +5,16 @@
 #include "host/fs.h"
 #include "host/sync.h"
 
+/* Seconds from 1601-01-01 (FILETIME) to 1970-01-01 (host time). */
+static const int64_t FILETIME_UNIX_EPOCH_SECONDS = INT64_C(11644473600);
+/* The last host second whose FILETIME still fits in 64 bits. */
+static const int64_t FILETIME_MAX_UNIX_SECONDS = INT64_C(1833029933770);
+
+enum
+{
+    TICKS_PER_SECOND = 10000000
+};
+
 typedef struct FileSearch
 {
     LxHostDirectory *directory;
@@ -17,19 +27,19 @@ static ULONG find_error(LxHostFsError error)
     switch (error)
     {
         case LX_HOST_FS_MISSING:
-            return 3;
+            return ERROR_PATH_NOT_FOUND;
         case LX_HOST_FS_NOT_DIRECTORY:
-            return 267;
+            return ERROR_DIRECTORY;
         case LX_HOST_FS_DENIED:
-            return 5;
+            return ERROR_ACCESS_DENIED;
         case LX_HOST_FS_NO_MEMORY:
-            return 8;
+            return ERROR_NOT_ENOUGH_MEMORY;
         case LX_HOST_FS_TOO_MANY_FILES:
-            return 4;
+            return ERROR_TOO_MANY_OPEN_FILES;
         case LX_HOST_FS_NAME_LONG:
-            return 206;
+            return ERROR_FILENAME_EXCED_RANGE;
         default:
-            return 31;
+            return ERROR_GEN_FAILURE;
     }
 }
 
@@ -83,11 +93,12 @@ static void search_destroy(void *data)
 static void find_time(uint8 *output, int64_t seconds)
 {
     /* Unix seconds are UTC; FILETIME counts 100-ns intervals from 1601. */
-    uint64_t ticks = seconds < -INT64_C(11644473600) || seconds > INT64_C(1833029933770)
-                         ? 0
-                         : (uint64_t)(seconds + INT64_C(11644473600)) * UINT64_C(10000000);
-    lx_guest_store_u32(output, (uint32)ticks);
-    lx_guest_store_u32(output + 4, (uint32)(ticks >> 32));
+    uint64_t ticks =
+        seconds < -FILETIME_UNIX_EPOCH_SECONDS || seconds > FILETIME_MAX_UNIX_SECONDS
+            ? 0
+            : (uint64_t)(seconds + FILETIME_UNIX_EPOCH_SECONDS) * (uint64_t)TICKS_PER_SECOND;
+    lx_guest_store_u32(output + WIN32_FILETIME_LOW, (uint32)ticks);
+    lx_guest_store_u32(output + WIN32_FILETIME_HIGH, (uint32)(ticks >> 32));
 }
 
 static BOOL search_next(FileSearch *search, PVOID output, BOOL first)
@@ -102,20 +113,22 @@ static BOOL search_next(FileSearch *search, PVOID output, BOOL first)
             (info.kind != LX_HOST_FILE_REGULAR && info.kind != LX_HOST_FILE_DIRECTORY))
             continue;
         size_t length = strlen(name);
-        if (length >= 260)
+        if (length >= WIN32_MAX_PATH)
         {
             open32SetError(ERROR_FILENAME_EXCED_RANGE);
             return FALSE;
         }
-        uint8 wire[320] = {0};
+        uint8 wire[WIN32_FIND_DATA_SIZE] = {0};
         ULONG attributes =
-            (info.kind == LX_HOST_FILE_DIRECTORY ? 0x10 : 0) | (info.readonly ? 1 : 0);
-        lx_guest_store_u32(wire, attributes ? attributes : 0x80);
-        find_time(wire + 12, info.accessed);
-        find_time(wire + 20, info.modified);
-        lx_guest_store_u32(wire + 28, (uint32)(info.size >> 32));
-        lx_guest_store_u32(wire + 32, (uint32)info.size);
-        memcpy(wire + 44, name, length + 1);
+            (info.kind == LX_HOST_FILE_DIRECTORY ? WIN32_FILE_ATTRIBUTE_DIRECTORY : 0) |
+            (info.readonly ? WIN32_FILE_ATTRIBUTE_READONLY : 0);
+        lx_guest_store_u32(wire + WIN32_FIND_DATA_FILE_ATTRIBUTES,
+                           attributes ? attributes : WIN32_FILE_ATTRIBUTE_NORMAL);
+        find_time(wire + WIN32_FIND_DATA_LAST_ACCESS_TIME, info.accessed);
+        find_time(wire + WIN32_FIND_DATA_LAST_WRITE_TIME, info.modified);
+        lx_guest_store_u32(wire + WIN32_FIND_DATA_FILE_SIZE_HIGH, (uint32)(info.size >> 32));
+        lx_guest_store_u32(wire + WIN32_FIND_DATA_FILE_SIZE_LOW, (uint32)info.size);
+        memcpy(wire + WIN32_FIND_DATA_FILE_NAME, name, length + 1);
         memcpy(output, wire, sizeof wire);
         return TRUE;
     }
