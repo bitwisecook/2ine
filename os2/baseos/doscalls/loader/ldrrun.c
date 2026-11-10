@@ -168,8 +168,6 @@ enum
 
 enum
 {
-    NENOTP = 0x8000,
-    NEIERR = 0x2000,
     /* The NE application type field matches FAPPTYP's low bits. */
     NE_APPTYPE_SHIFT = 8,
     NE_APPTYPE_BITS = 0x3,
@@ -180,13 +178,10 @@ enum
 
 enum
 {
-    E32NOLOAD = 0x2000,
     E32APPMASK = 0x0300,
     E32NOPMW = 0x0100,
     E32PMW = 0x0200,
     E32PMAPI = 0x0300,
-    E32MODMASK = 0x38000,
-    E32MODDLL = 0x08000,
     E32MODPROTDLL = 0x18000,
     E32MODPDEV = 0x20000,
     E32MODVDEV = 0x28000
