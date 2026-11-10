@@ -52,8 +52,8 @@ static uint32 bridge32_CreateProcess(uint8 *a)
 static uint32 bridge32_DuplicateHandle(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), sizeof(ULONG),
+                             LX_GUEST_WRITE, &output))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -123,8 +123,8 @@ static uint32 bridge32_WinExec(uint8 *a)
 static uint32 bridge32_GetExitCodeProcess(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
-                             &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), sizeof(ULONG),
+                             LX_GUEST_WRITE, &output))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;

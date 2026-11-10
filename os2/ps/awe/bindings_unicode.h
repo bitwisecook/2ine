@@ -143,8 +143,8 @@ static uint32 bridge32_WideCharToMultiByte(uint8 *a)
     }
     if ((capacity && !lx_execution_borrow(GProcessState.execution, output, (size_t)capacity,
                                           LX_GUEST_WRITE, &destination)) ||
-        (used_address &&
-         !lx_execution_borrow(GProcessState.execution, used_address, 4, LX_GUEST_WRITE, &used)))
+        (used_address && !lx_execution_borrow(GProcessState.execution, used_address, sizeof(ULONG),
+                                              LX_GUEST_WRITE, &used)))
         open32SetError(ERROR_INVALID_PARAMETER);
     else
         result = (uint32)WideCharToMultiByte(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), input,
