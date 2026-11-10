@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Windows metafiles: handles, validation, playback, enumeration and metafile metafile_files. */
+/* Windows metafiles: handles, validation, playback, enumeration and metafile files. */
 #include "os2/include/private/export.h"
 #include "emulator/handles.h"
 #include "host/sync.h"
@@ -32,24 +32,28 @@ void metafile_destroy_file(void *resource)
 
 BOOL metafile_valid_wmf(const UCHAR *data, ULONG size)
 {
-    if (!data || size < 24 || size > 64u * 1024 * 1024 || (size & 1))
+    if (!data || size < WMF_SIZE_MIN || size > METAFILE_SIZE_MAX || (size & 1))
         return FALSE;
-    USHORT type = lx_guest_load_u16(data), version = lx_guest_load_u16(data + 4);
-    if ((type != 1 && type != 2) || lx_guest_load_u16(data + 2) != 9 ||
-        (version != 0x100 && version != 0x300) || lx_guest_load_u32(data + 6) != size / 2 ||
-        lx_guest_load_u16(data + 16))
+    USHORT type = lx_guest_load_u16(data + WIN32_METAHEADER_TYPE),
+           version = lx_guest_load_u16(data + WIN32_METAHEADER_VERSION);
+    if ((type != WIN32_MEMORYMETAFILE && type != WIN32_DISKMETAFILE) ||
+        lx_guest_load_u16(data + WIN32_METAHEADER_HEADER_WORDS) != WIN32_METAHEADER_SIZE / 2 ||
+        (version != WIN32_METAVERSION100 && version != WIN32_METAVERSION300) ||
+        lx_guest_load_u32(data + WIN32_METAHEADER_FILE_WORDS) != size / 2 ||
+        lx_guest_load_u16(data + WIN32_METAHEADER_PARAMETERS))
         return FALSE;
-    ULONG maximum = lx_guest_load_u32(data + 12);
-    if (maximum < 3 || maximum > (size - 18) / 2)
+    ULONG maximum = lx_guest_load_u32(data + WIN32_METAHEADER_MAX_RECORD_WORDS);
+    if (maximum < WIN32_METARECORD_MIN_WORDS || maximum > (size - WIN32_METAHEADER_SIZE) / 2)
         return FALSE;
-    for (ULONG offset = 18; offset <= size - 6;)
+    for (ULONG offset = WIN32_METAHEADER_SIZE; offset <= size - WIN32_METARECORD_PARAMETERS;)
     {
-        ULONG words = lx_guest_load_u32(data + offset);
-        USHORT function = lx_guest_load_u16(data + offset + 4);
-        if (words < 3 || words > maximum || words > (size - offset) / 2)
+        ULONG words = lx_guest_load_u32(data + offset + WIN32_METARECORD_WORDS);
+        USHORT function = lx_guest_load_u16(data + offset + WIN32_METARECORD_FUNCTION);
+        if (words < WIN32_METARECORD_MIN_WORDS || words > maximum || words > (size - offset) / 2)
             return FALSE;
         if (!function)
-            return words == 3 && offset + 6 == size;
+            return words == WIN32_METARECORD_MIN_WORDS &&
+                   offset + WIN32_METARECORD_PARAMETERS == size;
         offset += words * 2;
     }
     return FALSE;
@@ -58,7 +62,7 @@ BOOL metafile_valid_wmf(const UCHAR *data, ULONG size)
 ULONG SetMetaFileBitsEx(ULONG size, PVOID data)
 {
     TRACE_NATIVE("SetMetaFileBitsEx(%u, %p)", size, data);
-    if (!data || size < 24 || size > 64u * 1024 * 1024 || (size & 1))
+    if (!data || size < WMF_SIZE_MIN || size > METAFILE_SIZE_MAX || (size & 1))
     {
         open32SetError(ERROR_INVALID_DATA);
         return 0;
@@ -134,7 +138,7 @@ static BOOL wmf_dib(ULONG dc, const UCHAR *dib, ULONG available, LONG x, LONG y,
                     LONG source_height, ULONG usage, ULONG operation)
 {
     size_t info_bytes, pixel_bytes;
-    if (available < 40 ||
+    if (available < WIN32_BITMAPINFOHEADER_SIZE ||
         !open32DibBuffers((PVOID)dib, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
         !pixel_bytes || info_bytes > available || pixel_bytes > available - info_bytes)
     {
@@ -148,7 +152,7 @@ static BOOL wmf_dib(ULONG dc, const UCHAR *dib, ULONG available, LONG x, LONG y,
 /* META_CREATEREGION: a Region object whose scans each list x pairs for one band. */
 static ULONG wmf_region(const UCHAR *p, ULONG size)
 {
-    ULONG scans = lx_guest_load_u16(p + 10), at = 22;
+    ULONG scans = lx_guest_load_u16(p + WMF_REGION_SCANS), at = WMF_REGION_SIZE;
     ULONG region = CreateRectRgn(0, 0, 0, 0), part = region ? CreateRectRgn(0, 0, 0, 0) : 0;
     BOOL ok = part != 0;
     for (ULONG i = 0; ok && i < scans; i++)
@@ -168,7 +172,7 @@ static ULONG wmf_region(const UCHAR *p, ULONG size)
         for (ULONG v = 0; ok && v + 1 < values; v += 2)
             ok = SetRectRgn(part, metafile_word(p + at + 6 + v * 2), top,
                             metafile_word(p + at + 8 + v * 2), bottom) &&
-                 CombineRgn(region, region, part, 2);
+                 CombineRgn(region, region, part, WIN32_RGN_OR);
         at += 8 + values * 2;
     }
     if (part)
@@ -183,14 +187,16 @@ static ULONG wmf_region(const UCHAR *p, ULONG size)
 
 static BOOL wmf_text(ULONG dc, const UCHAR *p, ULONG bytes)
 {
-    ULONG n = lx_guest_load_u16(p + 4), options = lx_guest_load_u16(p + 6) & 6;
-    ULONG text_at = options ? 16 : 8, padded = (n + 1) & ~1u, parameters = bytes - 6;
+    ULONG n = lx_guest_load_u16(p + 4),
+          options = lx_guest_load_u16(p + 6) & (WIN32_ETO_OPAQUE | WIN32_ETO_CLIPPED);
+    ULONG text_at = options ? 16 : 8, padded = (n + 1) & ~1u,
+          parameters = bytes - WIN32_METARECORD_PARAMETERS;
     if (text_at > parameters || padded > parameters - text_at)
     {
         open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
-    uint8 rectangle[16];
+    uint8 rectangle[WIN32_RECT_SIZE];
     for (unsigned i = 0; options && i < 4; i++)
         lx_guest_store_u32(rectangle + i * 4, (ULONG)metafile_word(p + 8 + i * 2));
     uint8 *advances = NULL;
@@ -214,18 +220,20 @@ static BOOL wmf_text(ULONG dc, const UCHAR *p, ULONG bytes)
 
 static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
 {
-    ULONG bytes = lx_guest_load_u32(record) * 2;
-    USHORT function = lx_guest_load_u16(record + 4);
-    const UCHAR *p = record + 6;
+    ULONG bytes = lx_guest_load_u32(record + WIN32_METARECORD_WORDS) * 2;
+    USHORT function = lx_guest_load_u16(record + WIN32_METARECORD_FUNCTION);
+    const UCHAR *p = record + WIN32_METARECORD_PARAMETERS;
+    /* bytes counts the 6-byte record header and two bytes per parameter word, so each check
+       below also fixes or bounds the record's parameter count. */
     if (!function)
         return TRUE;
-    if (function == 0x103 && bytes == 8)
+    if (function == WIN32_META_SETMAPMODE && bytes == 8)
         return SetMapMode(dc, metafile_word(p)) != 0;
-    if (function == 0x20b && bytes == 10)
+    if (function == WIN32_META_SETWINDOWORG && bytes == 10)
         return SetWindowOrgEx(dc, metafile_word(p + 2), metafile_word(p), NULL);
-    if (function == 0x20c && bytes == 10)
+    if (function == WIN32_META_SETWINDOWEXT && bytes == 10)
         return SetWindowExtEx(dc, metafile_word(p + 2), metafile_word(p), NULL);
-    if (function == 0xf43 && bytes >= 68)
+    if (function == WIN32_META_STRETCHDIB && bytes >= 68)
     {
         /* META_STRETCHDIB: DWORD raster operation, WORD usage, eight signed
            coordinates in reverse call order, then BITMAPINFO and pixel bits. */
@@ -243,55 +251,56 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
                              metafile_word(p + 10), metafile_word(p + 8), metafile_word(p + 6),
                              (UCHAR *)info + info_bytes, info, usage, lx_guest_load_u32(p)) != 0;
     }
-    if (function == 0x102 && bytes == 8)
+    if (function == WIN32_META_SETBKMODE && bytes == 8)
         return SetBkMode(dc, metafile_word(p)) != 0;
-    if (function == 0x104 && bytes == 8)
+    if (function == WIN32_META_SETROP2 && bytes == 8)
         return SetROP2(dc, metafile_word(p)) != 0;
-    if (function == 0x106 && bytes == 8)
+    if (function == WIN32_META_SETPOLYFILLMODE && bytes == 8)
         return SetPolyFillMode(dc, metafile_word(p)) != 0;
-    if (function == 0x107 && bytes == 8)
+    if (function == WIN32_META_SETSTRETCHBLTMODE && bytes == 8)
         return SetStretchBltMode(dc, metafile_word(p)) != 0;
-    if (function == 0x108 && bytes == 8)
+    if (function == WIN32_META_SETTEXTCHAREXTRA && bytes == 8)
         return SetTextCharacterExtra(dc, metafile_word(p)) != INT32_MIN;
-    if (function == 0x201 && bytes == 10)
+    if (function == WIN32_META_SETBKCOLOR && bytes == 10)
         return SetBkColor(dc, lx_guest_load_u32(p)) != UINT32_MAX;
-    if (function == 0x209 && bytes == 10)
+    if (function == WIN32_META_SETTEXTCOLOR && bytes == 10)
         return SetTextColor(dc, lx_guest_load_u32(p)) != UINT32_MAX;
-    if (function == 0x20a && bytes == 10)
+    if (function == WIN32_META_SETTEXTJUSTIFICATION && bytes == 10)
         return SetTextJustification(dc, metafile_word(p + 2), metafile_word(p));
-    if (function == 0x20d && bytes == 10)
+    if (function == WIN32_META_SETVIEWPORTORG && bytes == 10)
         return SetViewportOrgEx(dc, metafile_word(p + 2), metafile_word(p), NULL);
-    if (function == 0x20e && bytes == 10)
+    if (function == WIN32_META_SETVIEWPORTEXT && bytes == 10)
         return SetViewportExtEx(dc, metafile_word(p + 2), metafile_word(p), NULL);
-    if (function == 0x214 && bytes == 10)
+    if (function == WIN32_META_MOVETO && bytes == 10)
         return MoveToEx(dc, metafile_word(p + 2), metafile_word(p), NULL);
-    if (function == 0x213 && bytes == 10)
+    if (function == WIN32_META_LINETO && bytes == 10)
         return LineTo(dc, metafile_word(p + 2), metafile_word(p));
-    if (function == 0x1e && bytes == 6)
+    if (function == WIN32_META_SAVEDC && bytes == 6)
         return SaveDC(dc) != 0;
-    if (function == 0x127 && bytes == 8)
+    if (function == WIN32_META_RESTOREDC && bytes == 8)
         return RestoreDC(dc, metafile_word(p));
-    if ((function == 0x418 || function == 0x41b) && bytes == 14)
-        return function == 0x418 ? Ellipse(dc, metafile_word(p + 6), metafile_word(p + 4),
-                                           metafile_word(p + 2), metafile_word(p))
-                                 : Rectangle(dc, metafile_word(p + 6), metafile_word(p + 4),
-                                             metafile_word(p + 2), metafile_word(p));
-    if (function == 0x61c && bytes == 18)
+    if ((function == WIN32_META_ELLIPSE || function == WIN32_META_RECTANGLE) && bytes == 14)
+        return function == WIN32_META_ELLIPSE
+                   ? Ellipse(dc, metafile_word(p + 6), metafile_word(p + 4), metafile_word(p + 2),
+                             metafile_word(p))
+                   : Rectangle(dc, metafile_word(p + 6), metafile_word(p + 4), metafile_word(p + 2),
+                               metafile_word(p));
+    if (function == WIN32_META_ROUNDRECT && bytes == 18)
         return RoundRect(dc, metafile_word(p + 10), metafile_word(p + 8), metafile_word(p + 6),
                          metafile_word(p + 4), metafile_word(p + 2), metafile_word(p));
-    if (function == 0x830 && bytes == 22)
+    if (function == WIN32_META_CHORD && bytes == 22)
         return open32Chord(dc, metafile_word(p + 14), metafile_word(p + 12), metafile_word(p + 10),
                            metafile_word(p + 8), metafile_word(p + 6), metafile_word(p + 4),
                            metafile_word(p + 2), metafile_word(p));
-    if ((function == 0x817 || function == 0x81a) && bytes == 22)
-        return function == 0x817
+    if ((function == WIN32_META_ARC || function == WIN32_META_PIE) && bytes == 22)
+        return function == WIN32_META_ARC
                    ? Arc(dc, metafile_word(p + 14), metafile_word(p + 12), metafile_word(p + 10),
                          metafile_word(p + 8), metafile_word(p + 6), metafile_word(p + 4),
                          metafile_word(p + 2), metafile_word(p))
                    : Pie(dc, metafile_word(p + 14), metafile_word(p + 12), metafile_word(p + 10),
                          metafile_word(p + 8), metafile_word(p + 6), metafile_word(p + 4),
                          metafile_word(p + 2), metafile_word(p));
-    if ((function == 0x324 || function == 0x325) && bytes >= 8)
+    if ((function == WIN32_META_POLYGON || function == WIN32_META_POLYLINE) && bytes >= 8)
     {
         ULONG n = lx_guest_load_u16(p);
         if (n > (bytes - 8) / 4)
@@ -304,11 +313,12 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
             lx_guest_store_u32(points + i * 8, (ULONG)metafile_word(p + 2 + i * 4));
             lx_guest_store_u32(points + i * 8 + 4, (ULONG)metafile_word(p + 4 + i * 4));
         }
-        BOOL ok = function == 0x324 ? Polygon(dc, points, (LONG)n) : Polyline(dc, points, (LONG)n);
+        BOOL ok = function == WIN32_META_POLYGON ? Polygon(dc, points, (LONG)n)
+                                                 : Polyline(dc, points, (LONG)n);
         free(points);
         return ok;
     }
-    if (function == 0x538 && bytes >= 8)
+    if (function == WIN32_META_POLYPOLYGON && bytes >= 8)
     {
         ULONG polygons = lx_guest_load_u16(p);
         if (polygons > (bytes - 8) / 2)
@@ -316,7 +326,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         ULONG total = 0;
         for (ULONG i = 0; i < polygons; i++)
             total += lx_guest_load_u16(p + 2 + i * 2);
-        if (total > 65536 || total > (bytes - 8 - polygons * 2) / 4)
+        if (total > METAFILE_POINTS_MAX || total > (bytes - 8 - polygons * 2) / 4)
             return FALSE;
         uint8 *counts = malloc((size_t)polygons * 4), *points = malloc((size_t)total * 8);
         if (!counts || !points)
@@ -338,7 +348,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         free(counts);
         return ok;
     }
-    if (function == 0x521 && bytes >= 12)
+    if (function == WIN32_META_TEXTOUT && bytes >= 12)
     {
         ULONG n = lx_guest_load_u16(p), padded = (n + 1) & ~1u;
         if (padded > bytes - 12)
@@ -346,15 +356,15 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         return TextOut(dc, metafile_word(p + 4 + padded), metafile_word(p + 2 + padded),
                        (PSZ)(p + 2), (LONG)n);
     }
-    if (function == 0x12d && bytes == 8)
+    if (function == WIN32_META_SELECTOBJECT && bytes == 8)
     {
         ULONG index = lx_guest_load_u16(p),
-              object = index & 0x8000  ? GetStockObject((LONG)(index & 0x7fff))
+              object = index & WMF_STOCK_OBJECT_INDEX ? GetStockObject((LONG)(index & 0x7fff))
                        : index < count ? lx_guest_load_u32((uint8 *)table + index * 4)
                                        : 0;
         return object && SelectObject(dc, object) != 0;
     }
-    if (function == 0x1f0 && bytes == 8)
+    if (function == WIN32_META_DELETEOBJECT && bytes == 8)
     {
         ULONG index = lx_guest_load_u16(p);
         if (index >= count)
@@ -365,42 +375,50 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         lx_guest_store_u32((uint8 *)table + index * 4, 0);
         return TRUE;
     }
-    if (function == 0x2fa || function == 0x2fc || function == 0x2fb || function == 0xf7 ||
-        function == 0x142 || function == 0x6ff)
+    if (function == WIN32_META_CREATEPENINDIRECT || function == WIN32_META_CREATEBRUSHINDIRECT ||
+        function == WIN32_META_CREATEFONTINDIRECT || function == WIN32_META_CREATEPALETTE ||
+        function == WIN32_META_DIBCREATEPATTERNBRUSH || function == WIN32_META_CREATEREGION)
     {
         ULONG object = 0;
-        if (function == 0x6ff && bytes >= 28)
+        if (function == WIN32_META_CREATEREGION && bytes >= 28)
             object = wmf_region(p, bytes - 6);
-        else if (function == 0x142 && bytes >= 50)
+        else if (function == WIN32_META_DIBCREATEPATTERNBRUSH && bytes >= 50)
         {
             size_t info_bytes, pixel_bytes;
             ULONG usage = lx_guest_load_u16(p + 2);
             if (open32DibBuffers((PVOID)(p + 4), 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) &&
                 info_bytes + pixel_bytes <= bytes - 10)
                 object = open32DibPatternBrush((PVOID)(p + 4), (PVOID)(p + 4 + info_bytes), usage,
-                                               lx_guest_load_u16(p) == 3);
+                                               lx_guest_load_u16(p) == BS_PATTERN);
         }
-        else if (function == 0xf7 && bytes >= 10 && lx_guest_load_u16(p + 2) <= (bytes - 10) / 4)
+        else if (function == WIN32_META_CREATEPALETTE && bytes >= 10 &&
+                 lx_guest_load_u16(p + 2) <= (bytes - 10) / 4)
             object = CreatePalette((PVOID)p);
-        else if (function == 0x2fa && bytes == 16)
-            object =
-                CreatePen(metafile_word(p) & 15, metafile_word(p + 2), lx_guest_load_u32(p + 6));
-        else if (function == 0x2fc && bytes == 14)
+        else if (function == WIN32_META_CREATEPENINDIRECT && bytes == 16)
+            object = CreatePen(metafile_word(p) & PS_STYLE_MASK, metafile_word(p + 2),
+                               lx_guest_load_u32(p + 6));
+        else if (function == WIN32_META_CREATEBRUSHINDIRECT && bytes == 14)
         {
-            uint8 brush[12];
+            uint8 brush[WIN32_LOGBRUSH_SIZE];
             lx_guest_store_u32(brush, lx_guest_load_u16(p));
             memcpy(brush + 4, p + 2, 4);
             lx_guest_store_u32(brush + 8, lx_guest_load_u16(p + 6));
             object = CreateBrushIndirect(brush);
         }
-        else if (function == 0x2fb && bytes >= 24)
+        else if (function == WIN32_META_CREATEFONTINDIRECT &&
+                 bytes >= WIN32_METARECORD_PARAMETERS + WIN32_LOGFONT16_FACE_NAME)
         {
-            /* Records may end soon after the face name's terminator. */
-            uint8 font[60] = {0};
-            for (unsigned i = 0; i < 5; i++)
+            /* Records may end soon after the face name's terminator. The 16-bit size
+               fields widen; lfItalic onward copies as it is. */
+            uint8 font[WIN32_LOGFONT_SIZE] = {0};
+            for (unsigned i = 0; i < WIN32_LOGFONT16_ITALIC / 2; i++)
                 lx_guest_store_u32(font + i * 4, (ULONG)metafile_word(p + i * 2));
-            memcpy(font + 20, p + 10, bytes - 16 < 40 ? bytes - 16 : 40);
-            font[59] = 0;
+            ULONG available = bytes - WIN32_METARECORD_PARAMETERS - WIN32_LOGFONT16_ITALIC;
+            memcpy(font + WIN32_LOGFONT_ITALIC, p + WIN32_LOGFONT16_ITALIC,
+                   available < WIN32_LOGFONT_SIZE - WIN32_LOGFONT_ITALIC
+                       ? available
+                       : WIN32_LOGFONT_SIZE - WIN32_LOGFONT_ITALIC);
+            font[WIN32_LOGFONT_SIZE - 1] = 0;
             object = CreateFontIndirect(font);
         }
         if (!object)
@@ -414,44 +432,48 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         DeleteObject(object);
         return FALSE;
     }
-    if (function == 0x41f && bytes == 14)
+    if (function == WIN32_META_SETPIXEL && bytes == 14)
         return SetPixel(dc, metafile_word(p + 6), metafile_word(p + 4), lx_guest_load_u32(p)) !=
                UINT32_MAX;
-    if (function == 0x61d && bytes == 18)
+    if (function == WIN32_META_PATBLT && bytes == 18)
         return PatBlt(dc, metafile_word(p + 10), metafile_word(p + 8), metafile_word(p + 6),
                       metafile_word(p + 4), lx_guest_load_u32(p));
-    if (function == 0x12e && bytes == 8)
+    if (function == WIN32_META_SETTEXTALIGN && bytes == 8)
         return SetTextAlign(dc, lx_guest_load_u16(p)) != UINT32_MAX;
-    if ((function == 0x20f || function == 0x211) && bytes == 10)
-        return function == 0x20f
+    if ((function == WIN32_META_OFFSETWINDOWORG || function == WIN32_META_OFFSETVIEWPORTORG) &&
+        bytes == 10)
+        return function == WIN32_META_OFFSETWINDOWORG
                    ? OffsetWindowOrgEx(dc, metafile_word(p + 2), metafile_word(p), NULL)
                    : OffsetViewportOrgEx(dc, metafile_word(p + 2), metafile_word(p), NULL);
-    if ((function == 0x400 || function == 0x412) && bytes == 14)
-        return function == 0x400
+    if ((function == WMF_SCALEWINDOWEXT_RECORD || function == WIN32_META_SCALEVIEWPORTEXT) &&
+        bytes == 14)
+        return function == WMF_SCALEWINDOWEXT_RECORD
                    ? ScaleWindowExtEx(dc, metafile_word(p + 6), metafile_word(p + 4),
                                       metafile_word(p + 2), metafile_word(p), NULL)
                    : ScaleViewportExtEx(dc, metafile_word(p + 6), metafile_word(p + 4),
                                         metafile_word(p + 2), metafile_word(p), NULL);
-    if ((function == 0x415 || function == 0x416) && bytes == 14)
-        return (function == 0x415
+    if ((function == WIN32_META_EXCLUDECLIPRECT || function == WIN32_META_INTERSECTCLIPRECT) &&
+        bytes == 14)
+        return (function == WIN32_META_EXCLUDECLIPRECT
                     ? ExcludeClipRect(dc, metafile_word(p + 6), metafile_word(p + 4),
                                       metafile_word(p + 2), metafile_word(p))
                     : IntersectClipRect(dc, metafile_word(p + 6), metafile_word(p + 4),
                                         metafile_word(p + 2), metafile_word(p))) != 0;
-    if (function == 0xa32 && bytes >= 14)
+    if (function == WIN32_META_EXTTEXTOUT && bytes >= 14)
         return wmf_text(dc, p, bytes);
-    if (function == 0x234 && bytes == 8)
+    if (function == WIN32_META_SELECTPALETTE && bytes == 8)
     {
         ULONG index = lx_guest_load_u16(p);
         ULONG object = index < count ? lx_guest_load_u32((uint8 *)table + index * 4) : 0;
         return object && SelectPalette(dc, object, FALSE) != 0;
     }
-    if ((function == 0x940 || function == 0xb41) && bytes >= 20)
+    if ((function == WIN32_META_DIBBITBLT || function == WIN32_META_DIBSTRETCHBLT) && bytes >= 20)
     {
-        ULONG head = function == 0x940 ? 16 : 20, parameters = bytes - 6;
+        ULONG head = function == WIN32_META_DIBBITBLT ? 16 : 20,
+              parameters = bytes - WIN32_METARECORD_PARAMETERS;
         ULONG operation = lx_guest_load_u32(p);
         /* Without a DIB the record is a pattern transfer ending in h, w, y and x. */
-        if (parameters < head + 40)
+        if (parameters < head + WIN32_BITMAPINFOHEADER_SIZE)
         {
             const UCHAR *q = p + parameters - 8;
             return PatBlt(dc, metafile_word(q + 6), metafile_word(q + 4), metafile_word(q + 2),
@@ -459,14 +481,14 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         }
         const UCHAR *q = p + head - 8, *source = p + 4;
         LONG height = metafile_word(q), width = metafile_word(q + 2);
-        LONG source_height = function == 0x940 ? height : metafile_word(source);
-        LONG source_width = function == 0x940 ? width : metafile_word(source + 2);
-        const UCHAR *origin = function == 0x940 ? source : source + 4;
+        LONG source_height = function == WIN32_META_DIBBITBLT ? height : metafile_word(source);
+        LONG source_width = function == WIN32_META_DIBBITBLT ? width : metafile_word(source + 2);
+        const UCHAR *origin = function == WIN32_META_DIBBITBLT ? source : source + 4;
         return wmf_dib(dc, p + head, parameters - head, metafile_word(q + 6), metafile_word(q + 4),
                        width, height, metafile_word(origin + 2), metafile_word(origin),
                        source_width, source_height, 0, operation);
     }
-    if (function == 0xd33 && bytes >= 24 + 40)
+    if (function == WIN32_META_SETDIBTODEV && bytes >= 24 + WIN32_BITMAPINFOHEADER_SIZE)
     {
         size_t info_bytes, pixel_bytes;
         ULONG usage = lx_guest_load_u16(p), lines = lx_guest_load_u16(p + 2);
@@ -484,17 +506,18 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
                                  metafile_word(p + 6), lx_guest_load_u16(p + 4), lines,
                                  (PVOID)(dib + info_bytes), (PVOID)dib, usage) != 0;
     }
-    if (function == 0x12c && bytes == 8)
+    if (function == WIN32_META_SELECTCLIPREGION && bytes == 8)
     {
         ULONG index = lx_guest_load_u16(p);
         ULONG object = index < count ? lx_guest_load_u32((uint8 *)table + index * 4) : 0;
-        if (!(index & 0x8000) && !object)
+        if (!(index & WMF_STOCK_OBJECT_INDEX) && !object)
             return FALSE;
-        return SelectClipRgn(dc, index & 0x8000 ? 0 : object) != 0;
+        return SelectClipRgn(dc, index & WMF_STOCK_OBJECT_INDEX ? 0 : object) != 0;
     }
-    if (function == 0x35)
+    if (function == WIN32_META_REALIZEPALETTE)
         return RealizePalette(dc) != UINT32_MAX;
-    if ((function == 0x37 || function == 0x436) && bytes >= 10)
+    if ((function == WIN32_META_SETPALENTRIES || function == WIN32_META_ANIMATEPALETTE) &&
+        bytes >= 10)
     {
         Open32DC *context = open32FindDC(dc);
         ULONG first = lx_guest_load_u16(p), entries = lx_guest_load_u16(p + 2);
@@ -503,13 +526,13 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
             open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
-        return function == 0x37
+        return function == WIN32_META_SETPALENTRIES
                    ? SetPaletteEntries(context->palette_handle, first, entries, (PVOID)(p + 4)) != 0
                    : AnimatePalette(context->palette_handle, first, entries, (PVOID)(p + 4));
     }
-    if (function == 0x139 && bytes == 8)
+    if (function == WIN32_META_RESIZEPALETTE && bytes == 8)
         return ResizePalette(open32FindDC(dc)->palette_handle, lx_guest_load_u16(p));
-    if (function == 0x626 && bytes >= 10)
+    if (function == WIN32_META_ESCAPE && bytes >= 10)
     {
         /* A device may decline an escape; that is not a playback failure. */
         ULONG size = lx_guest_load_u16(p + 2);
@@ -518,13 +541,13 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
             open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
-        if (lx_guest_load_u16(p) != 15)
+        if (lx_guest_load_u16(p) != WIN32_MFCOMMENT)
             Escape(dc, lx_guest_load_u16(p), (LONG)size, (PVOID)(p + 4), NULL);
         return TRUE;
     }
     /* SetRelAbs has no effect on Win32 drawing, and every host face is a scalable face that
        aspect filtering cannot exclude. */
-    if (function == 0x105 || function == 0x231)
+    if (function == WIN32_META_SETRELABS || function == WIN32_META_SETMAPPERFLAGS)
         return TRUE;
     TRACE_NATIVE("Unsupported WMF record %04X (%u bytes)", function, bytes);
     open32SetError(ERROR_NOT_SUPPORTED);
@@ -534,13 +557,13 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
 BOOL PlayMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
 {
     (void)table;
-    if (!open32FindDC(dc) || !record || count > 65535)
+    if (!open32FindDC(dc) || !record || count > UINT16_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG words = lx_guest_load_u32(record);
-    if (words < 3 || words > 32u * 1024 * 1024)
+    if (words < WIN32_METARECORD_MIN_WORDS || words > METAFILE_SIZE_MAX / 2)
     {
         open32SetError(ERROR_INVALID_DATA);
         return FALSE;
@@ -560,12 +583,16 @@ BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
         return FALSE;
     }
     Open32Metafile *file = borrow.resource;
-    ULONG count = lx_guest_load_u16(file->data + 10);
+    ULONG count = lx_guest_load_u16(file->data + WIN32_METAHEADER_OBJECTS);
     ULONG table_bytes = count ? count * 4 : 4;
-    size_t record_bytes = (size_t)lx_guest_load_u32(file->data + 12) * 2;
-    size_t size = (table_bytes + record_bytes + 4095) & ~(size_t)4095;
-    LxGuestMapping *data = lx_execution_map(execution, 0, size, 3, 0);
-    LxGuestMapping *code = data ? lx_execution_map(execution, 0, 4096, 3, 0) : NULL;
+    size_t record_bytes =
+        (size_t)lx_guest_load_u32(file->data + WIN32_METAHEADER_MAX_RECORD_WORDS) * 2;
+    size_t size =
+        (table_bytes + record_bytes + OPEN32_PAGE_SIZE - 1) & ~(size_t)(OPEN32_PAGE_SIZE - 1);
+    LxGuestMapping *data = lx_execution_map(execution, 0, size, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    LxGuestMapping *code =
+        data ? lx_execution_map(execution, 0, OPEN32_PAGE_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, 0)
+             : NULL;
     BOOL ok = data && code;
     if (ok)
     {
@@ -575,8 +602,8 @@ BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
         UCHAR thunk[] = {0x55, 0x89, 0xe5, 0x68, 0,    0,    0,    0,    0xff, 0x75, 0x14,
                          0xff, 0x75, 0x10, 0xff, 0x75, 0x0c, 0xff, 0x75, 0x08, 0xb8, 0,
                          0,    0,    0,    0xff, 0xd0, 0x89, 0xec, 0x5d, 0xc3};
-        lx_guest_store_u32(thunk + 4, parameter);
-        lx_guest_store_u32(thunk + 21, procedure);
+        lx_guest_store_u32(thunk + ENUM_THUNK_PARAMETER, parameter);
+        lx_guest_store_u32(thunk + ENUM_THUNK_PROCEDURE, procedure);
         memcpy(lx_execution_mapping_host(code), thunk, sizeof thunk);
         ok = lx_execution_protect(execution, code, LX_GUEST_READ | LX_GUEST_EXECUTE);
     }
@@ -586,9 +613,9 @@ BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
     {
         UCHAR *record = (UCHAR *)lx_execution_mapping_host(data) + table_bytes;
         ULONG table_address = lx_execution_mapping_address(data);
-        for (ULONG offset = 18; ok && offset < file->size;)
+        for (ULONG offset = WIN32_METAHEADER_SIZE; ok && offset < file->size;)
         {
-            ULONG bytes = lx_guest_load_u32(file->data + offset) * 2;
+            ULONG bytes = lx_guest_load_u32(file->data + offset + WIN32_METARECORD_WORDS) * 2;
             memcpy(record, file->data + offset, bytes);
             ok = lx_execution_callback32_4(execution, lx_execution_mapping_address(code), dc,
                                            table_address, table_address + table_bytes, count) != 0;
@@ -614,21 +641,22 @@ BOOL PlayMetaFile(ULONG dc, ULONG handle)
     }
     LONG saved = SaveDC(dc);
     Open32Metafile *file = borrow.resource;
-    ULONG count = lx_guest_load_u16(file->data + 10);
+    ULONG count = lx_guest_load_u16(file->data + WIN32_METAHEADER_OBJECTS);
     uint8 *table = calloc(count ? count : 1, 4);
     BOOL ok = saved > 0 && table;
     /* A refused record does not stop playback; only malformed framing ends it early. */
-    for (size_t offset = 18; ok && offset + 6 <= file->size;)
+    for (size_t offset = WIN32_METAHEADER_SIZE;
+         ok && offset + WIN32_METARECORD_PARAMETERS <= file->size;)
     {
         const UCHAR *record = file->data + offset;
-        size_t bytes = (size_t)lx_guest_load_u32(record) * 2;
-        if (bytes < 6 || bytes > file->size - offset)
+        size_t bytes = (size_t)lx_guest_load_u32(record + WIN32_METARECORD_WORDS) * 2;
+        if (bytes < WIN32_METARECORD_PARAMETERS || bytes > file->size - offset)
         {
             open32SetError(ERROR_INVALID_DATA);
             ok = FALSE;
             break;
         }
-        if (!lx_guest_load_u16(record + 4))
+        if (!lx_guest_load_u16(record + WIN32_METARECORD_FUNCTION))
             break;
         play_record(dc, record, table, count);
         offset += bytes;
@@ -669,8 +697,8 @@ void open32MetafilesCleanup(void)
 
 BOOL metafile_save(PSZ name, const uint8 *bytes, ULONG size)
 {
-    uint8 of[136];
-    LONG file = OpenFile(name, of, 0x1002);
+    uint8 of[WIN32_OFSTRUCT_SIZE];
+    LONG file = OpenFile(name, of, WIN32_OF_CREATE | WIN32_OF_READWRITE);
     if (file < 0)
         return FALSE;
     ULONG written = _lwrite((ULONG)file, (PVOID)bytes, size);
@@ -685,13 +713,16 @@ ULONG metafile_read(PSZ name, BOOL enhanced)
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    uint8 of[136];
-    LONG file = OpenFile(name, of, 0);
+    uint8 of[WIN32_OFSTRUCT_SIZE];
+    LONG file = OpenFile(name, of, WIN32_OF_READ);
     if (file < 0)
         return 0;
-    LONG size = _llseek((ULONG)file, 0, 2);
+    LONG size = _llseek((ULONG)file, 0, WIN32_FILE_END);
     ULONG result = 0;
-    if (size >= 24 && size <= 64 * 1024 * 1024 && _llseek((ULONG)file, 0, 0) == 0)
+    /* WMF_SIZE_MIN admits the smallest WMF; SetMetaFileBitsEx or SetEnhMetaFileBits
+       validates the rest. */
+    if (size >= WMF_SIZE_MIN && size <= METAFILE_SIZE_MAX &&
+        _llseek((ULONG)file, 0, WIN32_FILE_BEGIN) == 0)
     {
         uint8 *bytes = malloc((size_t)size);
         if (bytes)
