@@ -12,6 +12,13 @@ extern "C"
 
     /* INCL_SPL: spooler queries */
 
+    enum
+    {
+        PRQ3_TYPE_RAW = 0x0001,
+        PRQ3_TYPE_BYPASS = 0x0002,
+        PRQ3_TYPE_APPDEFAULT = 0x0004
+    };
+
     OS2EXPORT ULONG OS2API SplQueryDevice(PSZ computer, PSZ device, ULONG level, PVOID buffer,
                                           ULONG capacity, PULONG needed);
 
