@@ -8,6 +8,19 @@
 #include "os2/include/private/pmp.h"
 #include <stdio.h>
 
+enum
+{
+    /* The guest page holding the PM FONTDLG record, with the family-name buffer after it. */
+    FONTDLG_FAMILY_NAME = 512,
+    /* Point sizes are in tenths here; FONTDLG holds a 16.16 FIXED point size. */
+    TENTHS_PER_POINT = 10,
+    FIXED_ONE = 65536,
+    TENTHS_PER_INCH = 72 * TENTHS_PER_POINT,
+    DEFAULT_DPI = 96,
+    DEFAULT_POINT_SIZE_TENTHS = 100,
+    FONT_PROCEDURE_ARGUMENT_BYTES = 4 * sizeof(uint32)
+};
+
 typedef struct FontDialog
 {
     ULONG address, hook;
@@ -24,8 +37,8 @@ static uint32 font_dispatch(uint8 *a)
     if (dialog && message == WM_INITDLG)
     {
         lx_pm_font_procedure(window, message, (MPARAM)(uintptr_t)first, (MPARAM)(uintptr_t)second);
-        lx_execution_callback32_4(GProcessState.execution, dialog->hook, window, WIN_INITDIALOG,
-                                  first, dialog->address);
+        lx_execution_callback32_4(GProcessState.execution, dialog->hook, window,
+                                  WIN32_WM_INITDIALOG, first, dialog->address);
         return 0;
     }
     if (dialog && open32CommonDialogHook(dialog->hook, window, message, first, second))
@@ -36,134 +49,153 @@ static uint32 font_dispatch(uint8 *a)
 
 BOOL ChooseFont(PVOID record)
 {
-    if (!record || lx_guest_load_u32(record) != 60)
+    if (!record || lx_guest_load_u32(record) != WIN32_CHOOSEFONT_SIZE)
     {
-        open32CommonDialogError(1);
+        open32CommonDialogError(WIN32_CDERR_STRUCTSIZE);
         return FALSE;
     }
     uint8 *wire = record;
-    ULONG flags = lx_guest_load_u32(wire + 20), address = lx_guest_load_u32(wire + 12);
-    ULONG hook = flags & CF_ENABLEHOOK ? lx_guest_load_u32(wire + 32) : 0;
-    if ((flags & CF_ENABLEHOOK) && !open32ValidProcedure(hook))
+    ULONG flags = lx_guest_load_u32(wire + WIN32_CHOOSEFONT_FLAGS),
+          address = lx_guest_load_u32(wire + WIN32_CHOOSEFONT_LOGFONT);
+    ULONG hook = flags & WIN32_CF_ENABLEHOOK ? lx_guest_load_u32(wire + WIN32_CHOOSEFONT_HOOK) : 0;
+    if ((flags & WIN32_CF_ENABLEHOOK) && !open32ValidProcedure(hook))
     {
-        open32CommonDialogError(CDERR_NOHOOK);
+        open32CommonDialogError(WIN32_CDERR_NOHOOK);
         return FALSE;
     }
     LxGuestBorrow logfont = {0};
-    if (!address || !lx_execution_borrow(GProcessState.execution, address, 60, 3, &logfont))
+    if (!address || !lx_execution_borrow(GProcessState.execution, address, WIN32_LOGFONT_SIZE,
+                                         LX_GUEST_READ | LX_GUEST_WRITE, &logfont))
     {
-        open32CommonDialogError(CDERR_INITIALIZATION);
+        open32CommonDialogError(WIN32_CDERR_INITIALIZATION);
         return FALSE;
     }
-    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
-    LxGuestMapping *procedure =
-        hook ? lx_execution_map(GProcessState.execution, 0, 4096, 3, 0) : NULL;
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                               LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    LxGuestMapping *procedure = hook
+                                    ? lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                                       LX_GUEST_READ | LX_GUEST_WRITE, 0)
+                                    : NULL;
     PVOID custom = NULL;
     BOOL result = FALSE, opened = FALSE;
     ULONG failure = 0;
     if (!mapping || (hook && !procedure))
     {
-        failure = CDERR_MEMALLOCFAILURE;
+        failure = WIN32_CDERR_MEMALLOCFAILURE;
         goto font_done;
     }
     uint8 *bytes = lx_execution_mapping_host(mapping);
     LXFONTDLG *dialog = (LXFONTDLG *)bytes;
     dialog->cbSize = sizeof *dialog;
-    dialog->pszFamilyname = lx_execution_mapping_address(mapping) + 512;
-    dialog->usFamilyBufLen = 32;
-    memcpy(bytes + 512, (uint8 *)logfont.host + 28, 31);
-    bytes[543] = 0;
-    LONG points = 100;
-    if (flags & CF_INITTOLOGFONTSTRUCT)
+    dialog->pszFamilyname = lx_execution_mapping_address(mapping) + FONTDLG_FAMILY_NAME;
+    dialog->usFamilyBufLen = FACESIZE;
+    memcpy(bytes + FONTDLG_FAMILY_NAME, (uint8 *)logfont.host + WIN32_LOGFONT_FACE_NAME,
+           FACESIZE - 1);
+    bytes[FONTDLG_FAMILY_NAME + FACESIZE - 1] = 0;
+    LONG points = DEFAULT_POINT_SIZE_TENTHS;
+    if (flags & WIN32_CF_INITTOLOGFONTSTRUCT)
     {
         LONG height = (LONG)lx_guest_load_u32(logfont.host);
         if (height < 0)
             height = -height;
-        points = height
-                     ? height * 720 / (GProcessState.display_dpi ? GProcessState.display_dpi : 96)
-                     : 100;
+        points = height ? height * TENTHS_PER_INCH /
+                              (GProcessState.display_dpi ? GProcessState.display_dpi : DEFAULT_DPI)
+                        : DEFAULT_POINT_SIZE_TENTHS;
     }
-    dialog->fxPointSize = points * 65536 / 10;
-    dialog->fl = 1;
-    dialog->clrFore = (LONG)lx_guest_load_u32(wire + 24);
+    dialog->fxPointSize = points * FIXED_ONE / TENTHS_PER_POINT;
+    dialog->fl = FNTS_CENTER;
+    dialog->clrFore = (LONG)lx_guest_load_u32(wire + WIN32_CHOOSEFONT_COLORS);
     dialog->fAttrs.usRecordLength = sizeof dialog->fAttrs;
-    memcpy(dialog->fAttrs.szFacename, bytes + 512, 32);
-    if (flags & CF_ENABLETEMPLATE)
+    memcpy(dialog->fAttrs.szFacename, bytes + FONTDLG_FAMILY_NAME, FACESIZE);
+    if (flags & WIN32_CF_ENABLETEMPLATE)
     {
-        ULONG module = open32DialogTemplateModule(lx_guest_load_u32(wire + 40));
-        ULONG identity = open32DialogTemplateIdentity(module, lx_guest_load_u32(wire + 36));
+        ULONG module =
+            open32DialogTemplateModule(lx_guest_load_u32(wire + WIN32_CHOOSEFONT_INSTANCE));
+        ULONG identity = open32DialogTemplateIdentity(
+            module, lx_guest_load_u32(wire + WIN32_CHOOSEFONT_TEMPLATE_NAME));
         if (!identity)
         {
-            failure = CDERR_FINDRESFAILURE;
+            failure = WIN32_CDERR_FINDRESFAILURE;
             goto font_done;
         }
-        dialog->fl |= 2; /* FNTS_CUSTOM */
+        dialog->fl |= FNTS_CUSTOM;
         dialog->hMod = module;
         dialog->usDlgId = (USHORT)identity;
     }
-    else if (flags & CF_ENABLETEMPLATEHANDLE)
+    else if (flags & WIN32_CF_ENABLETEMPLATEHANDLE)
     {
-        ULONG memory = lx_guest_load_u32(wire + 40), locked = GlobalLock(memory);
+        ULONG memory = lx_guest_load_u32(wire + WIN32_CHOOSEFONT_INSTANCE),
+              locked = GlobalLock(memory);
         custom = locked ? open32ConvertDialog(locked) : NULL;
         if (locked)
             GlobalUnlock(memory);
         if (!custom)
         {
-            failure = CDERR_NOTEMPLATE;
+            failure = WIN32_CDERR_NOTEMPLATE;
             goto font_done;
         }
     }
-    FontDialog state = {
-        .address = open32GuestRecordAddress(record, 60), .hook = hook, .previous = font_dialogs};
+    FontDialog state = {.address = open32GuestRecordAddress(record, WIN32_CHOOSEFONT_SIZE),
+                        .hook = hook,
+                        .previous = font_dialogs};
     if (hook)
     {
-        const LxExecutionApi32 api = {font_dispatch, 16, 0, LX_ABI_STACK32};
+        const LxExecutionApi32 api = {font_dispatch, FONT_PROCEDURE_ARGUMENT_BYTES, 0,
+                                      LX_ABI_STACK32};
         if (!lx_execution_emit_bridge32(GProcessState.execution,
-                                        lx_execution_mapping_host(procedure), 4096, &api) ||
+                                        lx_execution_mapping_host(procedure), OPEN32_PAGE_SIZE,
+                                        &api) ||
             !lx_execution_protect(GProcessState.execution, procedure,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
-            failure = CDERR_MEMALLOCFAILURE;
+            failure = WIN32_CDERR_MEMALLOCFAILURE;
             goto font_done;
         }
         dialog->pfnDlgProc = lx_execution_mapping_address(procedure);
         font_dialogs = &state;
     }
     PVOID guest = (PVOID)(uintptr_t)lx_execution_mapping_address(mapping);
-    ULONG owner = lx_guest_load_u32(wire + 4);
+    ULONG owner = lx_guest_load_u32(wire + WIN32_CHOOSEFONT_OWNER);
     opened = open32Presentation() &&
              (custom ? lx_pm_font_dialog_template(HWND_DESKTOP, owner, guest, custom)
                      : lx_pm_font_dialog(HWND_DESKTOP, owner, guest));
     if (hook)
         font_dialogs = state.previous;
-    result = opened && dialog->lReturn == 1;
+    result = opened && dialog->lReturn == DID_OK;
     if (result)
     {
-        points = (LONG)((int64_t)dialog->fxPointSize * 10 / 65536);
-        LONG minimum = (LONG)lx_guest_load_u32(wire + 52);
-        LONG maximum = (LONG)lx_guest_load_u32(wire + 56);
-        if ((flags & 0x2000) && (points < minimum * 10 || points > maximum * 10))
+        points = (LONG)((int64_t)dialog->fxPointSize * TENTHS_PER_POINT / FIXED_ONE);
+        LONG minimum = (LONG)lx_guest_load_u32(wire + WIN32_CHOOSEFONT_SIZE_MIN);
+        LONG maximum = (LONG)lx_guest_load_u32(wire + WIN32_CHOOSEFONT_SIZE_MAX);
+        if ((flags & WIN32_CF_LIMITSIZE) &&
+            (points < minimum * TENTHS_PER_POINT || points > maximum * TENTHS_PER_POINT))
             result = FALSE;
         else
         {
             uint8 *font = logfont.host;
             lx_guest_store_u32(
-                font,
-                (ULONG) -
-                    (points * (LONG)(GProcessState.display_dpi ? GProcessState.display_dpi : 96) /
-                     720));
-            lx_guest_store_u32(font + 16, dialog->usWeight >= 7 ? 700 : 400);
-            font[20] = (dialog->fAttrs.fsSelection & 1) != 0;
-            font[21] = (dialog->fAttrs.fsSelection & 2) != 0;
-            font[22] = (dialog->fAttrs.fsSelection & 0x10) != 0;
-            memcpy(font + 28, dialog->fAttrs.szFacename, 32);
-            font[59] = 0;
-            lx_guest_store_u32(wire + 16, points);
-            lx_guest_store_u32(wire + 24, (ULONG)dialog->clrFore);
-            lx_guest_store_u16(wire + 48, dialog->fAttrs.fsFontUse & 2 ? 4 : 1);
+                font, (ULONG) - (points *
+                                 (LONG)(GProcessState.display_dpi ? GProcessState.display_dpi
+                                                                  : DEFAULT_DPI) /
+                                 TENTHS_PER_INCH));
+            lx_guest_store_u32(font + WIN32_LOGFONT_WEIGHT,
+                               dialog->usWeight >= FWEIGHT_BOLD ? WIN32_FW_BOLD : WIN32_FW_NORMAL);
+            font[WIN32_LOGFONT_ITALIC] = (dialog->fAttrs.fsSelection & FATTR_SEL_ITALIC) != 0;
+            font[WIN32_LOGFONT_UNDERLINE] =
+                (dialog->fAttrs.fsSelection & FATTR_SEL_UNDERSCORE) != 0;
+            font[WIN32_LOGFONT_STRIKE_OUT] =
+                (dialog->fAttrs.fsSelection & FATTR_SEL_STRIKEOUT) != 0;
+            memcpy(font + WIN32_LOGFONT_FACE_NAME, dialog->fAttrs.szFacename, FACESIZE);
+            font[WIN32_LOGFONT_FACE_NAME + FACESIZE - 1] = 0;
+            lx_guest_store_u32(wire + WIN32_CHOOSEFONT_POINT_SIZE, points);
+            lx_guest_store_u32(wire + WIN32_CHOOSEFONT_COLORS, (ULONG)dialog->clrFore);
+            lx_guest_store_u16(wire + WIN32_CHOOSEFONT_FONT_TYPE,
+                               dialog->fAttrs.fsFontUse & FATTR_FONTUSE_NOMIX
+                                   ? WIN32_TRUETYPE_FONTTYPE
+                                   : WIN32_RASTER_FONTTYPE);
         }
     }
-    failure = opened ? 0 : 0xFFFF;
+    failure = opened ? 0 : WIN32_CDERR_DIALOGFAILURE;
 font_done:
     open32CommonDialogError(failure);
     free(custom);

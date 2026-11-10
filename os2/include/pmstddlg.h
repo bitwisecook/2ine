@@ -93,6 +93,28 @@ extern "C"
                                                MPARAM second);
 
     /* INCL_WINSTDDRAG */
+    /* Drag messages */
+    enum
+    {
+        DM_DRAGOVER = 0x032e,
+        DM_DROP = 0x032f
+    };
+
+    /* DM_DRAGOVER responses */
+    enum
+    {
+        DOR_DROP = 0x0001,
+        DOR_NODROPOP = 0x0002,
+        DOR_NEVERDROP = 0x0003
+    };
+
+    /* Drag operations */
+    enum
+    {
+        DO_DEFAULT = 0xBFFE,
+        DO_UNKNOWN = 0xBFFF
+    };
+
     OS2EXPORT ULONG OS2API DrgAddStrHandle(PSZ name);
 
     OS2EXPORT BOOL OS2API DrgDeleteStrHandle(ULONG string);

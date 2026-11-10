@@ -3,21 +3,21 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/include/pmstddlg.h"
+#include "os2/include/bsedos.h"
 #include <stdlib.h>
 #include <string.h>
 
 enum
 {
-    DM_DRAGOVER = 0x32e,
-    DM_DROP = 0x32f,
-    WM_DROPFILES = 0x233,
-    DO_DEFAULT = 0xbffe,
-    DOR_DROP = 1,
-    DOR_NODROPOP = 2,
-    DOR_NEVERDROP = 3,
-    DROP_HEADER = 20,
-    DROP_PATH = 260,
-    GHND = 0x42,
+    DROP_PATH = CCHMAXPATH,
+    /* A DROPFILES block whose file list exceeds this is treated as malformed. */
+    DROP_SCAN_LIMIT = 16u * 1024u * 1024u,
+    /* PM DRAGINFO: usOperation, and the drop point (xDrop, yDrop) in screen coordinates. */
+    DRAGINFO_HEADER = 16,
+    DRAGINFO_OPERATION = 6,
+    DRAGINFO_X_DROP = 12,
+    DRAGINFO_Y_DROP = 14,
+    /* PM DRAGITEM up to hstrTargetName: the container and source name string handles. */
     DRAGITEM_NAMES = 24,
     DRAGITEM_CONTAINER = 16,
     DRAGITEM_SOURCE = 20
@@ -25,8 +25,9 @@ enum
 
 VOID DragAcceptFiles(ULONG window, BOOL accept)
 {
-    LONG style = GetWindowLong(window, -20);
-    SetWindowLong(window, -20, accept ? style | 0x10 : style & ~0x10);
+    LONG style = GetWindowLong(window, WIN32_GWL_EXSTYLE);
+    SetWindowLong(window, WIN32_GWL_EXSTYLE,
+                  accept ? style | WIN32_WS_EX_ACCEPTFILES : style & ~WIN32_WS_EX_ACCEPTFILES);
 }
 
 VOID DragFinish(ULONG drop)
@@ -34,10 +35,11 @@ VOID DragFinish(ULONG drop)
     GlobalFree(drop);
 }
 
-static ULONG drop_address(ULONG drop, uint8 header[20])
+static ULONG drop_address(ULONG drop, uint8 header[WIN32_DROPFILES_SIZE])
 {
     ULONG address = GlobalLock(drop);
-    if (!address || !lx_execution_read(GProcessState.execution, address, header, 20))
+    if (!address ||
+        !lx_execution_read(GProcessState.execution, address, header, WIN32_DROPFILES_SIZE))
     {
         open32SetError(ERROR_INVALID_HANDLE);
         return 0;
@@ -47,12 +49,13 @@ static ULONG drop_address(ULONG drop, uint8 header[20])
 
 ULONG DragQueryFile(ULONG drop, ULONG index, PSZ output, ULONG capacity)
 {
-    uint8 header[20];
+    uint8 header[WIN32_DROPFILES_SIZE];
     ULONG base = drop_address(drop, header);
     if (!base)
         return 0;
-    ULONG offset = lx_guest_load_u32(header), wide = lx_guest_load_u32(header + 16), address;
-    if (offset < 20 || offset > 16u * 1024u * 1024u || base > UINT32_MAX - offset)
+    ULONG offset = lx_guest_load_u32(header + WIN32_DROPFILES_FILES),
+          wide = lx_guest_load_u32(header + WIN32_DROPFILES_WIDE), address;
+    if (offset < WIN32_DROPFILES_SIZE || offset > DROP_SCAN_LIMIT || base > UINT32_MAX - offset)
     {
         GlobalUnlock(drop);
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -60,13 +63,13 @@ ULONG DragQueryFile(ULONG drop, ULONG index, PSZ output, ULONG capacity)
     }
     address = base + offset;
     ULONG count = 0, result = 0;
-    for (ULONG scanned = 0; scanned < 16u * 1024u * 1024u;)
+    for (ULONG scanned = 0; scanned < DROP_SCAN_LIMIT;)
     {
         ULONG start = address, length = 0;
         USHORT c = 0;
         for (;;)
         {
-            uint8 wire[2];
+            uint8 wire[sizeof(USHORT)];
             ULONG step = wide ? 2 : 1;
             if (address > UINT32_MAX - step ||
                 !lx_execution_read(GProcessState.execution, address, wire, step))
@@ -79,9 +82,10 @@ ULONG DragQueryFile(ULONG drop, ULONG index, PSZ output, ULONG capacity)
             if (count == index && output && length + 1 < capacity)
                 output[length] = c < 256 ? (char)c : '?';
             length++;
-            if (scanned >= 16u * 1024u * 1024u)
+            if (scanned >= DROP_SCAN_LIMIT)
                 goto drop_done;
         }
+        /* An empty name ends the double-null-terminated list. */
         if (address - start == (wide ? 2u : 1u))
         {
             if (index == UINT32_MAX)
@@ -104,13 +108,13 @@ drop_done:
 
 BOOL DragQueryPoint(ULONG drop, PVOID output)
 {
-    uint8 header[20];
+    uint8 header[WIN32_DROPFILES_SIZE];
     ULONG address = drop_address(drop, header);
     if (!address)
         return FALSE;
     if (output)
-        memcpy(output, header + 4, 8);
-    BOOL result = !lx_guest_load_u32(header + 12);
+        memcpy(output, header + WIN32_DROPFILES_POINT, WIN32_POINT_SIZE);
+    BOOL result = !lx_guest_load_u32(header + WIN32_DROPFILES_NONCLIENT);
     GlobalUnlock(drop);
     return result;
 }
@@ -126,9 +130,10 @@ static ULONG drag_over_response(ULONG info)
     USHORT response = DOR_NEVERDROP;
     if (info && DrgAccessDraginfo(info))
     {
-        uint8 header[8], names[DRAGITEM_NAMES];
-        BOOL default_operation = lx_execution_read(GProcessState.execution, info, header, 8) &&
-                                 lx_guest_load_u16(header + 6) == DO_DEFAULT;
+        uint8 header[DRAGINFO_OPERATION + sizeof(USHORT)], names[DRAGITEM_NAMES];
+        BOOL default_operation =
+            lx_execution_read(GProcessState.execution, info, header, sizeof header) &&
+            lx_guest_load_u16(header + DRAGINFO_OPERATION) == DO_DEFAULT;
         response = default_operation ? DOR_DROP : DOR_NODROPOP;
         ULONG count = DrgQueryDragitemCount(info);
         for (ULONG i = 0; i < count && response != DOR_NEVERDROP; i++)
@@ -141,7 +146,7 @@ static ULONG drag_over_response(ULONG info)
         }
         DrgFreeDraginfo(info);
     }
-    return 0xbfff0000u | response;
+    return (ULONG)DO_UNKNOWN << 16 | response;
 }
 
 static BOOL item_path(ULONG item, char path[DROP_PATH])
@@ -157,14 +162,14 @@ static BOOL item_path(ULONG item, char path[DROP_PATH])
 /* The DROPFILES block belongs to the guest; DragFinish releases it. */
 static ULONG build_drop(HWND window, ULONG info)
 {
-    uint8 header[16];
+    uint8 header[DRAGINFO_HEADER];
     if (!lx_execution_read(GProcessState.execution, info, header, sizeof header))
         return 0;
     ULONG count = DrgQueryDragitemCount(info), drop = 0;
     char *paths = calloc(count ? count : 1, DROP_PATH);
     if (!paths)
         return 0;
-    size_t size = DROP_HEADER + 1;
+    size_t size = WIN32_DROPFILES_SIZE + 1;
     for (ULONG i = 0; i < count; i++)
     {
         char *path = paths + (size_t)i * DROP_PATH;
@@ -173,16 +178,20 @@ static ULONG build_drop(HWND window, ULONG info)
         else
             *path = 0;
     }
-    POINTL point = {(SHORT)lx_guest_load_u16(header + 12), (SHORT)lx_guest_load_u16(header + 14)};
+    POINTL point = {(SHORT)lx_guest_load_u16(header + DRAGINFO_X_DROP),
+                    (SHORT)lx_guest_load_u16(header + DRAGINFO_Y_DROP)};
     SWP position = {0};
     uint8 *wire = calloc(1, size);
     if (wire && WinMapWindowPoints(HWND_DESKTOP, window, &point, 1) &&
-        WinQueryWindowPos(window, &position) && (drop = GlobalAlloc(GHND, (ULONG)size)))
+        WinQueryWindowPos(window, &position) &&
+        (drop = GlobalAlloc(WIN32_GMEM_MOVEABLE | WIN32_GMEM_ZEROINIT, (ULONG)size)))
     {
-        size_t offset = DROP_HEADER;
-        lx_guest_store_u32(wire, DROP_HEADER);
-        lx_guest_store_u32(wire + 4, (uint32)point.x);
-        lx_guest_store_u32(wire + 8, (uint32)(position.cy - point.y));
+        /* The point is client-relative with y measured down from the top, as Windows has it. */
+        size_t offset = WIN32_DROPFILES_SIZE;
+        lx_guest_store_u32(wire + WIN32_DROPFILES_FILES, WIN32_DROPFILES_SIZE);
+        lx_guest_store_u32(wire + WIN32_DROPFILES_POINT, (uint32)point.x);
+        lx_guest_store_u32(wire + WIN32_DROPFILES_POINT + sizeof(LONG),
+                           (uint32)(position.cy - point.y));
         for (ULONG i = 0; i < count; i++)
         {
             const char *path = paths + (size_t)i * DROP_PATH;
@@ -213,7 +222,7 @@ static void post_dropped_files(HWND window, ULONG info)
         return;
     ULONG drop = build_drop(window, info);
     DrgFreeDraginfo(info);
-    if (drop && !PostMessage(window, WM_DROPFILES, drop, 0))
+    if (drop && !PostMessage(window, WIN32_WM_DROPFILES, drop, 0))
         GlobalFree(drop);
 }
 
@@ -222,7 +231,7 @@ ULONG open32DragMessage(ULONG window, BOOL accept, ULONG message, ULONG first, U
 {
     if (!accept)
     {
-        HWND parent = WinQueryWindow(window, 5);
+        HWND parent = WinQueryWindow(window, QW_PARENT);
         if (!parent || parent == HWND_DESKTOP)
             return 1;
         return (ULONG)(uintptr_t)WinSendMsg(parent, message, (MPARAM)(uintptr_t)first,

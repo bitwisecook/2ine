@@ -9,13 +9,22 @@
 
 enum
 {
-    PRINT_DIALOG_BYTES = 66,
-    DEVICE_MODE_BYTES = 128
+    /* The DEVMODE and DEVNAMES blocks returned, and the dpi reported in both
+       directions. */
+    DEVICE_MODE_BYTES = 128,
+    DEVICE_NAMES_BYTES = 128,
+    PRINTER_DPI = 300,
+    /* PD_ENABLEPRINTHOOK through PD_ENABLESETUPTEMPLATEHANDLE. */
+    PRINT_DIALOG_CUSTOMIZATION = WIN32_PD_ENABLEPRINTHOOK | WIN32_PD_ENABLESETUPHOOK |
+                                 WIN32_PD_ENABLEPRINTTEMPLATE | WIN32_PD_ENABLESETUPTEMPLATE |
+                                 WIN32_PD_ENABLEPRINTTEMPLATEHANDLE |
+                                 WIN32_PD_ENABLESETUPTEMPLATEHANDLE,
+    PRINT_DIALOG_RETURN_CONTEXT = WIN32_PD_RETURNDC | WIN32_PD_RETURNIC
 };
 
 static ULONG printer_block(const void *data, size_t size)
 {
-    ULONG block = GlobalAlloc(0x42, (ULONG)size);
+    ULONG block = GlobalAlloc(WIN32_GMEM_MOVEABLE | WIN32_GMEM_ZEROINIT, (ULONG)size);
     ULONG address = block ? GlobalLock(block) : 0;
     if (!address || !lx_execution_write(GProcessState.execution, address, data, size))
     {
@@ -33,76 +42,86 @@ BOOL PrintDlg(PVOID pointer)
 {
     open32CommonDialogError(0);
     uint32 address = (uint32)(uintptr_t)pointer;
-    uint8 record[PRINT_DIALOG_BYTES];
+    uint8 record[WIN32_PRINTDLG_SIZE];
     if ((uintptr_t)pointer > UINT32_MAX ||
         !lx_execution_read(GProcessState.execution, address, record, sizeof record) ||
         !lx_execution_memory(GProcessState.execution, address, sizeof record, LX_GUEST_WRITE) ||
         lx_guest_load_u32(record) != sizeof record)
     {
-        open32CommonDialogError(1); /* CDERR_STRUCTSIZE */
+        open32CommonDialogError(WIN32_CDERR_STRUCTSIZE);
         return FALSE;
     }
-    ULONG flags = lx_guest_load_u32(record + 20), old_mode = lx_guest_load_u32(record + 8),
-          old_names = lx_guest_load_u32(record + 12);
-    if ((flags & 0x3f000) || (flags & 0x300) == 0x300)
+    ULONG flags = lx_guest_load_u32(record + WIN32_PRINTDLG_FLAGS),
+          old_mode = lx_guest_load_u32(record + WIN32_PRINTDLG_DEVMODE),
+          old_names = lx_guest_load_u32(record + WIN32_PRINTDLG_DEVNAMES);
+    if ((flags & PRINT_DIALOG_CUSTOMIZATION) ||
+        (flags & PRINT_DIALOG_RETURN_CONTEXT) == PRINT_DIALOG_RETURN_CONTEXT)
     {
-        open32SetError(
-            ERROR_NOT_SUPPORTED);     /* Custom guest print hooks/templates are not implemented. */
-        open32CommonDialogError(0xb); /* CDERR_NOHOOK */
+        /* Guest print hooks and templates are not implemented. */
+        open32SetError(ERROR_NOT_SUPPORTED);
+        open32CommonDialogError(WIN32_CDERR_NOHOOK);
         return FALSE;
     }
-    if ((flags & 0x400) && (old_mode || old_names))
+    if ((flags & WIN32_PD_RETURNDEFAULT) && (old_mode || old_names))
     {
-        open32CommonDialogError(0x1003); /* PDERR_RETDEFFAILURE */
+        open32CommonDialogError(WIN32_PDERR_RETDEFFAILURE);
         return FALSE;
     }
     int preferred = lx_printer_default_queue();
-    if ((flags & 0x400) && preferred < 0)
+    if ((flags & WIN32_PD_RETURNDEFAULT) && preferred < 0)
     {
-        open32CommonDialogError(0x1008); /* PDERR_NODEFAULTPRN */
+        open32CommonDialogError(WIN32_PDERR_NODEFAULTPRN);
         return FALSE;
     }
+    /* kind numbers the 2ine printer queues from 1. */
     unsigned kind = preferred >= 0 ? (unsigned)preferred + 1 : 1;
-    if (!(flags & 0x400))
+    if (!(flags & WIN32_PD_RETURNDEFAULT))
     {
         LxHostSaveResult choice = lx_host_print_choose_device(&kind);
         if (choice != LX_HOST_SAVE_OK)
         {
             if (choice == LX_HOST_SAVE_ERROR)
-                open32CommonDialogError(0x1007); /* PDERR_NODEVICES */
+                open32CommonDialogError(WIN32_PDERR_NODEVICES);
             return FALSE;
         }
     }
-    if (kind < 1 || kind > 2)
+    if (kind < 1 || kind > LX_PRINTER_COUNT)
     {
-        open32CommonDialogError(0x1007);
+        open32CommonDialogError(WIN32_PDERR_NODEVICES);
         return FALSE;
     }
-    uint8 mode[DEVICE_MODE_BYTES] = {0}, names[128] = {0};
+    uint8 mode[DEVICE_MODE_BYTES] = {0}, names[DEVICE_NAMES_BYTES] = {0};
     const char *queue = lx_printer_queues[kind - 1];
     strcpy((char *)mode, queue);
-    lx_guest_store_u16(mode + 32, 0x0320);
-    lx_guest_store_u16(mode + 34, 1);
-    lx_guest_store_u16(mode + 36, sizeof mode);
-    lx_guest_store_u32(mode + 40, 0x2c03); /* orientation, A4, quality, color, y-resolution */
-    lx_guest_store_u16(mode + 44, 1);
-    lx_guest_store_u16(mode + 46, 9);
-    lx_guest_store_u16(mode + 54, 1);
-    lx_guest_store_u16(mode + 58, 300);
-    lx_guest_store_u16(mode + 60, kind == 1 ? 2 : 1);
-    lx_guest_store_u16(mode + 64, 300);
-    size_t tail = 8;
+    lx_guest_store_u16(mode + WIN32_DEVMODE_SPEC_VERSION, WIN32_DM_SPECVERSION);
+    lx_guest_store_u16(mode + WIN32_DEVMODE_DRIVER_VERSION, 1);
+    lx_guest_store_u16(mode + WIN32_DEVMODE_SIZE, sizeof mode);
+    lx_guest_store_u32(mode + WIN32_DEVMODE_FIELDS, WIN32_DM_ORIENTATION | WIN32_DM_PAPERSIZE |
+                                                        WIN32_DM_PRINTQUALITY | WIN32_DM_COLOR |
+                                                        WIN32_DM_YRESOLUTION);
+    lx_guest_store_u16(mode + WIN32_DEVMODE_ORIENTATION, WIN32_DMORIENT_PORTRAIT);
+    lx_guest_store_u16(mode + WIN32_DEVMODE_PAPER_SIZE, WIN32_DMPAPER_A4);
+    lx_guest_store_u16(mode + WIN32_DEVMODE_COPIES, 1);
+    lx_guest_store_u16(mode + WIN32_DEVMODE_PRINT_QUALITY, PRINTER_DPI);
+    /* The first queue (PDF) prints in colour, the second (PCL) in monochrome. */
+    lx_guest_store_u16(mode + WIN32_DEVMODE_COLOR,
+                       kind == 1 ? WIN32_DMCOLOR_COLOR : WIN32_DMCOLOR_MONOCHROME);
+    lx_guest_store_u16(mode + WIN32_DEVMODE_Y_RESOLUTION, PRINTER_DPI);
+    /* DEVNAMES: three offsets (driver, device, output) and wDefault, then the strings. */
+    size_t tail = WIN32_DEVNAMES_SIZE;
     for (unsigned i = 0; i < 3; i++)
     {
         const char *value = i == 2 ? "FILE:" : queue;
-        lx_guest_store_u16(names + i * 2, (USHORT)tail);
+        lx_guest_store_u16(names + i * (unsigned)sizeof(USHORT), (USHORT)tail);
         memcpy(names + tail, value, strlen(value) + 1);
         tail += strlen(value) + 1;
     }
-    lx_guest_store_u16(names + 6, (int)kind - 1 == preferred);
+    lx_guest_store_u16(names + WIN32_DEVNAMES_DEFAULT, (int)kind - 1 == preferred);
     ULONG new_mode = printer_block(mode, sizeof mode), new_names = printer_block(names, tail);
-    ULONG dc = flags & 0x300 ? open32CreatePrinterContext(kind, (flags & 0x200) != 0) : 0;
-    if (!new_mode || !new_names || ((flags & 0x300) && !dc))
+    ULONG dc = flags & PRINT_DIALOG_RETURN_CONTEXT
+                   ? open32CreatePrinterContext(kind, (flags & WIN32_PD_RETURNIC) != 0)
+                   : 0;
+    if (!new_mode || !new_names || ((flags & PRINT_DIALOG_RETURN_CONTEXT) && !dc))
     {
         if (new_mode)
             GlobalFree(new_mode);
@@ -110,13 +129,13 @@ BOOL PrintDlg(PVOID pointer)
             GlobalFree(new_names);
         if (dc)
             DeleteDC(dc);
-        open32CommonDialogError(9); /* CDERR_MEMALLOCFAILURE */
+        open32CommonDialogError(WIN32_CDERR_MEMALLOCFAILURE);
         return FALSE;
     }
-    lx_guest_store_u32(record + 8, new_mode);
-    lx_guest_store_u32(record + 12, new_names);
-    lx_guest_store_u32(record + 16, dc);
-    lx_guest_store_u16(record + 32, 1);
+    lx_guest_store_u32(record + WIN32_PRINTDLG_DEVMODE, new_mode);
+    lx_guest_store_u32(record + WIN32_PRINTDLG_DEVNAMES, new_names);
+    lx_guest_store_u32(record + WIN32_PRINTDLG_DC, dc);
+    lx_guest_store_u16(record + WIN32_PRINTDLG_COPIES, 1);
     if (!lx_execution_write(GProcessState.execution, address, record, sizeof record))
     {
         GlobalFree(new_mode);

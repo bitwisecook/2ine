@@ -18,11 +18,14 @@ ULONG dde_callback(DdeInstance *instance, ULONG type, ULONG format, ULONG conver
         return 0;
     if (!dde_callback_code)
     {
+        /* mov eax, [esp + 4]; push the eight callback words [eax + 0x1c] .. [eax];
+           call [eax + 0x20]; add esp, 0x20; ret */
         static const uint8 code[] = {0x8B, 0x44, 0x24, 0x04, 0xFF, 0x70, 0x1C, 0xFF, 0x70,
                                      0x18, 0xFF, 0x70, 0x14, 0xFF, 0x70, 0x10, 0xFF, 0x70,
                                      0x0C, 0xFF, 0x70, 0x08, 0xFF, 0x70, 0x04, 0xFF, 0x30,
                                      0xFF, 0x50, 0x20, 0x83, 0xC4, 0x20, 0xC3};
-        dde_callback_code = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
+        dde_callback_code = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                             LX_GUEST_READ | LX_GUEST_WRITE, 0);
         if (!dde_callback_code)
             return 0;
         memcpy(lx_execution_mapping_host(dde_callback_code), code, sizeof code);
@@ -34,12 +37,13 @@ ULONG dde_callback(DdeInstance *instance, ULONG type, ULONG format, ULONG conver
             return 0;
         }
     }
-    LxGuestMapping *arguments = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *arguments = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                                 LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!arguments)
         return 0;
     ULONG values[] = {type, format, conversation,      first, second, data,
                       one,  two,    instance->callback};
-    for (unsigned i = 0; i < 9; i++)
+    for (unsigned i = 0; i < sizeof values / sizeof *values; i++)
         lx_guest_store_u32((uint8 *)lx_execution_mapping_host(arguments) + i * 4, values[i]);
     ULONG result = lx_execution_callback32_4(GProcessState.execution,
                                              lx_execution_mapping_address(dde_callback_code),
@@ -187,7 +191,7 @@ BOOL dde_invoke(ULONG instance, ULONG timeout, ULONG type, ULONG format, ULONG c
         free(request);
         return FALSE;
     }
-    uint64 deadline = lx_host_monotonic_us() + (uint64)timeout * 1000;
+    uint64 deadline = lx_host_monotonic_us() + (uint64)timeout * US_PER_MS;
     BOOL done;
     for (;;)
     {
@@ -195,7 +199,7 @@ BOOL dde_invoke(ULONG instance, ULONG timeout, ULONG type, ULONG format, ULONG c
         lx_host_monitor_lock(dde_lock);
         done = request->done;
         if (!done && lx_host_monotonic_us() < deadline)
-            lx_host_monitor_wait(dde_lock, 20);
+            lx_host_monitor_wait(dde_lock, DDE_POLL_MS);
         done = request->done;
         BOOL expired = !done && lx_host_monotonic_us() >= deadline;
         if (expired)
