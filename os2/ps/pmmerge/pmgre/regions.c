@@ -3,6 +3,14 @@
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 
+/* Bounds on region work, which is quadratic in the rectangle count. */
+enum
+{
+    REGION_MAX_INPUT_RECTS = 8192,
+    REGION_MAX_RESULT_RECTS = 65536,
+    REGION_MAX_SET_RECTS = 4096
+};
+
 typedef struct
 {
     LONG x;
@@ -23,7 +31,7 @@ static int edge_compare(const void *left, const void *right)
 BOOL regionBoolean(PmRegion *out, const PmRegion *a, const PmRegion *b, LONG mode)
 {
     size_t total = a->count + (b ? b->count : 0);
-    if (total > 8192)
+    if (total > REGION_MAX_INPUT_RECTS)
         return FALSE;
     LONG *ys = malloc((total * 2 + 1) * sizeof *ys);
     Edge *edges = malloc((total * 2 + 1) * sizeof *edges);
@@ -82,11 +90,11 @@ BOOL regionBoolean(PmRegion *out, const PmRegion *a, const PmRegion *b, LONG mod
                 cb += edges[i].b;
                 i++;
             }
-            BOOL inside = mode == 1   ? ca || cb
-                          : mode == 2 ? ca > 0
-                          : mode == 4 ? !!ca != !!cb
-                          : mode == 6 ? ca && cb
-                                      : ca && !cb;
+            BOOL inside = mode == CRGN_OR     ? ca || cb
+                          : mode == CRGN_COPY ? ca > 0
+                          : mode == CRGN_XOR  ? !!ca != !!cb
+                          : mode == CRGN_AND  ? ca && cb
+                                              : ca && !cb;
             if (inside && !open)
             {
                 start = x;
@@ -108,7 +116,7 @@ BOOL regionBoolean(PmRegion *out, const PmRegion *a, const PmRegion *b, LONG mod
                     if (count == capacity)
                     {
                         size_t next = capacity ? capacity * 2 : 8;
-                        if (next > 65536)
+                        if (next > REGION_MAX_RESULT_RECTS)
                             goto fail;
                         RECTL *p = realloc(rects, next * sizeof *p);
                         if (!p)
@@ -164,13 +172,14 @@ static PmRegion *borrow_region(ULONG handle, LxHandleBorrow *borrow)
 
 static LONG region_type(const PmRegion *r)
 {
-    return !r->count ? 1 : r->count == 1 ? 2 : 3;
+    return !r->count ? RGN_NULL : r->count == 1 ? RGN_RECT : RGN_COMPLEX;
 }
 
 ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || !lx_pm_valid_ps(ps) || count < 0 || count > 4096 || (count && !rectangles))
+    if (!anchor || !lx_pm_valid_ps(ps) || count < 0 || count > REGION_MAX_SET_RECTS ||
+        (count && !rectangles))
         return 0;
     PmRegion source = {0}, *region = calloc(1, sizeof *region);
     if (!region)
@@ -184,7 +193,7 @@ ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles)
     for (LONG i = 0; i < count; i++)
         if (!WinIsRectEmpty(0, (PRECTL)&rectangles[i]))
             source.rects[source.count++] = rectangles[i];
-    BOOL ok = regionBoolean(region, &source, NULL, 2);
+    BOOL ok = regionBoolean(region, &source, NULL, CRGN_COPY);
     free(source.rects);
     if (!ok)
     {
@@ -218,7 +227,7 @@ BOOL lx_pm_region_destroy(HPS ps, ULONG handle)
 
 LONG lx_pm_region_set(HPS ps, ULONG handle, LONG count, const RECTL *rects)
 {
-    if (!lx_pm_valid_ps(ps) || count < 0 || count > 4096 || (count && !rects))
+    if (!lx_pm_valid_ps(ps) || count < 0 || count > REGION_MAX_SET_RECTS || (count && !rects))
         return 0;
     LxHandleBorrow borrow = {0};
     PmRegion *region = borrow_region(handle, &borrow);
@@ -230,7 +239,7 @@ LONG lx_pm_region_set(HPS ps, ULONG handle, LONG count, const RECTL *rects)
         for (LONG i = 0; i < count; i++)
             if (!WinIsRectEmpty(0, (PRECTL)&rects[i]))
                 source.rects[source.count++] = rects[i];
-        if (regionBoolean(region, &source, NULL, 2))
+        if (regionBoolean(region, &source, NULL, CRGN_COPY))
             result = region_type(region);
     }
     free(source.rects);
@@ -240,14 +249,16 @@ LONG lx_pm_region_set(HPS ps, ULONG handle, LONG count, const RECTL *rects)
 
 LONG lx_pm_region_combine(HPS ps, ULONG destination, ULONG first, ULONG second, LONG mode)
 {
-    if (!lx_pm_valid_ps(ps) || (mode != 1 && mode != 2 && mode != 4 && mode != 6 && mode != 7))
-        return 0;
+    if (!lx_pm_valid_ps(ps) || (mode != CRGN_OR && mode != CRGN_COPY && mode != CRGN_XOR &&
+                                mode != CRGN_AND && mode != CRGN_DIFF))
+        return RGN_ERROR;
     LxHandleBorrow d = {0}, a = {0}, b = {0};
     PmRegion *dst = borrow_region(destination, &d), *left = borrow_region(first, &a),
-             *right = mode == 2 ? NULL : borrow_region(second, &b);
-    LONG result = dst && left && (mode == 2 || right) && regionBoolean(dst, left, right, mode)
-                      ? region_type(dst)
-                      : 0;
+             *right = mode == CRGN_COPY ? NULL : borrow_region(second, &b);
+    LONG result =
+        dst && left && (mode == CRGN_COPY || right) && regionBoolean(dst, left, right, mode)
+            ? region_type(dst)
+            : RGN_ERROR;
     lx_handle_release(&b);
     lx_handle_release(&a);
     lx_handle_release(&d);
@@ -307,7 +318,7 @@ LONG lx_pm_set_clip(HPS handle, ULONG region, ULONG *previous)
         old->selected--;
     lx_handle_release(&ps->clip_lease);
     ps->clip_lease = next;
-    return value ? region_type(value) : 2;
+    return value ? region_type(value) : RGN_RECT;
 }
 
 LONG lx_pm_rect_visible(HPS handle, const RECTL *rect)
@@ -324,7 +335,7 @@ LONG lx_pm_rect_visible(HPS handle, const RECTL *rect)
     }
     RECTL target;
     if (!WinIntersectRect(0, &target, (PRECTL)rect, &bounds))
-        return 1;
+        return RVIS_INVISIBLE;
     uint64_t area = 0;
     if (clip)
         for (size_t i = 0; i < clip->count; i++)
@@ -337,10 +348,10 @@ LONG lx_pm_rect_visible(HPS handle, const RECTL *rect)
         area = (uint64_t)((int64_t)target.xRight - target.xLeft) *
                ((int64_t)target.yTop - target.yBottom);
     if (!area)
-        return 1;
+        return RVIS_INVISIBLE;
     uint64_t full =
         (uint64_t)((int64_t)rect->xRight - rect->xLeft) * ((int64_t)rect->yTop - rect->yBottom);
-    return area == full ? 3 : 2;
+    return area == full ? RVIS_VISIBLE : RVIS_PARTIAL;
 }
 
 void lx_pm_region_cleanup(void *context)
@@ -401,8 +412,9 @@ static int region_bottom_right(const void *a, const void *b)
 
 BOOL lx_pm_region_query_rects(HPS ps, ULONG handle, PRECTL bounds, RGNRECT *control, PRECTL rects)
 {
-    if (!control || (rects && (!control->ircStart || !control->crc)) || control->ulDirection < 1 ||
-        control->ulDirection > 4 || !lx_pm_valid_ps(ps))
+    if (!control || (rects && (!control->ircStart || !control->crc)) ||
+        control->ulDirection < RECTDIR_LFRT_TOPBOT || control->ulDirection > RECTDIR_RTLF_BOTTOP ||
+        !lx_pm_valid_ps(ps))
         return FALSE;
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_PM_REGION, &borrow))
@@ -417,7 +429,7 @@ BOOL lx_pm_region_query_rects(HPS ps, ULONG handle, PRECTL bounds, RGNRECT *cont
         clip.rects = bounds;
         clip.count = 1;
     }
-    if (!regionBoolean(&filtered, region, bounds ? &clip : NULL, bounds ? 6 : 2))
+    if (!regionBoolean(&filtered, region, bounds ? &clip : NULL, bounds ? CRGN_AND : CRGN_COPY))
         goto end;
     if (!rects)
     {
@@ -433,15 +445,19 @@ BOOL lx_pm_region_query_rects(HPS ps, ULONG handle, PRECTL bounds, RGNRECT *cont
                                 ? (uint64_t)((int64_t)bounds->xRight - bounds->xLeft) *
                                       ((int64_t)bounds->yTop - bounds->yBottom)
                                 : 0;
-            control->crc = !area ? 1 : area == full ? 3 : 2;
+            control->crc = !area ? RRGN_OUTSIDE : area == full ? RRGN_INSIDE : RRGN_PARTIAL;
         }
         free(filtered.rects);
         result = TRUE;
         goto end;
     }
-    static int (*const order[])(const void *, const void *) = {
-        region_top_left, region_top_right, region_bottom_left, region_bottom_right};
-    qsort(filtered.rects, filtered.count, sizeof *filtered.rects, order[control->ulDirection - 1]);
+    static int (*const order[])(const void *,
+                                const void *) = {[RECTDIR_LFRT_TOPBOT - 1] = region_top_left,
+                                                 [RECTDIR_RTLF_TOPBOT - 1] = region_top_right,
+                                                 [RECTDIR_LFRT_BOTTOP - 1] = region_bottom_left,
+                                                 [RECTDIR_RTLF_BOTTOP - 1] = region_bottom_right};
+    qsort(filtered.rects, filtered.count, sizeof *filtered.rects,
+          order[control->ulDirection - RECTDIR_LFRT_TOPBOT]);
     size_t start = control->ircStart - 1;
     size_t count = start < filtered.count ? filtered.count - start : 0;
     if (count > control->crc)

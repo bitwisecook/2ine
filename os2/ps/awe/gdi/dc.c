@@ -18,7 +18,6 @@ enum
     /* A ternary raster operation keeps its operation index in bits 16-23. */
     RASTER_OPERATION_INDEX_SHIFT = 16,
     RASTER_OPERATION_INDEX_MASK = 0xff,
-    RGB_WHITE = 0xFFFFFF,
     /* A compatible bitmap made while no bitmap is selected matches the display. */
     DISPLAY_BITMAP_DEPTH = 24
 };

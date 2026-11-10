@@ -10,7 +10,6 @@ enum
 {
     /* Hatch brushes repeat an 8-by-8 pel cell. */
     HATCH_CELL_MASK = 7,
-    RGB_WHITE = 0xFFFFFF,
     /* A DIB pattern LOGBRUSH carries its DIB_RGB_COLORS/DIB_PAL_COLORS usage in lbColor's
        low word. */
     DIB_USAGE_MASK = 0xFFFF,

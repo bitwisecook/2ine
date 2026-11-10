@@ -25,15 +25,56 @@ extern "C"
         LONG cx, cy;
     } SIZEL, *PSIZEL;
 
+    enum
+    {
+        GPI_ERROR = 0,
+        GPI_OK = 1,
+        GPI_ALTERROR = -1,
+        CLR_NOINDEX = -254
+    };
+
     /* INCL_GPICONTROL */
 
     enum
     {
+        PU_ARBITRARY = 0x0004,
         PU_PELS = 8,
+        PU_LOMETRIC = 0x000C,
+        PU_HIMETRIC = 0x0010,
+        PU_LOENGLISH = 0x0014,
+        PU_HIENGLISH = 0x0018,
+        PU_TWIPS = 0x001C,
         GPIF_DEFAULT = 0,
+        GPIF_SHORT = 0x0100,
+        GPIF_LONG = 0x0200,
         GPIT_NORMAL = 0,
+        GPIT_MICRO = 0x1000,
         GPIA_ASSOC = 0x4000,
         DM_DRAW = 1
+    };
+
+    enum
+    {
+        GRES_ATTRS = 0x0001,
+        GRES_SEGMENTS = 0x0002,
+        GRES_ALL = 0x0004,
+        PS_UNITS = 0x00FC,
+        PS_FORMAT = 0x0F00,
+        PS_TYPE = 0x1000,
+        PS_MODE = 0x2000,
+        PS_ASSOCIATE = 0x4000,
+        PS_NORESET = 0x8000,
+        DCTL_ERASE = 1,
+        DCTL_DISPLAY = 2,
+        DCTL_BOUNDARY = 3,
+        DCTL_DYNAMIC = 4,
+        DCTL_CORRELATE = 5,
+        DCTL_ERROR = -1,
+        DCTL_OFF = 0,
+        DCTL_ON = 1,
+        SDW_ERROR = -1,
+        SDW_OFF = 0,
+        SDW_ON = 1
     };
 
     OS2EXPORT LONG OS2API GpiSavePS(HPS ps);
@@ -66,6 +107,13 @@ extern "C"
 
     /* INCL_GPICORRELATION */
 
+    enum
+    {
+        PICKAP_DEFAULT = 0,
+        PICKAP_REC = 2,
+        GPI_HITS = 2
+    };
+
     OS2EXPORT BOOL OS2API GpiQueryBoundaryData(HPS ps, PRECTL bounds);
 
     OS2EXPORT BOOL OS2API GpiQueryPickAperturePosition(HPS a0, PPOINTL a1);
@@ -79,6 +127,18 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetPickApertureSize(HPS a0, LONG a1, PSIZEL a2);
 
     /* INCL_GPITRANSFORMS */
+
+    enum
+    {
+        CVTC_WORLD = 1,
+        CVTC_MODEL = 2,
+        CVTC_DEFAULTPAGE = 3,
+        CVTC_PAGE = 4,
+        CVTC_DEVICE = 5,
+        TRANSFORM_REPLACE = 0,
+        TRANSFORM_ADD = 1,
+        TRANSFORM_PREEMPT = 2
+    };
 
     OS2EXPORT BOOL OS2API GpiConvert(HPS ps, LONG source, LONG target, LONG count, PPOINTL points);
 
@@ -136,6 +196,28 @@ extern "C"
     {
         LCOLF_CONSECRGB = 2,
         LCOLF_RGB = 3
+    };
+
+    enum
+    {
+        LCOL_RESET = 0x0001,
+        LCOL_REALIZABLE = 0x0002,
+        LCOL_PURECOLOR = 0x0004,
+        LCOL_OVERRIDE_DEFAULT_COLORS = 0x0008,
+        LCOL_REALIZED = 0x0010,
+        LCOLF_DEFAULT = 0,
+        LCOLF_INDRGB = 1,
+        LCOLF_PALETTE = 4,
+        LCOLOPT_REALIZED = 0x0001,
+        LCOLOPT_INDEX = 0x0002,
+        QLCT_ERROR = -1,
+        QLCT_RGB = -2,
+        QLCT_NOTLOADED = -1,
+        QCD_LCT_FORMAT = 0,
+        QCD_LCT_LOINDEX = 1,
+        QCD_LCT_HIINDEX = 2,
+        QCD_LCT_OPTIONS = 3,
+        PAL_ERROR = -1
     };
 
     OS2EXPORT BOOL OS2API GpiQueryColorData(HPS ps, LONG count, PLONG output);
@@ -196,7 +278,17 @@ extern "C"
         ROP_ONE = 0x00ff,
         BBO_OR = 0,
         BBO_AND = 1,
-        BBO_IGNORE = 2
+        BBO_IGNORE = 2,
+        CBM_INIT = 0x0004
+    };
+
+    enum
+    {
+        BCA_UNCOMP = 0,
+        BCA_HUFFMAN1D = 3,
+        BCA_RLE4 = 2,
+        BCA_RLE8 = 1,
+        BCA_RLE24 = 4
     };
 
     OS2EXPORT LONG OS2API GpiSetBitmapBits(HPS ps, LONG start, LONG scans, PVOID bits, PVOID info);
@@ -265,7 +357,11 @@ extern "C"
         CLR_DARKGREEN = 12,
         CLR_DARKCYAN = 13,
         CLR_BROWN = 14,
-        CLR_PALEGRAY = 15
+        CLR_PALEGRAY = 15,
+        CLR_ERROR = -255,
+        RGB_ERROR = -255,
+        RGB_BLACK = 0x00000000,
+        RGB_WHITE = 0x00FFFFFF
     };
 
     enum
@@ -304,6 +400,114 @@ extern "C"
         BA_WINDING = 2,
         BA_INCL = 0,
         BA_EXCL = 8
+    };
+
+    enum
+    {
+        PRIM_LINE = 1,
+        PRIM_CHAR = 2,
+        PRIM_MARKER = 3,
+        PRIM_IMAGE = 5
+    };
+
+    enum
+    {
+        RVIS_ERROR = 0,
+        RVIS_INVISIBLE = 1,
+        RVIS_PARTIAL = 2,
+        RVIS_VISIBLE = 3
+    };
+
+    enum
+    {
+        FM_ERROR = -1,
+        BM_ERROR = -1,
+        BM_OR = 1,
+        LINETYPE_ERROR = -1,
+        LINETYPE_DEFAULT = 0,
+        LINETYPE_ALTERNATE = 9,
+        LINEWIDTH_NORMAL = 0x00010000,
+        LINEWIDTHGEOM_ERROR = -1,
+        LINEEND_ERROR = -1,
+        LINEEND_DEFAULT = 0,
+        LINEEND_FLAT = 1,
+        LINEEND_SQUARE = 2,
+        LINEEND_ROUND = 3,
+        LINEJOIN_ERROR = -1,
+        LINEJOIN_DEFAULT = 0,
+        LINEJOIN_BEVEL = 1,
+        LINEJOIN_ROUND = 2,
+        LINEJOIN_MITRE = 3,
+        CHDIRN_ERROR = -1,
+        CHDIRN_DEFAULT = 0,
+        CHDIRN_LEFTRIGHT = 1,
+        TA_NORMAL_HORIZ = 0x0001,
+        TA_LEFT = 0x0002,
+        TA_STANDARD_HORIZ = 0x0005,
+        TA_NORMAL_VERT = 0x0100,
+        TA_BASE = 0x0400,
+        TA_STANDARD_VERT = 0x0600,
+        CM_ERROR = -1,
+        CM_DEFAULT = 0,
+        CM_MODE1 = 1,
+        CM_MODE2 = 2,
+        CM_MODE3 = 3,
+        PATSYM_ERROR = -1,
+        PATSYM_DIAGHATCH = 19,
+        LCID_ERROR = -1,
+        LCID_DEFAULT = 0,
+        CHS_OPAQUE = 0x0001,
+        CHS_VECTOR = 0x0002,
+        CHS_LEAVEPOS = 0x0008,
+        CHS_CLIP = 0x0010,
+        CHS_UNDERSCORE = 0x0200,
+        CHS_STRIKEOUT = 0x0400,
+        DRO_FILL = 1,
+        DRO_OUTLINE = 2,
+        DRO_OUTLINEFILL = 3,
+        DRO_EXCLUSIVE = 0x10000000,
+        TXTBOX_COUNT = 5
+    };
+
+    /* GpiSetAttrs and GpiQueryAttrs bundle masks */
+    enum
+    {
+        LBB_COLOR = 0x0001,
+        LBB_BACK_COLOR = 0x0002,
+        LBB_MIX_MODE = 0x0004,
+        LBB_BACK_MIX_MODE = 0x0008,
+        LBB_WIDTH = 0x0010,
+        LBB_GEOM_WIDTH = 0x0020,
+        LBB_TYPE = 0x0040,
+        LBB_END = 0x0080,
+        LBB_JOIN = 0x0100,
+        CBB_COLOR = 0x0001,
+        CBB_BACK_COLOR = 0x0002,
+        CBB_MIX_MODE = 0x0004,
+        CBB_BACK_MIX_MODE = 0x0008,
+        CBB_SET = 0x0010,
+        CBB_MODE = 0x0020,
+        CBB_BOX = 0x0040,
+        CBB_ANGLE = 0x0080,
+        CBB_SHEAR = 0x0100,
+        CBB_DIRECTION = 0x0200,
+        CBB_TEXT_ALIGN = 0x0400,
+        CBB_EXTRA = 0x0800,
+        CBB_BREAK_EXTRA = 0x1000,
+        MBB_COLOR = 0x0001,
+        MBB_BACK_COLOR = 0x0002,
+        MBB_MIX_MODE = 0x0004,
+        MBB_BACK_MIX_MODE = 0x0008,
+        MBB_SET = 0x0010,
+        MBB_SYMBOL = 0x0020,
+        MBB_BOX = 0x0040,
+        ABB_COLOR = 0x0001,
+        ABB_BACK_COLOR = 0x0002,
+        ABB_MIX_MODE = 0x0004,
+        ABB_BACK_MIX_MODE = 0x0008,
+        ABB_SET = 0x0010,
+        ABB_SYMBOL = 0x0020,
+        ABB_REF_POINT = 0x0040
     };
 
     typedef struct
@@ -439,12 +643,6 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetCharExtra(HPS a0, LONG a1);
 
     /* INCL_GPILCIDS */
-    /* Local identifiers */
-    enum
-    {
-        LCID_DEFAULT = 0
-    };
-
     /* GpiQueryFonts options */
     enum
     {
@@ -455,6 +653,20 @@ extern "C"
     enum
     {
         FWEIGHT_BOLD = 7
+    };
+
+    enum
+    {
+        FONT_DEFAULT = 1,
+        FONT_MATCH = 2,
+        LCIDT_FONT = 6,
+        LCIDT_BITMAP = 7,
+        LCID_ALL = -1,
+        FWEIGHT_NORMAL = 5,
+        FWIDTH_NORMAL = 5,
+        QF_PRIVATE = 0x0002,
+        QF_NO_GENERIC = 0x0004,
+        QF_NO_DEVICE = 0x0008
     };
 
     OS2EXPORT LONG OS2API GpiCreateLogFont(HPS ps, PVOID name, LONG id, PFATTRS attrs);
@@ -489,6 +701,37 @@ extern "C"
         CRGN_XOR = 4,
         CRGN_AND = 6,
         CRGN_DIFF = 7
+    };
+
+    enum
+    {
+        RECTDIR_LFRT_TOPBOT = 1,
+        RECTDIR_RTLF_TOPBOT = 2,
+        RECTDIR_LFRT_BOTTOP = 3,
+        RECTDIR_RTLF_BOTTOP = 4
+    };
+
+    enum
+    {
+        RGN_ERROR = 0,
+        RGN_NULL = 1,
+        RGN_RECT = 2,
+        RGN_COMPLEX = 3
+    };
+
+    enum
+    {
+        RRGN_ERROR = 0,
+        RRGN_OUTSIDE = 1,
+        RRGN_PARTIAL = 2,
+        RRGN_INSIDE = 3
+    };
+
+    enum
+    {
+        PRGN_ERROR = 0,
+        PRGN_OUTSIDE = 1,
+        PRGN_INSIDE = 2
     };
 
     typedef struct RGNRECT
@@ -554,6 +797,18 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetDefViewingLimits(HPS a0, PRECTL a1);
 
     /* INCL_GPIPOLYGON */
+
+    enum
+    {
+        POLYGON_NOBOUNDARY = 0,
+        POLYGON_BOUNDARY = 0x0001,
+        POLYGON_ALTERNATE = 0,
+        POLYGON_WINDING = 0x0002,
+        POLYGON_INCL = 0,
+        POLYGON_EXCL = 0x0008,
+        POLYGON_FILL = 0,
+        POLYGON_NOFILL = 0x0010
+    };
 
     OS2EXPORT LONG OS2API GpiPolygons(HPS a0, ULONG a1, LXPOLYGON *a2, ULONG a3, ULONG a4);
 

@@ -4,6 +4,14 @@
 #include "os2/include/private/pmgrep.h"
 #include <math.h>
 
+enum
+{
+    /* Pels are 0xRRGGBB. */
+    RGB_MASK = 0xffffff,
+    /* Longest line drawn pel by pel, along either axis. */
+    LINE_MAX_SPAN = 65536
+};
+
 uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix)
 {
     uint32_t result;
@@ -55,13 +63,13 @@ uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix)
             result = ~(source & destination);
             break;
         case FM_ONE:
-            result = 0xffffff;
+            result = RGB_MASK;
             break;
         default:
             result = source;
             break;
     }
-    return result & 0xffffff;
+    return result & RGB_MASK;
 }
 
 static BOOL raster_bounds(PresentationSpace *ps, LONG *width, LONG *height)
@@ -79,14 +87,14 @@ uint32_t lx_pm_rop3(uint32_t pattern, uint32_t source, uint32_t destination, uns
         if (rop & (1u << i))
             value |= (i & 4 ? pattern : ~pattern) & (i & 2 ? source : ~source) &
                      (i & 1 ? destination : ~destination);
-    return value & 0xffffff;
+    return value & RGB_MASK;
 }
 
 BOOL lx_pm_blit_rect(HPS handle, const RECTL *rect, unsigned read, LxPmBlitPel pel, void *context)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     int64_t w = (int64_t)rect->xRight - rect->xLeft, h = (int64_t)rect->yTop - rect->yBottom;
-    if (!ps || w <= 0 || h <= 0 || w > 16384 || h > 16384)
+    if (!ps || w <= 0 || h <= 0 || w > LX_PM_RASTER_MAX_DIMENSION || h > LX_PM_RASTER_MAX_DIMENSION)
         return FALSE;
     uint32_t *pels = calloc((size_t)w * h, sizeof *pels);
     if (!pels)
@@ -154,8 +162,8 @@ BOOL lx_pm_pattern_pixel(HPS handle, LONG x, LONG y, uint32_t *rgb, BOOL *foregr
         *foreground = FALSE;
     else if (ps->pattern != PATSYM_SOLID)
         return FALSE;
-    LONG color =
-        lx_pm_resolve_color(handle, *foreground ? ps->primitive_color[3] : ps->primitive_back[3]);
+    LONG color = lx_pm_resolve_color(handle, *foreground ? ps->primitive_color[PRIM_AREA - 1]
+                                                         : ps->primitive_back[PRIM_AREA - 1]);
     if (color < 0)
         return FALSE;
     *rgb = (uint32_t)color;
@@ -166,7 +174,7 @@ BOOL lx_pm_fill_span(HPS handle, LONG x, LONG y, LONG count, unsigned primitive)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     LONG width, height;
-    if (!ps || primitive >= 5 || count < 0 || !raster_bounds(ps, &width, &height))
+    if (!ps || primitive > PRIM_IMAGE - 1 || count < 0 || !raster_bounds(ps, &width, &height))
         return FALSE;
     int64_t end = (int64_t)x + count;
     LONG left = x < 0 ? 0 : x, right = end > width ? width : (LONG)end;
@@ -181,7 +189,7 @@ BOOL lx_pm_fill_span(HPS handle, LONG x, LONG y, LONG count, unsigned primitive)
     {
         BOOL foreground = TRUE;
         uint32_t source = (uint32_t)solid;
-        if (primitive == 3)
+        if (primitive == PRIM_AREA - 1)
             ok = lx_pm_pattern_pixel(handle, column, y, &source, &foreground);
         else if (solid < 0)
             ok = FALSE;
@@ -211,7 +219,7 @@ static BOOL line_pel(void *context, LONG x, LONG y)
     uint32_t pixel;
     if (!lx_pm_raster_read(line->handle, x, y, 1, 1, &pixel))
         return FALSE;
-    pixel = lx_pm_mix_pixel(line->rgb, pixel, line->ps->primitive_mix[0]);
+    pixel = lx_pm_mix_pixel(line->rgb, pixel, line->ps->primitive_mix[PRIM_LINE - 1]);
     return lx_pm_raster_write(line->handle, x, y, 1, 1, &pixel);
 }
 
@@ -243,13 +251,13 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
     lx_pm_pick_line(ps, &from, &end);
     if (ps->gpi.initialized && !ps->gpi.display_enabled)
         return lx_pm_hits(ps);
-    if (ps->line_type == LINETYPE_INVISIBLE || ps->primitive_mix[0] == FM_LEAVEALONE)
+    if (ps->line_type == LINETYPE_INVISIBLE || ps->primitive_mix[PRIM_LINE - 1] == FM_LEAVEALONE)
         return lx_pm_hits(ps);
-    LONG rgb = lx_pm_resolve_color(handle, ps->primitive_color[0]);
+    LONG rgb = lx_pm_resolve_color(handle, ps->primitive_color[PRIM_LINE - 1]);
     if (rgb < 0)
         return 0;
     if (ps->window && ps->window->heavy.window && !ps->clip_lease.resource &&
-        ps->primitive_mix[0] == FM_OVERPAINT && ps->line_type == LINETYPE_SOLID)
+        ps->primitive_mix[PRIM_LINE - 1] == FM_OVERPAINT && ps->line_type == LINETYPE_SOLID)
     {
         LxHostRect origin;
         calcHeavyweightRect(ps->window, &origin);
@@ -268,7 +276,8 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
         free(visible.rects);
         return ok ? lx_pm_hits(ps) : 0;
     }
-    if (llabs((int64_t)point->x - from.x) > 65536 || llabs((int64_t)point->y - from.y) > 65536)
+    if (llabs((int64_t)point->x - from.x) > LINE_MAX_SPAN ||
+        llabs((int64_t)point->y - from.y) > LINE_MAX_SPAN)
         return 0;
     LinePels line = {handle, ps, width, height, (uint32_t)rgb};
     return lx_pm_walk_line(from.x, from.y, point->x, point->y, TRUE, line_pel, &line)

@@ -5,27 +5,36 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* PMGPI's export table and the presentation-space, line, colour and code-page entries. */
 
 #include "os2/include/private/export.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmdev.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmwinp.h"
+#include "os2/ps/pmgpi/internal.h"
 
 #include "os2/ps/pmgpi/generated/pmgpi-lx.h"
+
+/* Bounds the host work for one guest call. */
+enum
+{
+    MAX_POLYLINE_POINTS = 65536
+};
 
 HPS GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags)
 {
     TRACE_NATIVE("GpiCreatePS(%u, %u, %p, %u)", (uint)hab, (uint)dc, size, (uint)flags);
-    if (!size || (flags & ~(0x1c | GPIA_ASSOC | 0x1000 | 0x300)) || (flags & 0x300) == 0x300 ||
-        size->cx < 0 || size->cy < 0)
+    if (!size || (flags & ~(GPI_PAGE_UNITS | GPIA_ASSOC | GPIT_MICRO | GPIF_SHORT | GPIF_LONG)) ||
+        (flags & (GPIF_SHORT | GPIF_LONG)) == (GPIF_SHORT | GPIF_LONG) || size->cx < 0 ||
+        size->cy < 0)
         return 0;
     HPS handle = lx_pm_create_ps(hab, dc);
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (ps)
     {
         ps->page_size = *size;
-        ps->page_units = flags & 0x1c;
+        ps->page_units = flags & GPI_PAGE_UNITS;
         ps->ps_options = flags;
     }
     return handle;
@@ -48,16 +57,16 @@ LONG GpiPolyLine(HPS hps, LONG count, PPOINTL points)
     TRACE_NATIVE("GpiPolyLine(%u, %d, %d,%d)", (uint)hps, (int)count, points ? (int)points[0].x : 0,
                  points ? (int)points[0].y : 0);
     TRACE_NATIVE("GpiPolyLine(%u, %d, %p)", (unsigned)hps, (int)count, points);
-    if (!lx_pm_valid_ps(hps) || count < 0 || count > 65536 || (count && !points))
-        return 0;
-    LONG result = 1;
+    if (!lx_pm_valid_ps(hps) || count < 0 || count > MAX_POLYLINE_POINTS || (count && !points))
+        return GPI_ERROR;
+    LONG result = GPI_OK;
     for (LONG i = 0; i < count; i++)
     {
         LONG drawn = lx_pm_line(hps, &points[i], 0);
         if (!drawn)
-            return 0;
-        if (drawn == 2)
-            result = 2;
+            return GPI_ERROR;
+        if (drawn == GPI_HITS)
+            result = GPI_HITS;
     }
     return result;
 }
@@ -71,7 +80,7 @@ BOOL GpiMove(HPS hps, PPOINTL point)
 
 BOOL GpiSetColor(HPS hps, LONG color)
 {
-    return lx_pm_color(hps, color) != -255;
+    return lx_pm_color(hps, color) != CLR_ERROR;
 }
 
 HDC GpiQueryDevice(HPS ps)
@@ -130,21 +139,22 @@ LONG GpiQueryRGBColor(HPS hps, ULONG options, LONG index)
 {
     /* The true-color host realizes every logical RGB value exactly. INDEX and
        REALIZED therefore agree, but both still use this PS's logical table. */
-    return !(options & ~3u) && index != CLR_DEFAULT && lx_pm_valid_ps(hps)
+    return !(options & ~(LCOLOPT_REALIZED | LCOLOPT_INDEX)) && index != CLR_DEFAULT &&
+                   lx_pm_valid_ps(hps)
                ? lx_pm_resolve_color(hps, index)
-               : -255;
+               : RGB_ERROR;
 }
 
 LONG GpiQueryColorIndex(HPS hps, ULONG options, LONG rgb)
 {
     PresentationSpace *ps = lx_pm_font_space(hps);
-    if ((options & ~1u) || !ps || rgb < 0 || rgb > 0xffffff)
-        return -255;
+    if ((options & ~LCOLOPT_REALIZED) || !ps || rgb < 0 || rgb > RGB_WHITE)
+        return CLR_ERROR;
     if (ps->rgb_colors)
         return rgb;
     LONG nearest = CLR_WHITE;
     ULONG best = UINT32_MAX;
-    for (LONG index = CLR_WHITE; index < 256; index++)
+    for (LONG index = CLR_WHITE; index < (LONG)(sizeof ps->colors / sizeof *ps->colors); index++)
     {
         LONG candidate = lx_pm_resolve_color(hps, index);
         if (candidate < 0)

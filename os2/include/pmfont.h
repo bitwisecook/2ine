@@ -4,6 +4,15 @@
 #define _INCL_PMFONT_H_
 #include "os2/include/os2def.h"
 #define FACESIZE 32
+
+enum
+{
+    FATTR_FONTUSE_OUTLINE = 0x0004,
+    FATTR_FONTUSE_TRANSFORMABLE = 0x0008,
+    FM_TYPE_FIXED = 0x0001,
+    FM_DEFN_OUTLINE = 0x0001,
+};
+
 #pragma pack(push, 2)
 
 typedef struct _FATTRS

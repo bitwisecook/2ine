@@ -12,6 +12,11 @@ extern "C"
 
     /* INCL_WINHELP: help manager */
 
+    enum
+    {
+        HMERR_LOAD_DLL = 0x00002013
+    };
+
     OS2EXPORT HWND OS2API WinCreateHelpInstance(HAB hab, PVOID init);
 
     OS2EXPORT BOOL OS2API WinDestroyHelpInstance(HWND help);

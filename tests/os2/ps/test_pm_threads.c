@@ -20,6 +20,13 @@
     } while (0)
 static unsigned activated;
 
+enum
+{
+    POSTED_MESSAGES = 1000,
+    WAIT_TIMEOUT_MS = 5000,
+    WM_TEST = WM_USER + 1
+};
+
 typedef struct HostDelivery
 {
     LxHostMonitor *monitor;
@@ -45,7 +52,7 @@ static void *receive_host_event(void *argument)
     delivery->ready = TRUE;
     lx_host_monitor_wake_all(delivery->monitor);
     while (!delivery->sent)
-        CHECK(lx_host_monitor_wait(delivery->monitor, 5000) == LX_HOST_LOCK_OK);
+        CHECK(lx_host_monitor_wait(delivery->monitor, WAIT_TIMEOUT_MS) == LX_HOST_LOCK_OK);
     lx_host_monitor_unlock(delivery->monitor);
     QMSG message;
     CHECK(WinGetMsg(hab, &message, window, WM_CLOSE, WM_CLOSE));
@@ -66,14 +73,14 @@ static MRESULT OS2API procedure(HWND window, ULONG message, MPARAM first, MPARAM
 static void *post(void *argument)
 {
     HWND window = (HWND)(uintptr_t)argument;
-    for (unsigned i = 0; i < 1000; i++)
-        CHECK(WinPostMsg(window, WM_USER + 1, (MPARAM)(uintptr_t)i, 0));
+    for (unsigned i = 0; i < POSTED_MESSAGES; i++)
+        CHECK(WinPostMsg(window, WM_TEST, (MPARAM)(uintptr_t)i, 0));
     return NULL;
 }
 
 static void *stale(void *argument)
 {
-    CHECK(!WinPostMsg((HWND)(uintptr_t)argument, WM_USER + 1, 0, 0));
+    CHECK(!WinPostMsg((HWND)(uintptr_t)argument, WM_TEST, 0, 0));
     return NULL;
 }
 
@@ -90,8 +97,8 @@ static void *receive_global_quit(void *argument)
     LxHostEvent event = {.type = LX_HOST_EVENT_QUIT};
     CHECK(lx_host_video_push(&event) && lx_pm_poll_input());
     QMSG message;
-    CHECK(WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1) && message.msg == WM_QUIT);
-    CHECK(!WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1));
+    CHECK(WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, PM_REMOVE) && message.msg == WM_QUIT);
+    CHECK(!WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, PM_REMOVE));
     CHECK(WinDestroyWindow(first) && WinDestroyWindow(second));
     CHECK(WinDestroyMsgQueue(queue) && WinTerminate(hab));
     lxHostThreadCleanup();
@@ -115,24 +122,24 @@ int main(void)
     CHECK(thread && !lx_host_thread_join(thread, NULL));
     QMSG message;
     unsigned count = 0;
-    while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+    while (WinPeekMsg(hab, &message, 0, 0, 0, PM_REMOVE))
     {
         if (message.msg == WM_PAINT)
             WinDispatchMsg(hab, &message);
-        if (message.msg == WM_USER + 1)
+        if (message.msg == WM_TEST)
         {
             CHECK(message.hwnd == client && (uintptr_t)message.mp1 == count);
             count++;
         }
     }
-    CHECK(count == 1000);
+    CHECK(count == POSTED_MESSAGES);
     HWND old_client = client;
     CHECK(WinDestroyWindow(frame));
     thread = lx_host_thread_create(stale, (void *)(uintptr_t)old_client, NULL);
     CHECK(thread && !lx_host_thread_join(thread, NULL));
     frame = WinCreateStdWindow(HWND_DESKTOP, 0, &flags, "ThreadClient", "new", 0, 0, 0, &client);
     CHECK(frame && client && client != old_client);
-    CHECK(!WinPostMsg(old_client, WM_USER + 1, 0, 0));
+    CHECK(!WinPostMsg(old_client, WM_TEST, 0, 0));
     HostDelivery delivery = {0};
     delivery.monitor = lx_host_monitor_create();
     CHECK(delivery.monitor);
@@ -140,10 +147,10 @@ int main(void)
     CHECK(thread);
     lx_host_monitor_lock(delivery.monitor);
     while (!delivery.ready)
-        CHECK(lx_host_monitor_wait(delivery.monitor, 5000) == LX_HOST_LOCK_OK);
+        CHECK(lx_host_monitor_wait(delivery.monitor, WAIT_TIMEOUT_MS) == LX_HOST_LOCK_OK);
     LxHostEvent event = {.type = LX_HOST_EVENT_CLOSE, .window_data = delivery.window};
     CHECK(lx_pm_host_event(&event));
-    CHECK(!WinPeekMsg(hab, &message, 0, WM_CLOSE, WM_CLOSE, 1));
+    CHECK(!WinPeekMsg(hab, &message, 0, WM_CLOSE, WM_CLOSE, PM_REMOVE));
     delivery.sent = TRUE;
     lx_host_monitor_wake_all(delivery.monitor);
     lx_host_monitor_unlock(delivery.monitor);
@@ -159,12 +166,12 @@ int main(void)
     /* Destroy the newest representative target before draining the staged
        Quit. The application's surviving window must still receive it. */
     CHECK(WinDestroyWindow(transient));
-    CHECK(WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1) && message.msg == WM_QUIT);
-    CHECK(!WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1));
+    CHECK(WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, PM_REMOVE) && message.msg == WM_QUIT);
+    CHECK(!WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, PM_REMOVE));
     HPS space = WinGetPS(client);
     RECTL rectangle = {0, 0, 10, 10};
     CHECK(space && WinFillRect(space, &rectangle, CLR_RED));
-    WinPeekMsg(hab, &message, 0, 0, 0, 0);
+    WinPeekMsg(hab, &message, 0, 0, 0, PM_NOREMOVE);
     CHECK(WinReleasePS(space));
     CHECK(WinDestroyWindow(frame));
     CHECK(WinTerminate(hab));

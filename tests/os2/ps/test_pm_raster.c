@@ -116,10 +116,10 @@ static void fill_star_path(HPS ps, LONG options)
 
 static void gpi_contracts(HAB hab)
 {
-    HDC dc = DevOpenDC(hab, 8, "*", 0, NULL, 0);
+    HDC dc = DevOpenDC(hab, OD_MEMORY, "*", 0, NULL, 0);
     SIZEL size = {SIZE, SIZE};
     HPS ps = GpiCreatePS(hab, dc, &size, PU_PELS | GPIA_ASSOC);
-    uint8_t header[12] = {12, 0, 0, 0, SIZE, 0, SIZE, 0, 1, 0, 24, 0};
+    uint8_t header[12] = {12, 0, 0, 0, SIZE, 0, SIZE, 0, 1, 0, 24, 0}; /* BITMAPINFOHEADER */
     ULONG bitmap = GpiCreateBitmap(ps, header, 0, NULL, NULL);
     CHECK(dc && ps && bitmap && GpiSetBitmap(ps, bitmap) == 0);
     CHECK(GpiSetColor(ps, CLR_RED));
@@ -227,7 +227,7 @@ static void gpi_contracts(HAB hab)
                "............B...\n");
 
     /* Raster operations: source stripes against destination stripes under a pattern. */
-    HDC source_dc = DevOpenDC(hab, 8, "*", 0, NULL, 0);
+    HDC source_dc = DevOpenDC(hab, OD_MEMORY, "*", 0, NULL, 0);
     HPS source = GpiCreatePS(hab, source_dc, &size, PU_PELS | GPIA_ASSOC);
     ULONG source_bitmap = GpiCreateBitmap(source, header, 0, NULL, NULL);
     CHECK(source && source_bitmap && GpiSetBitmap(source, source_bitmap) == 0);
@@ -409,7 +409,7 @@ static void gpi_contracts(HAB hab)
         CHECK(WinFillRect(ps, &row, CLR_BLUE));
         CHECK(GpiSetColor(ps, CLR_RED) && GpiSetPattern(ps, PATSYM_SOLID));
         POINTL points[4] = {{1, 1}, {15, 15}, {0, 0}, {SIZE, SIZE}};
-        CHECK(GpiBitBlt(ps, source, 4, points, rops[i], BBO_IGNORE) == 1);
+        CHECK(GpiBitBlt(ps, source, 4, points, rops[i], BBO_IGNORE) == GPI_OK);
         char name[48];
         snprintf(name, sizeof name, "GpiBitBlt stretch ROP %02lX", (unsigned long)rops[i]);
         expect_gpi(name, ps, rop_expected[i]);
@@ -434,7 +434,7 @@ static void store_points(uint8_t *wire, const POINTL *points, unsigned count)
 
 static void clear_gdi(ULONG dc)
 {
-    CHECK(PatBlt(dc, 0, 0, SIZE, SIZE, 0xFF0062));
+    CHECK(PatBlt(dc, 0, 0, SIZE, SIZE, WHITENESS));
 }
 
 static void gdi_contracts(void)
@@ -445,11 +445,11 @@ static void gdi_contracts(void)
     static const POINTL gdi_star[] = {{8, 0}, {13, 14}, {1, 5}, {15, 5}, {3, 14}};
     uint8_t wire[64];
     store_points(wire, gdi_star, 5);
-    ULONG red = CreateSolidBrush(0x0000ff), null_pen = CreatePen(5, 0, 0);
+    ULONG red = CreateSolidBrush(0x0000ff), null_pen = CreatePen(PS_NULL, 0, 0);
     CHECK(red && null_pen && SelectObject(dc, red) && SelectObject(dc, null_pen));
 
     clear_gdi(dc);
-    CHECK(SetPolyFillMode(dc, 1) && Polygon(dc, wire, 5));
+    CHECK(SetPolyFillMode(dc, ALTERNATE) && Polygon(dc, wire, 5));
     expect_gdi("Polygon alternate", dc,
                "................\n"
                ".......RR.......\n"
@@ -468,7 +468,7 @@ static void gdi_contracts(void)
                "................\n"
                "................\n");
     clear_gdi(dc);
-    CHECK(SetPolyFillMode(dc, 2) && Polygon(dc, wire, 5));
+    CHECK(SetPolyFillMode(dc, WINDING) && Polygon(dc, wire, 5));
     expect_gdi("Polygon winding", dc,
                "................\n"
                ".......RR.......\n"
@@ -487,10 +487,10 @@ static void gdi_contracts(void)
                "................\n"
                "................\n");
 
-    ULONG blue = CreatePen(0, 1, 0xff0000);
+    ULONG blue = CreatePen(PS_SOLID, 1, 0xff0000);
     CHECK(blue && SelectObject(dc, blue));
     clear_gdi(dc);
-    CHECK(SetPolyFillMode(dc, 1) && Polygon(dc, wire, 5));
+    CHECK(SetPolyFillMode(dc, ALTERNATE) && Polygon(dc, wire, 5));
     expect_gdi("Polygon alternate with cosmetic outline", dc,
                "........B.......\n"
                ".......RB.......\n"
@@ -509,7 +509,7 @@ static void gdi_contracts(void)
                "...B.........B..\n"
                "................\n");
 
-    ULONG wide = CreatePen(0, 3, 0x00ff00);
+    ULONG wide = CreatePen(PS_SOLID, 3, 0x00ff00);
     CHECK(wide && SelectObject(dc, wide));
     clear_gdi(dc);
     CHECK(Polyline(dc, wire, 5));
@@ -531,9 +531,10 @@ static void gdi_contracts(void)
                "...GGG....GGGGG.\n"
                "............GGG.\n");
 
-    uint8_t logbrush[12] = {0};
+    uint8_t logbrush[12] = {0}; /* LOGBRUSH: BS_SOLID, black */
     lx_guest_store_u32(logbrush + 4, 0x000000);
-    ULONG geometric = ExtCreatePen(0x10000 | 0x100 | 0x2000, 4, logbrush, 0, NULL);
+    ULONG geometric =
+        ExtCreatePen(PS_GEOMETRIC | PS_ENDCAP_SQUARE | PS_JOIN_MITER, 4, logbrush, 0, NULL);
     CHECK(geometric && SelectObject(dc, geometric));
     static const POINTL chevron[] = {{2, 12}, {7, 3}, {13, 12}};
     store_points(wire, chevron, 3);
@@ -557,7 +558,7 @@ static void gdi_contracts(void)
                "..#.........#...\n"
                "................\n");
 
-    ULONG dashed = CreatePen(1, 1, 0x000000);
+    ULONG dashed = CreatePen(PS_DASH, 1, 0x000000);
     CHECK(dashed && SelectObject(dc, dashed));
     clear_gdi(dc);
     CHECK(MoveToEx(dc, 0, 2, NULL) && LineTo(dc, 15, 2) && LineTo(dc, 2, 13));
@@ -585,7 +586,7 @@ static void gdi_contracts(void)
     lx_guest_store_u32(counts, 4);
     lx_guest_store_u32(counts + 4, 4);
     store_points(wire, squares, 8);
-    ULONG region = CreatePolyPolygonRgn(wire, counts, 2, 1);
+    ULONG region = CreatePolyPolygonRgn(wire, counts, 2, ALTERNATE);
     clear_gdi(dc);
     CHECK(region && FillRgn(dc, region, red) && DeleteObject(region));
     expect_gdi("CreatePolyPolygonRgn alternate", dc,
@@ -605,7 +606,7 @@ static void gdi_contracts(void)
                "......RRRRRRRR..\n"
                "................\n"
                "................\n");
-    region = CreatePolyPolygonRgn(wire, counts, 2, 2);
+    region = CreatePolyPolygonRgn(wire, counts, 2, WINDING);
     clear_gdi(dc);
     CHECK(region && FillRgn(dc, region, red) && DeleteObject(region));
     expect_gdi("CreatePolyPolygonRgn winding", dc,
@@ -626,10 +627,10 @@ static void gdi_contracts(void)
                "................\n"
                "................\n");
 
-    ULONG hatch = CreateHatchBrush(5, 0x0000ff);
+    ULONG hatch = CreateHatchBrush(HS_DIAGCROSS, 0x0000ff);
     CHECK(hatch && SelectObject(dc, hatch));
     clear_gdi(dc);
-    CHECK(SetBkColor(dc, 0x00ff00) != 0xffffffff && PatBlt(dc, 1, 1, 14, 14, 0xF00021));
+    CHECK(SetBkColor(dc, 0x00ff00) != 0xffffffff && PatBlt(dc, 1, 1, 14, 14, PATCOPY));
     expect_gdi("PatBlt PATCOPY cross hatch, opaque", dc,
                "................\n"
                ".RGGGGGRGRGGGGG.\n"
@@ -647,7 +648,7 @@ static void gdi_contracts(void)
                ".GGRGRGGGGGRGRG.\n"
                ".GRGGGRGGGRGGGR.\n"
                "................\n");
-    CHECK(SetBkMode(dc, 1) && PatBlt(dc, 0, 0, 8, 16, 0x5A0049));
+    CHECK(SetBkMode(dc, TRANSPARENT) && PatBlt(dc, 0, 0, 8, 16, PATINVERT));
     expect_gdi("PatBlt PATINVERT cross hatch, transparent", dc,
                "c...............\n"
                ".#GGGGG#GRGGGGG.\n"
@@ -665,10 +666,10 @@ static void gdi_contracts(void)
                ".GG#G#GGGGGRGRG.\n"
                ".G#GGG#GGGRGGGR.\n"
                ".c.....c........\n");
-    CHECK(SetBkMode(dc, 2) && SelectObject(dc, red));
+    CHECK(SetBkMode(dc, OPAQUE) && SelectObject(dc, red));
 
     /* A 3x2 bottom-up DIB: red green blue / black white black. */
-    uint8_t info[40] = {0}, bits[24] = {0};
+    uint8_t info[40] = {0}, bits[24] = {0}; /* Win32 BITMAPINFOHEADER */
     lx_guest_store_u32(info, 40);
     lx_guest_store_u32(info + 4, 3);
     lx_guest_store_u32(info + 8, 2);
@@ -679,7 +680,7 @@ static void gdi_contracts(void)
     memcpy(bits, rows[0], 9);
     memcpy(bits + 12, rows[1], 9);
     clear_gdi(dc);
-    CHECK(StretchDIBits(dc, 1, 1, 13, 9, 0, 0, 3, 2, bits, info, 0, 0xCC0020) == 2);
+    CHECK(StretchDIBits(dc, 1, 1, 13, 9, 0, 0, 3, 2, bits, info, 0, SRCCOPY) == 2);
     expect_gdi("StretchDIBits SRCCOPY", dc,
                "................\n"
                ".RRRRRGGGGBBBB..\n"
@@ -697,7 +698,7 @@ static void gdi_contracts(void)
                "................\n"
                "................\n"
                "................\n");
-    CHECK(StretchDIBits(dc, 4, 4, -9, 11, 0, 0, 3, 2, bits, info, 0, 0x660046) == 2);
+    CHECK(StretchDIBits(dc, 4, 4, -9, 11, 0, 0, 3, 2, bits, info, 0, SRCINVERT) == 2);
     expect_gdi("StretchDIBits SRCINVERT mirrored", dc,
                "................\n"
                ".RRRRRGGGGBBBB..\n"
@@ -733,15 +734,15 @@ static void gdi_contracts(void)
                "#RRRRRyyyyymmmmm\n"
                "RRRRRR.....RRRRR\n"
                "RRRRRR.....RRRRR\n");
-    CHECK(SetStretchBltMode(dc, 1));
+    CHECK(SetStretchBltMode(dc, BLACKONWHITE));
     clear_gdi(dc);
-    CHECK(StretchDIBits(dc, 2, 2, 2, 1, 0, 0, 3, 2, bits, info, 0, 0xCC0020) == 2);
-    CHECK(SetStretchBltMode(dc, 3));
-    CHECK(StretchDIBits(dc, 6, 2, 2, 1, 0, 0, 3, 2, bits, info, 0, 0xCC0020) == 2);
+    CHECK(StretchDIBits(dc, 2, 2, 2, 1, 0, 0, 3, 2, bits, info, 0, SRCCOPY) == 2);
+    CHECK(SetStretchBltMode(dc, COLORONCOLOR));
+    CHECK(StretchDIBits(dc, 6, 2, 2, 1, 0, 0, 3, 2, bits, info, 0, SRCCOPY) == 2);
     /* A rotating world transform maps every target pel back to one source pel. */
     static const double rotation[6] = {0.8, 0.6, -0.6, 0.8, 8, 4};
     CHECK(open32WorldTransform(dc, rotation, 0));
-    CHECK(StretchDIBits(dc, 0, 0, 9, 6, 0, 0, 3, 2, bits, info, 0, 0xCC0020) == 2);
+    CHECK(StretchDIBits(dc, 0, 0, 9, 6, 0, 0, 3, 2, bits, info, 0, SRCCOPY) == 2);
     CHECK(open32WorldTransform(dc, rotation, 1));
     expect_gdi("StretchDIBits reduced and rotated", dc,
                "................\n"

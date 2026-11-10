@@ -19,7 +19,6 @@ enum
     INDEXED_DEPTH_MAX = 8,
     INDEXED_COLORS_MAX = 256,
     MONOCHROME_COLORS = 2,
-    RGB_WHITE = 0xFFFFFF,
     RGB_MASK = 0xFFFFFF,
     /* DDB rows are padded to whole 16-bit words. */
     BITMAP_ROW_ALIGN_BITS = 16,

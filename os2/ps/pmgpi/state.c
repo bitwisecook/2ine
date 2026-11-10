@@ -8,13 +8,54 @@
 #include <math.h>
 #include "os2/ps/pmgpi/internal.h"
 
+/* Guest attribute bundle layouts. Every bundle starts with lColor, lBackColor, usMixMode and
+   usBackMixMode, and every bundle mask uses the same four low bits for them. */
+enum
+{
+    BUNDLE_COLOR_OFFSET = 0,
+    BUNDLE_BACK_COLOR_OFFSET = 4,
+    BUNDLE_MIX_MODE_OFFSET = 8,
+    BUNDLE_BACK_MIX_MODE_OFFSET = 10,
+    BUNDLE_COLOR = LBB_COLOR,
+    BUNDLE_BACK_COLOR = LBB_BACK_COLOR,
+    BUNDLE_MIX_MODE = LBB_MIX_MODE,
+    BUNDLE_BACK_MIX_MODE = LBB_BACK_MIX_MODE,
+    BUNDLE_COMMON = BUNDLE_COLOR | BUNDLE_BACK_COLOR | BUNDLE_MIX_MODE | BUNDLE_BACK_MIX_MODE,
+    LINEBUNDLE_WIDTH_OFFSET = 12,
+    LINEBUNDLE_GEOM_WIDTH_OFFSET = 16,
+    LINEBUNDLE_TYPE_OFFSET = 20,
+    LINEBUNDLE_END_OFFSET = 22,
+    LINEBUNDLE_JOIN_OFFSET = 24,
+    CHARBUNDLE_SET_OFFSET = 12,
+    CHARBUNDLE_PRECISION_OFFSET = 14,
+    CHARBUNDLE_CELL_OFFSET = 16,
+    CHARBUNDLE_ANGLE_OFFSET = 24,
+    CHARBUNDLE_SHEAR_OFFSET = 32,
+    CHARBUNDLE_DIRECTION_OFFSET = 40,
+    CHARBUNDLE_TEXT_ALIGN_OFFSET = 42,
+    CHARBUNDLE_EXTRA_OFFSET = 44,
+    CHARBUNDLE_BREAK_EXTRA_OFFSET = 48,
+    MARKERBUNDLE_SET_OFFSET = 12,
+    MARKERBUNDLE_SYMBOL_OFFSET = 14,
+    MARKERBUNDLE_CELL_OFFSET = 16,
+    AREABUNDLE_SET_OFFSET = 12,
+    AREABUNDLE_SYMBOL_OFFSET = 14,
+    AREABUNDLE_REF_POINT_OFFSET = 16,
+    /* The default logical colour table holds CLR_BACKGROUND to CLR_PALEGRAY. */
+    DEFAULT_COLOR_COUNT = CLR_PALEGRAY + 1,
+    /* GpiRestorePS: restore the most recently saved state. */
+    RESTORE_LAST = -1,
+    /* FM_* and BM_* leave the value 3 unused. */
+    MIX_UNUSED = 3
+};
+
 BOOL GpiSetMix(HPS handle, LONG mode)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || mode < 0 || mode > 17 || mode == 3)
+    if (!ps || mode < FM_DEFAULT || mode > FM_ONE || mode == MIX_UNUSED)
         return FALSE;
-    ps->mix = mode ? mode : 2;
-    for (unsigned i = 0; i < 5; i++)
+    ps->mix = mode ? mode : FM_OVERPAINT;
+    for (unsigned i = 0; i < sizeof ps->primitive_mix / sizeof *ps->primitive_mix; i++)
         ps->primitive_mix[i] = ps->mix;
     return TRUE;
 }
@@ -22,10 +63,10 @@ BOOL GpiSetMix(HPS handle, LONG mode)
 BOOL GpiSetBackMix(HPS handle, LONG mode)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || mode < 0 || mode > 19 || mode == 3)
+    if (!ps || mode < BM_DEFAULT || mode > BM_DESTTRANSPARENT || mode == MIX_UNUSED)
         return FALSE;
-    ps->back_mix = mode ? mode : 5;
-    for (unsigned i = 0; i < 5; i++)
+    ps->back_mix = mode ? mode : BM_LEAVEALONE;
+    for (unsigned i = 0; i < sizeof ps->primitive_back_mix / sizeof *ps->primitive_back_mix; i++)
         ps->primitive_back_mix[i] = ps->back_mix;
     return TRUE;
 }
@@ -33,13 +74,13 @@ BOOL GpiSetBackMix(HPS handle, LONG mode)
 LONG GpiQueryMix(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->mix : -1;
+    return ps ? ps->mix : FM_ERROR;
 }
 
 LONG GpiQueryBackMix(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->back_mix : -1;
+    return ps ? ps->back_mix : BM_ERROR;
 }
 
 BOOL GpiSetBackColor(HPS handle, LONG color)
@@ -48,7 +89,7 @@ BOOL GpiSetBackColor(HPS handle, LONG color)
     if (!ps || lx_pm_resolve_color(handle, color) < 0)
         return FALSE;
     ps->back_color = color;
-    for (unsigned i = 0; i < 5; i++)
+    for (unsigned i = 0; i < sizeof ps->primitive_back / sizeof *ps->primitive_back; i++)
         ps->primitive_back[i] = color;
     return TRUE;
 }
@@ -56,38 +97,38 @@ BOOL GpiSetBackColor(HPS handle, LONG color)
 LONG GpiQueryBackColor(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->back_color : -255;
+    return ps ? ps->back_color : CLR_ERROR;
 }
 
 BOOL GpiSetLineType(HPS handle, LONG type)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || type < 0 || type > 9)
+    if (!ps || type < LINETYPE_DEFAULT || type > LINETYPE_ALTERNATE)
         return FALSE;
-    ps->line_type = type ? type : 7;
+    ps->line_type = type ? type : LINETYPE_SOLID;
     return TRUE;
 }
 
 LONG GpiQueryLineType(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->line_type : -1;
+    return ps ? ps->line_type : LINETYPE_ERROR;
 }
 
 LONG GpiSavePS(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || ps->save_id == INT32_MAX)
-        return -1;
+        return GPI_ALTERROR;
     PmSavedSpace *s = calloc(1, sizeof *s);
     if (!s)
-        return -1;
+        return GPI_ALTERROR;
     s->id = ++ps->save_id;
     if (ps->gpi.palette &&
         !lx_handle_borrow(ps->gpi.palette, LX_HANDLE_PM_PALETTE, &s->palette_lease))
     {
         free(s);
-        return -1;
+        return GPI_ALTERROR;
     }
     s->gpi = ps->gpi;
     s->position = ps->position;
@@ -127,10 +168,10 @@ LONG GpiSavePS(HPS handle)
 BOOL GpiRestorePS(HPS handle, LONG id)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || id == 0 || id < -1)
+    if (!ps || id == 0 || id < RESTORE_LAST)
         return FALSE;
     PmSavedSpace *s = ps->saved;
-    while (s && id != -1 && s->id != id)
+    while (s && id != RESTORE_LAST && s->id != id)
         s = s->next;
     if (!s)
         return FALSE;
@@ -213,107 +254,148 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
     TRACE_NATIVE("GpiSetAttrs(%u, %d, %u, %u, %p)", (uint)handle, (int)primitive, (uint)mask,
                  (uint)defaults, attrs);
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || primitive < 1 || primitive > 5 || (mask & ~defaults && !attrs))
+    if (!ps || primitive < PRIM_LINE || primitive > PRIM_IMAGE || (mask & ~defaults && !attrs))
         return FALSE;
-    uint8 zero[52] = {0};
+    uint8 zero[CHARBUNDLE_SIZE] = {0};
     const uint8 *p = attrs ? attrs : zero;
     TRACE_NATIVE("GpiSetAttrs color=%X back=%X mix=%u back_mix=%u set=%u symbol=%u",
-                 (uint)lx_guest_load_u32(p), (uint)lx_guest_load_u32(p + 4),
-                 (uint)lx_guest_load_u16(p + 8), (uint)lx_guest_load_u16(p + 10),
-                 (uint)lx_guest_load_u16(p + 12), (uint)lx_guest_load_u16(p + 14));
-    ULONG supported = primitive == 2 ? 0x1fff : primitive == 1 ? 0x1ff : primitive == 4 ? 0x7f : 15;
+                 (uint)lx_guest_load_u32(p + BUNDLE_COLOR_OFFSET),
+                 (uint)lx_guest_load_u32(p + BUNDLE_BACK_COLOR_OFFSET),
+                 (uint)lx_guest_load_u16(p + BUNDLE_MIX_MODE_OFFSET),
+                 (uint)lx_guest_load_u16(p + BUNDLE_BACK_MIX_MODE_OFFSET),
+                 (uint)lx_guest_load_u16(p + AREABUNDLE_SET_OFFSET),
+                 (uint)lx_guest_load_u16(p + AREABUNDLE_SYMBOL_OFFSET));
+    /* Markers and images take only the common attributes. */
+    ULONG supported =
+        primitive == PRIM_CHAR ? CBB_COLOR | CBB_BACK_COLOR | CBB_MIX_MODE | CBB_BACK_MIX_MODE |
+                                     CBB_SET | CBB_MODE | CBB_BOX | CBB_ANGLE | CBB_SHEAR |
+                                     CBB_DIRECTION | CBB_TEXT_ALIGN | CBB_EXTRA | CBB_BREAK_EXTRA
+        : primitive == PRIM_LINE ? LBB_COLOR | LBB_BACK_COLOR | LBB_MIX_MODE | LBB_BACK_MIX_MODE |
+                                       LBB_WIDTH | LBB_GEOM_WIDTH | LBB_TYPE | LBB_END | LBB_JOIN
+        : primitive == PRIM_AREA ? ABB_COLOR | ABB_BACK_COLOR | ABB_MIX_MODE | ABB_BACK_MIX_MODE |
+                                       ABB_SET | ABB_SYMBOL | ABB_REF_POINT
+                                 : BUNDLE_COMMON;
     if (mask & ~supported)
         return FALSE;
     /* Current renderer accepts horizontal character axes and unit-width lines. */
-    if (primitive == 2)
+    if (primitive == PRIM_CHAR)
     {
-        if ((mask & 0x20) && !(defaults & 0x20))
+        if ((mask & CBB_MODE) && !(defaults & CBB_MODE))
         {
-            unsigned mode = lx_guest_load_u16(p + 14);
-            if (mode < 1 || mode > 3)
+            unsigned mode = lx_guest_load_u16(p + CHARBUNDLE_PRECISION_OFFSET);
+            if (mode < CM_MODE1 || mode > CM_MODE3)
                 return FALSE;
         }
-        if ((mask & 0x80) && !(defaults & 0x80))
+        if ((mask & CBB_ANGLE) && !(defaults & CBB_ANGLE))
         {
-            LONG x = (LONG)lx_guest_load_u32(p + 24), y = (LONG)lx_guest_load_u32(p + 28);
+            LONG x = (LONG)lx_guest_load_u32(p + CHARBUNDLE_ANGLE_OFFSET),
+                 y = (LONG)lx_guest_load_u32(p + CHARBUNDLE_ANGLE_OFFSET + 4);
             if (x <= 0 || y != 0)
                 return FALSE;
         }
-        if ((mask & 0x10) &&
-            !GpiSetCharSet(handle, (defaults & 0x10) ? 0 : lx_guest_load_u16(p + 12)))
+        if ((mask & CBB_SET) &&
+            !GpiSetCharSet(handle,
+                           (defaults & CBB_SET) ? 0 : lx_guest_load_u16(p + CHARBUNDLE_SET_OFFSET)))
             return FALSE;
-        if (mask & 0x40)
+        if (mask & CBB_BOX)
         {
-            SIZEF box = {16 * 65536, 16 * 65536};
-            if (!(defaults & 0x40))
+            SIZEF box = {GPI_DEFAULT_FONT_PIXELS * GPI_FIXED_ONE,
+                         GPI_DEFAULT_FONT_PIXELS * GPI_FIXED_ONE};
+            if (!(defaults & CBB_BOX))
             {
-                box.cx = (LONG)lx_guest_load_u32(p + 16);
-                box.cy = (LONG)lx_guest_load_u32(p + 20);
+                box.cx = (LONG)lx_guest_load_u32(p + CHARBUNDLE_CELL_OFFSET);
+                box.cy = (LONG)lx_guest_load_u32(p + CHARBUNDLE_CELL_OFFSET + 4);
             }
             if (!GpiSetCharBox(handle, &box))
                 return FALSE;
         }
     }
-    if (primitive == 1)
+    if (primitive == PRIM_LINE)
     {
-        if ((mask & 0x10) && !(defaults & 0x10) && lx_guest_load_u32(p + 12) != 65536)
+        if ((mask & LBB_WIDTH) && !(defaults & LBB_WIDTH) &&
+            lx_guest_load_u32(p + LINEBUNDLE_WIDTH_OFFSET) != LINEWIDTH_NORMAL)
             return FALSE;
-        if ((mask & 0x20) && !(defaults & 0x20) && (LONG)lx_guest_load_u32(p + 16) < 0)
+        if ((mask & LBB_GEOM_WIDTH) && !(defaults & LBB_GEOM_WIDTH) &&
+            (LONG)lx_guest_load_u32(p + LINEBUNDLE_GEOM_WIDTH_OFFSET) < 0)
             return FALSE;
-        if ((mask & 0x80) && !(defaults & 0x80) && lx_guest_load_u16(p + 22) > 3)
+        if ((mask & LBB_END) && !(defaults & LBB_END) &&
+            lx_guest_load_u16(p + LINEBUNDLE_END_OFFSET) > LINEEND_ROUND)
             return FALSE;
-        if ((mask & 0x100) && !(defaults & 0x100) && lx_guest_load_u16(p + 24) > 3)
+        if ((mask & LBB_JOIN) && !(defaults & LBB_JOIN) &&
+            lx_guest_load_u16(p + LINEBUNDLE_JOIN_OFFSET) > LINEJOIN_MITRE)
             return FALSE;
-        if ((mask & 0x40) &&
-            !GpiSetLineType(handle, (defaults & 0x40) ? 0 : lx_guest_load_u16(p + 20)))
+        if ((mask & LBB_TYPE) &&
+            !GpiSetLineType(
+                handle, (defaults & LBB_TYPE) ? 0 : lx_guest_load_u16(p + LINEBUNDLE_TYPE_OFFSET)))
             return FALSE;
     }
-    if (primitive == 4)
+    if (primitive == PRIM_AREA)
     {
-        if ((mask & 0x10) &&
-            !GpiSetPatternSet(handle, (defaults & 0x10) ? 0 : lx_guest_load_u16(p + 12)))
+        if ((mask & ABB_SET) &&
+            !GpiSetPatternSet(
+                handle, (defaults & ABB_SET) ? 0 : lx_guest_load_u16(p + AREABUNDLE_SET_OFFSET)))
             return FALSE;
-        if ((mask & 0x20) &&
-            !GpiSetPattern(handle, (defaults & 0x20) ? 0 : lx_guest_load_u16(p + 14)))
+        if ((mask & ABB_SYMBOL) &&
+            !GpiSetPattern(handle, (defaults & ABB_SYMBOL)
+                                       ? 0
+                                       : lx_guest_load_u16(p + AREABUNDLE_SYMBOL_OFFSET)))
             return FALSE;
-        if (mask & 0x40)
-            ps->pattern_reference = (defaults & 0x40) ? (POINTL){0, 0}
-                                                      : (POINTL){(LONG)lx_guest_load_u32(p + 16),
-                                                                 (LONG)lx_guest_load_u32(p + 20)};
+        if (mask & ABB_REF_POINT)
+            ps->pattern_reference =
+                (defaults & ABB_REF_POINT)
+                    ? (POINTL){0, 0}
+                    : (POINTL){(LONG)lx_guest_load_u32(p + AREABUNDLE_REF_POINT_OFFSET),
+                               (LONG)lx_guest_load_u32(p + AREABUNDLE_REF_POINT_OFFSET + 4)};
     }
-    if (primitive == 1)
+    if (primitive == PRIM_LINE)
     {
-        if ((mask & 32) &&
-            !GpiSetLineWidthGeom(handle, defaults & 32 ? 1 : (LONG)lx_guest_load_u32(p + 16)))
+        if ((mask & LBB_GEOM_WIDTH) &&
+            !GpiSetLineWidthGeom(handle,
+                                 defaults & LBB_GEOM_WIDTH
+                                     ? 1
+                                     : (LONG)lx_guest_load_u32(p + LINEBUNDLE_GEOM_WIDTH_OFFSET)))
             return FALSE;
-        if ((mask & 128) && !GpiSetLineEnd(handle, defaults & 128 ? 0 : lx_guest_load_u16(p + 22)))
+        if ((mask & LBB_END) &&
+            !GpiSetLineEnd(handle,
+                           defaults & LBB_END ? 0 : lx_guest_load_u16(p + LINEBUNDLE_END_OFFSET)))
             return FALSE;
-        if ((mask & 256) && !GpiSetLineJoin(handle, defaults & 256 ? 0 : lx_guest_load_u16(p + 24)))
+        if ((mask & LBB_JOIN) &&
+            !GpiSetLineJoin(
+                handle, defaults & LBB_JOIN ? 0 : lx_guest_load_u16(p + LINEBUNDLE_JOIN_OFFSET)))
             return FALSE;
     }
-    if (primitive == 2 && (mask & 2048) &&
-        !GpiSetCharExtra(handle, defaults & 2048 ? 0 : (LONG)lx_guest_load_u32(p + 44)))
+    if (primitive == PRIM_CHAR && (mask & CBB_EXTRA) &&
+        !GpiSetCharExtra(handle, defaults & CBB_EXTRA
+                                     ? 0
+                                     : (LONG)lx_guest_load_u32(p + CHARBUNDLE_EXTRA_OFFSET)))
         return FALSE;
-    unsigned index = (unsigned)primitive - 1;
-    LONG color = (defaults & 1) ? CLR_BLACK : (LONG)lx_guest_load_u32(p);
-    LONG back = (defaults & 2) ? CLR_WHITE : (LONG)lx_guest_load_u32(p + 4);
-    LONG mix = (defaults & 4) ? 2 : lx_guest_load_u16(p + 8);
-    LONG back_mix = (defaults & 8) ? 5 : lx_guest_load_u16(p + 10);
-    if ((mask & 1) && lx_pm_resolve_color(handle, color) < 0)
+    unsigned index = GPI_PRIM_INDEX((unsigned)primitive);
+    LONG color =
+        (defaults & BUNDLE_COLOR) ? CLR_BLACK : (LONG)lx_guest_load_u32(p + BUNDLE_COLOR_OFFSET);
+    LONG back = (defaults & BUNDLE_BACK_COLOR)
+                    ? CLR_WHITE
+                    : (LONG)lx_guest_load_u32(p + BUNDLE_BACK_COLOR_OFFSET);
+    LONG mix =
+        (defaults & BUNDLE_MIX_MODE) ? FM_OVERPAINT : lx_guest_load_u16(p + BUNDLE_MIX_MODE_OFFSET);
+    LONG back_mix = (defaults & BUNDLE_BACK_MIX_MODE)
+                        ? BM_LEAVEALONE
+                        : lx_guest_load_u16(p + BUNDLE_BACK_MIX_MODE_OFFSET);
+    if ((mask & BUNDLE_COLOR) && lx_pm_resolve_color(handle, color) < 0)
         return FALSE;
-    if ((mask & 2) && lx_pm_resolve_color(handle, back) < 0)
+    if ((mask & BUNDLE_BACK_COLOR) && lx_pm_resolve_color(handle, back) < 0)
         return FALSE;
-    if ((mask & 4) && (mix < 1 || mix > 17 || mix == 3))
+    if ((mask & BUNDLE_MIX_MODE) && (mix < FM_OR || mix > FM_ONE || mix == MIX_UNUSED))
         return FALSE;
-    if ((mask & 8) && (back_mix < 1 || back_mix > 19 || back_mix == 3))
+    if ((mask & BUNDLE_BACK_MIX_MODE) &&
+        (back_mix < BM_OR || back_mix > BM_DESTTRANSPARENT || back_mix == MIX_UNUSED))
         return FALSE;
-    if (mask & 1)
+    if (mask & BUNDLE_COLOR)
         ps->primitive_color[index] = color;
-    if (mask & 2)
+    if (mask & BUNDLE_BACK_COLOR)
         ps->primitive_back[index] = back;
-    if (mask & 4)
+    if (mask & BUNDLE_MIX_MODE)
         ps->primitive_mix[index] = mix;
-    if (mask & 8)
+    if (mask & BUNDLE_BACK_MIX_MODE)
         ps->primitive_back_mix[index] = back_mix;
     return TRUE;
 }
@@ -321,13 +403,13 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
 LONG GpiQueryPatternSet(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->pattern_set : -1;
+    return ps ? ps->pattern_set : LCID_ERROR;
 }
 
 BOOL GpiSetPatternSet(HPS handle, LONG id)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || id < 0 || id > 254 || (id && !ps->bitmap_ids[id].resource))
+    if (!ps || id < 0 || id > GPI_LCID_MAX || (id && !ps->bitmap_ids[id].resource))
         return FALSE;
     ps->pattern_set = id;
     return TRUE;
@@ -336,15 +418,15 @@ BOOL GpiSetPatternSet(HPS handle, LONG id)
 LONG GpiQueryPattern(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->pattern : -1;
+    return ps ? ps->pattern : PATSYM_ERROR;
 }
 
 BOOL GpiSetPattern(HPS handle, LONG symbol)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || symbol < 0 || (symbol > 19 && symbol != 64))
+    if (!ps || symbol < PATSYM_DEFAULT || (symbol > PATSYM_DIAGHATCH && symbol != PATSYM_BLANK))
         return FALSE;
-    ps->pattern = symbol ? symbol : 16;
+    ps->pattern = symbol ? symbol : PATSYM_SOLID;
     return TRUE;
 }
 
@@ -365,25 +447,25 @@ BOOL GpiSetCurrentPosition(HPS handle, PPOINTL point)
 LONG GpiQueryColor(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->color : -255;
+    return ps ? ps->color : CLR_ERROR;
 }
 
 LONG GpiQueryLogColorTable(HPS handle, ULONG options, LONG start, LONG count, PLONG output)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || (options & ~2u) || start < 0 || count < 0 || (count && !output))
-        return -1;
+    if (!ps || (options & ~LCOLOPT_INDEX) || start < 0 || count < 0 || (count && !output))
+        return QLCT_ERROR;
     if (ps->rgb_colors)
-        return -2;
-    LONG last = 15;
-    for (LONG i = 16; i < 256; i++)
+        return QLCT_RGB;
+    LONG last = DEFAULT_COLOR_COUNT - 1;
+    for (LONG i = DEFAULT_COLOR_COUNT; i < GPI_MAX_PALETTE_COLORS; i++)
         if (ps->color_valid[i])
             last = i;
     LONG returned = 0;
     for (LONG i = start; i <= last && returned < count; i++)
     {
-        BOOL loaded = i < 16 || ps->color_valid[i];
-        if (options & 2)
+        BOOL loaded = i < DEFAULT_COLOR_COUNT || ps->color_valid[i];
+        if (options & LCOLOPT_INDEX)
         {
             if (!loaded)
                 continue;
@@ -391,7 +473,7 @@ LONG GpiQueryLogColorTable(HPS handle, ULONG options, LONG start, LONG count, PL
                 break;
             output[returned++] = i;
         }
-        output[returned++] = loaded ? lx_pm_resolve_color(handle, i) : -1;
+        output[returned++] = loaded ? lx_pm_resolve_color(handle, i) : QLCT_NOTLOADED;
     }
     return returned;
 }
@@ -400,14 +482,15 @@ BOOL GpiQueryColorData(HPS handle, LONG count, PLONG output)
 {
     TRACE_NATIVE("GpiQueryColorData(%u, %d, %p)", (uint)handle, (int)count, output);
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || count < 0 || count > 4 || (count && !output))
+    if (!ps || count < 0 || count > QCD_LCT_OPTIONS + 1 || (count && !output))
         return FALSE;
-    LONG last = ps->rgb_colors ? 0xffffff : 15;
+    LONG last = ps->rgb_colors ? RGB_WHITE : DEFAULT_COLOR_COUNT - 1;
     if (!ps->rgb_colors)
-        for (LONG i = 16; i < 256; i++)
+        for (LONG i = DEFAULT_COLOR_COUNT; i < GPI_MAX_PALETTE_COLORS; i++)
             if (ps->color_valid[i])
                 last = i;
-    const LONG data[4] = {ps->color_format, 0, last, 0};
+    /* Indexed by QCD_LCT_FORMAT, QCD_LCT_LOINDEX, QCD_LCT_HIINDEX and QCD_LCT_OPTIONS. */
+    const LONG data[QCD_LCT_OPTIONS + 1] = {ps->color_format, 0, last, 0};
     if (count)
         memcpy(output, data, (size_t)count * sizeof *output);
     return TRUE;
@@ -416,16 +499,16 @@ BOOL GpiQueryColorData(HPS handle, LONG count, PLONG output)
 BOOL GpiSetCharMode(HPS handle, LONG mode)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || mode < 0 || mode > 3)
+    if (!ps || mode < CM_DEFAULT || mode > CM_MODE3)
         return FALSE;
-    ps->char_mode = mode ? mode : 1;
+    ps->char_mode = mode ? mode : CM_MODE1;
     return TRUE;
 }
 
 LONG GpiQueryCharMode(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? (ps->char_mode ? ps->char_mode : 1) : -1;
+    return ps ? (ps->char_mode ? ps->char_mode : CM_MODE1) : CM_ERROR;
 }
 
 BOOL GpiSetPatternRefPoint(HPS handle, PPOINTL point)
@@ -451,11 +534,11 @@ BOOL GpiSetArcParams(HPS h, PLONG arc)
     PresentationSpace *p = gpi_space(h);
     if (!p || !arc)
         return FALSE;
-    memcpy(p->gpi.arc, arc, 16);
+    memcpy(p->gpi.arc, arc, sizeof p->gpi.arc);
     return TRUE;
 }
 
-#define ATTRIBUTE(Name, field, min, max, def)                                                      \
+#define ATTRIBUTE(Name, field, min, max, def, error)                                               \
     BOOL GpiSet##Name(HPS h, LONG v)                                                               \
     {                                                                                              \
         PresentationSpace *p = gpi_space(h);                                                       \
@@ -467,10 +550,10 @@ BOOL GpiSetArcParams(HPS h, PLONG arc)
     LONG GpiQuery##Name(HPS h)                                                                     \
     {                                                                                              \
         PresentationSpace *p = gpi_space(h);                                                       \
-        return p ? p->gpi.field : -1;                                                              \
+        return p ? p->gpi.field : error;                                                           \
     }
-ATTRIBUTE(LineEnd, line_end, 0, 3, 1)
-ATTRIBUTE(LineJoin, line_join, 0, 3, 1)
+ATTRIBUTE(LineEnd, line_end, LINEEND_DEFAULT, LINEEND_ROUND, LINEEND_FLAT, LINEEND_ERROR)
+ATTRIBUTE(LineJoin, line_join, LINEJOIN_DEFAULT, LINEJOIN_MITRE, LINEJOIN_BEVEL, LINEJOIN_ERROR)
 
 BOOL GpiSetLineWidthGeom(HPS h, LONG v)
 {
@@ -484,7 +567,7 @@ BOOL GpiSetLineWidthGeom(HPS h, LONG v)
 LONG GpiQueryLineWidthGeom(HPS h)
 {
     PresentationSpace *p = gpi_space(h);
-    return p ? p->gpi.line_width : -1;
+    return p ? p->gpi.line_width : LINEWIDTHGEOM_ERROR;
 }
 
 BOOL GpiSetCharExtra(HPS h, LONG v)
@@ -499,104 +582,106 @@ BOOL GpiSetCharExtra(HPS h, LONG v)
 LONG GpiQueryAttrs(HPS h, LONG primitive, ULONG mask, PVOID output)
 {
     PresentationSpace *p = gpi_space(h);
-    if (!p || primitive < 1 || primitive > 5 || (mask && !output))
-        return -1;
+    if (!p || primitive < PRIM_LINE || primitive > PRIM_IMAGE || (mask && !output))
+        return GPI_ALTERROR;
     if (!mask)
         return 0;
     uint8 *b = output;
-    unsigned k = primitive - 1;
+    unsigned k = GPI_PRIM_INDEX(primitive);
     ULONG defaults = 0;
 #define DEFAULTED(bit, test)                                                                       \
     if (test)                                                                                      \
     defaults |= (bit)
-    if (mask & 1)
-        lx_guest_store_u32(b, p->primitive_color[k]);
-    DEFAULTED(1, p->primitive_color[k] == CLR_BLACK);
-    if (mask & 2)
-        lx_guest_store_u32(b + 4, p->primitive_back[k]);
-    DEFAULTED(2, p->primitive_back[k] == CLR_WHITE);
-    if (mask & 4)
-        lx_guest_store_u16(b + 8, p->primitive_mix[k]);
-    DEFAULTED(4, p->primitive_mix[k] == 2);
-    if (mask & 8)
-        lx_guest_store_u16(b + 10, p->primitive_back_mix[k]);
-    DEFAULTED(8, p->primitive_back_mix[k] == 5);
-    if (primitive == 1)
+    if (mask & BUNDLE_COLOR)
+        lx_guest_store_u32(b + BUNDLE_COLOR_OFFSET, p->primitive_color[k]);
+    DEFAULTED(BUNDLE_COLOR, p->primitive_color[k] == CLR_BLACK);
+    if (mask & BUNDLE_BACK_COLOR)
+        lx_guest_store_u32(b + BUNDLE_BACK_COLOR_OFFSET, p->primitive_back[k]);
+    DEFAULTED(BUNDLE_BACK_COLOR, p->primitive_back[k] == CLR_WHITE);
+    if (mask & BUNDLE_MIX_MODE)
+        lx_guest_store_u16(b + BUNDLE_MIX_MODE_OFFSET, p->primitive_mix[k]);
+    DEFAULTED(BUNDLE_MIX_MODE, p->primitive_mix[k] == FM_OVERPAINT);
+    if (mask & BUNDLE_BACK_MIX_MODE)
+        lx_guest_store_u16(b + BUNDLE_BACK_MIX_MODE_OFFSET, p->primitive_back_mix[k]);
+    DEFAULTED(BUNDLE_BACK_MIX_MODE, p->primitive_back_mix[k] == BM_LEAVEALONE);
+    if (primitive == PRIM_LINE)
     {
-        if (mask & 16)
-            lx_guest_store_u32(b + 12, 65536);
-        defaults |= 16;
-        if (mask & 32)
-            lx_guest_store_u32(b + 16, p->gpi.line_width);
-        DEFAULTED(32, p->gpi.line_width == 1);
-        if (mask & 64)
-            lx_guest_store_u16(b + 20, p->line_type);
-        DEFAULTED(64, p->line_type == 7);
-        if (mask & 128)
-            lx_guest_store_u16(b + 22, p->gpi.line_end);
-        DEFAULTED(128, p->gpi.line_end == 1);
-        if (mask & 256)
-            lx_guest_store_u16(b + 24, p->gpi.line_join);
-        DEFAULTED(256, p->gpi.line_join == 1);
+        if (mask & LBB_WIDTH)
+            lx_guest_store_u32(b + LINEBUNDLE_WIDTH_OFFSET, LINEWIDTH_NORMAL);
+        defaults |= LBB_WIDTH;
+        if (mask & LBB_GEOM_WIDTH)
+            lx_guest_store_u32(b + LINEBUNDLE_GEOM_WIDTH_OFFSET, p->gpi.line_width);
+        DEFAULTED(LBB_GEOM_WIDTH, p->gpi.line_width == 1);
+        if (mask & LBB_TYPE)
+            lx_guest_store_u16(b + LINEBUNDLE_TYPE_OFFSET, p->line_type);
+        DEFAULTED(LBB_TYPE, p->line_type == LINETYPE_SOLID);
+        if (mask & LBB_END)
+            lx_guest_store_u16(b + LINEBUNDLE_END_OFFSET, p->gpi.line_end);
+        DEFAULTED(LBB_END, p->gpi.line_end == LINEEND_FLAT);
+        if (mask & LBB_JOIN)
+            lx_guest_store_u16(b + LINEBUNDLE_JOIN_OFFSET, p->gpi.line_join);
+        DEFAULTED(LBB_JOIN, p->gpi.line_join == LINEJOIN_BEVEL);
     }
-    if (primitive == 2)
+    if (primitive == PRIM_CHAR)
     {
-        if (mask & 16)
-            lx_guest_store_u16(b + 12, p->charset);
-        DEFAULTED(16, !p->charset);
-        if (mask & 32)
-            lx_guest_store_u16(b + 14, p->char_mode);
-        DEFAULTED(32, p->char_mode <= 1);
-        if (mask & 64)
+        if (mask & CBB_SET)
+            lx_guest_store_u16(b + CHARBUNDLE_SET_OFFSET, p->charset);
+        DEFAULTED(CBB_SET, !p->charset);
+        if (mask & CBB_MODE)
+            lx_guest_store_u16(b + CHARBUNDLE_PRECISION_OFFSET, p->char_mode);
+        DEFAULTED(CBB_MODE, p->char_mode <= CM_MODE1);
+        if (mask & CBB_BOX)
         {
-            lx_guest_store_u32(b + 16, p->char_width);
-            lx_guest_store_u32(b + 20, p->char_height);
+            lx_guest_store_u32(b + CHARBUNDLE_CELL_OFFSET, p->char_width);
+            lx_guest_store_u32(b + CHARBUNDLE_CELL_OFFSET + 4, p->char_height);
         }
-        DEFAULTED(64, !p->char_width && !p->char_height);
-        if (mask & 128)
-            memcpy(b + 24, &p->char_angle, 8);
-        DEFAULTED(128, !p->char_angle.x && !p->char_angle.y);
-        if (mask & 256)
-            memcpy(b + 32, &p->char_shear, 8);
-        DEFAULTED(256, !p->char_shear.x && !p->char_shear.y);
-        if (mask & 512)
-            lx_guest_store_u16(b + 40, p->char_direction);
-        DEFAULTED(512, p->char_direction <= 1);
-        if (mask & 1024)
-            lx_guest_store_u16(b + 42, p->text_horizontal | p->text_vertical);
-        DEFAULTED(1024, !p->text_horizontal && !p->text_vertical);
-        if (mask & 2048)
-            lx_guest_store_u32(b + 44, p->gpi.char_extra);
-        DEFAULTED(2048, !p->gpi.char_extra);
-        if (mask & 4096)
-            lx_guest_store_u32(b + 48, 0);
-        defaults |= 4096;
+        DEFAULTED(CBB_BOX, !p->char_width && !p->char_height);
+        if (mask & CBB_ANGLE)
+            memcpy(b + CHARBUNDLE_ANGLE_OFFSET, &p->char_angle, sizeof p->char_angle);
+        DEFAULTED(CBB_ANGLE, !p->char_angle.x && !p->char_angle.y);
+        if (mask & CBB_SHEAR)
+            memcpy(b + CHARBUNDLE_SHEAR_OFFSET, &p->char_shear, sizeof p->char_shear);
+        DEFAULTED(CBB_SHEAR, !p->char_shear.x && !p->char_shear.y);
+        if (mask & CBB_DIRECTION)
+            lx_guest_store_u16(b + CHARBUNDLE_DIRECTION_OFFSET, p->char_direction);
+        DEFAULTED(CBB_DIRECTION, p->char_direction <= CHDIRN_LEFTRIGHT);
+        if (mask & CBB_TEXT_ALIGN)
+            lx_guest_store_u16(b + CHARBUNDLE_TEXT_ALIGN_OFFSET,
+                               p->text_horizontal | p->text_vertical);
+        DEFAULTED(CBB_TEXT_ALIGN, !p->text_horizontal && !p->text_vertical);
+        if (mask & CBB_EXTRA)
+            lx_guest_store_u32(b + CHARBUNDLE_EXTRA_OFFSET, p->gpi.char_extra);
+        DEFAULTED(CBB_EXTRA, !p->gpi.char_extra);
+        if (mask & CBB_BREAK_EXTRA)
+            lx_guest_store_u32(b + CHARBUNDLE_BREAK_EXTRA_OFFSET, 0);
+        defaults |= CBB_BREAK_EXTRA;
     }
-    if (primitive == 3)
+    if (primitive == PRIM_MARKER)
     {
         /* Markers have no settable set, symbol or box in this PS. */
-        if (mask & 16)
-            lx_guest_store_u16(b + 12, 0);
-        if (mask & 32)
-            lx_guest_store_u16(b + 14, 0);
-        if (mask & 64)
+        if (mask & MBB_SET)
+            lx_guest_store_u16(b + MARKERBUNDLE_SET_OFFSET, 0);
+        if (mask & MBB_SYMBOL)
+            lx_guest_store_u16(b + MARKERBUNDLE_SYMBOL_OFFSET, 0);
+        if (mask & MBB_BOX)
         {
-            lx_guest_store_u32(b + 16, 0);
-            lx_guest_store_u32(b + 20, 0);
+            lx_guest_store_u32(b + MARKERBUNDLE_CELL_OFFSET, 0);
+            lx_guest_store_u32(b + MARKERBUNDLE_CELL_OFFSET + 4, 0);
         }
-        defaults |= 16 | 32 | 64;
+        defaults |= MBB_SET | MBB_SYMBOL | MBB_BOX;
     }
-    if (primitive == 4)
+    if (primitive == PRIM_AREA)
     {
-        if (mask & 16)
-            lx_guest_store_u16(b + 12, p->pattern_set);
-        DEFAULTED(16, !p->pattern_set);
-        if (mask & 32)
-            lx_guest_store_u16(b + 14, p->pattern);
-        DEFAULTED(32, p->pattern == 16);
-        if (mask & 64)
-            memcpy(b + 16, &p->pattern_reference, 8);
-        DEFAULTED(64, !p->pattern_reference.x && !p->pattern_reference.y);
+        if (mask & ABB_SET)
+            lx_guest_store_u16(b + AREABUNDLE_SET_OFFSET, p->pattern_set);
+        DEFAULTED(ABB_SET, !p->pattern_set);
+        if (mask & ABB_SYMBOL)
+            lx_guest_store_u16(b + AREABUNDLE_SYMBOL_OFFSET, p->pattern);
+        DEFAULTED(ABB_SYMBOL, p->pattern == PATSYM_SOLID);
+        if (mask & ABB_REF_POINT)
+            memcpy(b + AREABUNDLE_REF_POINT_OFFSET, &p->pattern_reference,
+                   sizeof p->pattern_reference);
+        DEFAULTED(ABB_REF_POINT, !p->pattern_reference.x && !p->pattern_reference.y);
     }
 #undef DEFAULTED
     return (LONG)(defaults & mask);

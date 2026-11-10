@@ -1,7 +1,29 @@
+#include "os2/include/bsedos.h"
 #include "os2/include/pmdev.h"
+#include "os2/include/private/pmdevp.h"
+#include "os2/ps/pmgpi/internal.h"
 
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* GPI structures are copied from checked guest spans before host drawing. */
+
+/* Bounds on what one guest call may make the host copy or allocate. */
+enum
+{
+    BRIDGE_MAX_BYTES = 64 * 1024 * 1024,
+    BRIDGE_MAX_NAME = 256,
+    BRIDGE_MAX_DEVOPEN_STRING = 32768,
+    BRIDGE_MAX_PATH = 65536,
+    BRIDGE_MAX_POINTS = 65536,
+    BRIDGE_MAX_STRING_CHARS = 65536,
+    BRIDGE_MAX_REGION_RECTS = 4096,
+    BRIDGE_MAX_ESCAPE_BYTES = 1048576,
+    BRIDGE_MAX_BITMAP_FORMATS = 65536,
+    /* RGNRECT.crc */
+    BRIDGE_MAX_QUERY_RECTS = 65536,
+    /* DevQueryHardcopyCaps: HCINFO is CHAR szFormname[32] and nine LONGs. */
+    HCINFO_SIZE = 68
+};
+
 static uint32 gpi_word(const uint8 *a, unsigned i)
 {
     return lx_guest_load_u32(a + 4 * i);
@@ -71,13 +93,13 @@ static uint32 bridge32_GpiQueryRGBColor(uint8 *a)
 
 static uint32 bridge32_GpiQueryColorData(uint8 *a)
 {
-    LONG count = (LONG)gpi_word(a, 1), output[4];
-    if (count < 0 || count > 4)
+    LONG count = (LONG)gpi_word(a, 1), output[QCD_LCT_OPTIONS + 1];
+    if (count < 0 || count > QCD_LCT_OPTIONS + 1)
         return 0;
     uint32 result = GpiQueryColorData(gpi_word(a, 0), count, output);
     if (result && count)
     {
-        uint8 wire[16];
+        uint8 wire[sizeof output];
         for (LONG i = 0; i < count; i++)
             lx_guest_store_u32(wire + 4 * i, output[i]);
         result =
@@ -89,8 +111,9 @@ static uint32 bridge32_GpiQueryColorData(uint8 *a)
 static uint32 bridge32_GpiQueryFonts(uint8 *a)
 {
     const uint32 name_pointer = gpi_word(a, 2);
-    char *face =
-        name_pointer ? lx_execution_copy_string(GProcessState.execution, name_pointer, 256) : NULL;
+    char *face = name_pointer ? lx_execution_copy_string(GProcessState.execution, name_pointer,
+                                                         BRIDGE_MAX_NAME)
+                              : NULL;
     LxGuestBorrow count = {0}, output = {0};
     uint32 result = (uint32)-255;
     if ((!name_pointer || face) && lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), 4,
@@ -132,7 +155,7 @@ static uint32 bridge32_GpiQueryFontMetrics(uint8 *a)
 static uint32 bridge32_DevQueryCaps(uint8 *a)
 {
     LONG start = (LONG)gpi_word(a, 1), count = (LONG)gpi_word(a, 2);
-    if (start < 0 || count < 0 || start > 42 || count > 42 - start)
+    if (start < 0 || count < 0 || start > GPI_CAPS_COUNT || count > GPI_CAPS_COUNT - start)
         return 0;
     LxGuestBorrow output = {0};
     if (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)count * 4,
@@ -146,11 +169,11 @@ static uint32 bridge32_DevQueryCaps(uint8 *a)
 static uint32 bridge32_GpiQueryTextBox(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 1), points = (LONG)gpi_word(a, 3);
-    if (count < 0 || count > 512 || points < 0)
+    if (count < 0 || count > GPI_TEXTBOX_MAX_CHARS || points < 0)
         return 0;
     LxGuestBorrow text = {0}, output = {0};
     uint32 result = 0;
-    size_t bytes = (size_t)(points < 5 ? points : 5) * sizeof(POINTL);
+    size_t bytes = (size_t)(points < TXTBOX_COUNT ? points : TXTBOX_COUNT) * sizeof(POINTL);
     if ((!count || lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)count,
                                        LX_GUEST_READ, &text)) &&
         (!bytes || lx_execution_borrow(GProcessState.execution, gpi_word(a, 4), bytes,
@@ -164,15 +187,15 @@ static uint32 bridge32_GpiQueryTextBox(uint8 *a)
 static uint32 bridge32_DevOpenDC(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 3);
-    if (count < 0 || count > 9)
+    if (count < 0 || count > GPI_DEVOPEN_FIELDS)
         return 0;
-    char *token = gpi_word(a, 2)
-                      ? lx_execution_copy_string(GProcessState.execution, gpi_word(a, 2), 256)
-                      : NULL;
+    char *token = gpi_word(a, 2) ? lx_execution_copy_string(GProcessState.execution, gpi_word(a, 2),
+                                                            BRIDGE_MAX_NAME)
+                                 : NULL;
     if (gpi_word(a, 2) && !token)
         return 0;
-    void *fields[9] = {0};
-    uint8 pointers[36];
+    void *fields[GPI_DEVOPEN_FIELDS] = {0};
+    uint8 pointers[GPI_DEVOPEN_FIELDS * 4];
     uint32 result = 0;
     if (count &&
         !lx_execution_read(GProcessState.execution, gpi_word(a, 4), pointers, (size_t)count * 4))
@@ -180,16 +203,16 @@ static uint32 bridge32_DevOpenDC(uint8 *a)
     for (LONG i = 0; i < count; i++)
     {
         uint32 address = lx_guest_load_u32(pointers + i * 4);
-        if (i == 2)
+        if (i == GPI_DEVOPEN_DRIVDATA)
             fields[i] = (void *)(uintptr_t)address;
-        else if (address &&
-                 !(fields[i] = lx_execution_copy_string(GProcessState.execution, address, 32768)))
+        else if (address && !(fields[i] = lx_execution_copy_string(GProcessState.execution, address,
+                                                                   BRIDGE_MAX_DEVOPEN_STRING)))
             goto done;
     }
     result = DevOpenDC(gpi_word(a, 0), (LONG)gpi_word(a, 1), token, count, fields, gpi_word(a, 5));
 done:
-    for (unsigned i = 0; i < 9; i++)
-        if (i != 2)
+    for (unsigned i = 0; i < GPI_DEVOPEN_FIELDS; i++)
+        if (i != GPI_DEVOPEN_DRIVDATA)
             free(fields[i]);
     free(token);
     return result;
@@ -223,10 +246,11 @@ static uint32 bridge32_GpiQueryCp(uint8 *a)
 static uint32 bridge32_GpiCreateLogColorTable(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 4);
-    if (gpi_word(a, 2) == 3)
-        return GpiCreateLogColorTable(gpi_word(a, 0), gpi_word(a, 1), 3, (LONG)gpi_word(a, 3),
-                                      count, NULL);
-    if (count < 0 || count > 256)
+    /* An LCOLF_RGB table has no entries. */
+    if (gpi_word(a, 2) == LCOLF_RGB)
+        return GpiCreateLogColorTable(gpi_word(a, 0), gpi_word(a, 1), LCOLF_RGB,
+                                      (LONG)gpi_word(a, 3), count, NULL);
+    if (count < 0 || count > GPI_MAX_PALETTE_COLORS)
         return 0;
     LxGuestBorrow colors = {0};
     if (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 5), (size_t)count * 4,
@@ -241,9 +265,10 @@ static uint32 bridge32_GpiCreateLogColorTable(uint8 *a)
 static uint32 bridge32_GpiCreateLogFont(uint8 *a)
 {
     FATTRS attrs;
-    uint8 name[8];
+    uint8 name[8]; /* STR8 */
     if (!lx_execution_read(GProcessState.execution, gpi_word(a, 3), &attrs, sizeof attrs) ||
-        (gpi_word(a, 1) && !lx_execution_read(GProcessState.execution, gpi_word(a, 1), name, 8)))
+        (gpi_word(a, 1) &&
+         !lx_execution_read(GProcessState.execution, gpi_word(a, 1), name, sizeof name)))
         return 0;
     return GpiCreateLogFont(gpi_word(a, 0), gpi_word(a, 1) ? name : NULL, (LONG)gpi_word(a, 2),
                             &attrs);
@@ -280,25 +305,30 @@ static uint32 bridge32_GpiQueryCharBox(uint8 *a)
 
 static uint32 bridge32_DevQueryDeviceNames(uint8 *a)
 {
-    char *driver = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), 256);
+    char *driver =
+        lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), BRIDGE_MAX_NAME);
     LONG devices = 0, types = 0;
     uint32 result = 0;
+    /* STR32 device names, STR64 descriptions and STR16 data types */
     char name[32], description[64], type[16];
-    if (driver && lx_execution_read(GProcessState.execution, gpi_word(a, 2), &devices, 4) &&
-        lx_execution_read(GProcessState.execution, gpi_word(a, 5), &types, 4))
+    if (driver &&
+        lx_execution_read(GProcessState.execution, gpi_word(a, 2), &devices, sizeof devices) &&
+        lx_execution_read(GProcessState.execution, gpi_word(a, 5), &types, sizeof types))
     {
         LONG dc = devices, tc = types;
         result = DevQueryDeviceNames(gpi_word(a, 0), driver, &devices, gpi_word(a, 3) ? name : NULL,
                                      gpi_word(a, 4) ? description : NULL, &types,
                                      gpi_word(a, 6) ? type : NULL);
-        if (result &&
-            ((dc &&
-              (!lx_execution_write(GProcessState.execution, gpi_word(a, 3), name, 32) ||
-               !lx_execution_write(GProcessState.execution, gpi_word(a, 4), description, 64))) ||
-             (tc && !lx_execution_write(GProcessState.execution, gpi_word(a, 6), type, 16))))
+        if (result && ((dc && (!lx_execution_write(GProcessState.execution, gpi_word(a, 3), name,
+                                                   sizeof name) ||
+                               !lx_execution_write(GProcessState.execution, gpi_word(a, 4),
+                                                   description, sizeof description))) ||
+                       (tc && !lx_execution_write(GProcessState.execution, gpi_word(a, 6), type,
+                                                  sizeof type))))
             result = 0;
-        if (!lx_execution_write(GProcessState.execution, gpi_word(a, 2), &devices, 4) ||
-            !lx_execution_write(GProcessState.execution, gpi_word(a, 5), &types, 4))
+        if (!lx_execution_write(GProcessState.execution, gpi_word(a, 2), &devices,
+                                sizeof devices) ||
+            !lx_execution_write(GProcessState.execution, gpi_word(a, 5), &types, sizeof types))
             result = 0;
     }
     free(driver);
@@ -371,14 +401,14 @@ static uint32 bridge32_GpiQueryPageViewport(uint8 *a)
 
 static uint32 bridge32_GpiSetAttrs(uint8 *a)
 {
-    uint8 bundle[52] = {0};
+    uint8 bundle[CHARBUNDLE_SIZE] = {0};
     LONG primitive = (LONG)gpi_word(a, 1);
     ULONG mask = gpi_word(a, 2), defaults = gpi_word(a, 3);
-    unsigned size = primitive == 2   ? 52
-                    : primitive == 1 ? 28
-                    : primitive == 3 ? 24
-                    : primitive == 4 ? 24
-                                     : 12;
+    unsigned size = primitive == PRIM_CHAR     ? CHARBUNDLE_SIZE
+                    : primitive == PRIM_LINE   ? LINEBUNDLE_SIZE
+                    : primitive == PRIM_MARKER ? MARKERBUNDLE_SIZE
+                    : primitive == PRIM_AREA   ? AREABUNDLE_SIZE
+                                               : IMAGEBUNDLE_SIZE;
     if ((mask & ~defaults) &&
         !lx_execution_read(GProcessState.execution, gpi_word(a, 4), bundle, size))
         return 0;
@@ -403,24 +433,25 @@ static uint32 bridge32_GpiSetBitmap(uint8 *a)
 
 static uint32 bridge32_GpiQueryBitmapParameters(uint8 *a)
 {
-    uint8 data[12];
+    uint8 data[BMIH_SIZE];
     return GpiQueryBitmapParameters(gpi_word(a, 0), data) &&
-           lx_execution_write(GProcessState.execution, gpi_word(a, 1), data, 12);
+           lx_execution_write(GProcessState.execution, gpi_word(a, 1), data, sizeof data);
 }
 
 static uint32 bridge32_GpiQueryBitmapInfoHeader(uint8 *a)
 {
-    uint8 data[64] = {0};
+    uint8 data[BMIH2_SIZE] = {0};
+    /* cbFix selects the header version. */
     return lx_execution_read(GProcessState.execution, gpi_word(a, 1), data, 4) &&
            GpiQueryBitmapInfoHeader(gpi_word(a, 0), data) &&
-           lx_execution_write(GProcessState.execution, gpi_word(a, 1), data, 64);
+           lx_execution_write(GProcessState.execution, gpi_word(a, 1), data, sizeof data);
 }
 
 static uint32 bridge32_GpiQueryDeviceBitmapFormats(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 1);
     LxGuestBorrow out = {0};
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > BRIDGE_MAX_BITMAP_FORMATS ||
         (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)count * 4,
                                        LX_GUEST_WRITE, &out)))
         return 0;
@@ -454,26 +485,31 @@ static uint32 bridge32_GpiWCBitBlt(uint8 *a)
 
 static uint8 *bitmap_bridge_info(uint32 address, size_t *bytes, BOOL palette)
 {
-    uint8 header[64] = {0};
+    uint8 header[BMIH2_SIZE] = {0};
     if (!lx_execution_read(GProcessState.execution, address, header, 4))
         return NULL;
     uint32 fixed = lx_guest_load_u32(header);
-    if ((fixed != 12 && fixed != 64) ||
+    if ((fixed != BMIH_SIZE && fixed != BMIH2_SIZE) ||
         !lx_execution_read(GProcessState.execution, address, header, fixed))
         return NULL;
-    unsigned width = fixed == 12 ? lx_guest_load_u16(header + 4) : lx_guest_load_u32(header + 4);
-    unsigned height = fixed == 12 ? lx_guest_load_u16(header + 6) : lx_guest_load_u32(header + 8);
-    unsigned planes = lx_guest_load_u16(header + (fixed == 12 ? 8 : 12));
-    unsigned depth = lx_guest_load_u16(header + (fixed == 12 ? 10 : 14));
-    if (!width || !height || width > 16384 || height > 16384 || (uint64)width * height > 16777216 ||
+    unsigned width = fixed == BMIH_SIZE ? lx_guest_load_u16(header + BMIH_CX_OFFSET)
+                                        : lx_guest_load_u32(header + BMIH2_CX_OFFSET);
+    unsigned height = fixed == BMIH_SIZE ? lx_guest_load_u16(header + BMIH_CY_OFFSET)
+                                         : lx_guest_load_u32(header + BMIH2_CY_OFFSET);
+    unsigned planes = lx_guest_load_u16(
+        header + (fixed == BMIH_SIZE ? BMIH_CPLANES_OFFSET : BMIH2_CPLANES_OFFSET));
+    unsigned depth = lx_guest_load_u16(
+        header + (fixed == BMIH_SIZE ? BMIH_CBITCOUNT_OFFSET : BMIH2_CBITCOUNT_OFFSET));
+    if (!width || !height || width > LX_PM_RASTER_MAX_DIMENSION ||
+        height > LX_PM_RASTER_MAX_DIMENSION || (uint64)width * height > LX_PM_RASTER_MAX_PELS ||
         planes != 1 || (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
         return NULL;
     unsigned colors = depth <= 8 ? 1u << depth : 0;
-    if (fixed == 64 && lx_guest_load_u32(header + 32))
-        colors = lx_guest_load_u32(header + 32);
-    if (colors > 256)
+    if (fixed == BMIH2_SIZE && lx_guest_load_u32(header + BMIH2_CCLRUSED_OFFSET))
+        colors = lx_guest_load_u32(header + BMIH2_CCLRUSED_OFFSET);
+    if (colors > GPI_MAX_PALETTE_COLORS)
         return NULL;
-    size_t size = fixed + (palette ? colors * (fixed == 12 ? 3 : 4) : 0);
+    size_t size = fixed + (palette ? colors * (fixed == BMIH_SIZE ? RGB_SIZE : RGB2_SIZE) : 0);
     uint8 *info = malloc(size);
     if (!info || !lx_execution_read(GProcessState.execution, address, info, size))
     {
@@ -507,28 +543,31 @@ static uint32 bridge32_GpiDrawBits(uint8 *a)
 static uint32 bridge32_GpiQueryBitmapBits(uint8 *a)
 {
     LONG start = (LONG)gpi_word(a, 1), scans = (LONG)gpi_word(a, 2);
-    uint8 header[64];
+    uint8 header[BMIH2_SIZE];
     if (start < 0 || scans < 0 ||
         !lx_execution_read(GProcessState.execution, gpi_word(a, 4), header, 4))
-        return (uint32)-1;
+        return (uint32)GPI_ALTERROR;
     unsigned fixed = lx_guest_load_u32(header);
-    if ((fixed != 12 && fixed != 64) ||
+    if ((fixed != BMIH_SIZE && fixed != BMIH2_SIZE) ||
         !lx_execution_read(GProcessState.execution, gpi_word(a, 4), header, fixed))
-        return (uint32)-1;
-    unsigned planes = lx_guest_load_u16(header + (fixed == 12 ? 8 : 12));
-    unsigned depth = lx_guest_load_u16(header + (fixed == 12 ? 10 : 14));
+        return (uint32)GPI_ALTERROR;
+    unsigned planes = lx_guest_load_u16(
+        header + (fixed == BMIH_SIZE ? BMIH_CPLANES_OFFSET : BMIH2_CPLANES_OFFSET));
+    unsigned depth = lx_guest_load_u16(
+        header + (fixed == BMIH_SIZE ? BMIH_CBITCOUNT_OFFSET : BMIH2_CBITCOUNT_OFFSET));
     if (planes != 1 || (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
-        return (uint32)-1;
+        return (uint32)GPI_ALTERROR;
     PresentationSpace *ps = lx_pm_font_space(gpi_word(a, 0));
     PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
     if (!bitmap || (ULONG)start > bitmap->height)
-        return (uint32)-1;
+        return (uint32)GPI_ALTERROR;
     unsigned rows =
         (ULONG)scans > bitmap->height - (ULONG)start ? bitmap->height - (ULONG)start : (ULONG)scans;
-    size_t size = fixed + (depth <= 8 ? (1u << depth) * (fixed == 12 ? 3 : 4) : 0);
+    size_t size =
+        fixed + (depth <= 8 ? (1u << depth) * (fixed == BMIH_SIZE ? RGB_SIZE : RGB2_SIZE) : 0);
     size_t bytes = ((size_t)bitmap->width * depth + 31) / 32 * 4 * rows;
     LxGuestBorrow info = {0}, bits = {0};
-    uint32 result = (uint32)-1;
+    uint32 result = (uint32)GPI_ALTERROR;
     if (lx_execution_borrow(GProcessState.execution, gpi_word(a, 4), size,
                             LX_GUEST_READ | LX_GUEST_WRITE, &info) &&
         (!bytes || lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), bytes,
@@ -548,7 +587,7 @@ static uint32 bridge32_GpiCreateBitmap(uint8 *a)
     uint8 *info = NULL;
     LxGuestBorrow bits = {0};
     uint32 result = 0;
-    if (gpi_word(a, 2) & 4)
+    if (gpi_word(a, 2) & CBM_INIT)
     {
         info = bitmap_bridge_info(gpi_word(a, 4), &initial_bytes, TRUE);
         if (!info || !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), initial_bytes,
@@ -583,8 +622,9 @@ static uint32 bridge32_GpiQuerySetIds(uint8 *a)
     LONG count = (LONG)gpi_word(a, 1);
     LxGuestBorrow types = {0}, names = {0}, ids = {0};
     uint32 result = 0;
-    if (count < 0 || count > 255)
+    if (count < 0 || count > GPI_LCID_MAX + 1)
         return 0;
+    /* STR8 names */
     if (!count || (lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)count * 4,
                                        LX_GUEST_WRITE, &types) &&
                    lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)count * 8,
@@ -602,6 +642,7 @@ static uint32 bridge32_GpiQueryWidthTable(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 2);
     LxGuestBorrow out = {0};
+    /* One width for each single-byte code point. */
     if (count < 0 || count > 256 ||
         (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)count * 4,
                                        LX_GUEST_WRITE, &out)))
@@ -615,7 +656,7 @@ static uint32 bridge32_GpiCharString(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 1);
     LxGuestBorrow text = {0};
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > BRIDGE_MAX_STRING_CHARS ||
         (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)count,
                                        LX_GUEST_READ, &text)))
         return 0;
@@ -629,7 +670,7 @@ static uint32 bridge32_GpiCharStringAt(uint8 *a)
     LONG count = (LONG)gpi_word(a, 2);
     LxGuestBorrow text = {0};
     POINTL point;
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > BRIDGE_MAX_STRING_CHARS ||
         !lx_execution_read(GProcessState.execution, gpi_word(a, 1), &point, sizeof point) ||
         (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)count,
                                        LX_GUEST_READ, &text)))
@@ -677,7 +718,7 @@ static uint32 bridge32_GpiCreateRegion(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 1);
     LxGuestBorrow rects = {0};
-    if (count < 0 || count > 4096 ||
+    if (count < 0 || count > BRIDGE_MAX_REGION_RECTS ||
         (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2),
                                        (size_t)count * sizeof(RECTL), LX_GUEST_READ, &rects)))
         return 0;
@@ -690,7 +731,7 @@ static uint32 bridge32_GpiSetRegion(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 2);
     LxGuestBorrow rects = {0};
-    if (count < 0 || count > 4096 ||
+    if (count < 0 || count > BRIDGE_MAX_REGION_RECTS ||
         (count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3),
                                        (size_t)count * sizeof(RECTL), LX_GUEST_READ, &rects)))
         return 0;
@@ -788,14 +829,14 @@ static uint32 positioned_text_bridge(uint8 *a, BOOL at)
     RECTL rect;
     LxGuestBorrow text = {0}, advances = {0};
     uint32 result = 0;
-    if (count < 0 || count > 65536 ||
+    if (count < 0 || count > BRIDGE_MAX_STRING_CHARS ||
         (at && !lx_execution_read(GProcessState.execution, gpi_word(a, 1), &point, sizeof point)) ||
         (gpi_word(a, 1 + offset) &&
          !lx_execution_read(GProcessState.execution, gpi_word(a, 1 + offset), &rect, sizeof rect)))
         return 0;
     if ((count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 4 + offset),
                                        (size_t)count, LX_GUEST_READ, &text)) ||
-        ((flags & 2) && count &&
+        ((flags & CHS_VECTOR) && count &&
          !lx_execution_borrow(GProcessState.execution, gpi_word(a, 5 + offset), (size_t)count * 4,
                               LX_GUEST_READ, &advances)))
         goto done;
@@ -832,11 +873,11 @@ static uint32 bridge32_DevQueryHardcopyCaps(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 2);
     if (count < 0 || count > 1)
-        return (uint32)-1;
+        return (uint32)DQHC_ERROR;
     LxGuestBorrow output = {0};
-    uint32 result = (uint32)-1;
-    if (!count ||
-        lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), 68, LX_GUEST_WRITE, &output))
+    uint32 result = (uint32)DQHC_ERROR;
+    if (!count || lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), HCINFO_SIZE,
+                                      LX_GUEST_WRITE, &output))
         result =
             (uint32)DevQueryHardcopyCaps(gpi_word(a, 0), (LONG)gpi_word(a, 1), count, output.host);
     lx_execution_release(&output);
@@ -852,13 +893,15 @@ static uint32 bridge32_GpiQueryLogColorTable(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 3);
     if (count < 0)
-        return UINT32_MAX;
-    size_t copied = count > 512 ? 512 : (size_t)count;
+        return (uint32)QLCT_ERROR;
+    /* At most an index and a value for each entry. */
+    LONG values[2 * GPI_MAX_PALETTE_COLORS];
+    size_t copied = count > (LONG)(sizeof values / sizeof *values) ? sizeof values / sizeof *values
+                                                                   : (size_t)count;
     LxGuestBorrow output = {0};
     if (copied && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 4), copied * 4,
                                        LX_GUEST_WRITE, &output))
-        return UINT32_MAX;
-    LONG values[512];
+        return (uint32)QLCT_ERROR;
     LONG result = GpiQueryLogColorTable(gpi_word(a, 0), gpi_word(a, 1), (LONG)gpi_word(a, 2),
                                         (LONG)copied, values);
     for (LONG i = 0; i < result; i++)
@@ -880,7 +923,7 @@ static uint32 bridge32_GpiQueryCharMode(uint8 *a)
 static uint32 bridge32_GpiConvert(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 3);
-    if (count < 0 || count > 65536)
+    if (count < 0 || count > BRIDGE_MAX_POINTS)
         return 0;
     size_t bytes = (size_t)count * sizeof(POINTL);
     POINTL *points = count ? malloc(bytes) : NULL;
@@ -916,7 +959,7 @@ static uint32 bridge32_GpiQueryPatternRefPoint(uint8 *a)
 static uint32 bridge32_GpiPolyLine(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 1);
-    if (count < 0 || count > 65536)
+    if (count < 0 || count > BRIDGE_MAX_POINTS)
         return 0;
     POINTL *points = count ? malloc((size_t)count * sizeof *points) : NULL;
     if (count && (!points || !lx_execution_read(GProcessState.execution, gpi_word(a, 2), points,
@@ -935,7 +978,7 @@ static uint32 bridge32_GpiQueryRegionRects(uint8 *a)
     RGNRECT control;
     RECTL bounds;
     if (!lx_execution_read(GProcessState.execution, gpi_word(a, 3), &control, sizeof control) ||
-        (gpi_word(a, 4) && control.crc > 65536))
+        (gpi_word(a, 4) && control.crc > BRIDGE_MAX_QUERY_RECTS))
         return 0;
     if (gpi_word(a, 2) &&
         !lx_execution_read(GProcessState.execution, gpi_word(a, 2), &bounds, sizeof bounds))
@@ -979,10 +1022,11 @@ static uint32 bridge32_GpiQueryTextAlignment(uint8 *a)
 {
     LONG horizontal, vertical;
     LxGuestBorrow h = {0}, v = {0};
-    uint32 result =
-        lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), 4, LX_GUEST_WRITE, &h) &&
-        lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), 4, LX_GUEST_WRITE, &v) &&
-        GpiQueryTextAlignment(gpi_word(a, 0), &horizontal, &vertical);
+    uint32 result = lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), sizeof horizontal,
+                                        LX_GUEST_WRITE, &h) &&
+                    lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), sizeof vertical,
+                                        LX_GUEST_WRITE, &v) &&
+                    GpiQueryTextAlignment(gpi_word(a, 0), &horizontal, &vertical);
     if (result)
     {
         lx_guest_store_u32(h.host, horizontal);
@@ -1025,10 +1069,10 @@ static uint32 bridge32_GpiSetTextAlignment(uint8 *a)
 static uint32 bridge32_DevEscape(uint8 *a)
 {
     LONG input_count = (LONG)gpi_word(a, 2), output_count = 0;
-    if (input_count < 0 || input_count > 1048576)
-        return (uint32)-1;
+    if (input_count < 0 || input_count > BRIDGE_MAX_ESCAPE_BYTES)
+        return (uint32)DEVESC_ERROR;
     LxGuestBorrow input = {0}, count = {0}, output = {0};
-    uint32 result = (uint32)-1;
+    uint32 result = (uint32)DEVESC_ERROR;
     if (input_count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3),
                                             (size_t)input_count, LX_GUEST_READ, &input))
         goto done;
@@ -1038,7 +1082,7 @@ static uint32 bridge32_DevEscape(uint8 *a)
                                  LX_GUEST_READ | LX_GUEST_WRITE, &count))
             goto done;
         output_count = (LONG)lx_guest_load_u32(count.host);
-        if (output_count < 0 || output_count > 1048576 ||
+        if (output_count < 0 || output_count > BRIDGE_MAX_ESCAPE_BYTES ||
             (output_count && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 5),
                                                   (size_t)output_count, LX_GUEST_WRITE, &output)))
             goto done;
@@ -1056,15 +1100,18 @@ done:
 
 static uint32 bridge32_DevPostDeviceModes(uint8 *a)
 {
+    /* The driver, device and queue names */
     char *strings[3] = {NULL, NULL, NULL};
     LxGuestBorrow data = {0};
-    uint32 result = (uint32)-1;
+    uint32 result = (uint32)DPDM_ERROR;
     for (unsigned i = 0; i < 3; i++)
-        if (gpi_word(a, i + 2) && !(strings[i] = lx_execution_copy_string(GProcessState.execution,
-                                                                          gpi_word(a, i + 2), 256)))
+        if (gpi_word(a, i + 2) &&
+            !(strings[i] = lx_execution_copy_string(GProcessState.execution, gpi_word(a, i + 2),
+                                                    BRIDGE_MAX_NAME)))
             goto done;
-    if (gpi_word(a, 1) && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), 40,
-                                               LX_GUEST_READ | LX_GUEST_WRITE, &data))
+    if (gpi_word(a, 1) &&
+        !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), LX_PRINTER_DRIVER_DATA_SIZE,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &data))
         goto done;
     result = (uint32)DevPostDeviceModes(gpi_word(a, 0), data.host, strings[0], strings[1],
                                         strings[2], gpi_word(a, 5));
@@ -1082,7 +1129,8 @@ static uint32 bridge32_GpiDeleteMetaFile(uint8 *a)
 
 static uint32 bridge32_GpiLoadMetaFile(uint8 *a)
 {
-    char *filename = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), 65536);
+    char *filename =
+        lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), BRIDGE_MAX_PATH);
     uint32 result = filename ? GpiLoadMetaFile(gpi_word(a, 0), filename) : 0;
     free(filename);
     return result;
@@ -1100,7 +1148,7 @@ static uint32 bridge32_GpiSetMetaFileBits(uint8 *a)
     LONG length = (LONG)gpi_word(a, 2);
     LxGuestBorrow input = {0};
     uint32 result = 0;
-    if (length >= 0 && length <= 64 * 1024 * 1024 &&
+    if (length >= 0 && length <= BRIDGE_MAX_BYTES &&
         (!length || lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)length,
                                         LX_GUEST_READ, &input)))
         result = GpiSetMetaFileBits(gpi_word(a, 0), (LONG)gpi_word(a, 1), length, input.host);
@@ -1112,7 +1160,8 @@ static uint32 bridge32_GpiQueryBoundaryData(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), 16, LX_GUEST_WRITE, &output))
+    if (lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), sizeof(RECTL), LX_GUEST_WRITE,
+                            &output))
     {
         RECTL bounds;
         result = GpiQueryBoundaryData(gpi_word(a, 0), &bounds);
@@ -1130,10 +1179,11 @@ static uint32 bridge32_GpiSetDrawControl(uint8 *a)
 
 static uint32 bridge32_GpiSetDefaultViewMatrix(uint8 *a)
 {
-    uint8 matrix[36];
-    return (LONG)gpi_word(a, 1) == 9 &&
+    uint8 matrix[GPI_MATRIX_ELEMENTS * 4];
+    return (LONG)gpi_word(a, 1) == GPI_MATRIX_ELEMENTS &&
            lx_execution_read(GProcessState.execution, gpi_word(a, 2), matrix, sizeof matrix) &&
-           GpiSetDefaultViewMatrix(gpi_word(a, 0), 9, matrix, (LONG)gpi_word(a, 3));
+           GpiSetDefaultViewMatrix(gpi_word(a, 0), GPI_MATRIX_ELEMENTS, matrix,
+                                   (LONG)gpi_word(a, 3));
 }
 
 static uint32 bridge32_GpiSetBitmapBits(uint8 *a)
@@ -1141,26 +1191,28 @@ static uint32 bridge32_GpiSetBitmapBits(uint8 *a)
     LONG scans = (LONG)gpi_word(a, 2), start = (LONG)gpi_word(a, 1);
     size_t ignored;
     uint8 *info = bitmap_bridge_info(gpi_word(a, 4), &ignored, TRUE);
-    if (!info || scans < 0 || scans > 16384 || start < 0)
+    if (!info || scans < 0 || scans > LX_PM_RASTER_MAX_DIMENSION || start < 0)
     {
         free(info);
-        return (uint32)-1;
+        return (uint32)GPI_ALTERROR;
     }
     PresentationSpace *ps = lx_pm_font_space(gpi_word(a, 0));
     PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
     if (!bitmap || (ULONG)start > bitmap->height)
     {
         free(info);
-        return (uint32)-1;
+        return (uint32)GPI_ALTERROR;
     }
     unsigned rows =
         (ULONG)scans > bitmap->height - (ULONG)start ? bitmap->height - (ULONG)start : (ULONG)scans;
     ULONG fixed = lx_guest_load_u32(info);
-    ULONG width = fixed == 12 ? lx_guest_load_u16(info + 4) : lx_guest_load_u32(info + 4);
-    ULONG depth = lx_guest_load_u16(info + (fixed == 12 ? 10 : 14));
+    ULONG width = fixed == BMIH_SIZE ? lx_guest_load_u16(info + BMIH_CX_OFFSET)
+                                     : lx_guest_load_u32(info + BMIH2_CX_OFFSET);
+    ULONG depth = lx_guest_load_u16(
+        info + (fixed == BMIH_SIZE ? BMIH_CBITCOUNT_OFFSET : BMIH2_CBITCOUNT_OFFSET));
     size_t bytes = ((size_t)width * depth + 31) / 32 * 4 * rows;
     LxGuestBorrow input = {0};
-    uint32 result = (uint32)-1;
+    uint32 result = (uint32)GPI_ALTERROR;
     if (!bytes ||
         lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), bytes, LX_GUEST_READ, &input))
         result = (uint32)GpiSetBitmapBits(gpi_word(a, 0), start, scans, input.host, info);
@@ -1246,9 +1298,9 @@ static uint32 bridge32_GpiPaintRegion(uint8 *a)
 static uint32 bridge32_GpiPointArc(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = 2 * sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1261,9 +1313,9 @@ done:
 static uint32 bridge32_GpiPtInRegion(uint8 *a)
 {
     LxGuestBorrow p2 = {0};
-    uint64_t n2 = 8;
+    uint64_t n2 = sizeof(POINTL);
     uint32 result = 0;
-    if (n2 > 64 * 1024 * 1024 ||
+    if (n2 > BRIDGE_MAX_BYTES ||
         (n2 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)n2,
                                     LX_GUEST_READ, &p2)))
         goto done;
@@ -1279,7 +1331,7 @@ static uint32 bridge32_GpiQueryDefaultViewMatrix(uint8 *a)
     LxGuestBorrow p2 = {0};
     uint64_t n2 = (uint64_t)gpi_word(a, 1) * 4;
     uint32 result = 0;
-    if (n2 > 64 * 1024 * 1024 ||
+    if (n2 > BRIDGE_MAX_BYTES ||
         (n2 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)n2,
                                     LX_GUEST_WRITE, &p2)))
         goto done;
@@ -1296,9 +1348,9 @@ done:
 static uint32 bridge32_GpiQueryGraphicsField(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = sizeof(RECTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1337,7 +1389,7 @@ static uint32 bridge32_GpiQueryMetaFileBits(uint8 *a)
     LxGuestBorrow p3 = {0};
     uint64_t n3 = (uint64_t)gpi_word(a, 2);
     uint32 result = 0;
-    if (n3 > 64 * 1024 * 1024 ||
+    if (n3 > BRIDGE_MAX_BYTES ||
         (n3 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)n3,
                                     LX_GUEST_WRITE, &p3)))
         goto done;
@@ -1361,7 +1413,7 @@ static uint32 bridge32_GpiQueryModelTransformMatrix(uint8 *a)
     LxGuestBorrow p2 = {0};
     uint64_t n2 = (uint64_t)gpi_word(a, 1) * 4;
     uint32 result = 0;
-    if (n2 > 64 * 1024 * 1024 ||
+    if (n2 > BRIDGE_MAX_BYTES ||
         (n2 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)n2,
                                     LX_GUEST_WRITE, &p2)))
         goto done;
@@ -1388,9 +1440,9 @@ static uint32 bridge32_GpiQueryNearestColor(uint8 *a)
 static uint32 bridge32_GpiQueryPS(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = sizeof(SIZEL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1403,9 +1455,9 @@ done:
 static uint32 bridge32_GpiQueryPel(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1418,9 +1470,9 @@ done:
 static uint32 bridge32_GpiQueryPickAperturePosition(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1433,9 +1485,9 @@ done:
 static uint32 bridge32_GpiQueryPickApertureSize(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = sizeof(SIZEL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1450,7 +1502,7 @@ static uint32 bridge32_GpiQueryRealColors(uint8 *a)
     LxGuestBorrow p4 = {0};
     uint64_t n4 = (uint64_t)gpi_word(a, 3) * 4;
     uint32 result = 0;
-    if (n4 > 64 * 1024 * 1024 ||
+    if (n4 > BRIDGE_MAX_BYTES ||
         (n4 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 4), (size_t)n4,
                                     LX_GUEST_WRITE, &p4)))
         goto done;
@@ -1465,9 +1517,9 @@ done:
 static uint32 bridge32_GpiQueryViewingLimits(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = sizeof(RECTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1480,9 +1532,9 @@ done:
 static uint32 bridge32_GpiRectInRegion(uint8 *a)
 {
     LxGuestBorrow p2 = {0};
-    uint64_t n2 = 16;
+    uint64_t n2 = sizeof(RECTL);
     uint32 result = 0;
-    if (n2 > 64 * 1024 * 1024 ||
+    if (n2 > BRIDGE_MAX_BYTES ||
         (n2 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)n2,
                                     LX_GUEST_READ, &p2)))
         goto done;
@@ -1511,7 +1563,7 @@ static uint32 bridge32_GpiResetPS(uint8 *a)
 
 static uint32 bridge32_GpiSaveMetaFile(uint8 *a)
 {
-    char *s1 = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), 65536);
+    char *s1 = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), BRIDGE_MAX_PATH);
     uint32 result = 0;
     if (!s1)
         goto done;
@@ -1524,9 +1576,9 @@ done:
 static uint32 bridge32_GpiSetArcParams(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = 4 * sizeof(LONG);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1539,9 +1591,9 @@ done:
 static uint32 bridge32_GpiSetGraphicsField(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = sizeof(RECTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1580,7 +1632,7 @@ static uint32 bridge32_GpiSetModelTransformMatrix(uint8 *a)
     LxGuestBorrow p2 = {0};
     uint64_t n2 = (uint64_t)gpi_word(a, 1) * 4;
     uint32 result = 0;
-    if (n2 > 64 * 1024 * 1024 ||
+    if (n2 > BRIDGE_MAX_BYTES ||
         (n2 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)n2,
                                     LX_GUEST_READ, &p2)))
         goto done;
@@ -1594,9 +1646,9 @@ done:
 static uint32 bridge32_GpiSetPS(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = sizeof(SIZEL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1610,9 +1662,9 @@ done:
 static uint32 bridge32_GpiSetPickAperturePosition(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1638,9 +1690,9 @@ static uint32 bridge32_GpiSetStopDraw(uint8 *a)
 static uint32 bridge32_GpiSetViewingLimits(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = sizeof(RECTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1671,14 +1723,14 @@ static uint32 bridge32_GpiPathToRegion(uint8 *a)
 static uint32 bridge32_GpiTranslate(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 36;
+    uint64_t n1 = GPI_MATRIX_ELEMENTS * sizeof(LONG);
     LxGuestBorrow p3 = {0};
-    uint64_t n3 = 8;
+    uint64_t n3 = sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ | LX_GUEST_WRITE, &p1)) ||
-        n3 > 64 * 1024 * 1024 ||
+        n3 > BRIDGE_MAX_BYTES ||
         (n3 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)n3,
                                     LX_GUEST_READ, &p3)))
         goto done;
@@ -1693,19 +1745,19 @@ done:
 static uint32 bridge32_GpiScale(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 36;
+    uint64_t n1 = GPI_MATRIX_ELEMENTS * sizeof(LONG);
     LxGuestBorrow p3 = {0};
-    uint64_t n3 = 8;
+    uint64_t n3 = 2 * sizeof(LONG);
     LxGuestBorrow p4 = {0};
-    uint64_t n4 = 8;
+    uint64_t n4 = sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ | LX_GUEST_WRITE, &p1)) ||
-        n3 > 64 * 1024 * 1024 ||
+        n3 > BRIDGE_MAX_BYTES ||
         (n3 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)n3,
                                     LX_GUEST_READ, &p3)) ||
-        n4 > 64 * 1024 * 1024 ||
+        n4 > BRIDGE_MAX_BYTES ||
         (n4 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 4), (size_t)n4,
                                     LX_GUEST_READ, &p4)))
         goto done;
@@ -1721,14 +1773,14 @@ done:
 static uint32 bridge32_GpiRotate(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 36;
+    uint64_t n1 = GPI_MATRIX_ELEMENTS * sizeof(LONG);
     LxGuestBorrow p4 = {0};
-    uint64_t n4 = 8;
+    uint64_t n4 = sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ | LX_GUEST_WRITE, &p1)) ||
-        n4 > 64 * 1024 * 1024 ||
+        n4 > BRIDGE_MAX_BYTES ||
         (n4 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 4), (size_t)n4,
                                     LX_GUEST_READ, &p4)))
         goto done;
@@ -1743,9 +1795,9 @@ done:
 static uint32 bridge32_GpiQueryDefViewingLimits(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = sizeof(RECTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1758,9 +1810,9 @@ done:
 static uint32 bridge32_GpiSetDefViewingLimits(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = sizeof(RECTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1797,11 +1849,12 @@ static uint32 bridge32_GpiQueryPalette(uint8 *a)
 static uint32 bridge32_GpiQueryAttrs(uint8 *a)
 {
     LxGuestBorrow p3 = {0};
-    /* LINEBUNDLE 28, CHARBUNDLE 52, MARKERBUNDLE and AREABUNDLE 24, IMAGEBUNDLE 12. */
-    static const uint8 bundle[6] = {0, 28, 52, 24, 24, 12};
+    static const uint8 bundle[PRIM_IMAGE + 1] = {
+        0, LINEBUNDLE_SIZE, CHARBUNDLE_SIZE, MARKERBUNDLE_SIZE, AREABUNDLE_SIZE, IMAGEBUNDLE_SIZE};
     uint32 primitive = gpi_word(a, 1);
-    uint64_t n3 = gpi_word(a, 2) && gpi_word(a, 3) && primitive < 6 ? bundle[primitive] : 0;
-    uint32 result = UINT32_MAX;
+    uint64_t n3 =
+        gpi_word(a, 2) && gpi_word(a, 3) && primitive <= PRIM_IMAGE ? bundle[primitive] : 0;
+    uint32 result = (uint32)GPI_ALTERROR;
     if (n3 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 3), (size_t)n3,
                                    LX_GUEST_READ | LX_GUEST_WRITE, &p3))
         goto done;
@@ -1816,7 +1869,7 @@ static uint32 bridge32_GpiSetPickApertureSize(uint8 *a)
 {
     /* PICKAP_DEFAULT ignores the size pointer, which may be NULL. */
     LxGuestBorrow p2 = {0};
-    uint64_t n2 = gpi_word(a, 1) == 2 ? 8 : 0;
+    uint64_t n2 = gpi_word(a, 1) == PICKAP_REC ? sizeof(SIZEL) : 0;
     uint32 result = 0;
     if (n2 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 2), (size_t)n2,
                                    LX_GUEST_READ, &p2))
@@ -1833,7 +1886,7 @@ static uint32 bridge32_GpiCreatePalette(uint8 *a)
     LxGuestBorrow p4 = {0};
     uint64_t n4 = (uint64_t)gpi_word(a, 3) * 4;
     uint32 result = 0;
-    if (n4 > 64 * 1024 * 1024 ||
+    if (n4 > BRIDGE_MAX_BYTES ||
         (n4 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 4), (size_t)n4,
                                     LX_GUEST_READ, &p4)))
         goto done;
@@ -1850,7 +1903,7 @@ static uint32 bridge32_GpiQueryPaletteInfo(uint8 *a)
     LxGuestBorrow p5 = {0};
     uint64_t n5 = (uint64_t)gpi_word(a, 4) * 4;
     uint32 result = 0;
-    if (n5 > 64 * 1024 * 1024 ||
+    if (n5 > BRIDGE_MAX_BYTES ||
         (n5 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 5), (size_t)n5,
                                     LX_GUEST_WRITE, &p5)))
         goto done;
@@ -1865,9 +1918,9 @@ done:
 static uint32 bridge32_GpiPartialArc(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = sizeof(POINTL);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > BRIDGE_MAX_BYTES ||
         (n1 && !lx_execution_borrow(GProcessState.execution, gpi_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ, &p1)))
         goto done;
@@ -1887,10 +1940,16 @@ static uint32 bridge32_GpiSetCharExtra(uint8 *a)
     return result;
 }
 
+/* Guest POLYGON: ULONG ulPoints, PPOINTL aPointl. */
+enum
+{
+    POLYGON_WIRE_SIZE = 8
+};
+
 static uint32 bridge32_GpiPolygons(uint8 *a)
 {
     ULONG count = gpi_word(a, 1);
-    if (count > 65536 || !gpi_word(a, 2))
+    if (count > BRIDGE_MAX_POINTS || !gpi_word(a, 2))
         return 0;
     LXPOLYGON *polygons = calloc(count ? count : 1, sizeof *polygons);
     LxGuestBorrow *borrows = calloc(count ? count : 1, sizeof *borrows);
@@ -1904,17 +1963,18 @@ static uint32 bridge32_GpiPolygons(uint8 *a)
     size_t total = 0;
     for (ULONG i = 0; i < count; i++)
     {
-        uint8 wire[8];
-        uint64_t address = (uint64_t)gpi_word(a, 2) + i * 8;
+        uint8 wire[POLYGON_WIRE_SIZE];
+        uint64_t address = (uint64_t)gpi_word(a, 2) + i * POLYGON_WIRE_SIZE;
         if (address > UINT32_MAX ||
-            !lx_execution_read(GProcessState.execution, (uint32)address, wire, 8))
+            !lx_execution_read(GProcessState.execution, (uint32)address, wire, sizeof wire))
             goto done;
         ULONG points = lx_guest_load_u32(wire), data = lx_guest_load_u32(wire + 4);
-        if (points > 65536 || total + points > 65536)
+        if (points > BRIDGE_MAX_POINTS || total + points > BRIDGE_MAX_POINTS)
             goto done;
         total += points;
-        if (points && !lx_execution_borrow(GProcessState.execution, data, (size_t)points * 8,
-                                           LX_GUEST_READ, &borrows[i]))
+        if (points &&
+            !lx_execution_borrow(GProcessState.execution, data, (size_t)points * sizeof(POINTL),
+                                 LX_GUEST_READ, &borrows[i]))
             goto done;
         polygons[i].count = points;
         polygons[i].points = borrows[i].host;
@@ -1930,7 +1990,7 @@ done:
 
 static uint32 bridge32_GpiLoadPublicFonts(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), 261);
+    char *name = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), CCHMAXPATH + 1);
     BOOL result = name && GpiLoadPublicFonts((HAB)gpi_word(a, 0), name);
     free(name);
     return result;
@@ -1938,7 +1998,7 @@ static uint32 bridge32_GpiLoadPublicFonts(uint8 *a)
 
 static uint32 bridge32_GpiUnloadPublicFonts(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), 261);
+    char *name = lx_execution_copy_string(GProcessState.execution, gpi_word(a, 1), CCHMAXPATH + 1);
     BOOL result = name && GpiUnloadPublicFonts((HAB)gpi_word(a, 0), name);
     free(name);
     return result;

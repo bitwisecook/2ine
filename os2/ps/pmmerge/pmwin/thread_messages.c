@@ -69,11 +69,33 @@ static LxHostShared *live;
 static uint32 *live_windows;
 static _Thread_local QueuedCall *current_call;
 
+/* A cross-process HWND is the owning process's 16-bit mailbox prefix above a 16-bit window index.
+   Prefixes run from 1 to PREFIX_COUNT, so every such handle lies in [0x10000, 0xffff0000) and
+   never collides with HWND_DESKTOP or HWND_OBJECT. */
 enum
 {
-    LIVE_SIZE = 8192,
-    MESSAGE_SIZE = 20,
-    SESSION_BROADCAST = 0x0009 /* Send to frame windows only. */
+    PREFIX_SHIFT = 16,
+    INDEX_MASK = 0xffff,
+    INDEX_LIMIT = 0x10000,
+    PREFIX_COUNT = 0xfffe,
+    LIVE_SIZE = INDEX_LIMIT / 8 /* one bit per window index */
+};
+
+/* A mailbox record is five guest ULONGs. A null window marks a control record. */
+enum
+{
+    MESSAGE_WINDOW_OFFSET = 0,
+    MESSAGE_ID_OFFSET = 4,
+    MESSAGE_MP1_OFFSET = 8,
+    MESSAGE_MP2_OFFSET = 12,
+    MESSAGE_SIZE = 20
+};
+
+/* lx_host_mailbox_open results */
+enum
+{
+    MAILBOX_MISSING = 1,
+    MAILBOX_EXISTS = 2
 };
 
 static void mailboxName(char name[32], uint32 prefix)
@@ -91,13 +113,13 @@ static void initialize(void)
     lock = lx_host_mutex_create(0, 0);
     uint32 pid, parent;
     lx_host_process_ids(&pid, &parent);
-    for (uint32 i = 0; lock && i < 0xfffe; i++)
+    for (uint32 i = 0; lock && i < PREFIX_COUNT; i++)
     {
-        uint32 prefix = (pid + i) % 0xfffe + 1, owner;
+        uint32 prefix = (pid + i) % PREFIX_COUNT + 1, owner;
         char name[64];
         mailboxName(name, prefix);
         int result = lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), name, 1, 0, &inbox, &owner);
-        if (result == 2)
+        if (result == MAILBOX_EXISTS)
             continue;
         if (result)
             break;
@@ -132,12 +154,12 @@ HWND registerWindowMessages(AnchorBlock *anchor)
     if (!target)
         return 0;
     uint32 index = lx_host_atomic_increment(&next_window);
-    if (index >= 0x10000)
+    if (index >= INDEX_LIMIT)
     {
         free(target);
         return 0;
     }
-    target->window = (window_prefix << 16) | index;
+    target->window = (window_prefix << PREFIX_SHIFT) | index;
     target->anchor = anchor;
     target->thread = LX_GETTIB() ? lx_guest_load_u32(&LX_GETTIB2()->thread_id) : 0;
     lx_host_mutex_lock(lock, UINT32_MAX);
@@ -222,15 +244,15 @@ HWND foreignWindowQuery(HWND window, LONG code)
     if (object)
     {
         Window *found = NULL;
-        if (code == 0)
+        if (code == QW_NEXT)
             found = object->sibling;
-        else if (code == 2)
+        else if (code == QW_TOP)
             found = object->children;
-        else if (code == 4)
+        else if (code == QW_OWNER)
             found = object->owner;
-        else if (code == 5)
+        else if (code == QW_PARENT)
             found = object->parent;
-        else if (code == 1)
+        else if (code == QW_PREV)
         {
             Window *parent = object->parent;
             for (Window *i = parent ? parent->children : NULL; i && i != object; i = i->sibling)
@@ -240,7 +262,7 @@ HWND foreignWindowQuery(HWND window, LONG code)
                     break;
             }
         }
-        else if (code == 3)
+        else if (code == QW_BOTTOM)
             for (Window *i = object->children; i && object_target(i); i = i->sibling)
                 found = i;
         result = public_window(from, found);
@@ -438,8 +460,8 @@ void unregisterWindowMessages(HWND window)
     if (!lock)
         return;
     lx_host_mutex_lock(lock, UINT32_MAX);
-    if ((window >> 16) == window_prefix)
-        __atomic_fetch_and(&live_windows[(window & 0xffff) / 32], ~(1u << (window % 32)),
+    if ((window >> PREFIX_SHIFT) == window_prefix)
+        __atomic_fetch_and(&live_windows[(window & INDEX_MASK) / 32], ~(1u << (window % 32)),
                            __ATOMIC_RELEASE);
     AnchorBlock *owner = NULL;
     for (Target **link = &targets; *link; link = &(*link)->next)
@@ -492,28 +514,28 @@ static BOOL post_packet(HWND window, ULONG message, MPARAM first, MPARAM second,
                         BOOL require_open32)
 {
     lx_host_once(&initialized, initialize);
-    if (!lock || !window || window < 0x10000 || window >= 0xffff0000u)
+    if (!lock || !window || window < INDEX_LIMIT || window >= 0xffff0000u)
         return FALSE;
-    if ((window >> 16) != window_prefix)
+    if ((window >> PREFIX_SHIFT) != window_prefix)
     {
         if (require_open32)
             return FALSE;
         if ((uintptr_t)first > UINT32_MAX || (uintptr_t)second > UINT32_MAX)
             return FALSE;
         char name[64];
-        mailboxName(name, window >> 16);
+        mailboxName(name, window >> PREFIX_SHIFT);
         LxHostMailbox *destination;
         uint32 owner;
         if (lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), name, 0, 0, &destination, &owner))
             return FALSE;
-        liveName(name, owner, window >> 16);
+        liveName(name, owner, window >> PREFIX_SHIFT);
         LxHostShared *state = NULL;
         uint32 *bits = NULL;
         BOOL result = FALSE;
         if (lx_host_shared_open(name, 0, &state) == LX_HOST_SHARED_OK &&
             lx_host_shared_size(state) == LIVE_SIZE &&
             (bits = lx_host_shared_map(state, NULL, 0)) &&
-            (__atomic_load_n(&bits[(window & 0xffff) / 32], __ATOMIC_ACQUIRE) &
+            (__atomic_load_n(&bits[(window & INDEX_MASK) / 32], __ATOMIC_ACQUIRE) &
              (1u << (window % 32))))
         {
             uint8 wire[MESSAGE_SIZE];
@@ -562,9 +584,9 @@ static BOOL post_packet(HWND window, ULONG message, MPARAM first, MPARAM second,
 BOOL windowMessageTargetExists(HWND window)
 {
     lx_host_once(&initialized, initialize);
-    if (!lock || window < 0x10000 || window >= 0xffff0000u)
+    if (!lock || window < INDEX_LIMIT || window >= 0xffff0000u)
         return FALSE;
-    if ((window >> 16) == window_prefix)
+    if ((window >> PREFIX_SHIFT) == window_prefix)
     {
         BOOL found = FALSE;
         lx_host_mutex_lock(lock, UINT32_MAX);
@@ -578,18 +600,18 @@ BOOL windowMessageTargetExists(HWND window)
         return found;
     }
     char name[64];
-    mailboxName(name, window >> 16);
+    mailboxName(name, window >> PREFIX_SHIFT);
     LxHostMailbox *mailbox;
     uint32 owner;
     if (lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), name, 0, 0, &mailbox, &owner))
         return FALSE;
-    liveName(name, owner, window >> 16);
+    liveName(name, owner, window >> PREFIX_SHIFT);
     LxHostShared *state = NULL;
     uint32 *bits = NULL;
     BOOL found = FALSE;
     if (lx_host_shared_open(name, 0, &state) == LX_HOST_SHARED_OK &&
         lx_host_shared_size(state) == LIVE_SIZE && (bits = lx_host_shared_map(state, NULL, 0)))
-        found = !!(__atomic_load_n(&bits[(window & 0xffff) / 32], __ATOMIC_ACQUIRE) &
+        found = !!(__atomic_load_n(&bits[(window & INDEX_MASK) / 32], __ATOMIC_ACQUIRE) &
                    (1u << (window % 32)));
     if (bits)
         lx_host_shared_unmap(bits, LIVE_SIZE);
@@ -700,24 +722,24 @@ void drainForeignMessages(AnchorBlock *anchor)
                 break;
             if (size != sizeof wire)
                 continue;
-            HWND window = lx_guest_load_u32(wire);
-            if (!window && lx_guest_load_u32(wire + 4) == LX_PM_SESSION_END)
+            HWND window = lx_guest_load_u32(wire + MESSAGE_WINDOW_OFFSET);
+            if (!window && lx_guest_load_u32(wire + MESSAGE_ID_OFFSET) == LX_PM_SESSION_END)
             {
                 session_ending = TRUE;
                 continue;
             }
             /* The local registry validates lifetime and assigns the owning thread. */
-            if ((window >> 16) == window_prefix)
-                postForeignMessage(window, lx_guest_load_u32(wire + 4),
-                                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 8),
-                                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 12));
+            if ((window >> PREFIX_SHIFT) == window_prefix)
+                postForeignMessage(window, lx_guest_load_u32(wire + MESSAGE_ID_OFFSET),
+                                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + MESSAGE_MP1_OFFSET),
+                                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + MESSAGE_MP2_OFFSET));
         }
         if (session_ending)
         {
             /* Host Quit reaches every queue here and honours WinCancelShutdown. */
             LxHostEvent quit = {0};
             quit.type = LX_HOST_EVENT_QUIT;
-            WinBroadcastMsg(HWND_DESKTOP, WM_SAVEAPPLICATION, 0, 0, SESSION_BROADCAST);
+            WinBroadcastMsg(HWND_DESKTOP, WM_SAVEAPPLICATION, 0, 0, BMSG_SEND | BMSG_FRAMEONLY);
             lx_pm_host_event(&quit);
         }
     }
@@ -841,10 +863,10 @@ static void deliver_session_end(const char *name, void *context)
     LxHostMailbox *destination;
     uint32 owner;
     int opened = lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), name, 0, 0, &destination, &owner);
-    if (opened == 1)
+    if (opened == MAILBOX_MISSING)
         return; /* The owner's lifetime lock is gone, so that worker has already ended. */
     uint8 wire[MESSAGE_SIZE] = {0};
-    lx_guest_store_u32(wire + 4, LX_PM_SESSION_END);
+    lx_guest_store_u32(wire + MESSAGE_ID_OFFSET, LX_PM_SESSION_END);
     if (opened || lx_host_mailbox_send(destination, wire, sizeof wire, 0))
         end->failed = TRUE;
     if (!opened)

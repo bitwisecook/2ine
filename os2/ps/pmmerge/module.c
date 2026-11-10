@@ -5,10 +5,18 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* PMMERGE module: a PM program's host display is prepared when this library loads. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/pmshl.h"
 #include "emulator/arguments.h"
+
+/* LX module flags (IBM exe386.h): the application type field and its PM value. */
+enum
+{
+    E32APPMASK = 0x0300,
+    E32PMAPI = 0x0300
+};
 
 static int ProcessDisplayReference;
 
@@ -17,7 +25,7 @@ static int initializeProcessDisplay(void)
     const LxModule *program = GProcessState.main_module;
     /* GUI imports load before guest DLL initialization can create PM threads. */
     if (ProcessDisplayReference || !program || !program->is_lx ||
-        (program->header.lx.module_flags & 0x0300) != 0x0300)
+        (program->header.lx.module_flags & E32APPMASK) != E32PMAPI)
         return 1;
     if (!lx_host_video_initialize(&desktop_window.w, &desktop_window.h))
     {

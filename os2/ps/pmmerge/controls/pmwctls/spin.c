@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Numeric and string-array spin values retain validated limits and current state. */
 #include "os2/include/private/pmwctlp.h"
+#include "os2/include/pmstddlg.h"
 #include "emulator/abi.h"
 #include <errno.h>
 
@@ -38,10 +39,10 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;
     LONG a = (LONG)(uintptr_t)first, b = (LONG)(uintptr_t)second;
-    if (message == 0x206) /* SPBM_SETARRAY */
+    if (message == SPBM_SETARRAY)
     {
         ULONG count = (ULONG)(uintptr_t)second;
-        if (!count || count > 32767)
+        if (!count || count > INT16_MAX)
             return 0;
         ListItem *items = calloc(count, sizeof *items);
         if (!items)
@@ -50,7 +51,7 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         for (i = 0; i < count; i++)
         {
             uint8 wire[4];
-            if (!controlRead((MPARAM)((uintptr_t)first + 4 * i), wire, 4) ||
+            if (!controlRead((MPARAM)((uintptr_t)first + sizeof wire * i), wire, sizeof wire) ||
                 !(items[i].text = controlCopyText((MPARAM)(uintptr_t)lx_guest_load_u32(wire))))
                 break;
         }
@@ -69,7 +70,7 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         set_value(window, 0);
         return controlReply(TRUE);
     }
-    if (message == 0x207 || message == 0x200) /* SETLIMITS / OVERRIDESETLIMITS */
+    if (message == SPBM_SETLIMITS || message == SPBM_OVERRIDESETLIMITS)
     {
         if (a < b)
             return 0;
@@ -81,7 +82,7 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         c->lower = b;
         c->upper = a;
         LONG value = c->value;
-        if (message == 0x207)
+        if (message == SPBM_SETLIMITS)
             number(window->text, &value);
         if (value < b)
             value = b;
@@ -90,28 +91,28 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         set_value(window, value);
         return controlReply(TRUE);
     }
-    if (message == 0x201) /* QUERYLIMITS */
+    if (message == SPBM_QUERYLIMITS)
     {
         uint8 wire[4];
         lx_guest_store_u32(wire, (uint32)c->upper);
-        if (first && !controlWrite(first, wire, 4))
+        if (first && !controlWrite(first, wire, sizeof wire))
             return 0;
         lx_guest_store_u32(wire, (uint32)c->lower);
-        return controlReply(!second || controlWrite(second, wire, 4));
+        return controlReply(!second || controlWrite(second, wire, sizeof wire));
     }
-    if (message == 0x202) /* SETTEXTLIMIT */
+    if (message == SPBM_SETTEXTLIMIT)
     {
-        if (a <= 0 || a > 32767)
+        if (a <= 0 || a > CONTROL_TEXT_LIMIT_MAX)
             return 0;
         c->limit = (unsigned)a;
         return controlReply(TRUE);
     }
-    if (message == 0x208 || message == 0x203 || message == 0x204) /* SETCURRENT / SPINUP / DOWN */
+    if (message == SPBM_SETCURRENTVALUE || message == SPBM_SPINUP || message == SPBM_SPINDOWN)
     {
         LONG value = a;
-        if (message != 0x208)
+        if (message != SPBM_SETCURRENTVALUE)
         {
-            sint64 next = (sint64)c->value + (message == 0x203 ? 1 : -1);
+            sint64 next = (sint64)c->value + (message == SPBM_SPINUP ? 1 : -1);
             LONG low = c->count ? 0 : c->lower, high = c->count ? (LONG)c->count - 1 : c->upper;
             value = next > high ? low : next < low ? high : (LONG)next;
         }
@@ -121,10 +122,11 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         set_value(window, value);
         return controlReply(TRUE);
     }
-    if (message == 0x205) /* QUERYVALUE */
+    if (message == SPBM_QUERYVALUE)
     {
         unsigned capacity = (USHORT)(uintptr_t)second, policy = (USHORT)((uintptr_t)second >> 16);
-        if (policy != 0 && policy != 1 && policy != 3)
+        if (policy != SPBQ_UPDATEIFVALID && policy != SPBQ_ALWAYSUPDATE &&
+            policy != SPBQ_DONOTUPDATE)
             return 0;
         LONG value = c->value;
         BOOL valid = FALSE;
@@ -140,11 +142,11 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         }
         else
             valid = number(window->text, &value) && value >= c->lower && value <= c->upper;
-        if (policy != 3)
+        if (policy != SPBQ_DONOTUPDATE)
         {
             if (valid)
                 set_value(window, value);
-            else if (policy == 1)
+            else if (policy == SPBQ_ALWAYSUPDATE)
                 set_value(window, c->value);
         }
         if (!first)
@@ -154,14 +156,15 @@ MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
                 controlTextOutput(first, window->text ? window->text : "", capacity) && valid);
         uint8 wire[4];
         lx_guest_store_u32(wire, (uint32)c->value);
-        return controlReply(controlWrite(first, wire, 4) && valid);
+        return controlReply(controlWrite(first, wire, sizeof wire) && valid);
     }
     if (message == WM_BUTTON1DOWN)
     {
         unsigned y = (USHORT)((uintptr_t)first >> 16);
-        return spinMessage(window, y >= (unsigned)window->h / 2 ? 0x203 : 0x204, 0, 0);
+        return spinMessage(window, y >= (unsigned)window->h / 2 ? SPBM_SPINUP : SPBM_SPINDOWN, 0,
+                           0);
     }
-    if (message == WM_CHAR && !(window->style & 2))
+    if (message == WM_CHAR && !(window->style & SPBS_READONLY))
         return entryMessage(window, message, first, second);
     return WinDefWindowProc(window->hwnd, message, first, second);
 }

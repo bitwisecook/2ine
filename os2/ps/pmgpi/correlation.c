@@ -12,13 +12,13 @@
 LONG GpiQueryStopDraw(HPS h)
 {
     PresentationSpace *p = gpi_space(h);
-    return p ? p->gpi.stop_draw : -1;
+    return p ? p->gpi.stop_draw : SDW_ERROR;
 }
 
 BOOL GpiSetStopDraw(HPS h, LONG v)
 {
     PresentationSpace *p = gpi_space(h);
-    if (!p || v < 0 || v > 1)
+    if (!p || v < SDW_OFF || v > SDW_ON)
         return FALSE;
     p->gpi.stop_draw = v;
     return TRUE;
@@ -45,9 +45,9 @@ BOOL GpiQueryPickAperturePosition(HPS h, PPOINTL v)
 BOOL GpiSetPickApertureSize(HPS h, LONG options, PSIZEL v)
 {
     PresentationSpace *p = gpi_space(h);
-    if (!p || (options != 0 && options != 2))
+    if (!p || (options != PICKAP_DEFAULT && options != PICKAP_REC))
         return FALSE;
-    if (!options)
+    if (options == PICKAP_DEFAULT)
     {
         lx_gpi_default_pick(h);
         return TRUE;
@@ -88,22 +88,23 @@ BOOL GpiQueryBoundaryData(HPS handle, PRECTL bounds)
 BOOL GpiSetDrawControl(HPS handle, LONG control, LONG value)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || control < 1 || control > 5 || (value != 0 && value != 1))
+    if (!ps || control < DCTL_ERASE || control > DCTL_CORRELATE ||
+        (value != DCTL_OFF && value != DCTL_ON))
         return FALSE;
-    LONG matrix[9];
-    if (!GpiQueryDefaultViewMatrix(handle, 9, matrix))
+    LONG matrix[GPI_MATRIX_ELEMENTS];
+    if (!GpiQueryDefaultViewMatrix(handle, GPI_MATRIX_ELEMENTS, matrix))
         return FALSE;
     /* DCTL_ERASE and DCTL_DYNAMIC concern retained drawing, which does not exist here. */
-    if (control == 2)
+    if (control == DCTL_DISPLAY)
         ps->gpi.display_enabled = value;
-    else if (control == 3)
+    else if (control == DCTL_BOUNDARY)
         ps->gpi.boundary_enabled = value;
-    else if (control == 5)
+    else if (control == DCTL_CORRELATE)
     {
         ps->gpi.correlate = value;
         ps->gpi.pick_hit = FALSE;
     }
-    else if (value && control == 4)
+    else if (value && control == DCTL_DYNAMIC)
         return gpi_unsupported();
     return TRUE;
 }

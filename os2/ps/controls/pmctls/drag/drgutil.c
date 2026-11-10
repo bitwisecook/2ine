@@ -55,6 +55,24 @@ ULONG DrgQueryStrNameLen(ULONG string)
 #include "host/sync.h"
 #include "host/clock.h"
 
+enum
+{
+    /* DRAGTRANSFER in guest memory. */
+    DRAGTRANSFER_FSREPLY_OFFSET = 26,
+    DRAGTRANSFER_WIRE_SIZE = 28,
+    /* DRAGINFO and DRAGTRANSFER counts are USHORTs. */
+    DRAG_COUNT_MAX = UINT16_MAX,
+    /* lx_execution_map allocates whole guest pages. */
+    GUEST_PAGE_SIZE = 4096
+};
+
+/* The record a DragAllocation holds. */
+enum
+{
+    DRAG_ALLOCATION_INFO = 1,
+    DRAG_ALLOCATION_TRANSFER = 2
+};
+
 typedef struct DragAllocation
 {
     struct DragAllocation *next;
@@ -74,14 +92,15 @@ static void drag_initialize(void)
 
 static ULONG drag_allocate(ULONG count, ULONG item_size, ULONG header, ULONG kind)
 {
-    if (!count || count > 65535 || count > (UINT32_MAX - header) / item_size)
+    if (!count || count > DRAG_COUNT_MAX || count > (UINT32_MAX - header) / item_size)
         return 0;
     ULONG size = header + count * item_size;
     DragAllocation *allocation = calloc(1, sizeof *allocation);
     if (!allocation)
         return 0;
-    allocation->mapping =
-        lx_execution_map(GProcessState.execution, 0, (size + 4095u) & ~4095u, 3, 0);
+    allocation->mapping = lx_execution_map(GProcessState.execution, 0,
+                                           (size + GUEST_PAGE_SIZE - 1u) & ~(GUEST_PAGE_SIZE - 1u),
+                                           LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!allocation->mapping)
     {
         free(allocation);
@@ -91,20 +110,20 @@ static ULONG drag_allocate(ULONG count, ULONG item_size, ULONG header, ULONG kin
     allocation->size = size;
     allocation->kind = kind;
     /* Each transfer element is freed separately; draginfo has one owner reference. */
-    allocation->references = kind == 2 ? count : 1;
-    if (kind == 2 && !(allocation->shared = calloc(count, 1)))
+    allocation->references = kind == DRAG_ALLOCATION_TRANSFER ? count : 1;
+    if (kind == DRAG_ALLOCATION_TRANSFER && !(allocation->shared = calloc(count, 1)))
     {
         lx_execution_unmap(GProcessState.execution, allocation->mapping);
         free(allocation);
         return 0;
     }
     uint8 *wire = lx_execution_mapping_host(allocation->mapping);
-    if (kind == 1)
+    if (kind == DRAG_ALLOCATION_INFO)
     {
-        lx_guest_store_u32(wire, size);
-        lx_guest_store_u16(wire + 4, item_size);
-        lx_guest_store_u16(wire + 6, 0xbffe); /* DO_DEFAULT */
-        lx_guest_store_u16(wire + 16, count);
+        lx_guest_store_u32(wire + DRAGINFO_CBDRAGINFO_OFFSET, size);
+        lx_guest_store_u16(wire + DRAGINFO_CBDRAGITEM_OFFSET, item_size);
+        lx_guest_store_u16(wire + DRAGINFO_USOPERATION_OFFSET, DO_DEFAULT);
+        lx_guest_store_u16(wire + DRAGINFO_CDITEM_OFFSET, count);
     }
     else
         for (ULONG i = 0; i < count; i++)
@@ -119,20 +138,21 @@ static ULONG drag_allocate(ULONG count, ULONG item_size, ULONG header, ULONG kin
 
 ULONG DrgAllocDraginfo(ULONG count)
 {
-    return drag_allocate(count, 36, 20, 1);
+    return drag_allocate(count, DRAGITEM_WIRE_SIZE, DRAGINFO_WIRE_SIZE, DRAG_ALLOCATION_INFO);
 }
 
 ULONG DrgAllocDragtransfer(ULONG count)
 {
-    return drag_allocate(count, 28, 0, 2);
+    return drag_allocate(count, DRAGTRANSFER_WIRE_SIZE, 0, DRAG_ALLOCATION_TRANSFER);
 }
 
 BOOL drag_info(ULONG address, uint8 wire[DRAGINFO_WIRE_SIZE])
 {
     if (!address || !lx_execution_read(GProcessState.execution, address, wire, DRAGINFO_WIRE_SIZE))
         return FALSE;
-    ULONG size = lx_guest_load_u32(wire), item = lx_guest_load_u16(wire + 4);
-    ULONG count = lx_guest_load_u16(wire + 16);
+    ULONG size = lx_guest_load_u32(wire + DRAGINFO_CBDRAGINFO_OFFSET);
+    ULONG item = lx_guest_load_u16(wire + DRAGINFO_CBDRAGITEM_OFFSET);
+    ULONG count = lx_guest_load_u16(wire + DRAGINFO_CDITEM_OFFSET);
     return item >= DRAGITEM_WIRE_SIZE && size >= DRAGINFO_WIRE_SIZE &&
            count <= (size - DRAGINFO_WIRE_SIZE) / item &&
            lx_execution_memory(GProcessState.execution, address, size, LX_GUEST_READ) != NULL;
@@ -146,7 +166,7 @@ BOOL DrgAccessDraginfo(ULONG address)
     lx_host_once(&drag_once, drag_initialize);
     lx_host_mutex_lock(drag_mutex, UINT32_MAX);
     for (DragAllocation *a = drag_allocations; a; a = a->next)
-        if (a->address == address && a->kind == 1)
+        if (a->address == address && a->kind == DRAG_ALLOCATION_INFO)
         {
             if (a->references == UINT32_MAX)
             {
@@ -165,8 +185,9 @@ static BOOL drag_free(ULONG address, ULONG kind)
     lx_host_once(&drag_once, drag_initialize);
     lx_host_mutex_lock(drag_mutex, UINT32_MAX);
     DragAllocation **link = &drag_allocations, *allocation = NULL;
-    while (*link && ((*link)->kind != kind || address < (*link)->address ||
-                     address - (*link)->address >= (kind == 2 ? (*link)->size : 1)))
+    while (*link &&
+           ((*link)->kind != kind || address < (*link)->address ||
+            address - (*link)->address >= (kind == DRAG_ALLOCATION_TRANSFER ? (*link)->size : 1)))
         link = &(*link)->next;
     if (*link && !--(*link)->references)
     {
@@ -186,32 +207,34 @@ static BOOL drag_free(ULONG address, ULONG kind)
 
 BOOL DrgFreeDraginfo(ULONG address)
 {
-    return drag_free(address, 1);
+    return drag_free(address, DRAG_ALLOCATION_INFO);
 }
 
 BOOL DrgFreeDragtransfer(ULONG address)
 {
-    return drag_free(address, 2);
+    return drag_free(address, DRAG_ALLOCATION_TRANSFER);
 }
 
 ULONG DrgQueryDragitemCount(ULONG address)
 {
     uint8 wire[DRAGINFO_WIRE_SIZE];
-    return drag_info(address, wire) ? lx_guest_load_u16(wire + 16) : 0;
+    return drag_info(address, wire) ? lx_guest_load_u16(wire + DRAGINFO_CDITEM_OFFSET) : 0;
 }
 
 ULONG DrgQueryDragitemPtr(ULONG address, ULONG index)
 {
     uint8 wire[DRAGINFO_WIRE_SIZE];
-    if (!drag_info(address, wire) || index >= lx_guest_load_u16(wire + 16))
+    if (!drag_info(address, wire) || index >= lx_guest_load_u16(wire + DRAGINFO_CDITEM_OFFSET))
         return 0;
-    return address + 20 + index * lx_guest_load_u16(wire + 4);
+    return address + DRAGINFO_WIRE_SIZE +
+           index * lx_guest_load_u16(wire + DRAGINFO_CBDRAGITEM_OFFSET);
 }
 
 BOOL DrgSetDragitem(ULONG address, ULONG item, ULONG bytes, ULONG index)
 {
-    uint8 wire[36];
-    ULONG target = DrgQueryDragitemPtr(address, index), copied = bytes < 36 ? bytes : 36;
+    uint8 wire[DRAGITEM_WIRE_SIZE];
+    ULONG target = DrgQueryDragitemPtr(address, index),
+          copied = bytes < DRAGITEM_WIRE_SIZE ? bytes : DRAGITEM_WIRE_SIZE;
     if (!target)
         return FALSE;
     return !copied || (lx_execution_read(GProcessState.execution, item, wire, copied) &&
@@ -223,19 +246,28 @@ BOOL DrgDeleteDraginfoStrHandles(ULONG address)
     uint8 header[DRAGINFO_WIRE_SIZE], item[DRAGITEM_WIRE_SIZE];
     if (!drag_info(address, header))
         return FALSE;
-    ULONG count = lx_guest_load_u16(header + 16), stride = lx_guest_load_u16(header + 4);
+    ULONG count = lx_guest_load_u16(header + DRAGINFO_CDITEM_OFFSET),
+          stride = lx_guest_load_u16(header + DRAGINFO_CBDRAGITEM_OFFSET);
     if (!count)
         return TRUE;
+
     /* Items may share a string handle, which is deleted only once. */
-    ULONG *strings = malloc((size_t)count * 5 * sizeof *strings), found = 0;
+    enum
+    {
+        ITEM_STRINGS =
+            (DRAGITEM_HSTRTARGETNAME_OFFSET - DRAGITEM_HSTRTYPE_OFFSET) / sizeof(ULONG) + 1
+    };
+
+    ULONG *strings = malloc((size_t)count * ITEM_STRINGS * sizeof *strings), found = 0;
     if (!strings)
         return FALSE;
     BOOL result = TRUE;
     for (ULONG i = 0; i < count && result; i++)
     {
-        result = lx_execution_read(GProcessState.execution, address + 20 + i * stride, item,
-                                   sizeof item);
-        for (unsigned offset = 8; result && offset <= 24; offset += 4)
+        result = lx_execution_read(GProcessState.execution,
+                                   address + DRAGINFO_WIRE_SIZE + i * stride, item, sizeof item);
+        for (unsigned offset = DRAGITEM_HSTRTYPE_OFFSET;
+             result && offset <= DRAGITEM_HSTRTARGETNAME_OFFSET; offset += sizeof(ULONG))
         {
             ULONG string = lx_guest_load_u32(item + offset), known = 0;
             while (known < found && strings[known] != string)
@@ -273,11 +305,12 @@ static BOOL rmf_token(const char *begin, const char *end, const char *wanted)
 
 BOOL DrgVerifyRMF(ULONG item_address, PSZ mechanism, PSZ format)
 {
-    uint8 item[36];
+    uint8 item[DRAGITEM_WIRE_SIZE];
     if (!lx_execution_read(GProcessState.execution, item_address, item, sizeof item))
         return FALSE;
     LxHandleBorrow borrow = {0};
-    if (!lx_handle_borrow(lx_guest_load_u32(item + 12), LX_HANDLE_PM_DRAG_STRING, &borrow))
+    if (!lx_handle_borrow(lx_guest_load_u32(item + DRAGITEM_HSTRRMF_OFFSET),
+                          LX_HANDLE_PM_DRAG_STRING, &borrow))
         return FALSE;
     const char *p = borrow.resource;
     BOOL result = FALSE;
@@ -336,15 +369,17 @@ BOOL DrgReleasePS(HPS space)
 static void drag_transfer_sent(ULONG transfer, ULONG message)
 {
     uint8 reply[2] = {0, 0};
-    lx_execution_write(GProcessState.execution, transfer + 26, reply, sizeof reply);
-    if (message != 0x329 && message != 0x327) /* DM_RENDER, DM_RENDERPREPARE */
+    lx_execution_write(GProcessState.execution, transfer + DRAGTRANSFER_FSREPLY_OFFSET, reply,
+                       sizeof reply);
+    if (message != DM_RENDER && message != DM_RENDERPREPARE)
         return;
     lx_host_once(&drag_once, drag_initialize);
     lx_host_mutex_lock(drag_mutex, UINT32_MAX);
     for (DragAllocation *a = drag_allocations; a; a = a->next)
-        if (a->kind == 2 && transfer >= a->address && transfer - a->address < a->size)
+        if (a->kind == DRAG_ALLOCATION_TRANSFER && transfer >= a->address &&
+            transfer - a->address < a->size)
         {
-            ULONG element = (transfer - a->address) / 28;
+            ULONG element = (transfer - a->address) / DRAGTRANSFER_WIRE_SIZE;
             if (!a->shared[element])
             {
                 a->shared[element] = 1;
@@ -357,7 +392,7 @@ static void drag_transfer_sent(ULONG transfer, ULONG message)
 
 MRESULT DrgSendTransferMsg(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
-    if (message == 0x329 || message == 0x327)
+    if (message == DM_RENDER || message == DM_RENDERPREPARE)
         drag_transfer_sent((ULONG)(uintptr_t)first, message);
     return WinSendMsg(window, message, first, second);
 }
@@ -366,7 +401,7 @@ BOOL DrgPostTransferMsg(HWND window, ULONG message, ULONG transfer, ULONG flags,
                         BOOL retry)
 {
     (void)reserved;
-    uint8 wire[28];
+    uint8 wire[DRAGTRANSFER_WIRE_SIZE];
     if (!lx_execution_read(GProcessState.execution, transfer, wire, sizeof wire) ||
         lx_guest_load_u32(wire) < sizeof wire)
         return FALSE;

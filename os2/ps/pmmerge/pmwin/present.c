@@ -13,6 +13,11 @@
 #include "emulator/abi.h"
 #include <ctype.h>
 
+enum
+{
+    PRESENT_COALESCE_DELAY_MS = 16 /* one 60 Hz frame */
+};
+
 void presentWindow(AnchorBlock *anchor, Window *window)
 {
     if (!window || !window->heavy.window)
@@ -31,13 +36,15 @@ void presentWindow(AnchorBlock *anchor, Window *window)
     while (root->parent && root->parent != &desktop_window)
         root = root->parent;
     uint64_t now = lx_host_video_ticks_ms();
+    /* Wait for pending paints on the same canvas so a half-drawn frame is not shown, but
+       a window that repaints from WM_PAINT still presents once per frame. */
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
         Window *pending = anchor->windows[i];
         if (pending && pending->hwnd && pending->heavy.window == window->heavy.window &&
             pending->w > 0 && pending->h > 0 && pending->paint_pending &&
             !WinIsRectEmpty(0, &pending->invalid) && windowAcceptsUpdates(pending) &&
-            (!pending->paint_offered || now - root->last_present < 16))
+            (!pending->paint_offered || now - root->last_present < PRESENT_COALESCE_DELAY_MS))
             return;
     }
     lx_host_window_present(window->heavy.window);

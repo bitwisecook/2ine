@@ -23,7 +23,7 @@ static BOOL replace(Window *window, size_t position, size_t removed, const char 
     c->first = c->last = (unsigned)(position + size);
     c->changed = TRUE;
     controlRepaint(window);
-    controlNotify(window, 7); /* MLN_CHANGE */
+    controlNotify(window, MLN_CHANGE);
     return TRUE;
 }
 
@@ -42,9 +42,9 @@ static LONG wrapped_lines(Window *window, const char *text)
     HPS space = WinGetPS(window->hwnd);
     if (!space)
         return 0;
-    RECTL area = {2, 0, window->w - 2, INT32_MAX / 2};
+    RECTL area = {MLE_TEXT_INSET, 0, window->w - MLE_TEXT_INSET, INT32_MAX / 2};
     LONG lines = 0;
-    lx_pm_draw_text_lines(space, -1, (PCH)text, &area, 0x4000, count_line, &lines);
+    lx_pm_draw_text_lines(space, -1, (PCH)text, &area, DT_WORDBREAK, count_line, &lines);
     WinReleasePS(space);
     return lines;
 }
@@ -57,49 +57,49 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
     LONG a = (LONG)(intptr_t)first, b = (LONG)(intptr_t)second;
     switch (message)
     {
-        case 0x1b0:
+        case MLM_SETTEXTLIMIT:
         {
             LONG old = (LONG)c->limit;
             if (a >= 0)
                 c->limit = (unsigned)a;
             return controlReply(old);
         }
-        case 0x1b1:
+        case MLM_QUERYTEXTLIMIT:
             return controlReply((LONG)c->limit);
-        case 0x1b4:
+        case MLM_SETWRAP:
         {
-            BOOL old = (window->style & 1) != 0;
+            BOOL old = (window->style & MLS_WORDWRAP) != 0;
             if (a)
-                window->style |= 1;
+                window->style |= MLS_WORDWRAP;
             else
-                window->style &= ~1u;
+                window->style &= ~(unsigned)MLS_WORDWRAP;
             controlRepaint(window);
             return controlReply(old);
         }
-        case 0x1b5:
-            return controlReply((window->style & 1) != 0);
-        case 0x1b8:
+        case MLM_QUERYWRAP:
+            return controlReply((window->style & MLS_WORDWRAP) != 0);
+        case MLM_SETREADONLY:
         {
-            BOOL old = (window->style & 0x10) != 0;
+            BOOL old = (window->style & MLS_READONLY) != 0;
             if (a)
-                window->style |= 0x10;
+                window->style |= MLS_READONLY;
             else
-                window->style &= ~0x10u;
+                window->style &= ~(unsigned)MLS_READONLY;
             return controlReply(old);
         }
-        case 0x1b9:
-            return controlReply((window->style & 0x10) != 0);
-        case 0x1ba:
+        case MLM_QUERYREADONLY:
+            return controlReply((window->style & MLS_READONLY) != 0);
+        case MLM_QUERYCHANGED:
             return controlReply(c->changed);
-        case 0x1bb:
+        case MLM_SETCHANGED:
         {
             BOOL old = c->changed;
             c->changed = a != 0;
             return controlReply(old);
         }
-        case 0x1bc:
+        case MLM_QUERYLINECOUNT:
         {
-            LONG count = (window->style & 1) ? wrapped_lines(window, text) : 0;
+            LONG count = (window->style & MLS_WORDWRAP) ? wrapped_lines(window, text) : 0;
             if (count)
                 return controlReply(count);
             count = 1;
@@ -108,7 +108,7 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
                     count++;
             return controlReply(count);
         }
-        case 0x1bd:
+        case MLM_CHARFROMLINE:
         {
             LONG line = 0;
             size_t i = 0;
@@ -117,7 +117,7 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
                     line++;
             return controlReply((LONG)i);
         }
-        case 0x1be:
+        case MLM_LINEFROMCHAR:
         {
             LONG line = 0;
             for (size_t i = 0; i < length && i < (ULONG)a; i++)
@@ -125,7 +125,7 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
                     line++;
             return controlReply(line);
         }
-        case 0x1bf:
+        case MLM_QUERYLINELENGTH:
         {
             size_t position = a < 0 ? c->last : (size_t)a;
             if (position > length)
@@ -137,22 +137,22 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
                 end++;
             return controlReply((LONG)(end - position));
         }
-        case 0x1c0:
-        case 0x1c8:
+        case MLM_QUERYTEXTLENGTH:
+        case MLM_QUERYFORMATTEXTLENGTH:
             return controlReply((LONG)length);
-        case 0x1c1: /* MLM_FORMAT */
+        case MLM_FORMAT:
         {
             unsigned old = c->transfer_format;
-            if ((unsigned)a <= 2)
+            if ((unsigned)a <= MLFIE_WINFMT)
                 c->transfer_format = (unsigned)a;
             return controlReply((LONG)old);
         }
-        case 0x1c2: /* MLM_SETIMPORTEXPORT: caller retains the transfer buffer. */
+        case MLM_SETIMPORTEXPORT: /* The caller retains the transfer buffer. */
             c->transfer = first;
             c->transfer_size = (USHORT)b;
             return controlReply(first != NULL && c->transfer_size != 0);
-        case 0x1c3: /* MLM_IMPORT */
-        case 0x1c4: /* MLM_EXPORT */
+        case MLM_IMPORT:
+        case MLM_EXPORT:
         {
             uint8 offset[4];
             if (!controlRead(first, offset, sizeof offset) || !c->transfer)
@@ -162,7 +162,7 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
                 position = (LONG)c->last;
             uint8 requested[4];
             ULONG wanted = (ULONG)b;
-            if (message == 0x1c4)
+            if (message == MLM_EXPORT)
             {
                 if (!controlRead(second, requested, sizeof requested))
                     return 0;
@@ -171,7 +171,7 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
             if (position < 0 || (size_t)position > length)
                 return 0;
             size_t count = wanted < c->transfer_size ? wanted : c->transfer_size;
-            if (message == 0x1c3)
+            if (message == MLM_IMPORT)
             {
                 char *data = malloc(count ? count : 1);
                 if (!data)
@@ -202,7 +202,7 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
                 return 0;
             return controlReply((LONG)count);
         }
-        case 0x1c6: /* MLM_DELETE: programmatic edits also apply to read-only controls. */
+        case MLM_DELETE: /* Programmatic edits also apply to read-only controls. */
         {
             size_t position = a < 0 ? c->last : (size_t)a;
             if (position > length || b < 0)
@@ -210,17 +210,17 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
             size_t count = (size_t)b < length - position ? (size_t)b : length - position;
             return controlReply(replace(window, position, count, NULL, 0) ? (LONG)count : 0);
         }
-        case 0x1ca:
+        case MLM_SETSEL:
             c->first = a < 0 ? c->first : (ULONG)a > length ? (unsigned)length : (unsigned)a;
             c->last = b < 0 ? c->last : (ULONG)b > length ? (unsigned)length : (unsigned)b;
             controlRepaint(window);
             return 0;
-        case 0x1cb:
+        case MLM_QUERYSEL:
             return controlReply(a == 0   ? (LONG)c->first
                                 : a == 1 ? (LONG)c->last
                                 : a == 2 ? (LONG)(c->first < c->last ? c->first : c->last)
                                          : (LONG)(c->first > c->last ? c->first : c->last));
-        case 0x1c9:
+        case MLM_INSERT:
         {
             char *insert = controlCopyText(first);
             if (!insert)
@@ -233,12 +233,14 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         case WM_CHAR:
         {
             ULONG flags = (ULONG)(uintptr_t)first, key = (ULONG)(uintptr_t)second >> 16;
-            if (!(flags & 0x40) && (flags & 2) && (key == 0x1e || key == 8))
+            if (!(flags & KC_KEYUP) && (flags & KC_VIRTUALKEY) &&
+                (key == VK_ENTER || key == VK_NEWLINE))
             {
                 controlReplaceSelection(window, "\r\n", 2);
                 return 0;
             }
-            if (!(flags & 0x40) && (flags & 2) && key == 6 && !(window->style & 0x20))
+            if (!(flags & KC_KEYUP) && (flags & KC_VIRTUALKEY) && key == VK_TAB &&
+                !(window->style & MLS_IGNORETAB))
             {
                 controlReplaceSelection(window, "\t", 1);
                 return 0;

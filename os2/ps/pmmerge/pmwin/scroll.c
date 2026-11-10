@@ -4,6 +4,11 @@
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/bsedos.h"
 
+enum
+{
+    SCROLL_MAX_PIXELS = 16777216 /* bounds the temporary copy of the retained area */
+};
+
 static RECTL intersect(RECTL a, RECTL b)
 {
     return (RECTL){a.xLeft > b.xLeft ? a.xLeft : b.xLeft,
@@ -21,7 +26,7 @@ LONG WinScrollWindow(HWND handle, LONG dx, LONG dy, PRECTL scroll, PRECTL clip, 
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
-    if (!window || flags & ~3u)
+    if (!window || flags & ~(ULONG)(SW_SCROLLCHILDREN | SW_INVALIDATERGN))
         return 0;
     RECTL bounds = {0, 0, window->w, window->h};
     if (scroll)
@@ -35,7 +40,7 @@ LONG WinScrollWindow(HWND handle, LONG dx, LONG dy, PRECTL scroll, PRECTL clip, 
         return 0;
     if (!nonempty(bounds) || (!dx && !dy))
     {
-        LONG result = !region || lx_pm_region_set(ps, region, 0, NULL) ? 1 : 0;
+        LONG result = !region || lx_pm_region_set(ps, region, 0, NULL) ? RGN_NULL : RGN_ERROR;
         WinReleasePS(ps);
         return result;
     }
@@ -52,7 +57,7 @@ LONG WinScrollWindow(HWND handle, LONG dx, LONG dy, PRECTL scroll, PRECTL clip, 
     {
         unsigned width = retained.xRight - retained.xLeft,
                  height = retained.yTop - retained.yBottom;
-        uint32_t *pixels = (uint64_t)width * height <= 16777216
+        uint32_t *pixels = (uint64_t)width * height <= SCROLL_MAX_PIXELS
                                ? malloc((size_t)width * height * sizeof *pixels)
                                : NULL;
         ok = pixels &&
@@ -93,14 +98,14 @@ LONG WinScrollWindow(HWND handle, LONG dx, LONG dy, PRECTL scroll, PRECTL clip, 
         }
     }
     WinReleasePS(ps);
-    if (ok && flags & 1)
+    if (ok && flags & SW_SCROLLCHILDREN)
         for (Window *child = window->children; child; child = child->sibling)
             if (nonempty(intersect(
                     bounds, (RECTL){child->x, child->y, child->x + child->w, child->y + child->h})))
                 if (!WinSetWindowPos(child->hwnd, 0, child->x + dx, child->y + dy, 0, 0, SWP_MOVE))
                     ok = FALSE;
-    if (ok && flags & 2)
+    if (ok && flags & SW_INVALIDATERGN)
         for (LONG i = 0; i < count; i++)
             WinInvalidateRect(handle, &uncovered[i], FALSE);
-    return ok ? count ? count == 1 ? 2 : 3 : 1 : 0;
+    return ok ? count ? count == 1 ? RGN_RECT : RGN_COMPLEX : RGN_NULL : RGN_ERROR;
 }

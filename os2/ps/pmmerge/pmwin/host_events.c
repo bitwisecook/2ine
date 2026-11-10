@@ -14,14 +14,26 @@
 #include "emulator/abi.h"
 #include <ctype.h>
 
+enum
+{
+    /* WM_BEGINDRAG through WM_ENDSELECT, configured by SV_BEGINDRAG through SV_ENDSELECT. */
+    SEMANTIC_MESSAGES = SV_ENDSELECT - SV_BEGINDRAG + 1,
+    /* Each button's down, up and double-click (and motion and click) messages are consecutive. */
+    BUTTON_MESSAGE_STRIDE = WM_BUTTON2DOWN - WM_BUTTON1DOWN,
+    /* physical_buttons[] state bits */
+    BUTTON_PRESSED = 1,
+    BUTTON_DOWN = 2,
+    KEY_STATE_DOWN = 0x8000
+};
+
 /* SV_BEGINDRAG through SV_ENDSELECT name the raw event behind each semantic message. */
 static BOOL post_semantic(AnchorBlock *anchor, Window *win, ULONG raw, MPARAM point, ULONG ticks)
 {
     BOOL posted = FALSE;
-    ULONG shift = anchor->modifiers & 0x38; /* KC_SHIFT, KC_CTRL, KC_ALT */
-    for (LONG i = 0; i < 9; i++)
+    ULONG shift = anchor->modifiers & (KC_SHIFT | KC_CTRL | KC_ALT);
+    for (LONG i = 0; i < SEMANTIC_MESSAGES; i++)
     {
-        ULONG value = (ULONG)WinQuerySysValue(HWND_DESKTOP, 75 + i);
+        ULONG value = (ULONG)WinQuerySysValue(HWND_DESKTOP, SV_BEGINDRAG + i);
         if ((value & 0xffff) == raw && value >> 16 == shift)
             posted |= postTimestampedMsg(anchor, win->hwnd, WM_BEGINDRAG + i, point,
                                          (MPARAM)(uintptr_t)TRUE, ticks);
@@ -32,10 +44,11 @@ static BOOL post_semantic(AnchorBlock *anchor, Window *win, ULONG raw, MPARAM po
 BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULONG shift, ULONG ticks)
 {
     BOOL posted = FALSE;
-    for (LONG i = 0; i < 9; i++)
+    for (LONG i = 0; i < SEMANTIC_MESSAGES; i++)
     {
-        ULONG value = (ULONG)WinQuerySysValue(HWND_DESKTOP, 84 + i);
-        if (value && (value & 0xffff) == key && value >> 16 == (shift & 0x38))
+        ULONG value = (ULONG)WinQuerySysValue(HWND_DESKTOP, SV_BEGINDRAGKB + i);
+        if (value && (value & 0xffff) == key &&
+            value >> 16 == (shift & (KC_SHIFT | KC_CTRL | KC_ALT)))
             posted |= postTimestampedMsg(anchor, window, WM_BEGINDRAG + i, 0, 0, ticks);
     }
     return posted;
@@ -50,10 +63,10 @@ static BOOL post_derived(AnchorBlock *anchor, Window *win, const LxHostEvent *ev
     {
         for (unsigned b = 0; b < 3; b++)
             if (anchor->press_down[b] && !anchor->press_moving[b] &&
-                (labs(x - anchor->press_x[b]) > WinQuerySysValue(HWND_DESKTOP, 73) ||
-                 labs(y - anchor->press_y[b]) > WinQuerySysValue(HWND_DESKTOP, 74)))
+                (labs(x - anchor->press_x[b]) > WinQuerySysValue(HWND_DESKTOP, SV_CXMOTIONSTART) ||
+                 labs(y - anchor->press_y[b]) > WinQuerySysValue(HWND_DESKTOP, SV_CYMOTIONSTART)))
             {
-                ULONG start = WM_BUTTON1MOTIONSTART + b * 3;
+                ULONG start = WM_BUTTON1MOTIONSTART + b * BUTTON_MESSAGE_STRIDE;
                 anchor->press_moving[b] = TRUE;
                 posted |= postTimestampedMsg(anchor, win->hwnd, start, point, 0, ticks);
                 posted |= post_semantic(anchor, win, start, point, ticks);
@@ -72,16 +85,17 @@ static BOOL post_derived(AnchorBlock *anchor, Window *win, const LxHostEvent *ev
         anchor->press_y[b] = y;
         unsigned other = b ^ 1; /* A chord pairs the first two buttons. */
         if (b < 2 && anchor->press_down[other] &&
-            ticks - anchor->press_ticks[other] <= (ULONG)WinQuerySysValue(HWND_DESKTOP, 70) &&
-            labs(x - anchor->press_x[other]) <= WinQuerySysValue(HWND_DESKTOP, 71) &&
-            labs(y - anchor->press_y[other]) <= WinQuerySysValue(HWND_DESKTOP, 72))
+            ticks - anchor->press_ticks[other] <=
+                (ULONG)WinQuerySysValue(HWND_DESKTOP, SV_CHORDTIME) &&
+            labs(x - anchor->press_x[other]) <= WinQuerySysValue(HWND_DESKTOP, SV_CXCHORD) &&
+            labs(y - anchor->press_y[other]) <= WinQuerySysValue(HWND_DESKTOP, SV_CYCHORD))
             posted |= postTimestampedMsg(anchor, win->hwnd, WM_CHORD, point, 0, ticks);
     }
     else if (event->type == LX_HOST_EVENT_BUTTON_UP)
     {
         if (anchor->press_moving[b])
         {
-            ULONG end = WM_BUTTON1MOTIONEND + b * 3;
+            ULONG end = WM_BUTTON1MOTIONEND + b * BUTTON_MESSAGE_STRIDE;
             posted |= postTimestampedMsg(anchor, win->hwnd, end, point, 0, ticks);
             posted |= post_semantic(anchor, win, end, point, ticks);
         }
@@ -112,7 +126,8 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         event->button >= 1 && event->button <= 3)
     {
         uint8 *state = &anchor->physical_buttons[event->button - 1];
-        *state = event->type == LX_HOST_EVENT_BUTTON_DOWN ? 3 : (*state & 1);
+        *state = event->type == LX_HOST_EVENT_BUTTON_DOWN ? BUTTON_DOWN | BUTTON_PRESSED
+                                                          : (*state & BUTTON_PRESSED);
     }
     if (event->type == LX_HOST_EVENT_INPUT_RESET)
     {
@@ -237,19 +252,21 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
             return FALSE;
         /* SV_SWAPBUTTON exchanges the primary and secondary buttons. */
         button = event->button;
-        if (button <= 2 && WinQuerySysValue(HWND_DESKTOP, 0))
+        if (button <= 2 && WinQuerySysValue(HWND_DESKTOP, SV_SWAPBUTTON))
             button = 3 - button;
-        message = WM_BUTTON1DOWN + (button - 1) * 3 + (event->type == LX_HOST_EVENT_BUTTON_UP);
+        message = WM_BUTTON1DOWN + (button - 1) * BUTTON_MESSAGE_STRIDE +
+                  (event->type == LX_HOST_EVENT_BUTTON_UP);
         if (event->type == LX_HOST_EVENT_BUTTON_DOWN)
         {
             /* SV_DBLCLKTIME and the SV_CXDBLCLK rectangle define a double click. */
             LONG dx = x - anchor->click_x, dy = y - anchor->click_y;
             BOOL second = anchor->click_window == win->hwnd && anchor->click_button == button &&
-                          ticks - anchor->click_ticks <= (ULONG)WinQuerySysValue(HWND_DESKTOP, 1) &&
-                          labs(dx) <= WinQuerySysValue(HWND_DESKTOP, 2) &&
-                          labs(dy) <= WinQuerySysValue(HWND_DESKTOP, 3);
+                          ticks - anchor->click_ticks <=
+                              (ULONG)WinQuerySysValue(HWND_DESKTOP, SV_DBLCLKTIME) &&
+                          labs(dx) <= WinQuerySysValue(HWND_DESKTOP, SV_CXDBLCLK) &&
+                          labs(dy) <= WinQuerySysValue(HWND_DESKTOP, SV_CYDBLCLK);
             if (second)
-                message = WM_BUTTON1DBLCLK + (button - 1) * 3;
+                message = WM_BUTTON1DBLCLK + (button - 1) * BUTTON_MESSAGE_STRIDE;
             anchor->click_window = second ? 0 : win->hwnd;
             anchor->click_button = button;
             anchor->click_ticks = ticks;
@@ -263,7 +280,7 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         result |= post_semantic(anchor, win, message, point, ticks);
     if (event->type == LX_HOST_EVENT_BUTTON_UP)
     {
-        ULONG click = WM_BUTTON1CLICK + (button - 1) * 3;
+        ULONG click = WM_BUTTON1CLICK + (button - 1) * BUTTON_MESSAGE_STRIDE;
         result |= postTimestampedMsg(anchor, win->hwnd, click, point, 0, ticks);
         result |= post_semantic(anchor, win, click, point, ticks);
     }
@@ -288,6 +305,6 @@ LONG lx_pm_mouse_state(unsigned button)
     if (!anchor || button < 1 || button > 3)
         return 0;
     unsigned state = anchor->physical_buttons[button - 1];
-    anchor->physical_buttons[button - 1] &= ~1u;
-    return (SHORT)((state & 2 ? 0x8000 : 0) | (state & 1));
+    anchor->physical_buttons[button - 1] &= ~(unsigned)BUTTON_PRESSED;
+    return (SHORT)((state & BUTTON_DOWN ? KEY_STATE_DOWN : 0) | (state & BUTTON_PRESSED));
 }

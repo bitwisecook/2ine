@@ -5,18 +5,17 @@
 
 enum
 {
-    CBID_LIST = 0x29a,
-    CBID_EDIT = 0x29b,
-    CBM_SHOWLIST = 0x170,
-    CBM_HILITE = 0x171,
-    CBM_ISLISTSHOWING = 0x172
+    /* Height the edit child adds to its text line for its border. */
+    COMBO_EDIT_PADDING = 4,
+    /* Rows a drop-down list shows when the combo box gives it no height of its own. */
+    COMBO_DEFAULT_LIST_ROWS = 6
 };
 
 BOOL initializeCombo(Window *window)
 {
     PmControl *c = window->control;
-    ULONG style = window->style & 7;
-    if (style != 1 && style != 2 && style != 4)
+    ULONG style = window->style & COMBO_TYPE_MASK;
+    if (style != CBS_SIMPLE && style != CBS_DROPDOWN && style != CBS_DROPDOWNLIST)
         return FALSE;
     HPS space = WinGetPS(window->hwnd);
     LxHostFontMetrics metrics;
@@ -25,20 +24,22 @@ BOOL initializeCombo(Window *window)
         WinReleasePS(space);
     if (!valid)
         return FALSE;
-    LONG height = metrics.ascent + metrics.descent + 4;
-    c->popup_height = window->h > height * 2 ? window->h - height : height * 6;
+    LONG height = metrics.ascent + metrics.descent + COMBO_EDIT_PADDING;
+    c->popup_height =
+        window->h > height * 2 ? window->h - height : height * COMBO_DEFAULT_LIST_ROWS;
     c->edit = WinCreateWindow(window->hwnd, (PSZ)WC_ENTRYFIELD, window->text,
-                              WS_VISIBLE | (style == 4 ? 0x20 : 0), 0, 0,
+                              WS_VISIBLE | (style == CBS_DROPDOWNLIST ? ES_READONLY : 0), 0, 0,
                               window->w > height ? window->w - height : 1, height, window->hwnd,
                               HWND_BOTTOM, CBID_EDIT, NULL, NULL);
     if (!c->edit)
         return FALSE;
-    c->list = WinCreateWindow(style == 1 ? window->hwnd : HWND_DESKTOP, (PSZ)WC_LISTBOX, NULL,
-                              style == 1 ? WS_VISIBLE : 0, 0, 0, window->w > 0 ? window->w : 1,
-                              c->popup_height, window->hwnd, HWND_BOTTOM, CBID_LIST, NULL, NULL);
+    c->list =
+        WinCreateWindow(style == CBS_SIMPLE ? window->hwnd : HWND_DESKTOP, (PSZ)WC_LISTBOX, NULL,
+                        style == CBS_SIMPLE ? WS_VISIBLE : 0, 0, 0, window->w > 0 ? window->w : 1,
+                        c->popup_height, window->hwnd, HWND_BOTTOM, CBID_LIST, NULL, NULL);
     if (!c->list)
         return FALSE;
-    if (style != 1)
+    if (style != CBS_SIMPLE)
     {
         Window *list = getWindowFromHWND(getAnchorBlockNoHAB(), c->list);
         lx_host_window_border(list->heavy.window, FALSE);
@@ -61,7 +62,7 @@ static void select_item(Window *window, BOOL notify)
             WinSetWindowText(c->edit, items->items[i].text);
             c->updating = FALSE;
             if (notify)
-                controlNotify(window, 4); /* CBN_LBSELECT */
+                controlNotify(window, CBN_LBSELECT);
             return;
         }
 }
@@ -69,7 +70,7 @@ static void select_item(Window *window, BOOL notify)
 MRESULT comboMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;
-    if (message >= 0x160 && message <= 0x16f)
+    if (message >= LM_QUERYITEMCOUNT && message <= LM_INSERTMULTITEMS)
     {
         MRESULT result = WinSendMsg(c->list, message, first, second);
         if (message == LM_SELECTITEM && result)
@@ -79,7 +80,8 @@ MRESULT comboMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
     if (message == WM_ADJUSTWINDOWPOS)
     {
         SWP position;
-        if (controlRead(first, &position, sizeof position) && (window->style & 7) != 1)
+        if (controlRead(first, &position, sizeof position) &&
+            (window->style & COMBO_TYPE_MASK) != CBS_SIMPLE)
         {
             SWP edit;
             if (WinQueryWindowPos(c->edit, &edit) && position.cy > edit.cy)
@@ -108,7 +110,7 @@ MRESULT comboMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
     if (message == WM_BUTTON1CLICK || message == CBM_SHOWLIST)
     {
         BOOL show = message == CBM_SHOWLIST ? (USHORT)(uintptr_t)first != 0 : !c->dropped;
-        if ((window->style & 7) == 1)
+        if ((window->style & COMBO_TYPE_MASK) == CBS_SIMPLE)
             return controlReply(TRUE);
         c->dropped = show;
         if (show)
@@ -124,27 +126,27 @@ MRESULT comboMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         }
         else
             WinShowWindow(c->list, FALSE);
-        controlNotify(window, 6);
-        return controlReply(TRUE); /* CBN_SHOWLIST */
+        controlNotify(window, CBN_SHOWLIST);
+        return controlReply(TRUE);
     }
     if (message == WM_CONTROL)
     {
         if (c->updating)
             return 0;
         USHORT id = (USHORT)(uintptr_t)first, code = (USHORT)((uintptr_t)first >> 16);
-        if (id == CBID_EDIT && code == 4)
+        if (id == CBID_EDIT && code == EN_CHANGE)
         {
             Window *edit = getWindowFromHWND(getAnchorBlockNoHAB(), c->edit);
             c->updating = TRUE;
             if (edit)
                 WinSetWindowText(window->hwnd, edit->text ? edit->text : "");
             c->updating = FALSE;
-            controlNotify(window, 1); /* CBN_EFCHANGE */
+            controlNotify(window, CBN_EFCHANGE);
         }
-        else if (id == CBID_LIST && (code == 1 || code == 5))
+        else if (id == CBID_LIST && (code == LN_SELECT || code == LN_ENTER))
         {
             c->dropped = FALSE;
-            if ((window->style & 7) != 1)
+            if ((window->style & COMBO_TYPE_MASK) != CBS_SIMPLE)
                 WinShowWindow(c->list, FALSE);
             WinSetFocus(HWND_DESKTOP, c->edit);
             select_item(window, TRUE);

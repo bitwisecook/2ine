@@ -5,16 +5,24 @@
 #include "os2/include/bsedos.h"
 #include "os2/ps/common/pm_text.h"
 
+/* Case mapping supports the US English and multilingual code pages for the US country code. */
+enum
+{
+    CODEPAGE_US = 437,
+    CODEPAGE_MULTILINGUAL = 850,
+    COUNTRY_US = 1
+};
+
 ULONG WinCompareStrings(HAB hab, ULONG codepage, ULONG country, PSZ first, PSZ second,
                         ULONG reserved)
 {
     if (!getAnchorBlock(hab) || !first || !second || reserved)
-        return 0;
+        return WCS_ERROR;
     COUNTRYCODE code = {country, codepage};
     char weights[256];
     ULONG length;
     if (DosQueryCollate(sizeof weights, &code, weights, &length))
-        return 0;
+        return WCS_ERROR;
     const unsigned char *a = (const unsigned char *)first, *b = (const unsigned char *)second;
     while (*a && *b && weights[*a] == weights[*b])
     {
@@ -22,19 +30,19 @@ ULONG WinCompareStrings(HAB hab, ULONG codepage, ULONG country, PSZ first, PSZ s
         b++;
     }
     unsigned left = (unsigned char)weights[*a], right = (unsigned char)weights[*b];
-    return left == right ? 1 : left < right ? 2 : 3;
+    return left == right ? WCS_EQ : left < right ? WCS_LT : WCS_GT;
 }
 
 static BOOL case_parameters(HAB hab, ULONG codepage, ULONG country)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
-    if (codepage != 0 && codepage != 437 && codepage != 850)
+    if (codepage != 0 && codepage != CODEPAGE_US && codepage != CODEPAGE_MULTILINGUAL)
     {
         if (anchor)
             lxHostThreadState()->pm_error = PMERR_INVALID_SRC_CODEPAGE;
         return FALSE;
     }
-    if (country != 0 && country != 1)
+    if (country != 0 && country != COUNTRY_US)
     {
         if (anchor)
             lxHostThreadState()->pm_error = PMERR_PARAMETER_OUT_OF_RANGE;

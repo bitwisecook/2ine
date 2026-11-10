@@ -4,12 +4,6 @@
 #include "os2/include/private/pmgrep.h"
 #include "os2/ps/common/pm_text.h"
 
-enum
-{
-    /* The low style bits below SS_AUTOSIZE select the static type. */
-    STATIC_TYPE_MASK = SS_AUTOSIZE - 1
-};
-
 /* Group boxes and frames leave the controls inside them visible. */
 BOOL staticIsFrame(const Window *window)
 {
@@ -23,8 +17,8 @@ void paintStaticShape(Window *window, HPS space)
 {
     ULONG type = window->style & STATIC_TYPE_MASK;
     ULONG foreground = (ULONG)windowPresentationColor(window, TRUE, 0);
-    ULONG background =
-        (ULONG)windowPresentationColor(window, FALSE, WinQuerySysColor(HWND_DESKTOP, -34, 0));
+    ULONG background = (ULONG)windowPresentationColor(
+        window, FALSE, WinQuerySysColor(HWND_DESKTOP, SYSCLR_DIALOGBACKGROUND, 0));
     ULONG tone = type == SS_FGNDRECT || type == SS_FGNDFRAME           ? 0
                  : type == SS_HALFTONERECT || type == SS_HALFTONEFRAME ? 1
                                                                        : 2;
@@ -32,12 +26,12 @@ void paintStaticShape(Window *window, HPS space)
         (LONG)(tone == 0   ? foreground
                : tone == 2 ? background
                            : ((foreground >> 1) & 0x7f7f7f) + ((background >> 1) & 0x7f7f7f));
-    if (!lx_pm_color_table(space, 0, 2, 254, 1, &color))
+    if (!lx_pm_color_table(space, 0, LCOLF_CONSECRGB, CONTROL_RGB_COLOR_INDEX, 1, &color))
         return;
     if (type <= SS_BKGNDRECT)
     {
         RECTL area = {0, 0, window->w, window->h};
-        WinFillRect(space, &area, 254);
+        WinFillRect(space, &area, CONTROL_RGB_COLOR_INDEX);
         return;
     }
     RECTL edges[] = {{0, 0, window->w, 1},
@@ -45,7 +39,7 @@ void paintStaticShape(Window *window, HPS space)
                      {0, 0, 1, window->h},
                      {window->w - 1, 0, window->w, window->h}};
     for (size_t i = 0; i < sizeof edges / sizeof *edges; i++)
-        WinFillRect(space, &edges[i], 254);
+        WinFillRect(space, &edges[i], CONTROL_RGB_COLOR_INDEX);
 }
 
 /* SS_GROUPBOX: an etched frame whose top edge runs through the middle of the caption line,

@@ -104,13 +104,26 @@ static inline LONG clamp_long(LONG x, LONG low, LONG high)
     return x < low ? low : x > high ? high : x;
 }
 
+/* lx_execution_map allocates whole guest pages. */
+enum
+{
+    PM_GUEST_PAGE_SIZE = 4096
+};
+
+/* A predefined class name is the integer atom PM_INTEGER_ATOM_BASE | n, from WC_FRAME (n = 1)
+   through n = PM_LAST_PREDEFINED_CLASS. */
+#define PM_INTEGER_ATOM_BASE 0xffff0000u
+#define PM_LAST_PREDEFINED_CLASS 0x70
+
 LX_PRIVATE void cleanupErrorInfo(void);
 /* FC_NOSETFOCUS, FC_NOLOSEFOCUS and FC_NOSETACTIVE suppress their notifications. */
 LX_PRIVATE BOOL changeFocus(HWND desktop, HWND handle, ULONG flags);
 LX_PRIVATE BOOL queryPointerClip(RECTL *bounds);
 /* FOCUS_NOTIFY adds WM_FOCUSCHANGE and WM_SETSELECTION for WinFocusChange callers. */
 #define FOCUS_NOTIFY 0x10000u
-/* Decodes a 16-entry string or message bundle resource. */
+/* The loadStringTable module that selects PM's own resources in PMMRGRES.DLL. */
+#define PM_RESOURCE_MODULE ((HMODULE) - 1)
+/* Decodes a 16-entry string or message bundle resource into output; returns the length copied. */
 LX_PRIVATE LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR output);
 LX_PRIVATE BOOL prepareFrameState(Window *window, SWP *position);
 LX_PRIVATE BOOL isFrameWindow(const Window *window);

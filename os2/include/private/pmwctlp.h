@@ -5,6 +5,35 @@
 #define _INCL_PMWCTLP_H_
 #include "os2/include/private/pmwinp.h"
 
+/* Ordinals of the built-in WC_* classes: a control's kind, the number in its "#n" class name and
+   the class index of a dialog template item. */
+enum
+{
+    PM_CLASS_FRAME = WC_FRAME & 0xffff,
+    PM_CLASS_COMBOBOX = WC_COMBOBOX & 0xffff,
+    PM_CLASS_BUTTON = WC_BUTTON & 0xffff,
+    PM_CLASS_STATIC = WC_STATIC & 0xffff,
+    PM_CLASS_ENTRYFIELD = WC_ENTRYFIELD & 0xffff,
+    PM_CLASS_LISTBOX = WC_LISTBOX & 0xffff,
+    PM_CLASS_SCROLLBAR = WC_SCROLLBAR & 0xffff,
+    PM_CLASS_MLE = WC_MLE & 0xffff,
+    PM_CLASS_SPINBUTTON = WC_SPINBUTTON & 0xffff
+};
+
+enum
+{
+    /* The static type is the style below SS_AUTOSIZE. */
+    STATIC_TYPE_MASK = SS_AUTOSIZE - 1,
+    COMBO_TYPE_MASK = CBS_SIMPLE | CBS_DROPDOWN | CBS_DROPDOWNLIST,
+    /* Entry field and spin button text limits travel in a SHORT. */
+    CONTROL_TEXT_LIMIT_MAX = INT16_MAX,
+    /* WinDrawText and WinFillRect take colour indices, so an RGB colour is loaded into this
+       logical colour table slot first. */
+    CONTROL_RGB_COLOR_INDEX = 254,
+    /* Pixels between an MLE's edge and its text; painting and line counting must agree. */
+    MLE_TEXT_INSET = 2
+};
+
 typedef struct
 {
     char *text;

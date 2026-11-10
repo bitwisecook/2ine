@@ -4,39 +4,30 @@
 
 enum
 {
-    BS_PUSH = 0,
-    BS_CHECK = 1,
-    BS_AUTOCHECK = 2,
-    BS_RADIO = 3,
-    BS_AUTORADIO = 4,
-    BS_THREE = 5,
-    BS_AUTOTHREE = 6,
-    BS_USER = 7,
-    BM_CLICK = 0x120,
-    BM_QUERYINDEX = 0x121,
-    BM_QUERYHILITE = 0x122,
-    BM_SETHILITE = 0x123,
-    BM_QUERYCHECK = 0x124,
-    BM_SETCHECK = 0x125,
-    BM_SETDEFAULT = 0x126
+    /* BM_SETCHECK / BM_QUERYCHECK states; the indeterminate one exists only for 3-state buttons. */
+    CHECK_STATE_CHECKED = 1,
+    CHECK_STATE_INDETERMINATE = 2,
+    /* lx_execution_map allocates whole guest pages. */
+    GUEST_PAGE_SIZE = 4096
 };
 
 void paintUserButton(Window *window, HPS space)
 {
     if (!window->owner)
         return;
-    ULONG state = (window->control->pressed ? 0x100 : 0) | (!window->enabled ? 0x200 : 0) |
-                  (window->style & 0x400);
+    ULONG state = (window->control->pressed ? BDS_HILITED : 0) |
+                  (!window->enabled ? BDS_DISABLED : 0) | (window->style & BS_DEFAULT);
     uint32 data[] = {window->hwnd, space, state, window->control->button_draw_state};
     window->control->button_draw_state = state;
     Window *owner = window->owner;
-    ULONG packed = (USHORT)window->id | 3u << 16; /* BN_PAINT */
+    ULONG packed = (USHORT)window->id | (ULONG)BN_PAINT << 16;
     LxExecution *execution = GProcessState.execution;
     BOOL guest =
         execution && (uintptr_t)owner->window_proc <= UINT32_MAX &&
         lx_execution_memory(execution, (uint32)(uintptr_t)owner->window_proc, 1, LX_GUEST_EXECUTE);
     LxGuestMapping *mapping =
-        guest ? lx_execution_map(execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0) : NULL;
+        guest ? lx_execution_map(execution, 0, GUEST_PAGE_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, 0)
+              : NULL;
     if (guest && !mapping)
         return;
     MPARAM parameter = data;
@@ -58,7 +49,7 @@ static Window *group_start(Window *window)
     Window *start = first;
     for (Window *item = first; item; item = item->sibling)
     {
-        if (item->style & 0x10000) /* WS_GROUP */
+        if (item->style & WS_GROUP)
             start = item;
         if (item == window)
             break;
@@ -69,7 +60,7 @@ static Window *group_start(Window *window)
 MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;
-    unsigned type = window->style & 15;
+    unsigned type = window->style & BS_PRIMARYSTYLES;
     switch (message)
     {
         case BM_QUERYCHECK:
@@ -86,26 +77,28 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
         case BM_SETCHECK:
         {
             unsigned old = c->check, value = (USHORT)(uintptr_t)first;
-            if (type != BS_PUSH && value <= (type >= BS_THREE ? 2u : 1u))
+            if (type != BS_PUSHBUTTON &&
+                value <= (type >= BS_3STATE ? (unsigned)CHECK_STATE_INDETERMINATE
+                                            : (unsigned)CHECK_STATE_CHECKED))
                 c->check = value;
             controlRepaint(window);
             return controlReply((LONG)old);
         }
         case BM_SETDEFAULT:
             if ((USHORT)(uintptr_t)first)
-                window->style |= 0x400;
+                window->style |= BS_DEFAULT;
             else
-                window->style &= ~0x400u;
+                window->style &= ~(unsigned)BS_DEFAULT;
             controlRepaint(window);
             return controlReply(TRUE);
-        case BM_QUERYINDEX:
+        case BM_QUERYCHECKINDEX:
         {
             int index = 0;
             for (Window *item = group_start(window); item; item = item->sibling)
             {
-                if (index && (item->style & 0x10000))
+                if (index && (item->style & WS_GROUP))
                     break;
-                if (item->control && item->control->kind == 3)
+                if (item->control && item->control->kind == PM_CLASS_BUTTON)
                 {
                     if (item->control->check)
                         return controlReply(index);
@@ -115,11 +108,12 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
             return controlReply(-1);
         }
         case WM_QUERYDLGCODE:
-            return controlReply(2 |
-                                (type == BS_PUSH || type == BS_USER         ? 0x20
-                                 : type == BS_RADIO || type == BS_AUTORADIO ? 4
-                                                                            : 0x40) |
-                                (window->style & 0x400 ? 0x10 : 0));
+            return controlReply(DLGC_BUTTON |
+                                (type == BS_PUSHBUTTON || type == BS_USERBUTTON ? DLGC_PUSHBUTTON
+                                 : type == BS_RADIOBUTTON || type == BS_AUTORADIOBUTTON
+                                     ? DLGC_RADIOBUTTON
+                                     : DLGC_CHECKBOX) |
+                                (window->style & BS_DEFAULT ? DLGC_DEFAULT : 0));
         case WM_BUTTON1DOWN:
             c->pressed = TRUE;
             controlRepaint(window);
@@ -132,8 +126,8 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
             controlRepaint(window);
             return 0;
         case WM_CHAR:
-            if (((uintptr_t)first & 0x40) ||
-                !(((uintptr_t)first & 1) && (USHORT)(uintptr_t)second == ' '))
+            if (((uintptr_t)first & KC_KEYUP) ||
+                !(((uintptr_t)first & KC_CHAR) && (USHORT)(uintptr_t)second == ' '))
                 return WinDefWindowProc(window->hwnd, message, first, second);
             break;
         case WM_BUTTON1CLICK:
@@ -144,19 +138,20 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
     }
     if (!window->enabled || !window->owner)
         return 0;
-    if (type == BS_AUTOCHECK)
+    if (type == BS_AUTOCHECKBOX)
         c->check = !c->check;
-    else if (type == BS_AUTOTHREE)
-        c->check = (c->check + 1) % 3;
-    else if (type == BS_AUTORADIO)
+    else if (type == BS_AUTO3STATE)
+        c->check = (c->check + 1) % (CHECK_STATE_INDETERMINATE + 1);
+    else if (type == BS_AUTORADIOBUTTON)
     {
         Window *start = group_start(window);
         for (Window *item = start; item; item = item->sibling)
         {
-            if (item != start && (item->style & 0x10000))
+            if (item != start && (item->style & WS_GROUP))
                 break;
-            if (item->control && item->control->kind == 3 &&
-                ((item->style & 15) == BS_RADIO || (item->style & 15) == BS_AUTORADIO))
+            if (item->control && item->control->kind == PM_CLASS_BUTTON &&
+                ((item->style & BS_PRIMARYSTYLES) == BS_RADIOBUTTON ||
+                 (item->style & BS_PRIMARYSTYLES) == BS_AUTORADIOBUTTON))
             {
                 item->control->check = item == window;
                 controlRepaint(item);
@@ -166,12 +161,12 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
     controlRepaint(window);
     HWND owner = window->owner->hwnd;
     ULONG id = window->id, style = window->style;
-    if (style & 0x100)
+    if (style & BS_HELP)
         WinPostMsg(owner, WM_HELP, (MPARAM)(uintptr_t)id, 0);
-    else if (type == BS_PUSH)
-        WinPostMsg(owner, style & 0x200 ? WM_SYSCOMMAND : WM_COMMAND, (MPARAM)(uintptr_t)id,
-                   (MPARAM)(uintptr_t)1);
+    else if (type == BS_PUSHBUTTON)
+        WinPostMsg(owner, style & BS_SYSCOMMAND ? WM_SYSCOMMAND : WM_COMMAND, (MPARAM)(uintptr_t)id,
+                   (MPARAM)(uintptr_t)CMDSRC_PUSHBUTTON);
     else
-        controlNotify(window, 1); /* BN_CLICKED */
+        controlNotify(window, BN_CLICKED);
     return 0;
 }

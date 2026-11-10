@@ -1,5 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* FILEDLG keeps guest addresses, including its custom callback and user pointer. */
+
+enum
+{
+    /* Longest guest string a binding copies. */
+    BINDING_STRING_MAX = 65536
+};
+
 static uint32 bridge32_WinFileDlg(uint8 *a)
 {
     return WinFileDlg(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
@@ -40,7 +47,8 @@ static uint32 bridge32_WinDefFontDlgProc(uint8 *a)
 
 static uint32 bridge32_DrgAddStrHandle(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 65536);
+    char *name =
+        lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), BINDING_STRING_MAX);
     if (!name)
         return 0;
     ULONG result = DrgAddStrHandle(name);
@@ -151,9 +159,11 @@ static uint32 bridge32_DrgSetDragitem(uint8 *a)
 static uint32 bridge32_DrgVerifyRMF(uint8 *a)
 {
     ULONG mechanism = lx_guest_load_u32(a + 4), format = lx_guest_load_u32(a + 8);
-    char *m =
-        mechanism ? lx_execution_copy_string(GProcessState.execution, mechanism, 65536) : NULL;
-    char *f = format ? lx_execution_copy_string(GProcessState.execution, format, 65536) : NULL;
+    char *m = mechanism
+                  ? lx_execution_copy_string(GProcessState.execution, mechanism, BINDING_STRING_MAX)
+                  : NULL;
+    char *f = format ? lx_execution_copy_string(GProcessState.execution, format, BINDING_STRING_MAX)
+                     : NULL;
     BOOL result = (!mechanism || m) && (!format || f) && DrgVerifyRMF(lx_guest_load_u32(a), m, f);
     free(m);
     free(f);

@@ -29,7 +29,6 @@ enum
     CURVE_STEPS_MAX = 4096,
     /* Each round-rectangle corner is a quarter ellipse of 64 segments. */
     ROUND_CORNER_STEPS = 64,
-    RGB_WHITE = 0xffffff,
     INT_BYTES = 4,
     LONG_BYTES = 4
 };

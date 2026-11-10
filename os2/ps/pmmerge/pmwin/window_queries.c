@@ -142,24 +142,24 @@ HWND WinQueryWindow(HWND window, LONG code)
     Window *result = NULL;
     switch (code)
     {
-        case 0:
+        case QW_NEXT:
             result = w->sibling;
-            break; /* QW_NEXT */
-        case 1:    /* QW_PREV */
+            break;
+        case QW_PREV:
             for (Window *i = w->parent ? w->parent->children : NULL; i && i != w; i = i->sibling)
                 result = i;
             break;
-        case 2:
+        case QW_TOP:
             result = w->children;
-            break; /* QW_TOP */
-        case 3:    /* QW_BOTTOM */
+            break;
+        case QW_BOTTOM:
             for (Window *i = w->children; i; i = i->sibling)
                 result = i;
             break;
-        case 4:
+        case QW_OWNER:
             result = w->owner;
             break;
-        case 5:
+        case QW_PARENT:
             result = w->parent;
             break;
         default:

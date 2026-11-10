@@ -10,6 +10,22 @@
 #include <strings.h>
 #include <ctype.h>
 
+enum
+{
+    DEFAULT_CODEPAGE = 437,
+    MAX_CLIPBOARD_DATA = 64 * 1024 * 1024,
+    MAX_GUEST_DATA_SCAN = 16 * 1024 * 1024,
+    MAX_OFFERED_TYPES = 64
+};
+
+/* A PNG stream is its signature, then chunks of length, type, data and CRC. */
+enum
+{
+    PNG_SIGNATURE_SIZE = 8,
+    PNG_CHUNK_TYPE_OFFSET = 4,
+    PNG_CHUNK_OVERHEAD = 12
+};
+
 typedef struct ClipFormat
 {
     ULONG format, data, flags, codepage;
@@ -52,9 +68,9 @@ static ClipFormat *find_format(ULONG format)
 
 static const char *format_mime(ULONG format, const char *name)
 {
-    if (format == 1)
+    if (format == CF_TEXT)
         return "text/plain;charset=utf-8";
-    if (format == 2)
+    if (format == CF_BITMAP)
         return "image/png";
     if (!name)
         return NULL;
@@ -100,11 +116,11 @@ static void discard_format(ClipFormat *item)
 {
     if (item->mapping)
         lx_execution_unmap(GProcessState.execution, item->mapping);
-    else if (item->data && !(item->flags & 1))
+    else if (item->data && !(item->flags & CFI_OWNERFREE))
     {
-        if (item->format == 2)
+        if (item->format == CF_BITMAP)
             lx_pm_bitmap_delete(item->data);
-        else if ((item->flags & 0x400) && GProcessState.execution)
+        else if ((item->flags & CFI_POINTER) && GProcessState.execution)
         {
             ClipboardFree *pending = malloc(sizeof *pending);
             if (pending)
@@ -172,7 +188,7 @@ static size_t rtf_length(const unsigned char *bytes, size_t size)
                     continue;
                 while (at < size && isdigit(bytes[at]))
                 {
-                    if (length > 64 * 1024 * 1024 / 10)
+                    if (length > MAX_CLIPBOARD_DATA / 10)
                         return 0;
                     length = length * 10 + bytes[at++] - '0';
                 }
@@ -196,8 +212,8 @@ static void *copy_pointer(ClipFormat *item, size_t *size)
         return NULL;
     size_t offset = (size_t)item->data - lx_execution_mapping_address(mapping);
     size_t capacity = lx_execution_mapping_size(mapping) - offset;
-    if (capacity > 16 * 1024 * 1024)
-        capacity = 16 * 1024 * 1024;
+    if (capacity > MAX_GUEST_DATA_SCAN)
+        capacity = MAX_GUEST_DATA_SCAN;
     if (item->length && item->length + 1 < capacity)
         capacity = item->length + 1;
     LxGuestBorrow borrow = {0};
@@ -212,20 +228,22 @@ static void *copy_pointer(ClipFormat *item, size_t *size)
     {
         if (item->length)
             length = item->length;
-        else if (capacity >= 20 && !memcmp(source, "\x89PNG\r\n\x1a\n", 8))
-            for (size_t at = 8; at <= capacity - 12;)
+        else if (capacity >= PNG_SIGNATURE_SIZE + PNG_CHUNK_OVERHEAD &&
+                 !memcmp(source, "\x89PNG\r\n\x1a\n", PNG_SIGNATURE_SIZE))
+            /* An unsized PNG ends with its IEND chunk. */
+            for (size_t at = PNG_SIGNATURE_SIZE; at <= capacity - PNG_CHUNK_OVERHEAD;)
             {
                 uint32_t chunk = (uint32_t)source[at] << 24 | (uint32_t)source[at + 1] << 16 |
                                  (uint32_t)source[at + 2] << 8 | source[at + 3];
-                if (chunk > capacity - at - 12)
+                if (chunk > capacity - at - PNG_CHUNK_OVERHEAD)
                     break;
-                if (!memcmp(source + at + 4, "IEND", 4))
+                if (!memcmp(source + at + PNG_CHUNK_TYPE_OFFSET, "IEND", 4))
                 {
                     if (!chunk)
-                        length = at + 12;
+                        length = at + PNG_CHUNK_OVERHEAD;
                     break;
                 }
-                at += (size_t)chunk + 12;
+                at += (size_t)chunk + PNG_CHUNK_OVERHEAD;
             }
     }
     else if (item->name && format_mime(item->format, item->name) &&
@@ -286,7 +304,7 @@ static void *provide_clipboard(void *context, const char *mime, size_t *size)
     {
         const char *candidate = format_mime(item->format, item->name);
         if (candidate &&
-            (!strcmp(candidate, mime) || (item->format == 2 && !strcmp(mime, "image/bmp"))))
+            (!strcmp(candidate, mime) || (item->format == CF_BITMAP && !strcmp(mime, "image/bmp"))))
             break;
         item = item->next;
     }
@@ -307,12 +325,12 @@ static void *provide_clipboard(void *context, const char *mime, size_t *size)
     void *bytes = NULL;
     if (item && item->data)
     {
-        if (format == 2)
+        if (format == CF_BITMAP)
             bytes = bitmap_bytes(item->data, mime, size);
         else
         {
             bytes = copy_pointer(item, size);
-            if (bytes && format == 1)
+            if (bytes && format == CF_TEXT)
             {
                 void *converted = lx_host_clipboard_text_utf8(item->codepage, bytes, *size, size);
                 free(bytes);
@@ -334,9 +352,10 @@ static BOOL publish_clipboard(void)
 {
     if (!lock_clipboard())
         return FALSE;
-    LxHostClipboardItem items[64] = {{0}};
+    LxHostClipboardItem items[MAX_OFFERED_TYPES] = {{0}};
     size_t count = 0;
-    for (ClipFormat *item = formats; item && count < 63; item = item->next)
+    /* Leave room for the second type a bitmap offers. */
+    for (ClipFormat *item = formats; item && count < MAX_OFFERED_TYPES - 1; item = item->next)
     {
         const char *mime = format_mime(item->format, item->name);
         if (!mime)
@@ -347,7 +366,7 @@ static BOOL publish_clipboard(void)
                 duplicate = TRUE;
         if (!duplicate)
             items[count++].mime = mime;
-        if (item->format == 2)
+        if (item->format == CF_BITMAP)
             items[count++].mime = "image/bmp";
     }
     /* MIME names are static strings, and providers copy guest data on demand. */
@@ -451,7 +470,7 @@ static ULONG host_format(ULONG format)
     if (changing)
         return 0;
     const char *name = NULL;
-    if (format >= 0xc000 && lock_clipboard())
+    if (format >= FIRST_STRING_ATOM && lock_clipboard())
     {
         const char *found = systemAtomName(format);
         name = found ? strdup(found) : NULL;
@@ -459,9 +478,9 @@ static ULONG host_format(ULONG format)
     }
     const char *mime = format_mime(format, name);
     BOOL available = mime && lx_host_clipboard_has(mime);
-    if (!available && format == 1)
+    if (!available && format == CF_TEXT)
         available = lx_host_clipboard_has("text/plain");
-    if (!available && format == 2)
+    if (!available && format == CF_BITMAP)
         available = lx_host_clipboard_has("image/bmp");
     if (!available && mime && !strcmp(mime, "text/rtf"))
         available = lx_host_clipboard_has("application/rtf");
@@ -484,21 +503,21 @@ BOOL WinQueryClipbrdFmtInfo(HAB hab, ULONG format, PULONG flags)
         return TRUE;
     if (!host_format(format))
         return FALSE;
-    *flags = format == 2 ? 0x200 : 0x400;
+    *flags = format == CF_BITMAP ? CFI_HANDLE : CFI_POINTER;
     return TRUE;
 }
 
 static void import_host_formats(void)
 {
     static const char *names[] = {"Rich Text Format", "HTML Format", "PNG", NULL};
-    ULONG list[5] = {1, 2, 0, 0, 0};
+    ULONG list[5] = {CF_TEXT, CF_BITMAP, 0, 0, 0};
     for (unsigned i = 0; names[i]; i++)
-        list[i + 2] = WinFindAtom(1, (PSZ)names[i]);
+        list[i + 2] = WinFindAtom(SYSTEM_ATOM_TABLE, (PSZ)names[i]);
     /* Only create registered atoms when that native MIME is advertised. */
     const char *mimes[] = {"text/rtf", "text/html", "image/png"};
     for (unsigned i = 0; names[i]; i++)
         if (!list[i + 2] && lx_host_clipboard_has(mimes[i]))
-            list[i + 2] = WinAddAtom(1, (PSZ)names[i]);
+            list[i + 2] = WinAddAtom(SYSTEM_ATOM_TABLE, (PSZ)names[i]);
     for (unsigned i = 0; i < 5; i++)
     {
         ULONG format = list[i];
@@ -511,9 +530,9 @@ static void import_host_formats(void)
             {
                 item->format = format;
                 item->serial = ++clipboard_serial;
-                item->flags = format == 2 ? 0x200 : 0x400;
-                item->codepage =
-                    GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+                item->flags = format == CF_BITMAP ? CFI_HANDLE : CFI_POINTER;
+                item->codepage = GProcessState.process_codepage ? GProcessState.process_codepage
+                                                                : DEFAULT_CODEPAGE;
                 item->imported = 1;
                 const char *name = systemAtomName(format);
                 item->name = name ? strdup(name) : NULL;
@@ -538,8 +557,9 @@ static void import_requested_format(ULONG format)
         {
             item->format = format;
             item->serial = ++clipboard_serial;
-            item->flags = format == 2 ? 0x200 : 0x400;
-            item->codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+            item->flags = format == CF_BITMAP ? CFI_HANDLE : CFI_POINTER;
+            item->codepage =
+                GProcessState.process_codepage ? GProcessState.process_codepage : DEFAULT_CODEPAGE;
             item->imported = 1;
             const char *name = systemAtomName(format);
             item->name = name ? strdup(name) : NULL;
@@ -579,9 +599,10 @@ ULONG WinEnumClipbrdFmts(HAB hab, ULONG format)
 
 static BOOL install_bytes(ClipFormat *item, const void *bytes, size_t size)
 {
-    if (!GProcessState.execution || size > 64 * 1024 * 1024)
+    if (!GProcessState.execution || size > MAX_CLIPBOARD_DATA)
         return FALSE;
-    size_t capacity = (size + 4096) & ~(size_t)4095;
+    /* Room for a terminating NUL. */
+    size_t capacity = (size + 1 + PM_GUEST_PAGE_SIZE - 1) & ~(size_t)(PM_GUEST_PAGE_SIZE - 1);
     LxGuestMapping *mapping =
         lx_execution_map(GProcessState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
@@ -631,17 +652,17 @@ ULONG WinQueryClipbrdData(HAB hab, ULONG format)
     {
         size_t size = 0;
         void *bytes = lx_host_clipboard_read(mime, &size);
-        if (!bytes && format == 1)
+        if (!bytes && format == CF_TEXT)
             bytes = lx_host_clipboard_read("text/plain", &size);
-        if (!bytes && format == 2)
+        if (!bytes && format == CF_BITMAP)
             bytes = lx_host_clipboard_read("image/bmp", &size), mime = "image/bmp";
         if (!bytes && !strcmp(mime, "text/rtf"))
             bytes = lx_host_clipboard_read("application/rtf", &size);
-        if (bytes && format == 1)
+        if (bytes && format == CF_TEXT)
         {
             void *converted = lx_host_clipboard_text_os2(
-                GProcessState.process_codepage ? GProcessState.process_codepage : 437, bytes, size,
-                &size);
+                GProcessState.process_codepage ? GProcessState.process_codepage : DEFAULT_CODEPAGE,
+                bytes, size, &size);
             free(bytes);
             bytes = converted;
         }
@@ -652,7 +673,7 @@ ULONG WinQueryClipbrdData(HAB hab, ULONG format)
             bytes = html;
         }
         ULONG bitmap = 0;
-        if (bytes && format == 2)
+        if (bytes && format == CF_BITMAP)
         {
             unsigned width, height;
             uint8_t *rgba = lx_host_clipboard_decode_image(mime, bytes, size, &width, &height);
@@ -678,7 +699,7 @@ ULONG WinQueryClipbrdData(HAB hab, ULONG format)
             item = find_format(format);
             if (item && item->serial == serial && item->imported && !item->data && bytes)
             {
-                if (format == 2)
+                if (format == CF_BITMAP)
                     item->data = bitmap;
                 else
                     install_bytes(item, bytes, size);
@@ -698,7 +719,9 @@ ULONG WinQueryClipbrdData(HAB hab, ULONG format)
 BOOL WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !format || (flags & ~0x603u) || (flags & 0x600u) == 0x600u || !lock_clipboard())
+    const ULONG kinds = CFI_HANDLE | CFI_POINTER;
+    if (!anchor || !format || (flags & ~(ULONG)(CFI_OWNERFREE | CFI_OWNERDISPLAY | kinds)) ||
+        (flags & kinds) == kinds || !lock_clipboard())
         return FALSE;
     BOOL result =
         clipboard_open == anchor || (rendering_format == format && owner_anchor == anchor);
@@ -716,7 +739,8 @@ BOOL WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
             item->format = format;
             item->data = data;
             item->flags = flags;
-            item->codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+            item->codepage =
+                GProcessState.process_codepage ? GProcessState.process_codepage : DEFAULT_CODEPAGE;
             const char *name = systemAtomName(format);
             item->name = name ? strdup(name) : NULL;
             if (*slot)
@@ -766,9 +790,9 @@ uint64_t lx_pm_clipboard_format_serial(ULONG format)
 BOOL lx_pm_clipboard_set_bytes(HAB hab, ULONG format, const void *bytes, size_t size)
 {
     ClipFormat staged = {0};
-    if (!bytes || size > 64 * 1024 * 1024 || !install_bytes(&staged, bytes, size))
+    if (!bytes || size > MAX_CLIPBOARD_DATA || !install_bytes(&staged, bytes, size))
         return FALSE;
-    if (!WinSetClipbrdData(hab, staged.data, format, 0x400))
+    if (!WinSetClipbrdData(hab, staged.data, format, CFI_POINTER))
     {
         lx_execution_unmap(GProcessState.execution, staged.mapping);
         return FALSE;

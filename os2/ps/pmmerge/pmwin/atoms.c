@@ -5,6 +5,13 @@
 #include <strings.h>
 #include <ctype.h>
 
+enum
+{
+    MAX_ATOM_NAME = 255,
+    MAX_ATOM_TABLE_INITIAL_SIZE = 16 * 1024 * 1024,
+    MAX_ATOM_TABLE_BUCKETS = 65535
+};
+
 typedef struct SystemAtom
 {
     char *name;
@@ -21,11 +28,11 @@ typedef struct PrivateAtomTable
 } PrivateAtomTable;
 
 static PrivateAtomTable *atom_tables;
-static ULONG next_atom_table = 2;
+static ULONG next_atom_table = SYSTEM_ATOM_TABLE + 1;
 
 static BOOL valid_atom_table(ULONG table)
 {
-    if (table == 1)
+    if (table == SYSTEM_ATOM_TABLE)
         return TRUE;
     for (PrivateAtomTable *item = atom_tables; item; item = item->next)
         if (item->handle == table)
@@ -35,7 +42,7 @@ static BOOL valid_atom_table(ULONG table)
 
 ULONG WinQuerySystemAtomTable(VOID)
 {
-    return 1;
+    return SYSTEM_ATOM_TABLE;
 }
 
 static ULONG atom_name(ULONG table, PSZ name, BOOL add)
@@ -43,7 +50,8 @@ static ULONG atom_name(ULONG table, PSZ name, BOOL add)
     if (!name)
         return 0;
     uintptr_t value = (uintptr_t)name;
-    if (value < 0x10000 || (value <= UINT32_MAX && value >= 0xffff0000))
+    /* An integer atom arrives bare or in MAKEINTATOM form. */
+    if (value < 0x10000 || (value <= UINT32_MAX && value >= PM_INTEGER_ATOM_BASE))
     {
         if (!lock_clipboard())
             return 0;
@@ -51,7 +59,7 @@ static ULONG atom_name(ULONG table, PSZ name, BOOL add)
         lx_host_mutex_unlock(clipboard_mutex);
         return result;
     }
-    if (!*name || strlen(name) > 255 || !lock_clipboard())
+    if (!*name || strlen(name) > MAX_ATOM_NAME || !lock_clipboard())
         return 0;
     if (!valid_atom_table(table))
     {
@@ -59,7 +67,7 @@ static ULONG atom_name(ULONG table, PSZ name, BOOL add)
         return 0;
     }
     SystemAtom *item = atoms;
-    ULONG id = 0xc000;
+    ULONG id = FIRST_STRING_ATOM;
     while (item && (item->table != table || strcasecmp(item->name, name)))
     {
         if (item->table == table && item->id >= id)
@@ -115,7 +123,7 @@ ULONG WinDeleteAtom(ULONG table, ULONG atom)
         lx_host_mutex_unlock(clipboard_mutex);
         return atom;
     }
-    if (atom < 0xc000)
+    if (atom < FIRST_STRING_ATOM)
     {
         lx_host_mutex_unlock(clipboard_mutex);
         return 0;
@@ -137,7 +145,8 @@ ULONG WinDeleteAtom(ULONG table, ULONG atom)
 
 ULONG WinCreateAtomTable(ULONG initial, ULONG buckets)
 {
-    if (initial > 16 * 1024 * 1024 || buckets > 65535 || !lock_clipboard())
+    if (initial > MAX_ATOM_TABLE_INITIAL_SIZE || buckets > MAX_ATOM_TABLE_BUCKETS ||
+        !lock_clipboard())
         return 0;
     PrivateAtomTable *table = next_atom_table < UINT32_MAX ? calloc(1, sizeof *table) : NULL;
     if (table)
@@ -188,7 +197,7 @@ ULONG WinQueryAtomName(ULONG table, ULONG atom, PSZ output, ULONG capacity)
         return 0;
     const char *name = NULL;
     char number[24];
-    if (atom && atom < 0xc000)
+    if (atom && atom < FIRST_STRING_ATOM)
     {
         snprintf(number, sizeof number, "#%u", (unsigned)atom);
         name = number;
@@ -215,7 +224,7 @@ ULONG WinQueryAtomName(ULONG table, ULONG atom, PSZ output, ULONG capacity)
 const char *systemAtomName(ULONG format)
 {
     for (SystemAtom *item = atoms; item; item = item->next)
-        if (item->table == 1 && item->id == format)
+        if (item->table == SYSTEM_ATOM_TABLE && item->id == format)
             return item->name;
     return NULL;
 }

@@ -1,15 +1,35 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Modal state survives reentrant destruction until its message loop returns. */
+/* Dialog windows: modal processing, dismissal, item enumeration and dialog units. Modal state
+   survives reentrant destruction until its message loop returns. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include <ctype.h>
+#include <limits.h>
 
+/* Dialog units are a quarter of the dialog font's average character width and an eighth of its
+   height. The font is System Proportional, whose 96-DPI average width and maximum baseline are
+   6 and 16 pels. */
 enum
 {
-    DIALOG_ERROR = 0xffff,
-    DIALOG_CANCEL = 2
+    DIALOG_UNITS_PER_CHAR_X = 4,
+    DIALOG_UNITS_PER_CHAR_Y = 8,
+    SYSTEM_FONT_AVERAGE_WIDTH = 6,
+    SYSTEM_FONT_HEIGHT = 16,
+    MAX_DIALOG_POINTS = 65536
+};
+
+/* Resource type (the Toolkit's bsedos.h). */
+enum
+{
+    RT_DIALOG = 4
+};
+
+/* The logical color index WinDefDlgProc loads with the dialog background. */
+enum
+{
+    DIALOG_BACKGROUND_INDEX = 254
 };
 
 typedef struct PmDialog
@@ -74,9 +94,9 @@ void dialogWordChanged(Window *window, LONG index, USHORT value)
 {
     if (!window->dialog)
         return;
-    if (index == 8) /* QWS_FLAGS / FF_DLGDISMISSED */
-        window->dialog->dismissed = (value & 0x10) != 0;
-    if (index == 10) /* QWS_RESULT */
+    if (index == QWS_FLAGS)
+        window->dialog->dismissed = (value & FF_DLGDISMISSED) != 0;
+    if (index == QWS_RESULT)
         window->dialog->result = value;
     updateWindowCyclePolicy(window);
 }
@@ -87,7 +107,7 @@ BOOL initializeDialog(Window *window)
     if (!window->dialog)
         return FALSE;
     window->dialog->references = 1;
-    window->dialog->result = DIALOG_ERROR;
+    window->dialog->result = DID_ERROR;
     window->dialog->window = window->hwnd;
     window->dialog->previous_focus = WinQueryFocus(HWND_DESKTOP);
     updateWindowCyclePolicy(window);
@@ -107,32 +127,32 @@ HWND WinEnumDlgItem(HWND dialog, HWND item, ULONG code)
     Window *parent = anchor ? getWindowFromHWND(anchor, dialog) : NULL;
     if (!parent)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
-    if (code > 7 || !parent->children)
+    if (code > EDI_PREVGROUPITEM || !parent->children)
         return 0;
     Window *current = getWindowFromHWND(anchor, item);
     while (current && current != parent && current->parent != parent)
         current = current->parent;
-    if (code >= 2 && (!current || current == parent))
+    if (code >= EDI_NEXTTABITEM && (!current || current == parent))
         return parent->children->hwnd;
     Window *start = parent->children, *end = NULL;
-    if (code >= 4)
+    if (code >= EDI_FIRSTGROUPITEM)
     {
         for (Window *w = start; w; w = w->sibling)
         {
-            if (w->style & 0x10000) /* WS_GROUP */
+            if (w->style & WS_GROUP)
                 start = w;
             if (w == current)
                 break;
         }
         end = start->sibling;
-        while (end && !(end->style & 0x10000))
+        while (end && !(end->style & WS_GROUP))
             end = end->sibling;
     }
     Window *first = NULL, *last = NULL, *previous = NULL, *next = NULL;
     BOOL passed = FALSE;
     for (Window *w = start; w != end; w = w->sibling)
     {
-        BOOL eligible = code >= 4 || (w->style & 0x20000); /* WS_TABSTOP */
+        BOOL eligible = code >= EDI_FIRSTGROUPITEM || (w->style & WS_TABSTOP);
         if (w == current)
             passed = TRUE;
         if (!eligible)
@@ -148,16 +168,16 @@ HWND WinEnumDlgItem(HWND dialog, HWND item, ULONG code)
     Window *result;
     switch (code)
     {
-        case 0:
-        case 4:
+        case EDI_FIRSTTABITEM:
+        case EDI_FIRSTGROUPITEM:
             result = first;
             break;
-        case 1:
-        case 5:
+        case EDI_LASTTABITEM:
+        case EDI_LASTGROUPITEM:
             result = last;
             break;
-        case 2:
-        case 6:
+        case EDI_NEXTTABITEM:
+        case EDI_NEXTGROUPITEM:
             result = next ? next : first;
             break;
         default:
@@ -222,8 +242,9 @@ BOOL WinDismissDlg(HWND handle, ULONG result)
     if (!dialog)
         return FALSE;
     dialog->references++;
-    WinSetWindowUShort(handle, 8, WinQueryWindowUShort(handle, 8) | 0x10);
-    WinSetWindowUShort(handle, 10, (USHORT)result);
+    WinSetWindowUShort(handle, QWS_FLAGS,
+                       WinQueryWindowUShort(handle, QWS_FLAGS) | FF_DLGDISMISSED);
+    WinSetWindowUShort(handle, QWS_RESULT, (USHORT)result);
     dialog->dismissed = TRUE;
     dialog->result = result;
     WinShowWindow(handle, FALSE);
@@ -236,16 +257,16 @@ static BOOL dialog_key(AnchorBlock *anchor, HWND dialog, const QMSG *message)
 {
     ULONG flags = (USHORT)(uintptr_t)message->mp1;
     unsigned key = (USHORT)((uintptr_t)message->mp2 >> 16);
-    if (message->msg != WM_CHAR || !(flags & 2) || (flags & 0x40))
+    if (message->msg != WM_CHAR || !(flags & KC_VIRTUALKEY) || (flags & KC_KEYUP))
         return FALSE;
-    if (key == 6) /* VK_TAB */
+    if (key == VK_TAB)
     {
         HWND first = 0, previous = 0, next = 0;
         BOOL found = FALSE;
         for (size_t i = 0; i < anchor->windows_array_len; i++)
         {
             Window *w = anchor->windows[i];
-            if (!w || !w->hwnd || !(w->style & 0x20000) || !WinIsChild(w->hwnd, dialog))
+            if (!w || !w->hwnd || !(w->style & WS_TABSTOP) || !WinIsChild(w->hwnd, dialog))
                 continue;
             BOOL visible = windowAcceptsInput(w);
             for (Window *p = w; p && p != &desktop_window; p = p->parent)
@@ -260,7 +281,7 @@ static BOOL dialog_key(AnchorBlock *anchor, HWND dialog, const QMSG *message)
             if (w->hwnd == anchor->focus)
             {
                 found = TRUE;
-                if (flags & 8)
+                if (flags & KC_SHIFT)
                     next = previous;
             }
             if (!found)
@@ -271,24 +292,25 @@ static BOOL dialog_key(AnchorBlock *anchor, HWND dialog, const QMSG *message)
         return TRUE;
     }
     Window *focused = getWindowFromHWND(anchor, anchor->focus);
-    if ((key == 0x1e || key == 8) && focused && focused->window_class_name &&
+    /* A multi-line entry field keeps Enter for itself. */
+    if ((key == VK_ENTER || key == VK_NEWLINE) && focused && focused->window_class_name &&
         !strcmp(focused->window_class_name, "#10"))
         return FALSE;
-    if (key == 0xf || key == 0x1e || key == 8) /* Escape / Enter / Newline */
+    if (key == VK_ESC || key == VK_ENTER || key == VK_NEWLINE)
     {
-        ULONG id = key == 0xf ? 2 : 1;
-        if (id == 1)
+        ULONG id = key == VK_ESC ? DID_CANCEL : DID_OK;
+        if (id == DID_OK)
             for (size_t i = 0; i < anchor->windows_array_len; i++)
             {
                 Window *w = anchor->windows[i];
-                if (w && w->hwnd && w->enabled && (w->style & WS_VISIBLE) && (w->style & 0x400) &&
-                    WinIsChild(w->hwnd, dialog))
+                if (w && w->hwnd && w->enabled && (w->style & WS_VISIBLE) &&
+                    (w->style & BS_DEFAULT) && WinIsChild(w->hwnd, dialog))
                 {
                     id = w->id;
                     break;
                 }
             }
-        WinPostMsg(dialog, WM_COMMAND, (MPARAM)(uintptr_t)id, (MPARAM)(uintptr_t)1);
+        WinPostMsg(dialog, WM_COMMAND, (MPARAM)(uintptr_t)id, (MPARAM)(uintptr_t)CMDSRC_PUSHBUTTON);
         return TRUE;
     }
     return FALSE;
@@ -301,7 +323,7 @@ ULONG WinProcessDlg(HWND handle)
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     PmDialog *dialog = window ? window->dialog : NULL;
     if (!dialog || dialog->processing)
-        return DIALOG_ERROR;
+        return DID_ERROR;
     dialog->references++;
     dialog->processing = TRUE;
     updateWindowCyclePolicy(window);
@@ -323,7 +345,7 @@ ULONG WinProcessDlg(HWND handle)
         QMSG message = {0};
         if (!WinGetMsg(anchor->hab, &message, 0, 0, 0))
         {
-            WinDismissDlg(handle, DIALOG_CANCEL);
+            WinDismissDlg(handle, DID_CANCEL);
             if (message.msg == WM_QUIT)
                 WinPostQueueMsg(anchor->message_queue.hmq, WM_QUIT, message.mp1, message.mp2);
             break;
@@ -352,8 +374,9 @@ HWND WinLoadDlg(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG 
     if (!anchor)
         return 0;
     if (!GProcessState.getResource || !GProcessState.queryResourceSize ||
-        !GProcessState.freeResource || GProcessState.queryResourceSize(module, 4, id, &size) ||
-        GProcessState.getResource(module, 4, id, &data))
+        !GProcessState.freeResource ||
+        GProcessState.queryResourceSize(module, RT_DIALOG, id, &size) ||
+        GProcessState.getResource(module, RT_DIALOG, id, &data))
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
     HWND result = createDialog(parent, owner, procedure, data, size, parameters, module);
     GProcessState.freeResource(data);
@@ -367,7 +390,7 @@ ULONG WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG 
                  (uint)module, (uint)id, parameters);
     HWND window = WinLoadDlg(parent, owner, procedure, module, id, parameters);
     if (!window)
-        return DIALOG_ERROR;
+        return DID_ERROR;
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PmDialog *dialog = getWindowFromHWND(anchor, window)->dialog;
     dialog->references++;
@@ -391,7 +414,7 @@ MRESULT WinDefDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_CLOSE || message == WM_COMMAND)
     {
-        WinDismissDlg(window, message == WM_CLOSE ? DIALOG_CANCEL : (USHORT)(uintptr_t)first);
+        WinDismissDlg(window, message == WM_CLOSE ? DID_CANCEL : (USHORT)(uintptr_t)first);
         return 0;
     }
     if (message == WM_PAINT)
@@ -400,10 +423,11 @@ MRESULT WinDefDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
         HPS space = WinBeginPaint(window, 0, &rect);
         if (space)
         {
-            LONG color = windowPresentationColor(getWindowFromHWND(getAnchorBlockNoHAB(), window),
-                                                 FALSE, WinQuerySysColor(HWND_DESKTOP, -34, 0));
-            if (lx_pm_color_table(space, 0, 2, 254, 1, &color))
-                WinFillRect(space, &rect, 254);
+            LONG color =
+                windowPresentationColor(getWindowFromHWND(getAnchorBlockNoHAB(), window), FALSE,
+                                        WinQuerySysColor(HWND_DESKTOP, SYSCLR_DIALOGBACKGROUND, 0));
+            if (lx_pm_color_table(space, 0, LCOLF_CONSECRGB, DIALOG_BACKGROUND_INDEX, 1, &color))
+                WinFillRect(space, &rect, DIALOG_BACKGROUND_INDEX);
             paintFrameBorder(getWindowFromHWND(getAnchorBlockNoHAB(), window), space);
             WinEndPaint(space);
         }
@@ -438,15 +462,15 @@ static BOOL mapDialogCoordinate(LONG input, LONG numerator, LONG divisor, LONG *
 BOOL WinMapDlgPoints(HWND window, PPOINTL points, ULONG count, BOOL to_pixels)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (count > 65536 || (count && !points) || !anchor || !getWindowFromHWND(anchor, window))
+    if (count > MAX_DIALOG_POINTS || (count && !points) || !anchor ||
+        !getWindowFromHWND(anchor, window))
         return FALSE;
     unsigned dpi = lx_pm_dc_dpi(0);
     if (DialogMetrics.dpi != dpi)
     {
-        /* System Proportional's 96-DPI average width and maximum baseline.
-           Presentation fonts affect text, independently of template coordinates. */
-        DialogMetrics.width = lx_pm_display_scale(6);
-        DialogMetrics.height = lx_pm_display_scale(16);
+        /* Presentation fonts affect text, independently of template coordinates. */
+        DialogMetrics.width = lx_pm_display_scale(SYSTEM_FONT_AVERAGE_WIDTH);
+        DialogMetrics.height = lx_pm_display_scale(SYSTEM_FONT_HEIGHT);
         DialogMetrics.dpi = dpi;
     }
     LONG factors[2] = {DialogMetrics.width, DialogMetrics.height};
@@ -457,18 +481,21 @@ BOOL WinMapDlgPoints(HWND window, PPOINTL points, ULONG count, BOOL to_pixels)
             LONG output;
             if (!mapDialogCoordinate(j ? points[i].y : points[i].x,
                                      to_pixels ? factors[j]
-                                     : j       ? 8
-                                               : 4,
-                                     to_pixels ? (j ? 8 : 4) : factors[j], &output))
+                                     : j       ? DIALOG_UNITS_PER_CHAR_Y
+                                               : DIALOG_UNITS_PER_CHAR_X,
+                                     to_pixels
+                                         ? (j ? DIALOG_UNITS_PER_CHAR_Y : DIALOG_UNITS_PER_CHAR_X)
+                                         : factors[j],
+                                     &output))
                 return FALSE;
         }
     }
     for (ULONG i = 0; i < count; i++)
     {
-        mapDialogCoordinate(points[i].x, to_pixels ? factors[0] : 4, to_pixels ? 4 : factors[0],
-                            &points[i].x);
-        mapDialogCoordinate(points[i].y, to_pixels ? factors[1] : 8, to_pixels ? 8 : factors[1],
-                            &points[i].y);
+        mapDialogCoordinate(points[i].x, to_pixels ? factors[0] : DIALOG_UNITS_PER_CHAR_X,
+                            to_pixels ? DIALOG_UNITS_PER_CHAR_X : factors[0], &points[i].x);
+        mapDialogCoordinate(points[i].y, to_pixels ? factors[1] : DIALOG_UNITS_PER_CHAR_Y,
+                            to_pixels ? DIALOG_UNITS_PER_CHAR_Y : factors[1], &points[i].y);
     }
     return TRUE;
 }
@@ -501,10 +528,10 @@ BOOL WinQueryDlgItemShort(HWND parent, ULONG id, PSHORT output, BOOL signed_valu
     for (; *p >= '0' && *p <= '9'; p++)
     {
         ULONG digit = (ULONG)(*p - '0');
-        if (value > 6553 || (value == 6553 && digit > 5))
+        if (value > USHRT_MAX / 10 || (value == USHRT_MAX / 10 && digit > USHRT_MAX % 10))
             return FALSE;
         value = value * 10 + digit;
-        if (signed_value && value > 32767)
+        if (signed_value && value > SHRT_MAX)
             return FALSE;
     }
     if (*p)

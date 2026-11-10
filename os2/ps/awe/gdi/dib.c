@@ -28,7 +28,6 @@ enum
     INDEXED_COLORS_MAX = 256,
     TRUE_COLOR_BITS = 24,
     RGB_MASK = 0xFFFFFF,
-    RGB_WHITE = 0xFFFFFF,
     /* A ternary raster operation keeps its operation index in bits 16-23. */
     RASTER_OPERATION_INDEX_SHIFT = 16,
     RASTER_OPERATION_INDEX_MASK = 0xff,

@@ -9,7 +9,6 @@
 enum
 {
     PEN_WIDTH_MAX = 32767,
-    RGB_WHITE = 0xFFFFFF,
     /* PS_ENDCAP_* and PS_JOIN_* as the 0-2 selectors Open32Pen keeps. */
     PEN_ENDCAP_SHIFT = 8,
     PEN_JOIN_SHIFT = 12,

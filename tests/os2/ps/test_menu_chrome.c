@@ -44,7 +44,8 @@ static MRESULT OS2API client_proc(HWND window, ULONG message, MPARAM first, MPAR
 static void dispatch_pending(HAB anchor)
 {
     QMSG message;
-    for (unsigned count = 0; count < 1000 && WinPeekMsg(anchor, &message, 0, 0, 0, 1); count++)
+    for (unsigned count = 0; count < 1000 && WinPeekMsg(anchor, &message, 0, 0, 0, PM_REMOVE);
+         count++)
         WinDispatchMsg(anchor, &message);
 }
 
@@ -64,7 +65,7 @@ int main(void)
     CHECK(lxRuntimeWindowChrome() == LX_CHROME_BOTH);
     HWND parent = WinCreateWindow(HWND_DESKTOP, "menu-parent", "Menu test", WS_VISIBLE, 0, 0, 300,
                                   200, 0, HWND_TOP, 1, NULL, NULL);
-    ULONG flags = 1 | 2 | 0x100;
+    ULONG flags = FCF_TITLEBAR | FCF_SYSMENU | FCF_DLGBORDER;
     HWND client = 0;
     HWND frame = WinCreateStdWindow(parent, WS_VISIBLE, &flags, "menu-parent", "Child frame", 0, 0,
                                     0, &client);
@@ -72,8 +73,10 @@ int main(void)
     CHECK(WinSetWindowPos(frame, HWND_TOP, 10, 10, 200, 140, SWP_MOVE | SWP_SIZE | SWP_SHOW));
     HWND system = WinWindowFromID(frame, FID_SYSMENU);
     Window *button = lx_pm_menu_window(system);
-    CHECK(button && (button->style & 3) == 3 && button->menu->count == 1);
-    CHECK(button->w == button->h && button->h == WinQuerySysValue(HWND_DESKTOP, 30));
+    CHECK(button &&
+          (button->style & (MS_ACTIONBAR | MS_TITLEBUTTON)) == (MS_ACTIONBAR | MS_TITLEBUTTON) &&
+          button->menu->count == 1);
+    CHECK(button->w == button->h && button->h == WinQuerySysValue(HWND_DESKTOP, SV_CYTITLEBAR));
     WinSendMsg(system, WM_PAINT, 0, 0);
     RECTL rectangle = button->menu->items[0].rect;
     CHECK(rectangle.xLeft == 0 && rectangle.yBottom == 0 && rectangle.xRight == button->w &&
@@ -87,15 +90,15 @@ int main(void)
     WinSendMsg(system, WM_BUTTON1DOWN,
                (MPARAM)(uintptr_t)((unsigned)(button->w / 2) | (unsigned)(button->h / 2) << 16), 0);
     CHECK(WinIsWindowVisible(popup));
-    WinSendMsg(popup, 0x186, 0, 0); /* MM_ENDMENUMODE */
+    WinSendMsg(popup, MM_ENDMENUMODE, 0, 0);
     CHECK(!WinIsWindowVisible(popup));
     /* Maximized document frames may merge their system button into an action bar. */
-    HWND merged = WinCreateWindow(parent, (PSZ)WC_MENU, NULL, 1 | WS_VISIBLE, 0, 0, 280, 24, parent,
-                                  HWND_TOP, FID_MENU, NULL, NULL);
-    MENUITEM item = {-1, 0x11, 0, 0x8007, popup, 0};
-    CHECK(merged && (intptr_t)WinSendMsg(merged, 0x180, &item, "~System") != -1);
-    item = (MENUITEM){-1, 1, 0, 42, 0, 0};
-    CHECK((intptr_t)WinSendMsg(merged, 0x180, &item, "~File") != -1);
+    HWND merged = WinCreateWindow(parent, (PSZ)WC_MENU, NULL, MS_ACTIONBAR | WS_VISIBLE, 0, 0, 280,
+                                  24, parent, HWND_TOP, FID_MENU, NULL, NULL);
+    MENUITEM item = {MIT_END, MIS_TEXT | MIS_SUBMENU, 0, SC_SYSMENU, popup, 0};
+    CHECK(merged && (intptr_t)WinSendMsg(merged, MM_INSERTITEM, &item, "~System") != MIT_ERROR);
+    item = (MENUITEM){MIT_END, MIS_TEXT, 0, 42, 0, 0};
+    CHECK((intptr_t)WinSendMsg(merged, MM_INSERTITEM, &item, "~File") != MIT_ERROR);
     WinSendMsg(merged, WM_PAINT, 0, 0);
     Window *action = lx_pm_menu_window(merged);
     CHECK(action && action->menu->items[0].rect.xRight == action->h);
@@ -105,14 +108,16 @@ int main(void)
     Window *commands = lx_pm_menu_window(popup);
     CHECK(commands && commands->menu->active_parent == merged);
     PmMenuItem *close = &commands->menu->items[commands->menu->count - 1];
-    CHECK(close->item.id == 0x8004);
+    CHECK(close->item.id == SC_CLOSE);
     WinSendMsg(popup, WM_BUTTON1DOWN, point(close->rect.xLeft + 2, close->rect.yBottom + 2), 0);
     dispatch_pending(anchor);
     CHECK(!WinIsWindowVisible(popup) && !action->menu->focus && closed_client == client);
-    HWND generic = WinCreateWindow(parent, (PSZ)WC_MENU, NULL, 3 | WS_VISIBLE, 0, 0, 280, 24,
-                                   parent, HWND_TOP, 0x9001, NULL, NULL);
-    item = (MENUITEM){-1, 1, 0, 42, 0, 0};
-    CHECK(generic && (intptr_t)WinSendMsg(generic, 0x180, &item, "A custom title button") != -1);
+    HWND generic =
+        WinCreateWindow(parent, (PSZ)WC_MENU, NULL, MS_ACTIONBAR | MS_TITLEBUTTON | WS_VISIBLE, 0,
+                        0, 280, 24, parent, HWND_TOP, 0x9001, NULL, NULL);
+    item = (MENUITEM){MIT_END, MIS_TEXT, 0, 42, 0, 0};
+    CHECK(generic && (intptr_t)WinSendMsg(generic, MM_INSERTITEM, &item, "A custom title button") !=
+                         MIT_ERROR);
     WinSendMsg(generic, WM_PAINT, 0, 0);
     Window *custom = lx_pm_menu_window(generic);
     CHECK(custom && custom->menu->items[0].rect.xRight > custom->h);
@@ -122,7 +127,7 @@ int main(void)
     {
         CHECK(lxRuntimeConfigureFeature("window_chrome", modes[mode]) == 1);
         CHECK(lxRuntimeWindowChrome() == (int)mode);
-        ULONG controls = 1 | 2 | 8 | 0x30;
+        ULONG controls = FCF_TITLEBAR | FCF_SYSMENU | FCF_SIZEBORDER | FCF_MINMAX;
         HWND top_client = 0;
         HWND top = WinCreateStdWindow(HWND_DESKTOP, WS_VISIBLE, &controls, "menu-parent",
                                       "Top frame", 0, 0, 0, &top_client);
@@ -141,7 +146,7 @@ int main(void)
               before.cy == after.cy);
         for (unsigned i = 0; i < 4; i++)
         {
-            CHECK(WinQueryWindow(records[i].hwnd, 5) == top); /* QW_PARENT */
+            CHECK(WinQueryWindow(records[i].hwnd, QW_PARENT) == top);
             if (mode == LX_CHROME_NATIVE && records[i].hwnd != top_client)
                 CHECK((records[i].fl & SWP_HIDE) && !(records[i].fl & SWP_SHOW));
             for (unsigned j = i + 1; j < 4; j++)
@@ -158,15 +163,15 @@ int main(void)
         {
             CHECK(before.x > 0 && before.cy < 160);
             Window *buttons = lx_pm_menu_window(minmax);
-            LONG button_width = WinQuerySysValue(HWND_DESKTOP, 33);
+            LONG button_width = WinQuerySysValue(HWND_DESKTOP, SV_CXMINMAXBUTTON);
             CHECK(buttons && buttons->menu->count == 2 && buttons->w == button_width * 2);
             WinSendMsg(minmax, WM_PAINT, 0, 0);
             WinSendMsg(minmax, WM_BUTTON1DOWN, point(button_width + 2, 2), 0);
             dispatch_pending(anchor);
-            CHECK(WinQueryWindowULong(top, -2) & WS_MAXIMIZED);
+            CHECK(WinQueryWindowULong(top, QWL_STYLE) & WS_MAXIMIZED);
             WinSendMsg(minmax, WM_BUTTON1DOWN, point(button_width + 2, 2), 0);
             dispatch_pending(anchor);
-            CHECK(!(WinQueryWindowULong(top, -2) & WS_MAXIMIZED));
+            CHECK(!(WinQueryWindowULong(top, QWL_STYLE) & WS_MAXIMIZED));
             CHECK(WinQueryWindowPos(top, &after) && after.x == 20 && after.y == 25 &&
                   after.cx == 240 && after.cy == 160);
             WinSendMsg(title, WM_BUTTON1DOWN, point(10, 10), 0);
@@ -197,16 +202,16 @@ int main(void)
             dispatch_pending(anchor);
             CHECK(!WinQueryCapture(HWND_DESKTOP));
         }
-        WinSendMsg(top, WM_SYSCOMMAND, (MPARAM)(uintptr_t)0x8002, 0);
-        CHECK(WinQueryWindowULong(top, -2) & WS_MINIMIZED);
+        WinSendMsg(top, WM_SYSCOMMAND, (MPARAM)(uintptr_t)SC_MINIMIZE, 0);
+        CHECK(WinQueryWindowULong(top, QWL_STYLE) & WS_MINIMIZED);
         LxHostEvent restored = {.type = LX_HOST_EVENT_RESTORED, .window_data = test_window(top)};
         CHECK(processHostEvent(test_anchor(), &restored));
-        CHECK(!(WinQueryWindowULong(top, -2) & (WS_MINIMIZED | WS_MAXIMIZED)));
+        CHECK(!(WinQueryWindowULong(top, QWL_STYLE) & (WS_MINIMIZED | WS_MAXIMIZED)));
         CHECK(!!WinIsWindowVisible(sys) == (mode != LX_CHROME_NATIVE));
         CHECK(WinSetParent(top, parent, TRUE));
         CHECK(WinIsWindowVisible(title) && WinIsWindowVisible(sys) && WinIsWindowVisible(minmax));
-        WinSendMsg(top, WM_SYSCOMMAND, (MPARAM)(uintptr_t)0x8002, 0);
-        CHECK(WinQueryWindowULong(top, -2) & WS_MINIMIZED);
+        WinSendMsg(top, WM_SYSCOMMAND, (MPARAM)(uintptr_t)SC_MINIMIZE, 0);
+        CHECK(WinQueryWindowULong(top, QWL_STYLE) & WS_MINIMIZED);
         /* SV_DBLCLKTIME and the double-click rectangle decide the second press. */
         LxHostEvent double_click = {.type = LX_HOST_EVENT_BUTTON_DOWN,
                                     .window_data = test_window(parent),
@@ -219,12 +224,12 @@ int main(void)
         double_click.clicks = 2;
         CHECK(processHostEvent(test_anchor(), &double_click));
         dispatch_pending(anchor);
-        CHECK(!(WinQueryWindowULong(top, -2) & WS_MINIMIZED) && WinIsWindowVisible(title));
+        CHECK(!(WinQueryWindowULong(top, QWL_STYLE) & WS_MINIMIZED) && WinIsWindowVisible(title));
         CHECK(WinSetParent(top, HWND_DESKTOP, TRUE));
         CHECK(!!WinIsWindowVisible(title) == (mode != LX_CHROME_NATIVE));
         CHECK(WinDestroyWindow(top));
     }
-    ULONG fixed_flags = 1 | 2 | 0x100;
+    ULONG fixed_flags = FCF_TITLEBAR | FCF_SYSMENU | FCF_DLGBORDER;
     HWND fixed = WinCreateStdWindow(HWND_DESKTOP, WS_VISIBLE, &fixed_flags, "menu-parent",
                                     "Fixed dialog", 0, 0, 0, &client);
     CHECK(fixed && WinSetWindowPos(fixed, HWND_TOP, 0, 0, 240, 160, SWP_SIZE));
@@ -240,13 +245,13 @@ int main(void)
     CHECK(WinQueryWindowPos(fixed, &unchanged) && unchanged.cx == 240 && unchanged.cy == 160);
     /* Fixed dialogs can still change size at the application's request. */
     CHECK(WinSetWindowPos(fixed, HWND_TOP, 0, 0, 260, 180, SWP_SIZE));
-    ULONG fixed_style = WinQueryWindowULong(fixed, -2);
-    CHECK(WinSetWindowULong(fixed, -2, fixed_style | 0x800));
+    ULONG fixed_style = WinQueryWindowULong(fixed, QWL_STYLE);
+    CHECK(WinSetWindowULong(fixed, QWL_STYLE, fixed_style | FS_SIZEBORDER));
     if (native_resize_flags)
         CHECK(lx_host_window_is_resizable(test_window(fixed)->heavy.window));
     CHECK(processHostEvent(test_anchor(), &resize));
     CHECK(WinQueryWindowPos(fixed, &unchanged) && unchanged.cx == 561 && unchanged.cy == 426);
-    CHECK(WinSetWindowULong(fixed, -2, fixed_style));
+    CHECK(WinSetWindowULong(fixed, QWL_STYLE, fixed_style));
     if (native_resize_flags)
         CHECK(!lx_host_window_is_resizable(test_window(fixed)->heavy.window));
     CHECK(WinDestroyWindow(fixed));

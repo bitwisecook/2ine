@@ -22,6 +22,15 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
+enum
+{
+    LIST_ID = 902,
+    KEY_DOWN = 0x8000, /* WinGetKeyState: the key is down */
+    KEY_FLAGS = KC_CHAR | KC_VIRTUALKEY | KC_SCANCODE,
+    MICRO_PELS = PU_PELS | GPIT_MICRO | GPIA_ASSOC
+};
+
 static unsigned creates, sizes, changes;
 static unsigned hook_calls;
 static unsigned selections;
@@ -57,13 +66,16 @@ static void pointer_contracts(HPS ps)
 {
     CHECK((uintptr_t)WinDefWindowProc(HWND_DESKTOP, WM_CONTROLPOINTER, (MPARAM)(uintptr_t)123,
                                       (MPARAM)(uintptr_t)0x4567) == 0x4567);
-    CHECK(WinQuerySysValue(HWND_DESKTOP, 44) == 0);
+    CHECK(WinQuerySysValue(HWND_DESKTOP, SV_POINTERLEVEL) == 0);
     CHECK(WinShowPointer(HWND_DESKTOP, FALSE) && WinShowPointer(HWND_DESKTOP, FALSE));
-    CHECK(WinQuerySysValue(HWND_DESKTOP, 44) == 2);
-    CHECK(WinSetPointer(HWND_DESKTOP, 0) && WinQuerySysValue(HWND_DESKTOP, 44) == 2);
-    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) && WinQuerySysValue(HWND_DESKTOP, 44) == 1);
-    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) && WinQuerySysValue(HWND_DESKTOP, 44) == 0);
-    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) && WinQuerySysValue(HWND_DESKTOP, 44) == 0);
+    CHECK(WinQuerySysValue(HWND_DESKTOP, SV_POINTERLEVEL) == 2);
+    CHECK(WinSetPointer(HWND_DESKTOP, 0) && WinQuerySysValue(HWND_DESKTOP, SV_POINTERLEVEL) == 2);
+    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) &&
+          WinQuerySysValue(HWND_DESKTOP, SV_POINTERLEVEL) == 1);
+    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) &&
+          WinQuerySysValue(HWND_DESKTOP, SV_POINTERLEVEL) == 0);
+    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) &&
+          WinQuerySysValue(HWND_DESKTOP, SV_POINTERLEVEL) == 0);
     for (unsigned offset = 0; offset <= 32; offset += 32)
     {
         uint8_t *header = icon_resource + offset;
@@ -90,12 +102,12 @@ static void pointer_contracts(HPS ps)
     CHECK(pointer && icon_releases == 1);
     RECTL background = {0, 0, 5, 5};
     CHECK(WinFillRect(ps, &background, CLR_RED));
-    CHECK(WinDrawPointer(ps, 1, 1, pointer, 0));
+    CHECK(WinDrawPointer(ps, 1, 1, pointer, DP_NORMAL));
     uint32_t pixel;
     CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0);
     CHECK(lx_pm_raster_read(ps, 2, 1, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(lx_pm_raster_read(ps, 1, 2, 1, 1, &pixel) && pixel == 0xffffff);
-    CHECK(!WinDrawPointer(ps, 1, 1, pointer, 4));
+    CHECK(!WinDrawPointer(ps, 1, 1, pointer, DP_MINI));
     CHECK(WinDestroyPointer(pointer) && !WinDestroyPointer(pointer));
     icon_size = 30;
     CHECK(!WinLoadPointer(HWND_DESKTOP, 0, 1) && icon_releases == 2);
@@ -103,7 +115,7 @@ static void pointer_contracts(HPS ps)
     GProcessState.queryResourceSize = old_query;
     GProcessState.getResource = old_get;
     GProcessState.freeResource = old_free;
-    for (LONG id = 10; id <= 14; id++)
+    for (LONG id = SPTR_APPICON; id <= SPTR_ICONWARNING; id++)
     {
         HPOINTER shared = WinQuerySysPointer(HWND_DESKTOP, id, FALSE);
         HPOINTER copy = WinQuerySysPointer(HWND_DESKTOP, id, TRUE);
@@ -111,13 +123,13 @@ static void pointer_contracts(HPS ps)
         CHECK(shared && copy && shared != copy &&
               WinQuerySysPointer(HWND_DESKTOP, id, FALSE) == shared);
         CHECK(lx_pm_pointer_dimensions(shared, &width, &height) && width == 32 && height == 32);
-        CHECK(WinDrawPointer(ps, 0, 0, shared, 0));
+        CHECK(WinDrawPointer(ps, 0, 0, shared, DP_NORMAL));
         CHECK(!WinDestroyPointer(shared) && WinDestroyPointer(copy));
     }
-    CHECK(!WinQuerySysPointer(HWND_DESKTOP, 15, FALSE));
+    CHECK(!WinQuerySysPointer(HWND_DESKTOP, SPTR_ICONWARNING + 1, FALSE));
     HWND bitmap_control =
-        WinCreateWindow(HWND_DESKTOP, (PSZ)(uintptr_t)0xffff0005, "", WS_VISIBLE | 4 | 0x40, 0, 0,
-                        32, 24, 0, HWND_TOP, 987, NULL, NULL);
+        WinCreateWindow(HWND_DESKTOP, (PSZ)WC_STATIC, "", WS_VISIBLE | SS_BITMAP | SS_AUTOSIZE, 0,
+                        0, 32, 24, 0, HWND_TOP, 987, NULL, NULL);
     ULONG bitmap = lx_pm_bitmap_create(2, 2, 1, 24);
     LxHandleBorrow borrow = {0};
     PmBitmap *image = lx_pm_bitmap(bitmap, &borrow);
@@ -127,8 +139,8 @@ static void pointer_contracts(HPS ps)
     image->pixels[2] = 0xfedcba;
     image->pixels[3] = 0x654321;
     lx_handle_release(&borrow);
-    CHECK(!WinSendMsg(bitmap_control, 0x100, (MPARAM)(uintptr_t)bitmap, 0));
-    CHECK((ULONG)(uintptr_t)WinSendMsg(bitmap_control, 0x101, 0, 0) == bitmap);
+    CHECK(!WinSendMsg(bitmap_control, SM_SETHANDLE, (MPARAM)(uintptr_t)bitmap, 0));
+    CHECK((ULONG)(uintptr_t)WinSendMsg(bitmap_control, SM_QUERYHANDLE, 0, 0) == bitmap);
     RECTL sized;
     CHECK(WinQueryWindowRect(bitmap_control, &sized) && sized.xRight == 2 && sized.yTop == 2);
     CHECK(!GpiDeleteBitmap(bitmap) && WinUpdateWindow(bitmap_control));
@@ -143,7 +155,7 @@ static unsigned menu_initializations;
 
 static BOOL OS2API input_hook(HAB hab, PQMSG message, ULONG flags)
 {
-    CHECK(flags == 1);
+    CHECK(flags == PM_REMOVE);
     if (message->msg == WM_USER + 100)
     {
         hook_calls++;
@@ -154,7 +166,7 @@ static BOOL OS2API input_hook(HAB hab, PQMSG message, ULONG flags)
         hook_calls++;
         message->msg++;
         message->mp1 = (MPARAM)(uintptr_t)1234;
-        CHECK(WinReleaseHook(hab, 1, 1, (PFN)input_hook, 0));
+        CHECK(WinReleaseHook(hab, HMQ_CURRENT, HK_INPUT, (PFN)input_hook, 0));
     }
     return FALSE;
 }
@@ -162,20 +174,20 @@ static BOOL OS2API input_hook(HAB hab, PQMSG message, ULONG flags)
 static void hook_contracts(HAB hab, HWND window)
 {
     QMSG message;
-    while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+    while (WinPeekMsg(hab, &message, 0, 0, 0, PM_REMOVE))
         WinDispatchMsg(hab, &message);
-    CHECK(WinSetHook(hab, 1, 1, (PFN)input_hook, 0));
+    CHECK(WinSetHook(hab, HMQ_CURRENT, HK_INPUT, (PFN)input_hook, 0));
     CHECK(WinPostMsg(window, WM_USER + 100, 0, 0));
     CHECK(WinPostMsg(window, WM_USER + 101, 0, 0));
     CHECK(WinGetMsg(hab, &message, 0, 0, 0));
     CHECK(hook_calls == 2 && message.msg == WM_USER + 102 && (uintptr_t)message.mp1 == 1234);
-    CHECK(!WinReleaseHook(hab, 1, 1, (PFN)input_hook, 0));
+    CHECK(!WinReleaseHook(hab, HMQ_CURRENT, HK_INPUT, (PFN)input_hook, 0));
 }
 
 static void busy_queue_host_events(HAB hab, HWND window)
 {
     QMSG message;
-    while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+    while (WinPeekMsg(hab, &message, 0, 0, 0, PM_REMOVE))
         WinDispatchMsg(hab, &message);
     CHECK(WinPostMsg(window, WM_USER + 150, 0, 0));
     LxHostEvent quit = {.type = LX_HOST_EVENT_QUIT};
@@ -191,18 +203,18 @@ static void busy_queue_host_events(HAB hab, HWND window)
 
 static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
 {
-    if (message == WM_CONTROL && (ULONG)(uintptr_t)a == (902 | 1u << 16))
+    if (message == WM_CONTROL && (ULONG)(uintptr_t)a == (LIST_ID | LN_SELECT << 16))
     {
-        CHECK((LONG)(intptr_t)WinSendMsg((HWND)(uintptr_t)b, 0x165, (MPARAM)(intptr_t)-1, 0) ==
-              expected_selection);
+        CHECK((LONG)(intptr_t)WinSendMsg((HWND)(uintptr_t)b, LM_QUERYSELECTION,
+                                         (MPARAM)(intptr_t)LIT_FIRST, 0) == expected_selection);
         selections++;
     }
     if (message == WM_INITMENU && changing_menu)
     {
         if (!menu_initializations++)
         {
-            MENUITEM extra = {0, 1, 0, 99, 0, 0};
-            CHECK((intptr_t)WinSendMsg(changing_menu, 0x180, &extra, "~Extra") == 0);
+            MENUITEM extra = {0, MIS_TEXT, 0, 99, 0, 0};
+            CHECK((intptr_t)WinSendMsg(changing_menu, MM_INSERTITEM, &extra, "~Extra") == 0);
         }
         return 0;
     }
@@ -210,7 +222,7 @@ static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
     {
         CREATESTRUCT *creation = b;
         CHECK(creation && creation->pCtlData == a);
-        CHECK(creation->hwndParent == WinQueryWindow(hwnd, 5));
+        CHECK(creation->hwndParent == WinQueryWindow(hwnd, QW_PARENT));
         CHECK(WinWindowFromID(creation->hwndParent, creation->id) == hwnd);
         creates++;
     }
@@ -223,21 +235,23 @@ static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
 
 static void accelerator_contracts(HAB hab, HWND frame, HWND client)
 {
-    const uint8_t table[] = {1, 0, 181, 1, 17, 0, 'S', 0, 42, 0};
+    /* ACCELTABLE: one entry in code page 437; Ctrl+S sends command 42. */
+    const uint8_t table[] = {1, 0, 181, 1, AF_CHAR | AF_CONTROL, 0, 'S', 0, 42, 0};
     ULONG handle = WinCreateAccelTable(hab, (PVOID)table);
     CHECK(handle && WinSetAccelTable(hab, handle, frame));
     CHECK(WinQueryAccelTable(hab, frame) == handle && !WinDestroyAccelTable(handle));
     uint8_t copy[10];
     CHECK(WinCopyAccelTable(handle, copy, sizeof copy) == sizeof copy &&
           !memcmp(copy, table, sizeof table));
-    QMSG message = {client, WM_CHAR, (MPARAM)(uintptr_t)0x10001, (MPARAM)(uintptr_t)'s', 0,
-                    {0, 0}, 0};
+    QMSG message = {
+        client, WM_CHAR, (MPARAM)(uintptr_t)(KC_CHAR | 1 << 16), (MPARAM)(uintptr_t)'s', 0,
+        {0, 0}, 0};
     CHECK(!WinTranslateAccel(hab, frame, 0, &message) && message.hwnd == client &&
           message.msg == WM_CHAR);
-    message.mp1 = (MPARAM)(uintptr_t)0x10011;
+    message.mp1 = (MPARAM)(uintptr_t)(KC_CHAR | KC_CTRL | 1 << 16);
     CHECK(WinTranslateAccel(hab, frame, 0, &message));
     CHECK(message.hwnd == frame && message.msg == WM_COMMAND && (uintptr_t)message.mp1 == 42 &&
-          (uintptr_t)message.mp2 == 3);
+          (uintptr_t)message.mp2 == CMDSRC_ACCELERATOR);
     CHECK(WinSetAccelTable(hab, 0, frame) && WinDestroyAccelTable(handle));
     CHECK(!WinQueryAccelTable(hab, frame) && !WinDestroyAccelTable(handle));
 }
@@ -265,13 +279,13 @@ static void keyboard_contracts(HAB hab, HWND window)
     CHECK(WinGetPhysKeyState(HWND_DESKTOP, 0x1d) == 0);
     QMSG message;
     CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
-    CHECK((WinGetKeyState(HWND_DESKTOP, 10) & 0x8000) != 0);
+    CHECK((WinGetKeyState(HWND_DESKTOP, VK_CTRL) & KEY_DOWN) != 0);
     CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
     CHECK((uintptr_t)message.mp2 == 0x001375e0 && ((uintptr_t)message.mp1 >> 24) == 0x65 &&
-          (WinGetKeyState(HWND_DESKTOP, 10) & 0x8000) != 0);
+          (WinGetKeyState(HWND_DESKTOP, VK_CTRL) & KEY_DOWN) != 0);
     CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
     CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
-    CHECK((WinGetKeyState(HWND_DESKTOP, 10) & 0x8000) == 0);
+    CHECK((WinGetKeyState(HWND_DESKTOP, VK_CTRL) & KEY_DOWN) == 0);
     for (unsigned keypad = 0; keypad < 2; keypad++)
     {
         event.type = LX_HOST_EVENT_KEY_DOWN;
@@ -279,13 +293,15 @@ static void keyboard_contracts(HAB hab, HWND window)
         event.scancode = 0x1c;
         CHECK(processKeyboardEvent(anchor, &event));
         CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
-        CHECK(((uintptr_t)message.mp1 & 7) == 7);
-        CHECK((uintptr_t)message.mp2 == ((keypad ? 0x1eu : 8u) << 16 | 13));
+        CHECK(((uintptr_t)message.mp1 & KEY_FLAGS) == KEY_FLAGS);
+        CHECK((uintptr_t)message.mp2 ==
+              ((keypad ? (unsigned)VK_ENTER : (unsigned)VK_NEWLINE) << 16 | '\r'));
         CHECK(((uintptr_t)message.mp1 >> 24) == (keypad ? 0x5au : 0x1cu));
         event.type = LX_HOST_EVENT_KEY_UP;
         CHECK(processKeyboardEvent(anchor, &event));
         CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
-        CHECK(((uintptr_t)message.mp1 & 0x47) == 0x46);
+        CHECK(((uintptr_t)message.mp1 & (KEY_FLAGS | KC_KEYUP)) ==
+              (KC_VIRTUALKEY | KC_SCANCODE | KC_KEYUP));
         CHECK((uintptr_t)message.mp2 == (keypad ? 0x001ee00du : 0x00081c0du));
     }
 
@@ -315,7 +331,8 @@ static void keyboard_contracts(HAB hab, HWND window)
                 CHECK(processKeyboardEvent(anchor, &event));
                 CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
                 CHECK(((uintptr_t)message.mp1 >> 24) == navigation[i].scan);
-                CHECK(((uintptr_t)message.mp1 & 0x57) == (6u | control << 4 | up << 6));
+                CHECK(((uintptr_t)message.mp1 & (KEY_FLAGS | KC_CTRL | KC_KEYUP)) ==
+                      (KC_VIRTUALKEY | KC_SCANCODE | control << 4 | up << 6));
                 CHECK((uintptr_t)message.mp2 ==
                       (control ? navigation[i].control : navigation[i].plain));
             }
@@ -324,36 +341,39 @@ static void keyboard_contracts(HAB hab, HWND window)
 static void selection_contracts(HWND parent)
 {
     HWND list = WinCreateWindow(parent, (PSZ)WC_LISTBOX, "", 0, 0, 0, 120, 80, parent, HWND_TOP,
-                                902, NULL, NULL);
+                                LIST_ID, NULL, NULL);
     CHECK(list);
-    CHECK((intptr_t)WinSendMsg(list, 0x161, (MPARAM)(intptr_t)-1, "first") == 0);
-    CHECK((intptr_t)WinSendMsg(list, 0x161, (MPARAM)(intptr_t)-1, "second") == 1);
+    CHECK((intptr_t)WinSendMsg(list, LM_INSERTITEM, (MPARAM)(intptr_t)LIT_END, "first") == 0);
+    CHECK((intptr_t)WinSendMsg(list, LM_INSERTITEM, (MPARAM)(intptr_t)LIT_END, "second") == 1);
     expected_selection = 0;
-    CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 1);
-    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, 0, 0) == 0);
-    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, (MPARAM)(uintptr_t)100, 0) == 0);
-    CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 1);
+    CHECK(WinSendMsg(list, LM_SELECTITEM, 0, (MPARAM)(uintptr_t)TRUE) && selections == 1);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, LM_QUERYSELECTION, 0, 0) == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, LM_QUERYSELECTION, (MPARAM)(uintptr_t)100, 0) == 0);
+    CHECK(WinSendMsg(list, LM_SELECTITEM, 0, (MPARAM)(uintptr_t)TRUE) && selections == 1);
     expected_selection = 1;
-    CHECK(WinSendMsg(list, 0x164, (MPARAM)(uintptr_t)1, (MPARAM)(uintptr_t)TRUE) &&
+    CHECK(WinSendMsg(list, LM_SELECTITEM, (MPARAM)(uintptr_t)1, (MPARAM)(uintptr_t)TRUE) &&
           selections == 2);
     expected_selection = -1;
-    CHECK(WinSendMsg(list, 0x164, (MPARAM)(intptr_t)-1, 0) && selections == 3);
+    CHECK(WinSendMsg(list, LM_SELECTITEM, (MPARAM)(intptr_t)LIT_NONE, 0) && selections == 3);
     expected_selection = 0;
-    CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 4);
+    CHECK(WinSendMsg(list, LM_SELECTITEM, 0, (MPARAM)(uintptr_t)TRUE) && selections == 4);
     expected_selection = -1;
-    CHECK(WinSendMsg(list, 0x164, (MPARAM)(intptr_t)-1, (MPARAM)(uintptr_t)TRUE) &&
+    CHECK(WinSendMsg(list, LM_SELECTITEM, (MPARAM)(intptr_t)LIT_NONE, (MPARAM)(uintptr_t)TRUE) &&
           selections == 4);
-    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, (MPARAM)(intptr_t)-1, 0) == -1);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, LM_QUERYSELECTION, (MPARAM)(intptr_t)LIT_FIRST, 0) ==
+          -1);
     CHECK(WinDestroyWindow(list));
-    list = WinCreateWindow(parent, (PSZ)WC_LISTBOX, "", 1, 0, 0, 120, 80, parent, HWND_TOP, 902,
-                           NULL, NULL);
-    CHECK(list && (intptr_t)WinSendMsg(list, 0x161, (MPARAM)(intptr_t)-1, "first") == 0);
+    list = WinCreateWindow(parent, (PSZ)WC_LISTBOX, "", LS_MULTIPLESEL, 0, 0, 120, 80, parent,
+                           HWND_TOP, LIST_ID, NULL, NULL);
+    CHECK(list &&
+          (intptr_t)WinSendMsg(list, LM_INSERTITEM, (MPARAM)(intptr_t)LIT_END, "first") == 0);
     expected_selection = 0;
-    CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 5);
-    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, 0, 0) == -1);
+    CHECK(WinSendMsg(list, LM_SELECTITEM, 0, (MPARAM)(uintptr_t)TRUE) && selections == 5);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, LM_QUERYSELECTION, 0, 0) == -1);
     expected_selection = -1;
-    CHECK(WinSendMsg(list, 0x164, (MPARAM)(intptr_t)-1, 0) && selections == 5);
-    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, (MPARAM)(intptr_t)-1, 0) == -1);
+    CHECK(WinSendMsg(list, LM_SELECTITEM, (MPARAM)(intptr_t)LIT_NONE, 0) && selections == 5);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, LM_QUERYSELECTION, (MPARAM)(intptr_t)LIT_FIRST, 0) ==
+          -1);
     CHECK(WinDestroyWindow(list));
 }
 
@@ -362,27 +382,29 @@ static void scrollbar_contracts(HAB hab, HWND parent)
     uint8_t data[14] = {14, 0, 0, 0, 1, 0, 51, 0, 25, 0, 50, 0, 100, 0};
     /* Dialogs size themselves from these: a long line counts and paints as wrapped lines. */
     PSZ long_text = "several words that cannot possibly fit on one short line of this control";
-    HWND wrapped = WinCreateWindow(parent, (PSZ)WC_MLE, long_text, 1, 0, 0, 80, 80, parent,
-                                   HWND_TOP, 904, NULL, NULL);
+    HWND wrapped = WinCreateWindow(parent, (PSZ)WC_MLE, long_text, MLS_WORDWRAP, 0, 0, 80, 80,
+                                   parent, HWND_TOP, 904, NULL, NULL);
     HWND unwrapped = WinCreateWindow(parent, (PSZ)WC_MLE, long_text, 0, 0, 0, 80, 80, parent,
                                      HWND_TOP, 905, NULL, NULL);
     CHECK(wrapped && unwrapped);
-    CHECK((intptr_t)WinSendMsg(wrapped, 0x1bc, 0, 0) > 1);
-    CHECK((intptr_t)WinSendMsg(unwrapped, 0x1bc, 0, 0) == 1);
+    CHECK((intptr_t)WinSendMsg(wrapped, MLM_QUERYLINECOUNT, 0, 0) > 1);
+    CHECK((intptr_t)WinSendMsg(unwrapped, MLM_QUERYLINECOUNT, 0, 0) == 1);
     CHECK(WinDestroyWindow(wrapped) && WinDestroyWindow(unwrapped));
-    HWND scroll = WinCreateWindow(parent, (PSZ)WC_SCROLLBAR, "", WS_VISIBLE | 3, 0, 0, 20, 200,
-                                  parent, HWND_TOP, 903, data, NULL);
+    HWND scroll =
+        WinCreateWindow(parent, (PSZ)WC_SCROLLBAR, "", WS_VISIBLE | SBS_VERT | SBS_THUMBSIZE, 0, 0,
+                        20, 200, parent, HWND_TOP, 903, data, NULL);
     CHECK(scroll);
-    CHECK((uintptr_t)WinSendMsg(scroll, 0x1a3, 0, 0) == 0x00330001);
-    CHECK((uintptr_t)WinSendMsg(scroll, 0x1a2, 0, 0) == 25);
-    CHECK(WinSendMsg(scroll, 0x1a1, (MPARAM)(uintptr_t)100, 0));
-    CHECK((uintptr_t)WinSendMsg(scroll, 0x1a2, 0, 0) == 51);
-    CHECK(WinSendMsg(scroll, 0x1a0, (MPARAM)(intptr_t)-10, (MPARAM)(uintptr_t)0x0005fffe));
-    CHECK((uintptr_t)WinSendMsg(scroll, 0x1a3, 0, 0) == 0x00050000);
-    CHECK((uintptr_t)WinSendMsg(scroll, 0x1a2, 0, 0) == 0);
-    CHECK(WinSendMsg(scroll, 0x1a6, (MPARAM)(uintptr_t)0x00640064, 0));
+    CHECK((uintptr_t)WinSendMsg(scroll, SBM_QUERYRANGE, 0, 0) == 0x00330001);
+    CHECK((uintptr_t)WinSendMsg(scroll, SBM_QUERYPOS, 0, 0) == 25);
+    CHECK(WinSendMsg(scroll, SBM_SETPOS, (MPARAM)(uintptr_t)100, 0));
+    CHECK((uintptr_t)WinSendMsg(scroll, SBM_QUERYPOS, 0, 0) == 51);
+    CHECK(
+        WinSendMsg(scroll, SBM_SETSCROLLBAR, (MPARAM)(intptr_t)-10, (MPARAM)(uintptr_t)0x0005fffe));
+    CHECK((uintptr_t)WinSendMsg(scroll, SBM_QUERYRANGE, 0, 0) == 0x00050000);
+    CHECK((uintptr_t)WinSendMsg(scroll, SBM_QUERYPOS, 0, 0) == 0);
+    CHECK(WinSendMsg(scroll, SBM_SETTHUMBSIZE, (MPARAM)(uintptr_t)0x00640064, 0));
     CHECK(!WinIsWindowEnabled(scroll));
-    CHECK(WinSendMsg(scroll, 0x1a6, (MPARAM)(uintptr_t)0x00640032, 0));
+    CHECK(WinSendMsg(scroll, SBM_SETTHUMBSIZE, (MPARAM)(uintptr_t)0x00640032, 0));
     CHECK(WinIsWindowEnabled(scroll));
     WinSendMsg(scroll, WM_PAINT, 0, 0);
     HPS ps = WinGetPS(scroll);
@@ -391,12 +413,12 @@ static void scrollbar_contracts(HAB hab, HWND parent)
     CHECK(WinReleasePS(ps));
     WinSendMsg(scroll, WM_BUTTON1DOWN, (MPARAM)(uintptr_t)(5 | 195u << 16), 0);
     QMSG message;
-    CHECK(WinPeekMsg(hab, &message, parent, WM_VSCROLL, WM_VSCROLL, 1));
-    CHECK((uintptr_t)message.mp1 == 903 && ((uintptr_t)message.mp2 >> 16) == 1);
+    CHECK(WinPeekMsg(hab, &message, parent, WM_VSCROLL, WM_VSCROLL, PM_REMOVE));
+    CHECK((uintptr_t)message.mp1 == 903 && ((uintptr_t)message.mp2 >> 16) == SB_LINEUP);
     CHECK(WinDestroyWindow(scroll));
     data[0] = 8;
-    CHECK(!WinCreateWindow(parent, (PSZ)WC_SCROLLBAR, "", 3, 0, 0, 20, 200, parent, HWND_TOP, 903,
-                           data, NULL));
+    CHECK(!WinCreateWindow(parent, (PSZ)WC_SCROLLBAR, "", SBS_VERT | SBS_THUMBSIZE, 0, 0, 20, 200,
+                           parent, HWND_TOP, 903, data, NULL));
 }
 
 static void host_focus_contracts(HAB hab, HWND frame, HWND client)
@@ -416,11 +438,11 @@ static void host_focus_contracts(HAB hab, HWND frame, HWND client)
     CHECK(processHostEvent(anchor, &event));
     QMSG message;
     CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
-    CHECK(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000);
+    CHECK(WinGetKeyState(HWND_DESKTOP, VK_CTRL) & KEY_DOWN);
     event.type = LX_HOST_EVENT_FOCUS_LOST;
     processHostEvent(anchor, &event);
     CHECK(!WinQueryActiveWindow(HWND_DESKTOP) && !WinQueryFocus(HWND_DESKTOP));
-    CHECK(!(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000));
+    CHECK(!(WinGetKeyState(HWND_DESKTOP, VK_CTRL) & KEY_DOWN));
     CHECK(!WinGetPhysKeyState(HWND_DESKTOP, 0x1d));
     event.type = LX_HOST_EVENT_FOCUS_GAINED;
     processHostEvent(anchor, &event);
@@ -431,7 +453,7 @@ static void host_focus_contracts(HAB hab, HWND frame, HWND client)
     event.modifiers = 0;
     CHECK(processHostEvent(anchor, &event));
     CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
-    CHECK(message.hwnd == client && ((uintptr_t)message.mp2 & 0xff) == 27);
+    CHECK(message.hwnd == client && ((uintptr_t)message.mp2 & 0xff) == '\033');
     event.type = LX_HOST_EVENT_KEY_UP;
     CHECK(processHostEvent(anchor, &event));
     CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
@@ -453,16 +475,20 @@ static void capture_release_contracts(HAB hab, HWND client)
     QMSG message;
     for (unsigned i = 0; i < 3; i++)
         CHECK(WinGetMsg(hab, &message, client, 0, 0));
-    CHECK(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000);
-    CHECK(WinGetKeyState(HWND_DESKTOP, 1) & 0x8000);
+    CHECK(WinGetKeyState(HWND_DESKTOP, VK_CTRL) & KEY_DOWN);
+    CHECK(WinGetKeyState(HWND_DESKTOP, VK_BUTTON1) & KEY_DOWN);
     CHECK(releaseInputState(anchor, 0));
     CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
-    CHECK(((uintptr_t)message.mp1 >> 24) == 0x1d && ((uintptr_t)message.mp1 & 0x46) == 0x46);
-    CHECK(!(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000));
+    CHECK(((uintptr_t)message.mp1 >> 24) == 0x1d &&
+          ((uintptr_t)message.mp1 & (KC_VIRTUALKEY | KC_SCANCODE | KC_KEYUP)) ==
+              (KC_VIRTUALKEY | KC_SCANCODE | KC_KEYUP));
+    CHECK(!(WinGetKeyState(HWND_DESKTOP, VK_CTRL) & KEY_DOWN));
     CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
-    CHECK(((uintptr_t)message.mp1 >> 24) == 0x61 && ((uintptr_t)message.mp1 & 0x46) == 0x46);
+    CHECK(((uintptr_t)message.mp1 >> 24) == 0x61 &&
+          ((uintptr_t)message.mp1 & (KC_VIRTUALKEY | KC_SCANCODE | KC_KEYUP)) ==
+              (KC_VIRTUALKEY | KC_SCANCODE | KC_KEYUP));
     CHECK(WinGetMsg(hab, &message, client, WM_BUTTON1UP, WM_BUTTON1UP));
-    CHECK(!(WinGetKeyState(HWND_DESKTOP, 1) & 0x8000));
+    CHECK(!(WinGetKeyState(HWND_DESKTOP, VK_BUTTON1) & KEY_DOWN));
     CHECK(!WinGetPhysKeyState(HWND_DESKTOP, 0x61));
     CHECK(WinQueryFocus(HWND_DESKTOP) == client);
 }
@@ -479,12 +505,12 @@ static void clipboard_contracts(HAB hab, HWND parent)
     ULONG flags = 123;
     CHECK(!WinQueryClipbrdFmtInfo(hab, atom, &flags) && flags == 123);
     CHECK(WinSetClipbrdOwner(hab, parent) && WinQueryClipbrdOwner(hab) == parent);
-    CHECK(WinSetClipbrdData(hab, 456, atom, 0x201));
+    CHECK(WinSetClipbrdData(hab, 456, atom, CFI_HANDLE | CFI_OWNERFREE));
     CHECK(WinEnumClipbrdFmts(hab, 0) == atom && !WinEnumClipbrdFmts(hab, atom));
-    CHECK(WinQueryClipbrdFmtInfo(hab, atom, &flags) && flags == 0x201);
+    CHECK(WinQueryClipbrdFmtInfo(hab, atom, &flags) && flags == (CFI_HANDLE | CFI_OWNERFREE));
     CHECK(WinQueryClipbrdData(hab, atom) == 456);
     CHECK(WinCloseClipbrd(hab) && !WinCloseClipbrd(hab));
-    CHECK(!WinSetClipbrdData(hab, 789, atom, 0x201));
+    CHECK(!WinSetClipbrdData(hab, 789, atom, CFI_HANDLE | CFI_OWNERFREE));
     CHECK(WinOpenClipbrd(hab) && WinEmptyClipbrd(hab));
     CHECK(!WinQueryClipbrdOwner(hab) && !WinQueryClipbrdData(hab, atom));
     CHECK(WinCloseClipbrd(hab));
@@ -496,23 +522,24 @@ static void menu_contracts(HWND parent)
     const uint8_t empty[] = {10, 0, 0, 0, 181, 1, 0, 0, 0, 0};
     HWND menu = WinCreateMenu(parent, (PVOID)empty);
     CHECK(menu);
-    MENUITEM item = {-1, 1, 0, 42, 0, 123};
-    CHECK((intptr_t)WinSendMsg(menu, 0x180, &item, "~Item") == 0);
+    MENUITEM item = {MIT_END, MIS_TEXT, 0, 42, 0, 123};
+    CHECK((intptr_t)WinSendMsg(menu, MM_INSERTITEM, &item, "~Item") == 0);
     item.iPosition = 99;
-    item.afAttribute = 0x4000;
+    item.afAttribute = MIA_DISABLED;
     item.hItem = 456;
-    CHECK(WinSendMsg(menu, 0x183, 0, &item));
+    CHECK(WinSendMsg(menu, MM_SETITEM, 0, &item));
     MENUITEM actual;
-    CHECK(WinSendMsg(menu, 0x182, (MPARAM)(uintptr_t)42, &actual));
-    CHECK(actual.iPosition == 0 && actual.afAttribute == 0x4000 && actual.hItem == 456);
+    CHECK(WinSendMsg(menu, MM_QUERYITEM, (MPARAM)(uintptr_t)42, &actual));
+    CHECK(actual.iPosition == 0 && actual.afAttribute == MIA_DISABLED && actual.hItem == 456);
     char text[16];
-    CHECK((uintptr_t)WinSendMsg(menu, 0x18b, (MPARAM)(uintptr_t)(42 | sizeof text << 16), text) ==
-          5);
+    CHECK((uintptr_t)WinSendMsg(menu, MM_QUERYITEMTEXT, (MPARAM)(uintptr_t)(42 | sizeof text << 16),
+                                text) == 5);
     CHECK(!strcmp(text, "~Item"));
-    CHECK((uintptr_t)WinSendMsg(menu, 0x18b, (MPARAM)(uintptr_t)(42 | 3u << 16), text) == 2);
+    CHECK((uintptr_t)WinSendMsg(menu, MM_QUERYITEMTEXT, (MPARAM)(uintptr_t)(42 | 3u << 16), text) ==
+          2);
     CHECK(!strcmp(text, "~I"));
     item.id = 43;
-    CHECK(!WinSendMsg(menu, 0x183, 0, &item));
+    CHECK(!WinSendMsg(menu, MM_SETITEM, 0, &item));
     CHECK(WinDestroyWindow(menu));
 }
 
@@ -579,7 +606,7 @@ static void point_lookup_contracts(HAB hab)
 static void paint_scheduling_contracts(HAB hab)
 {
     QMSG message;
-    while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+    while (WinPeekMsg(hab, &message, 0, 0, 0, PM_REMOVE))
         WinDispatchMsg(hab, &message);
     HWND parent = WinCreateWindow(HWND_DESKTOP, "test", "paint order", WS_VISIBLE, 0, 0, 32, 32, 0,
                                   HWND_TOP, 990, NULL, NULL);
@@ -591,29 +618,29 @@ static void paint_scheduling_contracts(HAB hab)
     CHECK(initial && WinEndPaint(initial));
     CHECK(WinInvalidateRect(child, NULL, FALSE) && WinInvalidateRect(parent, NULL, FALSE));
     CHECK(WinPostMsg(parent, WM_USER + 151, 0, 0));
-    CHECK(WinPeekMsg(hab, &message, parent, 0, 0, 1) && message.msg == WM_USER + 151);
-    CHECK(WinPeekMsg(hab, &message, 0, WM_PAINT, WM_PAINT, 1));
+    CHECK(WinPeekMsg(hab, &message, parent, 0, 0, PM_REMOVE) && message.msg == WM_USER + 151);
+    CHECK(WinPeekMsg(hab, &message, 0, WM_PAINT, WM_PAINT, PM_REMOVE));
     CHECK(message.hwnd == parent);
     /* PM_REMOVE removes no update region: deferred paint is returned again. */
-    CHECK(WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, 1));
+    CHECK(WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, PM_REMOVE));
     HPS paint = WinBeginPaint(parent, 0, NULL);
     RECTL bounds = {0, 0, 32, 32};
     CHECK(paint && WinFillRect(paint, &bounds, CLR_BLUE) && WinEndPaint(paint));
-    CHECK(WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, 1));
+    CHECK(WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, PM_REMOVE));
     paint = WinBeginPaint(child, 0, NULL);
     CHECK(paint && WinFillRect(paint, &bounds, CLR_RED) && WinEndPaint(paint));
     HPS ps = WinGetPS(child);
     uint32_t pixel;
     CHECK(ps && lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(WinReleasePS(ps));
-    CHECK(!WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, 1));
-    CHECK(!WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, 1));
+    CHECK(!WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, PM_REMOVE));
+    CHECK(!WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, PM_REMOVE));
     CHECK(WinShowWindow(parent, FALSE) && WinInvalidateRect(child, NULL, FALSE));
-    CHECK(!WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, 1));
+    CHECK(!WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, PM_REMOVE));
     CHECK(WinShowWindow(parent, TRUE));
     CHECK(WinGetMsg(hab, &message, parent, WM_PAINT, WM_PAINT) && message.hwnd == parent);
     WinDispatchMsg(hab, &message); /* Default painting must validate too. */
-    CHECK(!WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, 1));
+    CHECK(!WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, PM_REMOVE));
     CHECK(WinDestroyWindow(parent));
 }
 
@@ -629,17 +656,17 @@ static void menu_tracking_contracts(HWND parent)
     test_window(file)->owner = bar_window;
     test_window(edit)->owner = bar_window;
     test_window(nested)->owner = file_window;
-    MENUITEM item = {-1, 0x11, 0, 42, file, 0};
-    CHECK((intptr_t)WinSendMsg(bar, 0x180, &item, "~File") == 0);
+    MENUITEM item = {MIT_END, MIS_SUBMENU | MIS_TEXT, 0, 42, file, 0};
+    CHECK((intptr_t)WinSendMsg(bar, MM_INSERTITEM, &item, "~File") == 0);
     item.id = 43;
     item.hwndSubMenu = edit;
-    CHECK((intptr_t)WinSendMsg(bar, 0x180, &item, "~Edit") == 1);
-    item = (MENUITEM){-1, 0x11, 0, 101, nested, 0};
-    CHECK((intptr_t)WinSendMsg(file, 0x180, &item, "~First") == 0);
+    CHECK((intptr_t)WinSendMsg(bar, MM_INSERTITEM, &item, "~Edit") == 1);
+    item = (MENUITEM){MIT_END, MIS_SUBMENU | MIS_TEXT, 0, 101, nested, 0};
+    CHECK((intptr_t)WinSendMsg(file, MM_INSERTITEM, &item, "~First") == 0);
     item.id = 102;
-    item.afStyle = 1;
+    item.afStyle = MIS_TEXT;
     item.hwndSubMenu = 0;
-    CHECK((intptr_t)WinSendMsg(file, 0x180, &item, "~Second") == 1);
+    CHECK((intptr_t)WinSendMsg(file, MM_INSERTITEM, &item, "~Second") == 1);
     CHECK(WinSetWindowPos(bar, HWND_TOP, 0, 0, 300, 24, SWP_SIZE | SWP_SHOW));
     CHECK(WinSetFocus(HWND_DESKTOP, parent));
     changing_menu = bar;
@@ -660,9 +687,9 @@ static void menu_tracking_contracts(HWND parent)
     CHECK(WinIsWindowVisible(nested));
     WinSendMsg(file, WM_MOUSEMOVE, menu_point(file_window, 102), 0);
     CHECK(file_window->menu->selected == 1 && !WinIsWindowVisible(nested));
-    WinSendMsg(file, WM_CHAR, (MPARAM)(uintptr_t)2, (MPARAM)(uintptr_t)(0x16u << 16));
+    WinSendMsg(file, WM_CHAR, (MPARAM)(uintptr_t)KC_VIRTUALKEY, (MPARAM)(uintptr_t)(VK_UP << 16));
     CHECK(file_window->menu->selected == 0);
-    WinSendMsg(file, WM_CHAR, (MPARAM)(uintptr_t)2, (MPARAM)(uintptr_t)(0x18u << 16));
+    WinSendMsg(file, WM_CHAR, (MPARAM)(uintptr_t)KC_VIRTUALKEY, (MPARAM)(uintptr_t)(VK_DOWN << 16));
     CHECK(file_window->menu->selected == 1);
     WinSendMsg(bar, WM_MOUSEMOVE, menu_point(bar_window, 43), 0);
     CHECK(menu_initializations == 4 && !WinIsWindowVisible(file) && WinIsWindowVisible(edit));
@@ -681,20 +708,24 @@ static void menu_tracking_contracts(HWND parent)
 
 static void list_contracts(HWND parent)
 {
-    HWND combo = WinCreateWindow(parent, (PSZ)WC_COMBOBOX, "", 4, 0, 0, 180, 120, parent, HWND_TOP,
-                                 901, NULL, NULL);
+    HWND combo = WinCreateWindow(parent, (PSZ)WC_COMBOBOX, "", CBS_DROPDOWNLIST, 0, 0, 180, 120,
+                                 parent, HWND_TOP, 901, NULL, NULL);
     CHECK(combo);
-    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0004,
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, LM_SEARCHSTRING, (MPARAM)(uintptr_t)0xffff0004,
                                      "Lotus Word Pro") == -1);
-    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x161, (MPARAM)(intptr_t)-1, "Lotus Word Pro") == 0);
-    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x161, (MPARAM)(intptr_t)-1, "Plain text") == 1);
-    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0004,
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, LM_INSERTITEM, (MPARAM)(intptr_t)LIT_END,
                                      "Lotus Word Pro") == 0);
-    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0x00010006, "Lotus") == 0);
-    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0005, "text") == 1);
-    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0004,
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, LM_INSERTITEM, (MPARAM)(intptr_t)LIT_END,
+                                     "Plain text") == 1);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, LM_SEARCHSTRING, (MPARAM)(uintptr_t)0xffff0004,
+                                     "Lotus Word Pro") == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, LM_SEARCHSTRING, (MPARAM)(uintptr_t)0x00010006,
+                                     "Lotus") == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, LM_SEARCHSTRING, (MPARAM)(uintptr_t)0xffff0005,
+                                     "text") == 1);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, LM_SEARCHSTRING, (MPARAM)(uintptr_t)0xffff0004,
                                      "lotus word pro") == -1);
-    CHECK(WinSendMsg(combo, 0x164, 0, (MPARAM)(uintptr_t)TRUE));
+    CHECK(WinSendMsg(combo, LM_SELECTITEM, 0, (MPARAM)(uintptr_t)TRUE));
     char text[32];
     CHECK(WinQueryWindowText(combo, sizeof text, text) == 14 && !strcmp(text, "Lotus Word Pro"));
     CHECK(WinDestroyWindow(combo));
@@ -706,20 +737,23 @@ static void graphics_contracts(HAB hab, HWND window)
     HDC window_dc = WinQueryWindowDC(window);
     CHECK(window_dc == WinOpenWindowDC(window));
     CHECK(!WinQueryWindowDC(0));
-    HDC memory = DevOpenDC(hab, 8, "*", 0, NULL, window_dc);
-    CHECK(memory && !DevOpenDC(hab, 8, "*", 0, NULL, 0xdeadbeef));
+    HDC memory = DevOpenDC(hab, OD_MEMORY, "*", 0, NULL, window_dc);
+    CHECK(memory && !DevOpenDC(hab, OD_MEMORY, "*", 0, NULL, 0xdeadbeef));
     SIZEL size = {32, 24};
-    HPS ps = GpiCreatePS(hab, memory, &size, 0x5008);
+    HPS ps = GpiCreatePS(hab, memory, &size, MICRO_PELS);
     CHECK(ps && GpiQueryDevice(ps) == memory && DevCloseDC(memory) == (ULONG)-1);
-    /* The Lotus backdrop uses a micro PS in hundredths of an inch. */
+    /* The Lotus backdrop uses a micro PS in hundredths of an inch. The units follow
+       PU_LOMETRIC, PU_HIMETRIC, PU_LOENGLISH, PU_HIENGLISH and PU_TWIPS, four apart. */
     const LONG units[] = {254, 2540, 100, 1000, 1440};
     for (unsigned i = 0; i < 5; i++)
     {
-        HPS physical = GpiCreatePS(hab, memory, &size, 0x500c + i * 4);
+        HPS physical =
+            GpiCreatePS(hab, memory, &size, (PU_LOMETRIC | GPIT_MICRO | GPIA_ASSOC) + i * 4);
         POINTL inch = {units[i], -units[i]};
-        CHECK(physical && GpiConvert(physical, 1, 5, 1, &inch));
+        CHECK(physical && GpiConvert(physical, CVTC_WORLD, CVTC_DEVICE, 1, &inch));
         CHECK(inch.x == 96 && inch.y == -96);
-        CHECK(GpiConvert(physical, 5, 1, 1, &inch) && inch.x == units[i] && inch.y == -units[i]);
+        CHECK(GpiConvert(physical, CVTC_DEVICE, CVTC_WORLD, 1, &inch) && inch.x == units[i] &&
+              inch.y == -units[i]);
         CHECK(GpiDestroyPS(physical));
     }
     LONG colors[40];
@@ -731,46 +765,49 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(GpiQueryLogColorTable(ps, 0, 0, 40, colors) == 16);
     CHECK(colors[0] == 0xffffff && colors[1] == 0xff && colors[2] == 0xff0000);
     LONG custom = 0x123456;
-    CHECK(GpiCreateLogColorTable(ps, 0, 2, 20, 1, &custom));
-    CHECK(GpiQueryRGBColor(ps, 1, 20) == custom && GpiQueryRGBColor(ps, 2, 20) == custom);
-    CHECK(GpiQueryColorIndex(ps, 1, custom) == 20);
+    CHECK(GpiCreateLogColorTable(ps, 0, LCOLF_CONSECRGB, 20, 1, &custom));
+    CHECK(GpiQueryRGBColor(ps, LCOLOPT_REALIZED, 20) == custom &&
+          GpiQueryRGBColor(ps, 2, 20) == custom);
+    CHECK(GpiQueryColorIndex(ps, LCOLOPT_REALIZED, custom) == 20);
     LONG pairs[] = {23, 0x408080, 6, 0x654321};
-    CHECK(GpiCreateLogColorTable(ps, 0, 1, -99, 4, pairs));
+    CHECK(GpiCreateLogColorTable(ps, 0, LCOLF_INDRGB, -99, 4, pairs));
     CHECK(GpiQueryRGBColor(ps, 3, 23) == 0x408080 && GpiQueryRGBColor(ps, 0, 6) == 0x654321 &&
           GpiQueryRGBColor(ps, 0, 20) == custom);
     CHECK(GpiQueryColorIndex(ps, 0, 0x408080) == 23);
-    CHECK(!GpiCreateLogColorTable(ps, 0, 1, 0, 3, pairs));
+    CHECK(!GpiCreateLogColorTable(ps, 0, LCOLF_INDRGB, 0, 3, pairs));
     LONG invalid_pairs[] = {23, 0x111111, 256, 0x222222};
-    CHECK(!GpiCreateLogColorTable(ps, 1, 1, 0, 4, invalid_pairs) &&
+    CHECK(!GpiCreateLogColorTable(ps, LCOL_RESET, LCOLF_INDRGB, 0, 4, invalid_pairs) &&
           GpiQueryRGBColor(ps, 0, 23) == 0x408080);
-    CHECK(GpiCreateLogColorTable(ps, 1, 2, 20, 1, &custom));
+    CHECK(GpiCreateLogColorTable(ps, LCOL_RESET, LCOLF_CONSECRGB, 20, 1, &custom));
     CHECK(GpiQueryColorData(ps, 3, color_data) && color_data[0] == 2 && color_data[2] == 20);
     LONG color_state = GpiSavePS(ps);
-    CHECK(color_state > 0 && GpiCreateLogColorTable(ps, 0, 3, 0, 16, NULL));
+    CHECK(color_state > 0 && GpiCreateLogColorTable(ps, 0, LCOLF_RGB, 0, 16, NULL));
     CHECK(GpiQueryColorData(ps, 3, color_data) && color_data[0] == 3);
     CHECK(GpiRestorePS(ps, color_state) && GpiQueryColorData(ps, 3, color_data) &&
           color_data[0] == 2 && color_data[2] == 20);
     CHECK(GpiQueryLogColorTable(ps, 0, 16, 5, colors) == 5 && colors[0] == -1 &&
           colors[4] == custom);
-    CHECK(GpiQueryLogColorTable(ps, 2, 16, 3, colors) == 2 && colors[0] == 20 &&
+    CHECK(GpiQueryLogColorTable(ps, LCOLOPT_INDEX, 16, 3, colors) == 2 && colors[0] == 20 &&
           colors[1] == custom);
     CHECK(GpiCreateLogColorTable(ps, 0, 0, 0, 0, NULL));
-    CHECK(GpiCreateLogColorTable(ps, 0, 2, 20, 1, &custom));
-    CHECK(GpiCreateLogColorTable(ps, 0, 3, 0, 0, NULL));
-    CHECK(GpiQueryRGBColor(ps, 1, CLR_BLACK) == 0 &&
-          GpiQueryRGBColor(ps, 1, 0x408080) == 0x408080 &&
-          GpiQueryColorIndex(ps, 1, 0x408080) == 0x408080);
-    CHECK(GpiQueryRGBColor(ps, 0, CLR_DEFAULT) == -255 &&
-          GpiQueryRGBColor(ps, 4, CLR_RED) == -255 && GpiQueryColorIndex(ps, 2, 0x408080) == -255);
-    CHECK(GpiCreateLogColorTable(ps, 0, 1, 0, 0, NULL));
+    CHECK(GpiCreateLogColorTable(ps, 0, LCOLF_CONSECRGB, 20, 1, &custom));
+    CHECK(GpiCreateLogColorTable(ps, 0, LCOLF_RGB, 0, 0, NULL));
+    CHECK(GpiQueryRGBColor(ps, LCOLOPT_REALIZED, CLR_BLACK) == 0 &&
+          GpiQueryRGBColor(ps, LCOLOPT_REALIZED, 0x408080) == 0x408080 &&
+          GpiQueryColorIndex(ps, LCOLOPT_REALIZED, 0x408080) == 0x408080);
+    CHECK(GpiQueryRGBColor(ps, 0, CLR_DEFAULT) == RGB_ERROR &&
+          GpiQueryRGBColor(ps, 4, CLR_RED) == RGB_ERROR &&
+          GpiQueryColorIndex(ps, 2, 0x408080) == CLR_ERROR);
+    CHECK(GpiCreateLogColorTable(ps, 0, LCOLF_INDRGB, 0, 0, NULL));
     CHECK(GpiQueryColorData(ps, 3, color_data) && color_data[0] == 1 && color_data[2] == 15);
-    CHECK(GpiQueryRGBColor(ps, 1, 6) == 0xffff00 && GpiQueryRGBColor(ps, 0, 20) == -255);
+    CHECK(GpiQueryRGBColor(ps, LCOLOPT_REALIZED, CLR_YELLOW) == 0xffff00 &&
+          GpiQueryRGBColor(ps, 0, 20) == RGB_ERROR);
     CHECK(GpiSetColor(ps, CLR_RED) && GpiQueryColor(ps) == CLR_RED);
     CHECK(GpiSetCp(ps, 437) && GpiQueryCp(ps) == 437 && !GpiSetCp(ps, 932));
     FATTRS attrs = {0};
     attrs.usRecordLength = sizeof attrs;
     strcpy(attrs.szFacename, "Courier");
-    CHECK(GpiCreateLogFont(ps, NULL, 5, &attrs) == 2 && GpiSetCharSet(ps, 5));
+    CHECK(GpiCreateLogFont(ps, NULL, 5, &attrs) == FONT_MATCH && GpiSetCharSet(ps, 5));
     FONTMETRICS metrics;
     CHECK(GpiQueryFontMetrics(ps, sizeof metrics, &metrics) &&
           !strcmp(metrics.szFamilyname, "Courier"));
@@ -784,19 +821,21 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(GpiQueryWidthTable(ps, 'W', 1, widths) && GpiQueryWidthTable(ps, 'i', 1, widths + 1) &&
           widths[0] == widths[1]);
     CHECK(GpiQueryNumberSetIds(ps) == 1 && !GpiSetCharSet(ps, 6));
-    CHECK(GpiQueryCharMode(ps) == 1 && GpiSetCharMode(ps, 3));
-    CHECK(!GpiSetCharMode(ps, 4));
+    CHECK(GpiQueryCharMode(ps) == CM_MODE1 && GpiSetCharMode(ps, CM_MODE3));
+    CHECK(!GpiSetCharMode(ps, CM_MODE3 + 1));
     LONG saved = GpiSavePS(ps);
-    CHECK(saved > 0 && GpiSetCharMode(ps, 0) && GpiQueryCharMode(ps) == 1 && GpiSetBackMix(ps, 2) &&
-          GpiQueryBackMix(ps) == 2);
+    CHECK(saved > 0 && GpiSetCharMode(ps, CM_DEFAULT) && GpiQueryCharMode(ps) == CM_MODE1 &&
+          GpiSetBackMix(ps, BM_OVERPAINT) && GpiQueryBackMix(ps) == BM_OVERPAINT);
     CHECK(GpiSetCharSet(ps, 0) && GpiRestorePS(ps, saved) && GpiQueryCharSet(ps) == 5 &&
-          GpiQueryBackMix(ps) == 5);
-    CHECK(!GpiRestorePS(ps, saved) && GpiQueryCharMode(ps) == 3);
+          GpiQueryBackMix(ps) == BM_LEAVEALONE);
+    CHECK(!GpiRestorePS(ps, saved) && GpiQueryCharMode(ps) == CM_MODE3);
     POINTL converted = {16, 12};
     RECTL viewport = {10, 20, 74, 68};
-    CHECK(GpiSetPageViewport(ps, &viewport) && GpiConvert(ps, 1, 5, 1, &converted));
+    CHECK(GpiSetPageViewport(ps, &viewport) &&
+          GpiConvert(ps, CVTC_WORLD, CVTC_DEVICE, 1, &converted));
     CHECK(converted.x == 42 && converted.y == 44);
-    CHECK(GpiConvert(ps, 5, 2, 1, &converted) && converted.x == 16 && converted.y == 12);
+    CHECK(GpiConvert(ps, CVTC_DEVICE, CVTC_MODEL, 1, &converted) && converted.x == 16 &&
+          converted.y == 12);
     viewport = (RECTL){0, 0, 32, 24};
     CHECK(GpiSetPageViewport(ps, &viewport));
     uint8_t header[64] = {64};
@@ -812,47 +851,51 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(lx_pm_raster_read(ps, 3, 4, 1, 1, &pixel) && pixel == 0xff0000);
     /* SmartIconBar selects RGB mode while still supplying its old palette count. */
     LONG rgb_state = GpiSavePS(ps);
-    CHECK(rgb_state > 0 && GpiCreateLogColorTable(ps, 0, 3, 0, 16, NULL));
+    CHECK(rgb_state > 0 && GpiCreateLogColorTable(ps, 0, LCOLF_RGB, 0, 16, NULL));
     uint8 strip[24] = {0};
     lx_guest_store_u32(strip, 0x408080);
-    lx_guest_store_u16(strip + 8, 2);
-    lx_guest_store_u16(strip + 14, 16);
-    CHECK(GpiSetAttrs(ps, 4, 1 | 4 | 32, 0, strip));
+    lx_guest_store_u16(strip + 8, FM_OVERPAINT);  /* AREABUNDLE usMixMode */
+    lx_guest_store_u16(strip + 14, PATSYM_SOLID); /* AREABUNDLE usSymbol */
+    CHECK(GpiSetAttrs(ps, PRIM_AREA, ABB_COLOR | ABB_MIX_MODE | ABB_SYMBOL, 0, strip));
     POINTL strip_from = {1, 1}, strip_to = {7, 7};
-    CHECK(GpiMove(ps, &strip_from) && GpiBox(ps, 1, &strip_to, 0, 0));
+    CHECK(GpiMove(ps, &strip_from) && GpiBox(ps, DRO_FILL, &strip_to, 0, 0));
     CHECK(lx_pm_raster_read(ps, 3, 4, 1, 1, &pixel) && pixel == 0x408080);
     CHECK(GpiRestorePS(ps, rgb_state) && WinFillRect(ps, &fill, CLR_RED));
     /* Pattern ROPs take no source, and GpiWCBitBlt target corners are inclusive. */
     POINTL pattern_blit[4] = {{2, 2}, {5, 5}, {0, 0}, {4, 4}};
-    CHECK(GpiSetColor(ps, CLR_BLUE) && GpiWCBitBlt(ps, 0, 4, pattern_blit, 0xF0, 0) == 1);
+    CHECK(GpiSetColor(ps, CLR_BLUE) &&
+          GpiWCBitBlt(ps, 0, 4, pattern_blit, ROP_PATCOPY, BBO_OR) == 1);
     CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel != 0xff0000);
     CHECK(lx_pm_raster_read(ps, 6, 6, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(WinFillRect(ps, &fill, CLR_RED));
     RECTL outer = {0, 0, 16, 16}, hole = {4, 4, 12, 12};
     ULONG a = GpiCreateRegion(ps, 1, &outer), b = GpiCreateRegion(ps, 1, &hole),
           clipped = GpiCreateRegion(ps, 0, NULL);
-    CHECK(a && b && clipped && GpiCombineRegion(ps, clipped, a, b, 7) == 3);
+    CHECK(a && b && clipped && GpiCombineRegion(ps, clipped, a, b, CRGN_DIFF) == RGN_COMPLEX);
     RECTL bound;
-    CHECK(GpiQueryRegionBox(ps, clipped, &bound) == 3 && WinEqualRect(hab, &bound, &outer));
+    CHECK(GpiQueryRegionBox(ps, clipped, &bound) == RGN_COMPLEX &&
+          WinEqualRect(hab, &bound, &outer));
     ULONG previous = 99;
-    CHECK(GpiSetClipRegion(ps, clipped, &previous) == 3 && previous == 0 &&
+    CHECK(GpiSetClipRegion(ps, clipped, &previous) == RGN_COMPLEX && previous == 0 &&
           !GpiDestroyRegion(ps, clipped));
-    CHECK(GpiRectVisible(ps, &hole) == 1 && GpiRectVisible(ps, &outer) == 2);
+    CHECK(GpiRectVisible(ps, &hole) == RVIS_INVISIBLE &&
+          GpiRectVisible(ps, &outer) == RVIS_PARTIAL);
     CHECK(WinFillRect(ps, &outer, CLR_BLUE));
     CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0x0000ff);
     CHECK(lx_pm_raster_read(ps, 8, 8, 1, 1, &pixel) && pixel == 0xff0000);
-    CHECK(GpiSetClipRegion(ps, 0, &previous) == 2 && previous == clipped);
+    CHECK(GpiSetClipRegion(ps, 0, &previous) == RGN_RECT && previous == clipped);
     CHECK(GpiDestroyRegion(ps, clipped) && GpiDestroyRegion(ps, a) && GpiDestroyRegion(ps, b));
     CHECK(WinFillRect(ps, &outer, CLR_RED));
 
-    ULONG system_bitmap = WinGetSysBitmap(HWND_DESKTOP, 18);
+    ULONG system_bitmap = WinGetSysBitmap(HWND_DESKTOP, SBMP_TREEPLUS);
     POINTL origin = {0, 0};
-    CHECK(system_bitmap && WinDrawBitmap(ps, system_bitmap, NULL, &origin, CLR_BLUE, CLR_WHITE, 0));
+    CHECK(system_bitmap &&
+          WinDrawBitmap(ps, system_bitmap, NULL, &origin, CLR_BLUE, CLR_WHITE, DBM_NORMAL));
     CHECK(lx_pm_raster_read(ps, 4, 2, 1, 1, &pixel) && pixel == 0xff);
     CHECK(lx_pm_raster_read(ps, 2, 2, 1, 1, &pixel) && pixel == 0xffffff);
     CHECK(GpiDeleteBitmap(system_bitmap));
     /* Owner-drawn application lists crop checked/unchecked cells from this atlas. */
-    ULONG checkboxes = WinGetSysBitmap(HWND_DESKTOP, 48);
+    ULONG checkboxes = WinGetSysBitmap(HWND_DESKTOP, SBMP_CHECKBOXES);
     CHECK(checkboxes);
     uint8_t checks_header[64] = {64};
     CHECK(GpiQueryBitmapInfoHeader(checkboxes, checks_header));
@@ -863,32 +906,32 @@ static void graphics_contracts(HAB hab, HWND window)
     RECTL checked = {cell_width * 3, cell_height * 2, cell_width * 4, cell_height * 3};
     uint32_t empty[256], marked[256];
     CHECK(cell_width * cell_height <= 256);
-    CHECK(WinDrawBitmap(ps, checkboxes, &unchecked, &origin, 0, 0, 8));
+    CHECK(WinDrawBitmap(ps, checkboxes, &unchecked, &origin, 0, 0, DBM_IMAGEATTRS));
     CHECK(lx_pm_raster_read(ps, 0, 0, cell_width, cell_height, empty));
-    CHECK(WinDrawBitmap(ps, checkboxes, &checked, &origin, 0, 0, 8));
+    CHECK(WinDrawBitmap(ps, checkboxes, &checked, &origin, 0, 0, DBM_IMAGEATTRS));
     CHECK(lx_pm_raster_read(ps, 0, 0, cell_width, cell_height, marked));
     CHECK(memcmp(empty, marked, (size_t)cell_width * cell_height * sizeof *empty));
     CHECK(GpiDeleteBitmap(checkboxes));
-    CHECK(!WinGetSysBitmap(0, 18) && !WinGetSysBitmap(HWND_DESKTOP, 0));
+    CHECK(!WinGetSysBitmap(0, SBMP_TREEPLUS) && !WinGetSysBitmap(HWND_DESKTOP, 0));
     pointer_contracts(ps);
     CHECK(WinFillRect(ps, &outer, CLR_RED));
     RECTL border = {2, 2, 12, 12};
-    CHECK(WinDrawBorder(ps, &border, 2, 1, CLR_BLUE, CLR_WHITE, 0));
+    CHECK(WinDrawBorder(ps, &border, 2, 1, CLR_BLUE, CLR_WHITE, DB_PATCOPY));
     CHECK(lx_pm_raster_read(ps, 2, 5, 1, 1, &pixel) && pixel == 0xff);
     CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0xff0000);
-    CHECK(WinDrawBorder(ps, &border, 1, 1, CLR_BLUE, CLR_WHITE, 8));
+    CHECK(WinDrawBorder(ps, &border, 1, 1, CLR_BLUE, CLR_WHITE, DB_INTERIOR));
     CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0xffffff);
-    CHECK(WinDrawBorder(ps, &border, 1, 1, CLR_BLUE, CLR_WHITE, 2));
+    CHECK(WinDrawBorder(ps, &border, 1, 1, CLR_BLUE, CLR_WHITE, DB_DESTINVERT));
     CHECK(lx_pm_raster_read(ps, 2, 5, 1, 1, &pixel) && pixel == 0xffff00);
-    CHECK(!WinDrawBorder(ps, &border, -1, 1, CLR_BLUE, CLR_WHITE, 0));
+    CHECK(!WinDrawBorder(ps, &border, -1, 1, CLR_BLUE, CLR_WHITE, DB_PATCOPY));
     CHECK(WinFillRect(ps, &outer, CLR_RED));
 
     CHECK(GpiSetBitmapId(ps, bitmap, 9) && !GpiSetBitmapId(ps, bitmap, 9));
     CHECK(GpiQueryBitmapHandle(ps, 9) == bitmap && GpiQueryNumberSetIds(ps) == 2);
     LONG types[2], ids[2];
     char names[16];
-    CHECK(GpiQuerySetIds(ps, 2, types, names, ids) && ids[0] == 5 && types[0] == 6 && ids[1] == 9 &&
-          types[1] == 7);
+    CHECK(GpiQuerySetIds(ps, 2, types, names, ids) && ids[0] == 5 && types[0] == LCIDT_FONT &&
+          ids[1] == 9 && types[1] == LCIDT_BITMAP);
     uint8_t queried[64] = {64};
     CHECK(GpiQueryBitmapInfoHeader(bitmap, queried) && queried[4] == 32 && queried[8] == 24 &&
           queried[14] == 24);
@@ -897,7 +940,7 @@ static void graphics_contracts(HAB hab, HWND window)
           queried[12] == 0xa5);
     HPS target = WinGetPS(window);
     POINTL points[3] = {{0, 0}, {32, 24}, {0, 0}};
-    CHECK(GpiBitBlt(target, ps, 3, points, 0xcc, 2));
+    CHECK(GpiBitBlt(target, ps, 3, points, ROP_SRCCOPY, BBO_IGNORE));
     CHECK(lx_pm_raster_read(target, 3, 4, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(WinReleasePS(target));
     CHECK(GpiSetBitmap(ps, 0) == bitmap && GpiDeleteSetId(ps, 9) && GpiDeleteBitmap(bitmap));
@@ -907,7 +950,7 @@ static void graphics_contracts(HAB hab, HWND window)
 
 static void frame_border_contracts(void)
 {
-    FRAMECDATA data = {sizeof data, 0x100 | 1, 0, 0};
+    FRAMECDATA data = {sizeof data, FCF_DLGBORDER | FCF_TITLEBAR, 0, 0};
     HWND frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Dialog", WS_VISIBLE, 0, 0, 100, 80,
                                  0, HWND_TOP, 991, &data, NULL);
     CHECK(frame && WinWindowFromID(frame, FID_TITLEBAR));
@@ -942,8 +985,8 @@ static void frame_border_contracts(void)
     CHECK(WinQueryWindowText(WinWindowFromID(frame, FID_TITLEBAR), sizeof title, title) == 7 &&
           !strcmp(title, "Updated"));
     CHECK(WinDestroyWindow(frame));
-    frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Thin", WS_VISIBLE | 0x100, 0, 0, 80, 60,
-                            0, HWND_TOP, 992, NULL, NULL);
+    frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Thin", WS_VISIBLE | FS_BORDER, 0, 0, 80,
+                            60, 0, HWND_TOP, 992, NULL, NULL);
     CHECK(frame && WinSendMsg(frame, WM_QUERYBORDERSIZE, &output.border, 0));
     CHECK(output.border.x == 1 && output.border.y == 1);
     CHECK(WinDestroyWindow(frame));
@@ -953,8 +996,8 @@ static void native_control_paint_contracts(void)
 {
     HWND frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Controls", WS_VISIBLE, 0, 0, 240,
                                  100, 0, HWND_TOP, 993, NULL, NULL);
-    HWND combo = WinCreateWindow(frame, (PSZ)WC_COMBOBOX, "C:", WS_VISIBLE | 4, 0, 0, 180, 80,
-                                 frame, HWND_TOP, 994, NULL, NULL);
+    HWND combo = WinCreateWindow(frame, (PSZ)WC_COMBOBOX, "C:", WS_VISIBLE | CBS_DROPDOWNLIST, 0, 0,
+                                 180, 80, frame, HWND_TOP, 994, NULL, NULL);
     CHECK(frame && combo);
     CHECK(WinUpdateWindow(frame) && WinUpdateWindow(combo));
     Window *window = test_window(combo);
@@ -970,15 +1013,16 @@ static void native_control_paint_contracts(void)
     CHECK(lx_pm_raster_read(ps, left, 0, width, width, after));
     CHECK(!memcmp(before, after, (size_t)width * width * sizeof *before));
     ULONG color = 0xe5ddab;
-    CHECK(WinSetPresParam(frame, 3, sizeof color, &color));
-    HWND label = WinCreateWindow(frame, (PSZ)WC_STATIC, "", WS_VISIBLE | 1, 190, 0, 40, 30, frame,
-                                 HWND_TOP, 995, NULL, NULL);
+    CHECK(WinSetPresParam(frame, PP_BACKGROUNDCOLOR, sizeof color, &color));
+    HWND label = WinCreateWindow(frame, (PSZ)WC_STATIC, "", WS_VISIBLE | SS_TEXT, 190, 0, 40, 30,
+                                 frame, HWND_TOP, 995, NULL, NULL);
     CHECK(label && WinUpdateWindow(label));
     HPS label_ps = WinGetPS(label);
     uint32_t pixel;
     CHECK(label_ps && lx_pm_raster_read(label_ps, 10, 10, 1, 1, &pixel) && pixel == color);
     color = 0xabcde5;
-    CHECK(WinSetPresParam(frame, 3, sizeof color, &color) && WinUpdateWindow(label));
+    CHECK(WinSetPresParam(frame, PP_BACKGROUNDCOLOR, sizeof color, &color) &&
+          WinUpdateWindow(label));
     CHECK(lx_pm_raster_read(label_ps, 10, 10, 1, 1, &pixel) && pixel == color);
     CHECK(WinReleasePS(label_ps) && WinReleasePS(ps) && WinDestroyWindow(frame));
 }
@@ -995,10 +1039,11 @@ static void frame_state_contracts(void)
     SWP position;
     CHECK(WinQueryWindowPos(child, &position) && (position.fl & SWP_MAXIMIZE));
     CHECK(position.x == 0 && position.y == 0 && position.cx == 64 && position.cy == 48);
-    CHECK(WinQueryWindowUShort(child, 0x0c) == 10 && WinQueryWindowUShort(child, 0x10) == 20);
+    CHECK(WinQueryWindowUShort(child, QWS_XRESTORE) == 10 &&
+          WinQueryWindowUShort(child, QWS_CXRESTORE) == 20);
     CHECK(WinSetWindowPos(parent, HWND_TOP, 0, 0, 80, 60, SWP_SIZE));
     CHECK(WinQueryWindowPos(child, &position) && position.cx == 80 && position.cy == 60);
-    CHECK(WinSetWindowUShort(child, 0x0c, 13));
+    CHECK(WinSetWindowUShort(child, QWS_XRESTORE, 13));
     CHECK(WinSetWindowPos(child, HWND_TOP, 0, 0, 0, 0, SWP_RESTORE));
     CHECK(WinQueryWindowPos(child, &position) && !(position.fl & SWP_MAXIMIZE));
     CHECK(position.x == 13 && position.y == 7 && position.cx == 20 && position.cy == 12);
@@ -1012,25 +1057,25 @@ static void dialog_frame_contracts(HWND parent)
     HWND items[4];
     for (unsigned i = 0; i < 4; i++)
         items[i] = WinCreateWindow(dialog, "test", "",
-                                   WS_VISIBLE | (i == 0 || i == 3 ? 0x10000 : 0) |
-                                       (i == 0 || i == 2 ? 0x20000 : 0),
+                                   WS_VISIBLE | (i == 0 || i == 3 ? WS_GROUP : 0) |
+                                       (i == 0 || i == 2 ? WS_TABSTOP : 0),
                                    0, 0, 10, 10, dialog, HWND_BOTTOM, 811 + i, NULL, NULL);
     HWND nested = WinCreateWindow(items[1], "test", "", WS_VISIBLE, 0, 0, 1, 1, items[1],
                                   HWND_BOTTOM, 815, NULL, NULL);
     CHECK(dialog && items[0] && items[1] && items[2] && items[3] && nested);
-    CHECK(WinEnumDlgItem(dialog, 0, 0) == items[0]);
-    CHECK(WinEnumDlgItem(dialog, 0, 1) == items[2]);
-    CHECK(WinEnumDlgItem(dialog, items[2], 2) == items[0]);
-    CHECK(WinEnumDlgItem(dialog, items[0], 3) == items[2]);
-    CHECK(WinEnumDlgItem(dialog, nested, 4) == items[0]);
-    CHECK(WinEnumDlgItem(dialog, nested, 5) == items[2]);
-    CHECK(WinEnumDlgItem(dialog, items[2], 6) == items[0]);
-    CHECK(WinEnumDlgItem(dialog, items[0], 7) == items[2]);
-    CHECK(WinEnumDlgItem(dialog, items[3], 6) == items[3]);
-    CHECK(WinEnumDlgItem(dialog, 0xffffffff, 2) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, 0, EDI_FIRSTTABITEM) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, 0, EDI_LASTTABITEM) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, items[2], EDI_NEXTTABITEM) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, items[0], EDI_PREVTABITEM) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, nested, EDI_FIRSTGROUPITEM) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, nested, EDI_LASTGROUPITEM) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, items[2], EDI_NEXTGROUPITEM) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, items[0], EDI_PREVGROUPITEM) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, items[3], EDI_NEXTGROUPITEM) == items[3]);
+    CHECK(WinEnumDlgItem(dialog, 0xffffffff, EDI_NEXTTABITEM) == items[0]);
     CHECK(WinDestroyWindow(dialog));
-    HWND group = WinCreateWindow(parent, (PSZ)WC_STATIC, "", WS_VISIBLE | 2, 0, 0, 80, 60, parent,
-                                 HWND_TOP, 800, NULL, NULL);
+    HWND group = WinCreateWindow(parent, (PSZ)WC_STATIC, "", WS_VISIBLE | SS_GROUPBOX, 0, 0, 80, 60,
+                                 parent, HWND_TOP, 800, NULL, NULL);
     HWND content = WinCreateWindow(parent, "test", "", WS_VISIBLE, 10, 10, 20, 20, parent,
                                    HWND_BOTTOM, 801, NULL, NULL);
     CHECK(group && content);
@@ -1051,8 +1096,8 @@ static void dialog_frame_contracts(HWND parent)
                          .button = 1};
     CHECK(processHostEvent(lxHostThreadState()->anchor_block, &click));
     QMSG event;
-    CHECK(WinPeekMsg(0, &event, content, WM_BUTTON1DOWN, WM_BUTTON1DOWN, 1));
-    CHECK(WinSetWindowULong(content, -2, WS_VISIBLE | WS_CLIPSIBLINGS));
+    CHECK(WinPeekMsg(0, &event, content, WM_BUTTON1DOWN, WM_BUTTON1DOWN, PM_REMOVE));
+    CHECK(WinSetWindowULong(content, QWL_STYLE, WS_VISIBLE | WS_CLIPSIBLINGS));
     CHECK(WinFillRect(ps, &rect, CLR_BLUE));
     CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(WinReleasePS(ps));
@@ -1064,8 +1109,8 @@ static void class_clip_contracts(HAB hab, HWND parent)
     CHECK(WinRegisterClass(hab, "ClassClipParent", WinDefWindowProc, CS_CLIPCHILDREN, 0));
     HWND panel = WinCreateWindow(parent, "ClassClipParent", "", WS_VISIBLE, 0, 0, 40, 40, parent,
                                  HWND_TOP, 810, NULL, NULL);
-    HWND child = WinCreateWindow(panel, (PSZ)WC_STATIC, "", WS_VISIBLE | 1, 10, 10, 10, 10, panel,
-                                 HWND_TOP, 811, NULL, NULL);
+    HWND child = WinCreateWindow(panel, (PSZ)WC_STATIC, "", WS_VISIBLE | SS_TEXT, 10, 10, 10, 10,
+                                 panel, HWND_TOP, 811, NULL, NULL);
     CHECK(panel && child);
     HPS ps = WinGetPS(panel), content = WinGetPS(child);
     RECTL area = {0, 0, 40, 40};
@@ -1080,9 +1125,9 @@ static void class_clip_contracts(HAB hab, HWND parent)
 
 static void raster_contracts(HAB hab, HWND window)
 {
-    HDC dc = DevOpenDC(hab, 8, "*", 0, NULL, 0);
+    HDC dc = DevOpenDC(hab, OD_MEMORY, "*", 0, NULL, 0);
     SIZEL size = {8, 8};
-    HPS ps = GpiCreatePS(hab, dc, &size, 0x5008);
+    HPS ps = GpiCreatePS(hab, dc, &size, MICRO_PELS);
     uint8_t header[12] = {12, 0, 0, 0, 8, 0, 8, 0, 1, 0, 24, 0};
     ULONG bitmap = GpiCreateBitmap(ps, header, 0, NULL, NULL);
     CHECK(dc && ps && bitmap && GpiSetBitmap(ps, bitmap) == 0);
@@ -1093,15 +1138,15 @@ static void raster_contracts(HAB hab, HWND window)
     CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
     uint32_t pixel;
     CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0xff0000);
-    CHECK(GpiSetColor(ps, CLR_WHITE) && GpiSetMix(ps, 4));
+    CHECK(GpiSetColor(ps, CLR_WHITE) && GpiSetMix(ps, FM_XOR));
     CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
     CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0x00ffff);
     CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
     CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0xff0000);
-    CHECK(GpiSetMix(ps, 2) && GpiSetLineType(ps, 8));
+    CHECK(GpiSetMix(ps, FM_OVERPAINT) && GpiSetLineType(ps, LINETYPE_INVISIBLE));
     CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
     CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0xff0000);
-    CHECK(GpiSetLineType(ps, 7));
+    CHECK(GpiSetLineType(ps, LINETYPE_SOLID));
     POINTL segments[2] = {{4, 2}, {6, 2}}, current;
     from = (POINTL){4, 0};
     CHECK(GpiSetColor(ps, CLR_RED) && GpiMove(ps, &from));
@@ -1113,14 +1158,14 @@ static void raster_contracts(HAB hab, HWND window)
     RECTL shifted_view = {1, 1, 9, 9}, shifted_clip = {2, 2, 5, 3};
     CHECK(WinFillRect(ps, &all, CLR_WHITE) && GpiSetPageViewport(ps, &shifted_view));
     ULONG region = GpiCreateRegion(ps, 1, &shifted_clip);
-    CHECK(region && GpiSetClipRegion(ps, region, NULL) == 2);
+    CHECK(region && GpiSetClipRegion(ps, region, NULL) == RGN_RECT);
     from = (POINTL){1, 1};
     to = (POINTL){3, 1};
     CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
     CHECK(lx_pm_raster_read(ps, 2, 2, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(lx_pm_raster_read(ps, 4, 2, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0xffffff);
-    CHECK(GpiSetClipRegion(ps, 0, NULL) == 2 && GpiDestroyRegion(ps, region));
+    CHECK(GpiSetClipRegion(ps, 0, NULL) == RGN_RECT && GpiDestroyRegion(ps, region));
     shifted_view = (RECTL){0, 0, 16, 16};
     CHECK(GpiSetPageViewport(ps, &shifted_view) && GpiMove(ps, &from) && GpiLine(ps, &to));
     CHECK(lx_pm_raster_read(ps, 6, 2, 1, 1, &pixel) && pixel == 0xff0000);
@@ -1130,21 +1175,26 @@ static void raster_contracts(HAB hab, HWND window)
     uint8_t bits[8] = {0x80, 0, 0, 0, 0x40, 0, 0, 0};
     ULONG tile = GpiCreateBitmap(ps, info, 4, bits, info);
     CHECK(tile && GpiSetBitmapId(ps, tile, 7) && GpiSetPatternSet(ps, 7));
-    CHECK(GpiSetColor(ps, CLR_BLUE) && GpiSetBackColor(ps, CLR_WHITE) && GpiSetBackMix(ps, 2));
+    CHECK(GpiSetColor(ps, CLR_BLUE) && GpiSetBackColor(ps, CLR_WHITE) &&
+          GpiSetBackMix(ps, BM_OVERPAINT));
     uint8_t line[28] = {CLR_RED};
-    CHECK(GpiSetAttrs(ps, 1, 1, 0, line));
+    CHECK(GpiSetAttrs(ps, PRIM_LINE, LBB_COLOR, 0, line));
     from = (POINTL){0, 0};
     to = (POINTL){5, 5};
-    CHECK(GpiMove(ps, &from) && GpiBox(ps, 3, &to, 0, 0));
+    CHECK(GpiMove(ps, &from) && GpiBox(ps, DRO_OUTLINEFILL, &to, 0, 0));
     CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0x0000ff);
     CHECK(lx_pm_raster_read(ps, 2, 1, 1, 1, &pixel) && pixel == 0xffffff);
     CHECK(lx_pm_raster_read(ps, 0, 1, 1, 1, &pixel) && pixel == 0xff0000);
     uint8_t area[24] = {CLR_BLUE, 0, 0, 0, 0xfe, 0xff, 0xff, 0xff, 2, 0,
                         2,        0, 7, 0, 0,    0,    1,    0,    0, 0};
-    CHECK(GpiSetBackMix(ps, 5) && GpiSetAttrs(ps, 4, 0x5f, 0, area));
+    CHECK(GpiSetBackMix(ps, BM_LEAVEALONE) &&
+          GpiSetAttrs(ps, PRIM_AREA,
+                      ABB_COLOR | ABB_BACK_COLOR | ABB_MIX_MODE | ABB_BACK_MIX_MODE | ABB_SET |
+                          ABB_REF_POINT,
+                      0, area));
     POINTL reference;
     CHECK(GpiQueryPatternRefPoint(ps, &reference) && reference.x == 1 && reference.y == 0);
-    CHECK(GpiMove(ps, &from) && GpiBox(ps, 1, &to, 0, 0));
+    CHECK(GpiMove(ps, &from) && GpiBox(ps, DRO_FILL, &to, 0, 0));
     CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0xffffff);
     CHECK(lx_pm_raster_read(ps, 2, 1, 1, 1, &pixel) && pixel == 0x0000ff);
     LONG saved = GpiSavePS(ps);
@@ -1159,11 +1209,12 @@ static void raster_contracts(HAB hab, HWND window)
     HPS target = WinGetPS(window);
     POINTL points[3] = {{0, 0}, {8, 8}, {0, 0}};
     CHECK(WinFillRect(target, &all, CLR_RED) && GpiSetBackColor(target, CLR_GREEN));
-    CHECK(GpiSetBackMix(target, 18) && GpiBitBlt(target, ps, 3, points, 0xcc, 2));
+    CHECK(GpiSetBackMix(target, BM_SRCTRANSPARENT) &&
+          GpiBitBlt(target, ps, 3, points, ROP_SRCCOPY, BBO_IGNORE));
     CHECK(lx_pm_raster_read(target, 0, 0, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(lx_pm_raster_read(target, 1, 1, 1, 1, &pixel) && pixel == blue);
-    CHECK(GpiSetBackColor(target, CLR_RED) && GpiSetBackMix(target, 19));
-    CHECK(GpiBitBlt(target, ps, 3, points, 0xcc, 2));
+    CHECK(GpiSetBackColor(target, CLR_RED) && GpiSetBackMix(target, BM_DESTTRANSPARENT));
+    CHECK(GpiBitBlt(target, ps, 3, points, ROP_SRCCOPY, BBO_IGNORE));
     CHECK(lx_pm_raster_read(target, 0, 0, 1, 1, &pixel) && pixel == 0x00ff00);
     CHECK(lx_pm_raster_read(target, 1, 1, 1, 1, &pixel) && pixel == blue);
     CHECK(WinReleasePS(target));
@@ -1189,16 +1240,16 @@ int main(void)
     CHECK(frame && client && creates == 1);
     HWND object =
         WinCreateWindow(HWND_OBJECT, "test", NULL, 0, 0, 0, 0, 0, 0, HWND_TOP, 77, NULL, NULL);
-    CHECK(object && WinQueryWindow(object, 5) == HWND_OBJECT);
+    CHECK(object && WinQueryWindow(object, QW_PARENT) == HWND_OBJECT);
     CHECK(!WinGetPS(object) && !WinDestroyWindow(HWND_OBJECT));
-    CHECK(WinSetParent(object, client, TRUE) && WinQueryWindow(object, 5) == client);
+    CHECK(WinSetParent(object, client, TRUE) && WinQueryWindow(object, QW_PARENT) == client);
     CHECK(!WinSetParent(client, object, FALSE));
     CHECK(WinSetParent(object, HWND_DESKTOP, FALSE));
-    CHECK(WinQueryWindow(object, 5) == HWND_DESKTOP);
+    CHECK(WinQueryWindow(object, QW_PARENT) == HWND_DESKTOP);
     CHECK(WinSetParent(object, HWND_OBJECT, TRUE));
     CHECK(WinPostMsg(object, WM_USER + 7, (MPARAM)(uintptr_t)77, 0));
     QMSG object_message;
-    CHECK(WinPeekMsg(hab, &object_message, object, WM_USER + 7, WM_USER + 7, 1) &&
+    CHECK(WinPeekMsg(hab, &object_message, object, WM_USER + 7, WM_USER + 7, PM_REMOVE) &&
           (uintptr_t)object_message.mp1 == 77);
     CHECK(WinDestroyWindow(object));
     CHECK(WinWindowFromID(frame, FID_CLIENT) == client);
@@ -1208,25 +1259,25 @@ int main(void)
     CHECK(WinSetWindowULong(client, 0, 0x12345678) && WinQueryWindowULong(client, 0) == 0x12345678);
     CHECK(WinSetWindowPtr(client, 4, (void *)(uintptr_t)0xfedcba98) &&
           (uintptr_t)WinQueryWindowPtr(client, 4) == 0xfedcba98);
-    CHECK(!WinSetWindowULong(client, 5, 42) && !WinSetWindowULong(client, -1, 42));
-    CHECK(WinQueryWindowULong(client, -4) == hmq);
+    CHECK(!WinSetWindowULong(client, 5, 42) && !WinSetWindowULong(client, QWS_ID, 42));
+    CHECK(WinQueryWindowULong(client, QWL_HMQ) == hmq);
     CHECK(WinSubclassWindow(client, WinDefWindowProc) == procedure);
     CHECK(WinSubclassWindow(client, procedure) == WinDefWindowProc);
-    CHECK(WinQueryWindowULong(client, -3) == (ULONG)(uintptr_t)procedure);
-    CHECK(WinSetWindowPtr(client, -3, (PVOID)(uintptr_t)0x12345678));
-    CHECK((uintptr_t)WinQueryWindowPtr(client, -3) == 0x12345678);
+    CHECK(WinQueryWindowULong(client, QWP_PFNWP) == (ULONG)(uintptr_t)procedure);
+    CHECK(WinSetWindowPtr(client, QWP_PFNWP, (PVOID)(uintptr_t)0x12345678));
+    CHECK((uintptr_t)WinQueryWindowPtr(client, QWP_PFNWP) == 0x12345678);
     CHECK(WinSubclassWindow(client, procedure) == (PFNWP)(uintptr_t)0x12345678);
-    CHECK(WinQuerySysColor(HWND_DESKTOP, -20, 0) == 0xffffff);
+    CHECK(WinQuerySysColor(HWND_DESKTOP, SYSCLR_WINDOW, 0) == 0xffffff);
     char mixed_case[] = "Suite i-123";
     CHECK(WinUpper(hab, 0, 0, mixed_case) == 11 && !strcmp(mixed_case, "SUITE I-123"));
     CHECK(WinUpperChar(hab, 437, 1, 'z') == 'Z');
     CHECK(!WinUpper(hab, 932, 0, mixed_case));
-    CHECK(!WinQuerySysColor(HWND_DESKTOP, -51, 0));
+    CHECK(!WinQuerySysColor(HWND_DESKTOP, SYSCLR_SHADOWHILITEBGND - 1, 0));
     CHECK((WinGetLastError(hab) & 0xffff) == PMERR_PARAMETER_OUT_OF_RANGE);
     RECTL desktop;
     CHECK(WinQueryWindowRect(HWND_DESKTOP, &desktop));
-    CHECK(WinQuerySysValue(HWND_DESKTOP, 20) == desktop.xRight);
-    CHECK(WinQuerySysValue(HWND_DESKTOP, 21) == desktop.yTop);
+    CHECK(WinQuerySysValue(HWND_DESKTOP, SV_CXSCREEN) == desktop.xRight);
+    CHECK(WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN) == desktop.yTop);
     HPS screen = WinGetScreenPS(HWND_DESKTOP);
     CHECK(screen && sizeof(FONTMETRICS) == 228);
     HPS nested_screen = WinGetScreenPS(HWND_DESKTOP);
@@ -1234,36 +1285,41 @@ int main(void)
     CHECK(!WinReleasePS(nested_screen | 1));
     CHECK(WinReleasePS(nested_screen & ~1u) && lx_pm_valid_ps(screen));
     LONG requested = 0;
-    CHECK(GpiQueryFonts(screen, 1, "Helv", &requested, 228, NULL) == 4 && requested == 0);
+    CHECK(GpiQueryFonts(screen, QF_PUBLIC, "Helv", &requested, 228, NULL) == 4 && requested == 0);
     FONTMETRICS metrics[2];
     requested = 2;
-    CHECK(GpiQueryFonts(screen, 1, "Helv", &requested, 228, metrics) == 2 && requested == 2);
+    CHECK(GpiQueryFonts(screen, QF_PUBLIC, "Helv", &requested, 228, metrics) == 2 &&
+          requested == 2);
     CHECK(!strcmp(metrics[0].szFamilyname, "Helv") && metrics[0].lMatch == 1);
     CHECK(metrics[0].lMaxAscender > 0 && metrics[0].lAveCharWidth > 0);
-    CHECK(!(metrics[0].fsSelection & 0x20) && (metrics[1].fsSelection & 0x20));
+    CHECK(!(metrics[0].fsSelection & FM_SEL_BOLD) && (metrics[1].fsSelection & FM_SEL_BOLD));
     requested = 0;
-    CHECK(!GpiQueryFonts(screen, 1, "Missing face", &requested, 228, NULL));
+    CHECK(!GpiQueryFonts(screen, QF_PUBLIC, "Missing face", &requested, 228, NULL));
     CHECK(GpiQueryFontMetrics(screen, 228, metrics) && metrics[0].lMatch == 1);
     LONG capabilities[2];
-    CHECK(DevQueryCaps(HWND_DESKTOP, 8, 2, capabilities) && capabilities[0] == 3780 &&
-          capabilities[1] == 3780);
+    CHECK(DevQueryCaps(HWND_DESKTOP, CAPS_HORIZONTAL_RESOLUTION, 2, capabilities) &&
+          capabilities[0] == 3780 && capabilities[1] == 3780);
     CHECK(!DevQueryCaps(HWND_DESKTOP, 41, 2, capabilities));
     LONG display_caps[42];
     CHECK(DevQueryCaps(HWND_DESKTOP, 0, 42, display_caps));
-    CHECK(display_caps[14] == 16777216 && display_caps[15] == 1 && display_caps[16] == 24 &&
-          display_caps[17] == 1 && display_caps[33] == display_caps[14] && display_caps[34] == 255);
+    CHECK(display_caps[CAPS_COLORS] == 16777216 && display_caps[CAPS_COLOR_PLANES] == 1 &&
+          display_caps[CAPS_COLOR_BITCOUNT] == 24 && display_caps[CAPS_COLOR_TABLE_SUPPORT] == 1 &&
+          display_caps[CAPS_PHYS_COLORS] == display_caps[CAPS_COLORS] &&
+          display_caps[CAPS_COLOR_INDEX] == 255);
     LONG initial_palette[16];
     CHECK(GpiQueryLogColorTable(screen, 0, 0, 16, initial_palette) == 16 &&
           initial_palette[CLR_RED] == 0xff0000);
     LONG last_custom = 0x123456;
-    CHECK(GpiCreateLogColorTable(screen, 0, 2, display_caps[34], 1, &last_custom) &&
-          GpiQueryRGBColor(screen, 0, display_caps[34]) == last_custom);
-    CHECK(!GpiCreateLogColorTable(screen, 0, 2, display_caps[34] + 1, 1, &last_custom));
+    CHECK(GpiCreateLogColorTable(screen, 0, LCOLF_CONSECRGB, display_caps[CAPS_COLOR_INDEX], 1,
+                                 &last_custom) &&
+          GpiQueryRGBColor(screen, 0, display_caps[CAPS_COLOR_INDEX]) == last_custom);
+    CHECK(!GpiCreateLogColorTable(screen, 0, LCOLF_CONSECRGB, display_caps[CAPS_COLOR_INDEX] + 1, 1,
+                                  &last_custom));
     CHECK(GpiCreateLogColorTable(screen, 0, 0, 0, 0, NULL));
     CHECK(GpiQueryColorIndex(screen, 0, 0xff0000) == CLR_RED);
     CHECK(GpiQueryColorIndex(screen, 0, 0x0100fe) == CLR_BLUE);
     CHECK(GpiQueryRGBColor(screen, 0, CLR_RED) == 0xff0000);
-    CHECK(GpiQueryRGBColor(screen, 1, CLR_RED) == 0xff0000);
+    CHECK(GpiQueryRGBColor(screen, LCOLOPT_REALIZED, CLR_RED) == 0xff0000);
     CHECK(WinReleasePS(screen) && !WinReleasePS(screen));
     CHECK(WinSetWindowPos(frame, HWND_TOP, 10, 10, 64, 48, SWP_MOVE | SWP_SIZE | SWP_SHOW));
     graphics_contracts(hab, client);
@@ -1294,8 +1350,8 @@ int main(void)
     char classname[16];
     CHECK(WinQueryClassName(client, sizeof classname, classname) == 4 &&
           !strcmp(classname, "test"));
-    CHECK(WinQueryAnchorBlock(client) == hab && WinQueryWindow(client, 5) == frame);
-    CHECK(WinQueryWindow(client, 4) == frame);
+    CHECK(WinQueryAnchorBlock(client) == hab && WinQueryWindow(client, QW_PARENT) == frame);
+    CHECK(WinQueryWindow(client, QW_OWNER) == frame);
     HENUM enumeration = WinBeginEnumWindows(frame);
     CHECK(enumeration);
     HWND transient =
@@ -1303,7 +1359,8 @@ int main(void)
     CHECK(transient && WinGetNextWindow(enumeration) == client);
     CHECK(!WinGetNextWindow(enumeration) && WinGetNextWindow(enumeration) == client);
     CHECK(WinEndEnumWindows(enumeration) && !WinEndEnumWindows(enumeration));
-    CHECK(WinQueryWindow(transient, 0) == client && WinQueryWindow(client, 1) == transient);
+    CHECK(WinQueryWindow(transient, QW_NEXT) == client &&
+          WinQueryWindow(client, QW_PREV) == transient);
     CHECK(WinEnableWindow(transient, FALSE) && !WinIsWindowEnabled(transient));
     CHECK(WinEnableWindow(transient, TRUE) && WinIsWindowEnabled(transient));
     CHECK(WinPostMsg(transient, WM_USER + 90, 0, 0) && WinDestroyWindow(transient));
@@ -1312,11 +1369,14 @@ int main(void)
     CHECK(WinGetMsg(hab, &retired, 0, WM_USER + 90, WM_USER + 90) && retired.hwnd == client);
     ULONG color = CLR_RED, found = 0, result = 0;
     unsigned before = changes;
-    CHECK(WinSetPresParam(frame, 2, 4, &color) && changes == before + 1);
-    CHECK(WinQueryPresParam(client, 2, 0, &found, 4, &result, 2) == 4 && found == 2 &&
-          result == 0xff0000);
-    CHECK(!WinQueryPresParam(client, 2, 0, &found, 4, &result, 1));
-    CHECK(WinRemovePresParam(frame, 2) && !WinRemovePresParam(frame, 2));
+    CHECK(WinSetPresParam(frame, PP_FOREGROUNDCOLORINDEX, 4, &color) && changes == before + 1);
+    CHECK(WinQueryPresParam(client, PP_FOREGROUNDCOLORINDEX, 0, &found, 4, &result,
+                            QPF_ID1COLORINDEX) == 4 &&
+          found == PP_FOREGROUNDCOLORINDEX && result == 0xff0000);
+    CHECK(
+        !WinQueryPresParam(client, PP_FOREGROUNDCOLORINDEX, 0, &found, 4, &result, QPF_NOINHERIT));
+    CHECK(WinRemovePresParam(frame, PP_FOREGROUNDCOLORINDEX) &&
+          !WinRemovePresParam(frame, PP_FOREGROUNDCOLORINDEX));
     CHECK(WinShowWindow(frame, FALSE) && !WinIsWindowVisible(frame));
     CHECK(WinShowWindow(frame, TRUE) && WinIsWindowVisible(frame));
     HDC dc = WinOpenWindowDC(client);
@@ -1324,14 +1384,17 @@ int main(void)
     HPS ps = GpiCreatePS(hab, dc, &size, PU_PELS | GPIA_ASSOC);
     CHECK(ps && GpiSetColor(ps, CLR_RED) && GpiSetDrawingMode(ps, DM_DRAW));
     char font_name[] = "18.Courier Bold";
-    CHECK(WinSetPresParam(frame, 15, sizeof font_name, font_name));
+    CHECK(WinSetPresParam(frame, PP_FONTNAMESIZE, sizeof font_name, font_name));
     CHECK(GpiQueryFontMetrics(ps, 228, metrics));
-    CHECK(metrics[0].lEmHeight == 24 && (metrics[0].fsType & 1) && (metrics[0].fsSelection & 0x20));
+    CHECK(metrics[0].lEmHeight == 24 && (metrics[0].fsType & FM_TYPE_FIXED) &&
+          (metrics[0].fsSelection & FM_SEL_BOLD));
     POINTL text_box[5], narrow_box[5];
-    CHECK(GpiQueryTextBox(ps, 2, "WW", 5, text_box) && GpiQueryTextBox(ps, 2, "ii", 5, narrow_box));
+    CHECK(GpiQueryTextBox(ps, 2, "WW", TXTBOX_COUNT, text_box) &&
+          GpiQueryTextBox(ps, 2, "ii", TXTBOX_COUNT, narrow_box));
     CHECK(text_box[4].x == narrow_box[4].x && text_box[0].y > 0 && text_box[1].y <= 0);
-    CHECK(WinRemovePresParam(frame, 15));
-    CHECK(GpiQueryTextBox(ps, 2, "WW", 5, text_box) && GpiQueryTextBox(ps, 2, "ii", 5, narrow_box));
+    CHECK(WinRemovePresParam(frame, PP_FONTNAMESIZE));
+    CHECK(GpiQueryTextBox(ps, 2, "WW", TXTBOX_COUNT, text_box) &&
+          GpiQueryTextBox(ps, 2, "ii", TXTBOX_COUNT, narrow_box));
     CHECK(text_box[4].x > narrow_box[4].x);
 
     POINTL point = {0, 0};

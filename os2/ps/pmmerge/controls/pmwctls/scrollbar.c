@@ -3,6 +3,24 @@
 #include "os2/include/private/pmwctlp.h"
 #include "emulator/abi.h"
 
+enum
+{
+    /* SBCDATA in guest memory; without SBS_THUMBSIZE it may end before cVisible. */
+    SBCDATA_CB_OFFSET = 0,
+    SBCDATA_HILITE_OFFSET = 2,
+    SBCDATA_POSFIRST_OFFSET = 4,
+    SBCDATA_POSLAST_OFFSET = 6,
+    SBCDATA_POSTHUMB_OFFSET = 8,
+    SBCDATA_CVISIBLE_OFFSET = 10,
+    SBCDATA_CTOTAL_OFFSET = 12,
+    SBCDATA_SIZE = 14,
+    /* A thumb never shrinks below this many pixels unless the track does. */
+    SCROLLBAR_MIN_THUMB = 4,
+    /* Each arrow is a three-row triangle, five pixels at its base. */
+    ARROW_GLYPH_ROWS = 3,
+    ARROW_GLYPH_MIN_SIZE = 5
+};
+
 static LONG bound(LONG value, LONG low, LONG high)
 {
     return value < low ? low : value > high ? high : value;
@@ -21,19 +39,22 @@ BOOL initializeScrollbar(Window *window, MPARAM data)
     range(c, 0, 0, 0);
     if (!data)
         return TRUE;
-    uint8 bytes[14];
-    if (!controlRead(data, bytes, 2))
+    uint8 bytes[SBCDATA_SIZE];
+    if (!controlRead(data, bytes, sizeof(USHORT)))
         return FALSE;
-    unsigned size = lx_guest_load_u16(bytes);
-    if (size < ((window->style & 2) ? 14u : 10u) || size > sizeof bytes ||
-        !controlRead(data, bytes, size) || lx_guest_load_u16(bytes + 2))
+    unsigned size = lx_guest_load_u16(bytes + SBCDATA_CB_OFFSET);
+    if (size < ((window->style & SBS_THUMBSIZE) ? (unsigned)SBCDATA_SIZE
+                                                : (unsigned)SBCDATA_CVISIBLE_OFFSET) ||
+        size > sizeof bytes || !controlRead(data, bytes, size) ||
+        lx_guest_load_u16(bytes + SBCDATA_HILITE_OFFSET))
         return FALSE;
-    range(c, (SHORT)lx_guest_load_u16(bytes + 4), (SHORT)lx_guest_load_u16(bytes + 6),
-          (SHORT)lx_guest_load_u16(bytes + 8));
-    if (window->style & 2)
+    range(c, (SHORT)lx_guest_load_u16(bytes + SBCDATA_POSFIRST_OFFSET),
+          (SHORT)lx_guest_load_u16(bytes + SBCDATA_POSLAST_OFFSET),
+          (SHORT)lx_guest_load_u16(bytes + SBCDATA_POSTHUMB_OFFSET));
+    if (window->style & SBS_THUMBSIZE)
     {
-        SHORT visible = (SHORT)lx_guest_load_u16(bytes + 10);
-        SHORT total = (SHORT)lx_guest_load_u16(bytes + 12);
+        SHORT visible = (SHORT)lx_guest_load_u16(bytes + SBCDATA_CVISIBLE_OFFSET);
+        SHORT total = (SHORT)lx_guest_load_u16(bytes + SBCDATA_CTOTAL_OFFSET);
         c->first = visible > 0 ? (unsigned)visible : 0;
         c->last = total > 0 ? (unsigned)total : 0;
     }
@@ -43,14 +64,14 @@ BOOL initializeScrollbar(Window *window, MPARAM data)
 static void geometry(Window *w, LONG *arrow, LONG *start, LONG *thumb, LONG *travel)
 {
     PmControl *c = w->control;
-    BOOL vertical = (w->style & 1) != 0;
+    BOOL vertical = (w->style & SBS_VERT) != 0;
     LONG length = vertical ? w->h : w->w;
     *arrow = vertical ? w->w : w->h;
     if (*arrow > length / 2)
         *arrow = length / 2;
     LONG track = length - *arrow * 2;
     *thumb = c->last ? (LONG)((int64_t)track * c->first / c->last) : *arrow;
-    *thumb = bound(*thumb, track < 4 ? track : 4, track);
+    *thumb = bound(*thumb, track < SCROLLBAR_MIN_THUMB ? track : SCROLLBAR_MIN_THUMB, track);
     *travel = track - *thumb;
     *start =
         *arrow + (c->upper > c->lower
@@ -60,8 +81,8 @@ static void geometry(Window *w, LONG *arrow, LONG *start, LONG *thumb, LONG *tra
 
 static RECTL axis(Window *w, LONG first, LONG last)
 {
-    return (w->style & 1) ? (RECTL){0, w->h - last, w->w, w->h - first}
-                          : (RECTL){first, 0, last, w->h};
+    return (w->style & SBS_VERT) ? (RECTL){0, w->h - last, w->w, w->h - first}
+                                 : (RECTL){first, 0, last, w->h};
 }
 
 static void paint(Window *window)
@@ -72,7 +93,7 @@ static void paint(Window *window)
     LONG arrow, start, thumb, travel;
     geometry(window, &arrow, &start, &thumb, &travel);
     (void)travel;
-    LONG length = window->style & 1 ? window->h : window->w;
+    LONG length = window->style & SBS_VERT ? window->h : window->w;
     RECTL whole = {0, 0, window->w, window->h};
     WinFillRect(ps, &whole, CLR_DARKGRAY);
     RECTL parts[] = {axis(window, 0, arrow), axis(window, length - arrow, length),
@@ -82,14 +103,14 @@ static void paint(Window *window)
         WinFillRect(ps, &parts[i], CLR_PALEGRAY);
         WinDrawBorder(ps, &parts[i], 1, 1, CLR_BLACK, CLR_PALEGRAY, 0);
     }
-    for (unsigned i = 0; i < 2 && arrow >= 5; i++)
-        for (LONG row = 0; row < 3; row++)
+    for (unsigned i = 0; i < 2 && arrow >= ARROW_GLYPH_MIN_SIZE; i++)
+        for (LONG row = 0; row < ARROW_GLYPH_ROWS; row++)
         {
             LONG middle = (i ? length - arrow : 0) + arrow / 2;
             LONG at = middle + (i ? 1 - row : row - 1);
             RECTL line = axis(window, at, at + 1);
-            LONG half = window->style & 1 ? window->w / 2 : window->h / 2;
-            if (window->style & 1)
+            LONG half = window->style & SBS_VERT ? window->w / 2 : window->h / 2;
+            if (window->style & SBS_VERT)
                 line.xLeft = half - row, line.xRight = half + row + 1;
             else
                 line.yBottom = half - row, line.yTop = half + row + 1;
@@ -101,7 +122,7 @@ static void paint(Window *window)
 static void notify(Window *w, USHORT command, SHORT position)
 {
     if (w->owner)
-        WinPostMsg(w->owner->hwnd, (w->style & 1) ? WM_VSCROLL : WM_HSCROLL,
+        WinPostMsg(w->owner->hwnd, (w->style & SBS_VERT) ? WM_VSCROLL : WM_HSCROLL,
                    (MPARAM)(uintptr_t)(USHORT)w->id,
                    (MPARAM)(uintptr_t)((USHORT)position | (ULONG)command << 16));
 }
@@ -110,20 +131,20 @@ MRESULT scrollbarMessage(Window *w, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = w->control;
     ULONG p = (ULONG)(uintptr_t)first, q = (ULONG)(uintptr_t)second;
-    if (message == 0x1a2)
+    if (message == SBM_QUERYPOS)
         return controlReply(c->value);
-    if (message == 0x1a3)
+    if (message == SBM_QUERYRANGE)
         return (MRESULT)(uintptr_t)((USHORT)c->lower | (ULONG)(USHORT)c->upper << 16);
-    if (message == 0x1a0 || message == 0x1a1)
+    if (message == SBM_SETSCROLLBAR || message == SBM_SETPOS)
     {
-        if (message == 0x1a0)
+        if (message == SBM_SETSCROLLBAR)
             range(c, (SHORT)q, (SHORT)(q >> 16), (SHORT)p);
         else
             c->value = bound((SHORT)p, c->lower, c->upper);
         controlRepaint(w);
         return controlReply(TRUE);
     }
-    if (message == 0x1a6)
+    if (message == SBM_SETTHUMBSIZE)
     {
         c->first = (SHORT)p > 0 ? (unsigned)(SHORT)p : 0;
         c->last = (SHORT)(p >> 16) > 0 ? (unsigned)(SHORT)(p >> 16) : 0;
@@ -140,8 +161,8 @@ MRESULT scrollbarMessage(Window *w, ULONG message, MPARAM first, MPARAM second)
     {
         LONG arrow, start, thumb, travel;
         geometry(w, &arrow, &start, &thumb, &travel);
-        LONG at = (w->style & 1) ? w->h - 1 - (SHORT)(p >> 16) : (SHORT)p;
-        LONG length = w->style & 1 ? w->h : w->w;
+        LONG at = (w->style & SBS_VERT) ? w->h - 1 - (SHORT)(p >> 16) : (SHORT)p;
+        LONG length = w->style & SBS_VERT ? w->h : w->w;
         if (message == WM_BUTTON1DOWN)
         {
             if (at >= start && at < start + thumb && travel)
@@ -153,22 +174,22 @@ MRESULT scrollbarMessage(Window *w, ULONG message, MPARAM first, MPARAM second)
             }
             else
                 notify(w,
-                       at < arrow             ? 1
-                       : at >= length - arrow ? 2
-                       : at < start           ? 3
-                                              : 4,
+                       at < arrow             ? SB_LINEUP
+                       : at >= length - arrow ? SB_LINEDOWN
+                       : at < start           ? SB_PAGEUP
+                                              : SB_PAGEDOWN,
                        (SHORT)c->value);
         }
         else if (message == WM_MOUSEMOVE && c->pressed && travel)
         {
             LONG offset = bound(at - c->drag_offset - arrow, 0, travel);
             c->view = (unsigned)(c->lower + (int64_t)offset * (c->upper - c->lower) / travel);
-            if (w->style & 4)
+            if (w->style & SBS_AUTOTRACK)
             {
                 c->value = (LONG)c->view;
                 controlRepaint(w);
             }
-            notify(w, 5, (SHORT)c->view);
+            notify(w, SB_SLIDERTRACK, (SHORT)c->view);
         }
         else if (message == WM_BUTTON1UP)
         {
@@ -176,9 +197,9 @@ MRESULT scrollbarMessage(Window *w, ULONG message, MPARAM first, MPARAM second)
             {
                 c->pressed = FALSE;
                 WinSetCapture(HWND_DESKTOP, 0);
-                notify(w, 6, (SHORT)c->view);
+                notify(w, SB_SLIDERPOSITION, (SHORT)c->view);
             }
-            notify(w, 7, (SHORT)c->value);
+            notify(w, SB_ENDSCROLL, (SHORT)c->value);
         }
         return 0;
     }

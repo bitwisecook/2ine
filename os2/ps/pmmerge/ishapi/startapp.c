@@ -2,41 +2,28 @@
 /* WinStartApp maps program details onto a session. The startup directory and
    environment travel with the launch; this process's own state never changes. */
 #include "os2/include/private/export.h"
+#include "os2/include/pmerr.h"
 #include "os2/include/pmsei.h"
 #include "os2/include/pmshl.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/private/bsep.h"
 #include "emulator/handles.h"
 
+/* Toolkit bsedos.h STARTDATA values and the os2def.h error severity. */
 enum
 {
-    SAF_INSTALLEDCMDLINE = 0x01,
-    SAF_STARTCHILDAPP = 0x02,
-    SAF_MAXIMIZED = 0x04,
-    SAF_MINIMIZED = 0x08,
-    SAF_BACKGROUND = 0x10,
-    SAF_VALIDFLAGS = 0x1f,
-    SHE_INVISIBLE = 0x01,
-    SWP_HIDE_FLAG = 0x0010,
-    SWP_MINIMIZE_FLAG = 0x0400,
-    SWP_MAXIMIZE_FLAG = 0x0800,
-    SWP_NOAUTOCLOSE_FLAG = 0x8000,
     SSF_CONTROL_INVISIBLE = 0x0001,
     SSF_CONTROL_MAXIMIZE = 0x0002,
     SSF_CONTROL_MINIMIZE = 0x0004,
     SSF_CONTROL_NOAUTOCLOSE = 0x0008,
     SSF_CONTROL_SETPOS = 0x8000,
-    SWP_MOVE_FLAG = 0x0002,
-    PROG_VDM_TYPE = 4,
-    PROG_WINDOWEDVDM_TYPE = 7,
-    PROG_WINDOW_FIRST = 10,
-    PROG_WINDOW_LAST = 20,
-    PMERR_INVALID_WINDOW_ID = 0x1206,
-    PMERR_INVALID_PARAMETERS_ID = 0x1208,
-    PMERR_INVALID_APPL_ID = 0x1530,
-    PMERR_DOS_ERROR_ID = 0x1200,
-    PMERR_MEMORY_ID = 0x1112,
     SEVERITY_ERROR_ID = 8
+};
+
+/* STARTDATA length through ObjectBuffLen: every field is present. */
+enum
+{
+    STARTDATA_FULL_LENGTH = 60
 };
 
 typedef struct App
@@ -69,28 +56,29 @@ static PSZ installed_parameters(PSZ parameters)
 /* Windows program categories run under WINOS2.COM with a mode switch. */
 static const char *windows_switch(ULONG category)
 {
-    if (category == 10)
+    if (category == PROG_WINDOW_REAL)
         return "/r ";
-    if (category == 11 || category == 20 || (category >= 13 && category <= 16))
+    if (category == PROG_WINDOW_PROT || category == PROG_31_STD ||
+        (category >= PROG_SEAMLESSVDM && category <= PROG_31_STDSEAMLESSCOMMON))
         return "/s ";
-    if (category >= 17 && category <= 19)
+    if (category >= PROG_31_ENHSEAMLESSVDM && category <= PROG_31_ENH)
         return "/3 ";
-    return category == 12 ? " " : NULL;
+    return category == PROG_WINDOW_AUTO ? " " : NULL;
 }
 
 static USHORT session_control(const PROGDETAILS *details, ULONG options)
 {
     ULONG flags = details->swpInitial.fl;
     USHORT control = 0;
-    if ((flags & SWP_HIDE_FLAG) || (details->fbVisible & SHE_INVISIBLE))
+    if ((flags & SWP_HIDE) || (details->fbVisible & SHE_INVISIBLE))
         control |= SSF_CONTROL_INVISIBLE;
-    if (flags & SWP_MINIMIZE_FLAG)
+    if (flags & SWP_MINIMIZE)
         control |= SSF_CONTROL_MINIMIZE;
-    if (flags & SWP_MAXIMIZE_FLAG)
+    if (flags & SWP_MAXIMIZE)
         control |= SSF_CONTROL_MAXIMIZE;
-    if (flags & SWP_NOAUTOCLOSE_FLAG)
+    if (flags & SWP_NOAUTOCLOSE)
         control |= SSF_CONTROL_NOAUTOCLOSE;
-    if (flags & SWP_MOVE_FLAG)
+    if (flags & SWP_MOVE)
         control |= SSF_CONTROL_SETPOS;
     if (options & SAF_MAXIMIZED)
         control |= SSF_CONTROL_MAXIMIZE;
@@ -108,9 +96,9 @@ static ULONG dos_error(ULONG error)
         case ERROR_INVALID_EXE_SIGNATURE:
         case ERROR_EXE_MARKED_INVALID:
         case ERROR_BAD_EXE_FORMAT:
-            return PMERR_INVALID_APPL_ID;
+            return PMERR_INVALID_APPL;
         default:
-            return PMERR_DOS_ERROR_ID;
+            return PMERR_DOS_ERROR;
     }
 }
 
@@ -120,21 +108,23 @@ ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, UL
     *error = 0;
     if (!details || (options & ~(ULONG)SAF_VALIDFLAGS))
     {
-        *error = PMERR_INVALID_PARAMETERS_ID;
+        *error = PMERR_INVALID_PARAMETERS;
         return 0;
     }
     if (notify && !WinIsWindow(0, notify))
     {
-        *error = PMERR_INVALID_WINDOW_ID;
+        *error = PMERR_INVALID_WINDOW;
         return 0;
     }
     STARTDATA data = {0};
-    data.Length = 60;
-    data.Related = options & SAF_STARTCHILDAPP ? 1 : 0;
-    data.FgBg = (options & SAF_BACKGROUND) || (details->swpInitial.fl & SWP_MINIMIZE_FLAG) ? 1 : 0;
+    data.Length = STARTDATA_FULL_LENGTH;
+    data.Related = options & SAF_STARTCHILDAPP ? SSF_RELATED_CHILD : SSF_RELATED_INDEPENDENT;
+    data.FgBg = (options & SAF_BACKGROUND) || (details->swpInitial.fl & SWP_MINIMIZE)
+                    ? SSF_FGBG_BACK
+                    : SSF_FGBG_FORE;
     data.PgmTitle = details->pszTitle;
     data.PgmName = details->pszExecutable;
-    data.InheritOpt = 1;
+    data.InheritOpt = SSF_INHERTOPT_PARENT;
     data.PgmControl = session_control(details, options);
     data.InitXPos = (USHORT)details->swpInitial.x;
     data.InitYPos = (USHORT)details->swpInitial.y;
@@ -155,21 +145,21 @@ ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, UL
             size_t size = strlen(mode) + strlen(details->pszExecutable) + strlen(tail) + 2;
             if (!(windows_inputs = malloc(size)))
             {
-                *error = PMERR_MEMORY_ID;
+                *error = PMERR_MEMORY_ALLOCATION_ERR;
                 return 0;
             }
             snprintf(windows_inputs, size, "%s%s %s", mode, details->pszExecutable, tail);
             inputs = windows_inputs;
             data.PgmName = "WINOS2.COM";
-            category = PROG_VDM_TYPE;
+            category = PROG_VDM;
         }
     }
-    if (category >= PROG_WINDOW_FIRST && category <= PROG_WINDOW_LAST)
-        category = PROG_VDM_TYPE;
-    if (category > PROG_VDM_TYPE && category != PROG_WINDOWEDVDM_TYPE)
+    if (category >= PROG_WINDOW_REAL && category <= PROG_31_STD)
+        category = PROG_VDM;
+    if (category > PROG_VDM && category != PROG_WINDOWEDVDM)
     {
         free(windows_inputs);
-        *error = PMERR_INVALID_APPL_ID;
+        *error = PMERR_INVALID_APPL;
         return 0;
     }
     data.SessionType = (USHORT)category;
@@ -184,7 +174,7 @@ ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, UL
     {
         free(app);
         free(windows_inputs);
-        *error = PMERR_MEMORY_ID;
+        *error = PMERR_MEMORY_ALLOCATION_ERR;
         return 0;
     }
     /* The wait thread may close the handle as soon as the session starts. */
@@ -203,7 +193,7 @@ ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, UL
     if (result)
     {
         lx_handle_close(handle, LX_HANDLE_PM_APP);
-        *error = windows_session ? PMERR_DOS_ERROR_ID : dos_error(result);
+        *error = windows_session ? PMERR_DOS_ERROR : dos_error(result);
         return 0;
     }
     return handle;
@@ -213,7 +203,7 @@ ULONG WinStartApp(HWND notify, PPROGDETAILS details, PSZ parameters, PVOID reser
 {
     TRACE_NATIVE("WinStartApp(%u, %p, '%s', %p, %u)", (unsigned)notify, details, parameters,
                  reserved, (unsigned)options);
-    ULONG error = reserved ? PMERR_INVALID_PARAMETERS_ID : 0;
+    ULONG error = reserved ? PMERR_INVALID_PARAMETERS : 0;
     ULONG handle = error ? 0 : lx_pmshapi_start_app(notify, details, parameters, options, &error);
     if (error)
         WinSetErrorInfo(((ULONG)SEVERITY_ERROR_ID << 16) | error, 0);

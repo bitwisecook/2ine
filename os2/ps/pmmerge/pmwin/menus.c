@@ -7,6 +7,43 @@
 #include "emulator/abi.h"
 #include <ctype.h>
 
+/* Toolkit bsedos.h resource type. */
+enum
+{
+    RT_MENU = 3
+};
+
+/* MT and MTI menu template layouts: an MT header, then MTI items whose text and nested
+   submenu template follow inline. The MTI pad word carries the item attributes. */
+enum
+{
+    MT_CODEPAGE_OFFSET = 4,
+    MT_CMTI_OFFSET = 8,
+    MT_HEADER_SIZE = 10,
+    MTI_AFSTYLE_OFFSET = 0,
+    MTI_AFATTRIBUTE_OFFSET = 2,
+    MTI_IDITEM_OFFSET = 4,
+    MTI_HEADER_SIZE = 6
+};
+
+enum
+{
+    MENU_TEMPLATE_LIMIT = 1048576, /* bytes; rejects corrupt length words */
+    MENU_MAX_ITEMS = 4096,
+    MENU_MAX_DEPTH = 16,
+    MENU_OWNER_CHAIN_LIMIT = 4096, /* stops a cyclic owner chain */
+    /* Item text before this character is the label; the rest is right-aligned shortcut text. */
+    MENU_SHORTCUT_SEPARATOR = 8,
+    /* Layout in pels; every value except the text inset is display-scaled. */
+    MENU_ROW_HEIGHT = 24,
+    MENU_PADDING = 4,
+    MENU_MIN_POPUP_WIDTH = 80,
+    MENU_POPUP_EXTRA_WIDTH = 64,
+    MENU_SEPARATOR_HEIGHT = 8,
+    MENU_TEXT_INSET = 12,
+    MENU_UNSELECTABLE_STYLES = MIS_SEPARATOR | MIS_STATIC | MIS_BUTTONSEPARATOR
+};
+
 Window *lx_pm_menu_window(HWND handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -16,20 +53,22 @@ Window *lx_pm_menu_window(HWND handle)
 
 BOOL createSystemMenu(Window *frame, ULONG flags)
 {
-    ULONG style = 3 | ((flags & 1) ? WS_VISIBLE : 0);
+    ULONG style = MS_ACTIONBAR | MS_TITLEBUTTON | ((flags & FCF_TITLEBAR) ? WS_VISIBLE : 0);
     HWND bar =
         WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, style, 0,
-                        frame->h > lx_pm_display_scale(24) ? frame->h - lx_pm_display_scale(24) : 0,
-                        lx_pm_display_scale(24), lx_pm_display_scale(24), frame->hwnd, HWND_TOP,
-                        FID_SYSMENU, NULL, NULL);
+                        frame->h > lx_pm_display_scale(MENU_ROW_HEIGHT)
+                            ? frame->h - lx_pm_display_scale(MENU_ROW_HEIGHT)
+                            : 0,
+                        lx_pm_display_scale(MENU_ROW_HEIGHT), lx_pm_display_scale(MENU_ROW_HEIGHT),
+                        frame->hwnd, HWND_TOP, FID_SYSMENU, NULL, NULL);
     if (!bar)
         return FALSE;
     HWND popup = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_MENU, NULL, 0, 0, 0, 1, 1, bar, HWND_TOP, 0,
                                  NULL, NULL);
     if (!popup)
         goto fail;
-    MENUITEM root = {-1, 0x11, 0, 0x8007, popup, 0}; /* MIS_TEXT | MIS_SUBMENU, SC_SYSMENU */
-    if ((intptr_t)WinSendMsg(bar, 0x180, &root, "~System") == -1)
+    MENUITEM root = {MIT_END, MIS_TEXT | MIS_SUBMENU, 0, SC_SYSMENU, popup, 0};
+    if ((intptr_t)WinSendMsg(bar, MM_INSERTITEM, &root, "~System") == MIT_ERROR)
         goto fail;
 
     static const struct
@@ -37,15 +76,17 @@ BOOL createSystemMenu(Window *frame, ULONG flags)
         USHORT id;
         ULONG flag;
         const char *text;
-    } entries[] = {{0x8008, 0x30, "~Restore"},  {0x8001, 0, "~Move"},        {0x8000, 8, "~Size"},
-                   {0x8002, 0x10, "Mi~nimize"}, {0x8003, 0x20, "Ma~ximize"}, {0x8004, 0, "~Close"}};
+    } entries[] = {
+        {SC_RESTORE, FCF_MINMAX, "~Restore"},      {SC_MOVE, 0, "~Move"},
+        {SC_SIZE, FCF_SIZEBORDER, "~Size"},        {SC_MINIMIZE, FCF_MINBUTTON, "Mi~nimize"},
+        {SC_MAXIMIZE, FCF_MAXBUTTON, "Ma~ximize"}, {SC_CLOSE, 0, "~Close"}};
 
     for (size_t i = 0; i < sizeof entries / sizeof entries[0]; i++)
     {
         if (entries[i].flag && !(flags & entries[i].flag))
             continue;
-        MENUITEM item = {-1, 0x41, 0, entries[i].id, 0, 0}; /* MIS_TEXT | MIS_SYSCOMMAND */
-        if ((intptr_t)WinSendMsg(popup, 0x180, &item, (MPARAM)entries[i].text) == -1)
+        MENUITEM item = {MIT_END, MIS_TEXT | MIS_SYSCOMMAND, 0, entries[i].id, 0, 0};
+        if ((intptr_t)WinSendMsg(popup, MM_INSERTITEM, &item, (MPARAM)entries[i].text) == MIT_ERROR)
             goto fail;
     }
     return TRUE;
@@ -56,16 +97,18 @@ fail:
 
 BOOL createMinMaxMenu(Window *frame, ULONG flags)
 {
-    HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, 3 | WS_VISIBLE, 0, 0, 1, 1,
-                               frame->hwnd, HWND_TOP, FID_MINMAX, NULL, NULL);
+    HWND bar =
+        WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, MS_ACTIONBAR | MS_TITLEBUTTON | WS_VISIBLE,
+                        0, 0, 1, 1, frame->hwnd, HWND_TOP, FID_MINMAX, NULL, NULL);
     if (!bar)
         return FALSE;
-    const USHORT commands[] = {0x8002, 0x8003}; /* SC_MINIMIZE, SC_MAXIMIZE */
+    const USHORT commands[] = {SC_MINIMIZE, SC_MAXIMIZE};
+    const ULONG buttons[] = {FCF_MINBUTTON, FCF_MAXBUTTON};
     for (unsigned i = 0; i < 2; i++)
-        if (flags & (0x10u << i)) /* FCF_MINBUTTON / FCF_MAXBUTTON */
+        if (flags & buttons[i])
         {
-            MENUITEM item = {-1, 0x41, 0, commands[i], 0, 0};
-            if ((intptr_t)WinSendMsg(bar, 0x180, &item, "") == -1)
+            MENUITEM item = {MIT_END, MIS_TEXT | MIS_SYSCOMMAND, 0, commands[i], 0, 0};
+            if ((intptr_t)WinSendMsg(bar, MM_INSERTITEM, &item, "") == MIT_ERROR)
             {
                 WinDestroyWindow(bar);
                 return FALSE;
@@ -88,7 +131,7 @@ void destroyMenu(Window *window)
 
 static Window *menu_root(Window *window)
 {
-    for (unsigned depth = 0; depth < 4096; depth++)
+    for (unsigned depth = 0; depth < MENU_OWNER_CHAIN_LIMIT; depth++)
     {
         Window *parent = window->menu->active_parent
                              ? lx_pm_menu_window(window->menu->active_parent)
@@ -129,7 +172,7 @@ static LONG text_width(LxHostFont *font, const char *text)
     LONG width = 0;
     for (size_t i = 0; text && text[i]; i++)
     {
-        if (text[i] == '~' || text[i] == 8)
+        if (text[i] == '~' || text[i] == MENU_SHORTCUT_SEPARATOR)
             continue;
         int step = lx_host_font_advance(font, lx_pm_codepoint((uint8)text[i]));
         if (step > 0)
@@ -140,12 +183,13 @@ static LONG text_width(LxHostFont *font, const char *text)
 
 static BOOL title_menu_item(const Window *window, const PmMenuItem *item)
 {
-    if (!(window->style & 1))
+    if (!(window->style & MS_ACTIONBAR))
         return FALSE;
-    if (item->item.id == 0x8007 && item->item.hwndSubMenu)
-        return !(item->item.afStyle & (2 | 8)); /* Preserve custom bitmap/owner drawing. */
-    return (window->style & 2) && window->id == FID_MINMAX && isFrameWindow(window->parent) &&
-           (item->item.afStyle & 0x40) && (item->item.id == 0x8002 || item->item.id == 0x8003);
+    if (item->item.id == SC_SYSMENU && item->item.hwndSubMenu)
+        return !(item->item.afStyle & (MIS_BITMAP | MIS_OWNERDRAW)); /* Keep custom drawing. */
+    return (window->style & MS_TITLEBUTTON) && window->id == FID_MINMAX &&
+           isFrameWindow(window->parent) && (item->item.afStyle & MIS_SYSCOMMAND) &&
+           (item->item.id == SC_MINIMIZE || item->item.id == SC_MAXIMIZE);
 }
 
 static void menu_layout(Window *window)
@@ -153,32 +197,40 @@ static void menu_layout(Window *window)
     PmMenu *menu = window->menu;
     HPS ps = WinGetPS(window->hwnd);
     LxHostFont *font = lx_pm_font(ps);
-    BOOL bar = (window->style & 1) != 0;
-    LONG row = (window->style & 2) && window->h > 0 ? window->h : lx_pm_display_scale(24),
-         padding = lx_pm_display_scale(4);
-    LONG width = bar ? window->w : lx_pm_display_scale(80), height = bar ? row : padding, x = 0;
+    BOOL bar = (window->style & MS_ACTIONBAR) != 0;
+    LONG row = (window->style & MS_TITLEBUTTON) && window->h > 0
+                   ? window->h
+                   : lx_pm_display_scale(MENU_ROW_HEIGHT),
+         padding = lx_pm_display_scale(MENU_PADDING);
+    LONG width = bar ? window->w : lx_pm_display_scale(MENU_MIN_POPUP_WIDTH),
+         height = bar ? row : padding, x = 0;
     if (!bar)
         for (size_t i = 0; i < menu->count; i++)
         {
-            LONG item_width = text_width(font, menu->items[i].text) + lx_pm_display_scale(64);
+            LONG item_width =
+                text_width(font, menu->items[i].text) + lx_pm_display_scale(MENU_POPUP_EXTRA_WIDTH);
             if (item_width > width)
                 width = item_width;
-            height += (menu->items[i].item.afStyle & 4) ? lx_pm_display_scale(8) : row;
+            height += (menu->items[i].item.afStyle & MIS_SEPARATOR)
+                          ? lx_pm_display_scale(MENU_SEPARATOR_HEIGHT)
+                          : row;
         }
     LONG y = height - padding / 2;
     for (size_t i = 0; i < menu->count; i++)
     {
         PmMenuItem *item = &menu->items[i];
         LONG glyph_width = row;
-        if ((window->style & 2) && isFrameWindow(window->parent))
+        if ((window->style & MS_TITLEBUTTON) && isFrameWindow(window->parent))
         {
             if (window->id == FID_MINMAX)
-                glyph_width = WinQuerySysValue(HWND_DESKTOP, 33); /* SV_CXMINMAXBUTTON */
+                glyph_width = WinQuerySysValue(HWND_DESKTOP, SV_CXMINMAXBUTTON);
         }
         LONG w =
             bar ? title_menu_item(window, item) ? glyph_width : text_width(font, item->text) + row
                 : width;
-        LONG h = bar ? row : (item->item.afStyle & 4) ? lx_pm_display_scale(8) : row;
+        LONG h = bar                                    ? row
+                 : (item->item.afStyle & MIS_SEPARATOR) ? lx_pm_display_scale(MENU_SEPARATOR_HEIGHT)
+                                                        : row;
         item->rect =
             bar ? (RECTL){x, 0, x + w, row} : (RECTL){padding / 2, y - h, width - padding / 2, y};
         x += w;
@@ -199,7 +251,7 @@ static void menu_close(Window *window)
         if (sub)
             menu_close(sub);
     }
-    if (!(window->style & 1))
+    if (!(window->style & MS_ACTIONBAR))
         WinShowWindow(window->hwnd, FALSE);
     menu->selected = -1;
     menu->active_parent = 0;
@@ -271,8 +323,8 @@ static void menu_open(Window *window, PmMenuItem *item)
     submenu->menu->active_parent = window->hwnd;
     window->menu->selected = item->item.iPosition;
     menu_layout(submenu);
-    POINTL point = {(window->style & 1) ? item->rect.xLeft : window->w,
-                    (window->style & 1) ? 0 : item->rect.yTop};
+    POINTL point = {(window->style & MS_ACTIONBAR) ? item->rect.xLeft : window->w,
+                    (window->style & MS_ACTIONBAR) ? 0 : item->rect.yTop};
     WinMapWindowPoints(window->hwnd, HWND_DESKTOP, &point, 1);
     LONG x = point.x, y = point.y - submenu->h;
     if (x + submenu->w > desktop_window.w)
@@ -290,7 +342,7 @@ static void menu_activate(Window *window, int index)
     if (index < 0 || (size_t)index >= menu->count)
         return;
     PmMenuItem *item = &menu->items[index];
-    if ((item->item.afAttribute & 0x4000) || (item->item.afStyle & (4 | 0x100 | 0x200)))
+    if ((item->item.afAttribute & MIA_DISABLED) || (item->item.afStyle & MENU_UNSELECTABLE_STYLES))
         return;
     if (menu->selected == index && item->item.hwndSubMenu &&
         WinIsWindowVisible(item->item.hwndSubMenu))
@@ -303,9 +355,9 @@ static void menu_activate(Window *window, int index)
     }
     Window *root = menu_root(window);
     HWND owner = root->owner ? root->owner->hwnd : 0;
-    ULONG message = (item->item.afStyle & 0x40)   ? WM_SYSCOMMAND
-                    : (item->item.afStyle & 0x80) ? WM_HELP
-                                                  : WM_COMMAND;
+    ULONG message = (item->item.afStyle & MIS_SYSCOMMAND) ? WM_SYSCOMMAND
+                    : (item->item.afStyle & MIS_HELP)     ? WM_HELP
+                                                          : WM_COMMAND;
     USHORT id = item->item.id;
     if (message == WM_SYSCOMMAND)
     {
@@ -315,12 +367,12 @@ static void menu_activate(Window *window, int index)
             origin = origin->owner;
         owner = origin->owner ? origin->owner->hwnd : 0;
         Window *frame = origin->owner;
-        if (frame && id == 0x8003 && (frame->style & WS_MAXIMIZED))
-            id = 0x8008; /* SC_RESTORE */
+        if (frame && id == SC_MAXIMIZE && (frame->style & WS_MAXIMIZED))
+            id = SC_RESTORE;
     }
     menu_finish(window);
     if (owner)
-        WinPostMsg(owner, message, (MPARAM)(uintptr_t)id, (MPARAM)(uintptr_t)1); /* CMDSRC_MENU */
+        WinPostMsg(owner, message, (MPARAM)(uintptr_t)id, (MPARAM)(uintptr_t)1);
 }
 
 static void menu_paint(Window *window)
@@ -330,15 +382,19 @@ static void menu_paint(Window *window)
     RECTL whole = {0, 0, window->w, window->h};
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     BOOL active = anchor->active == topLevelWindow(anchor, window->hwnd);
-    LONG ordinary_background = (window->style & 2) ? (active ? -23 : -22) : CLR_PALEGRAY;
-    LONG ordinary_foreground = (window->style & 2) ? (active ? -28 : -29) : CLR_BLACK;
+    LONG ordinary_background = (window->style & MS_TITLEBUTTON)
+                                   ? (active ? SYSCLR_ACTIVETITLE : SYSCLR_INACTIVETITLE)
+                                   : CLR_PALEGRAY;
+    LONG ordinary_foreground = (window->style & MS_TITLEBUTTON)
+                                   ? (active ? SYSCLR_ACTIVETITLETEXT : SYSCLR_INACTIVETITLETEXT)
+                                   : CLR_BLACK;
     WinFillRect(ps, &whole, ordinary_background);
     PmMenu *menu = window->menu;
     for (size_t i = 0; i < menu->count; i++)
     {
         PmMenuItem *item = &menu->items[i];
         RECTL rect = item->rect;
-        if (item->item.afStyle & 4)
+        if (item->item.afStyle & MIS_SEPARATOR)
         {
             RECTL line = {rect.xLeft + 4, (rect.yBottom + rect.yTop) / 2, rect.xRight - 4,
                           (rect.yBottom + rect.yTop) / 2 + 1};
@@ -346,9 +402,9 @@ static void menu_paint(Window *window)
             continue;
         }
         BOOL selected = (int)i == menu->selected;
-        LONG foreground = (item->item.afAttribute & 0x4000) ? CLR_DARKGRAY
-                          : selected                        ? CLR_WHITE
-                                                            : ordinary_foreground;
+        LONG foreground = (item->item.afAttribute & MIA_DISABLED) ? CLR_DARKGRAY
+                          : selected                              ? CLR_WHITE
+                                                                  : ordinary_foreground;
         LONG background = selected ? CLR_DARKBLUE : ordinary_background;
         WinFillRect(ps, &rect, background);
         if (title_menu_item(window, item))
@@ -366,12 +422,12 @@ static void menu_paint(Window *window)
             WinFillRect(ps, &bottom, selected ? CLR_WHITE : CLR_DARKGRAY);
             WinFillRect(ps, &right, selected ? CLR_WHITE : CLR_DARKGRAY);
             LONG x = (rect.xLeft + rect.xRight) / 2, y = (rect.yBottom + rect.yTop) / 2;
-            if (item->item.id == 0x8002)
+            if (item->item.id == SC_MINIMIZE)
             {
                 RECTL glyph = {x - pel * 3, y - pel * 3, x + pel * 3, y - pel};
                 WinFillRect(ps, &glyph, foreground);
             }
-            else if (item->item.id == 0x8003)
+            else if (item->item.id == SC_MAXIMIZE)
             {
                 BOOL restore = window->parent && (window->parent->style & WS_MAXIMIZED);
                 LONG side = restore ? 3 : 5;
@@ -393,21 +449,22 @@ static void menu_paint(Window *window)
             }
             continue;
         }
-        rect.xLeft += 12;
-        rect.xRight -= 12;
+        rect.xLeft += MENU_TEXT_INSET;
+        rect.xRight -= MENU_TEXT_INSET;
         const char *text = item->text ? item->text : "";
-        const char *shortcut = strchr(text, 8);
+        const char *shortcut = strchr(text, MENU_SHORTCUT_SEPARATOR);
         LONG count = shortcut ? (LONG)(shortcut - text) : (LONG)strlen(text);
-        WinDrawText(ps, count, (PCH)text, &rect, foreground, background, 0x2400);
+        WinDrawText(ps, count, (PCH)text, &rect, foreground, background, DT_MNEMONIC | DT_VCENTER);
         if (shortcut)
-            WinDrawText(ps, -1, (PCH)shortcut + 1, &rect, foreground, background, 0x600);
-        if (item->item.afAttribute & 0x2000)
+            WinDrawText(ps, -1, (PCH)shortcut + 1, &rect, foreground, background,
+                        DT_RIGHT | DT_VCENTER);
+        if (item->item.afAttribute & MIA_CHECKED)
         {
             RECTL check = {item->rect.xLeft + 3, item->rect.yBottom + 9, item->rect.xLeft + 7,
                            item->rect.yBottom + 13};
             WinFillRect(ps, &check, foreground);
         }
-        if (item->item.hwndSubMenu && !(window->style & 1))
+        if (item->item.hwndSubMenu && !(window->style & MS_ACTIONBAR))
         {
             RECTL arrow = {rect.xRight - 1, rect.yBottom + 9, rect.xRight + 3, rect.yBottom + 13};
             WinFillRect(ps, &arrow, foreground);
@@ -419,15 +476,17 @@ static void menu_paint(Window *window)
 static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size, unsigned depth,
                        size_t *consumed)
 {
-    if (depth > 16 || size < 10)
+    if (depth > MENU_MAX_DEPTH || size < MT_HEADER_SIZE)
         return 0;
     uint32 length = lx_guest_load_u32(bytes);
-    unsigned cp = lx_guest_load_u16(bytes + 4), count = lx_guest_load_u16(bytes + 8);
-    if (length < 10 || length > size || (cp && cp != 437 && cp != 850) || count > 4096)
+    unsigned cp = lx_guest_load_u16(bytes + MT_CODEPAGE_OFFSET),
+             count = lx_guest_load_u16(bytes + MT_CMTI_OFFSET);
+    if (length < MT_HEADER_SIZE || length > size || (cp && cp != 437 && cp != 850) ||
+        count > MENU_MAX_ITEMS)
         return 0;
-    HWND handle =
-        WinCreateWindow(parent, (PSZ)WC_MENU, NULL, depth ? 0 : WS_VISIBLE | 1, 0, 0, 1,
-                        lx_pm_display_scale(24), owner, HWND_TOP, depth ? 0 : FID_MENU, NULL, NULL);
+    HWND handle = WinCreateWindow(parent, (PSZ)WC_MENU, NULL, depth ? 0 : WS_VISIBLE | MS_ACTIONBAR,
+                                  0, 0, 1, lx_pm_display_scale(MENU_ROW_HEIGHT), owner, HWND_TOP,
+                                  depth ? 0 : FID_MENU, NULL, NULL);
     Window *window = lx_pm_menu_window(handle);
     if (!window)
         return 0;
@@ -436,19 +495,19 @@ static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size,
     menu->items = calloc(count ? count : 1, sizeof *menu->items);
     if (!menu->items)
         goto fail;
-    size_t offset = 10;
+    size_t offset = MT_HEADER_SIZE;
     for (unsigned i = 0; i < count; i++)
     {
-        if (offset > length || length - offset < 6)
+        if (offset > length || length - offset < MTI_HEADER_SIZE)
             goto fail;
         PmMenuItem *item = &menu->items[menu->count++];
-        item->item.afStyle = lx_guest_load_u16(bytes + offset);
-        item->item.afAttribute = lx_guest_load_u16(bytes + offset + 2);
-        item->item.id = lx_guest_load_u16(bytes + offset + 4);
-        offset += 6;
-        if (item->item.afStyle & (2 | 8))
+        item->item.afStyle = lx_guest_load_u16(bytes + offset + MTI_AFSTYLE_OFFSET);
+        item->item.afAttribute = lx_guest_load_u16(bytes + offset + MTI_AFATTRIBUTE_OFFSET);
+        item->item.id = lx_guest_load_u16(bytes + offset + MTI_IDITEM_OFFSET);
+        offset += MTI_HEADER_SIZE;
+        if (item->item.afStyle & (MIS_BITMAP | MIS_OWNERDRAW))
             goto fail;
-        if (!(item->item.afStyle & 4))
+        if (!(item->item.afStyle & MIS_SEPARATOR))
         {
             const uint8 *end = memchr(bytes + offset, 0, length - offset);
             if (!end)
@@ -460,14 +519,14 @@ static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size,
             memcpy(item->text, bytes + offset, text_size);
             offset += text_size;
         }
-        if (item->item.afStyle & 0x10)
+        if (item->item.afStyle & MIS_SUBMENU)
         {
             size_t nested = 0;
             item->item.hwndSubMenu = parse_menu(HWND_DESKTOP, handle, bytes + offset,
                                                 length - offset, depth + 1, &nested);
             if (!item->item.hwndSubMenu)
                 goto fail;
-            WinSetWindowUShort(item->item.hwndSubMenu, -1, item->item.id);
+            WinSetWindowUShort(item->item.hwndSubMenu, QWS_ID, item->item.id);
             offset += nested;
         }
     }
@@ -504,7 +563,7 @@ HWND WinCreateMenu(HWND parent, PVOID data)
     if (!data)
         return 0;
     uint32 size = lx_guest_load_u32(data);
-    if (size > 1048576)
+    if (size > MENU_TEMPLATE_LIMIT)
         return 0;
     size_t consumed = 0;
     return parse_menu(parent, parent, data, size, parent == HWND_DESKTOP ? 1 : 0, &consumed);
@@ -517,8 +576,8 @@ HWND WinLoadMenu(HWND frame, HMODULE module, ULONG id)
         return 0;
     uint32 size = 0;
     void *data = NULL;
-    if (GProcessState.queryResourceSize(module, 3, id, &size) || size < 10 || size > 1048576 ||
-        GProcessState.getResource(module, 3, id, &data))
+    if (GProcessState.queryResourceSize(module, RT_MENU, id, &size) || size < MT_HEADER_SIZE ||
+        size > MENU_TEMPLATE_LIMIT || GProcessState.getResource(module, RT_MENU, id, &data))
         return 0;
     size_t consumed = 0;
     HWND result = parse_menu(frame, frame, data, size, 0, &consumed);
@@ -573,7 +632,7 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
     if (message == WM_BUTTON1DBLCLK && window->id == FID_SYSMENU && isFrameWindow(window->parent))
     {
         menu_finish(window);
-        WinPostMsg(window->parent->hwnd, WM_SYSCOMMAND, (MPARAM)(uintptr_t)0x8004, 0);
+        WinPostMsg(window->parent->hwnd, WM_SYSCOMMAND, (MPARAM)(uintptr_t)SC_CLOSE, 0);
         return 0;
     }
     if (message == WM_PAINT)
@@ -593,7 +652,7 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
             if (WinPtInRect(0, &menu->items[i].rect, &point))
             {
                 /* Clicking the title of an open menu closes it and returns focus. */
-                if ((window->style & 1) && menu->selected == (int)i &&
+                if ((window->style & MS_ACTIONBAR) && menu->selected == (int)i &&
                     menu->items[i].item.hwndSubMenu &&
                     WinIsWindowVisible(menu->items[i].item.hwndSubMenu))
                     menu_finish(window);
@@ -611,43 +670,43 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
             {
                 if (menu->selected == (int)i)
                     return 0;
-                if ((menu->items[i].item.afAttribute & 0x4000) ||
-                    (menu->items[i].item.afStyle & (4 | 0x100 | 0x200)))
+                if ((menu->items[i].item.afAttribute & MIA_DISABLED) ||
+                    (menu->items[i].item.afStyle & MENU_UNSELECTABLE_STYLES))
                 {
-                    if (!(window->style & 1))
+                    if (!(window->style & MS_ACTIONBAR))
                         menu_select(window, -1);
                     return 0;
                 }
                 if (menu->items[i].item.hwndSubMenu && menu_root(window)->menu->focus)
                     menu_activate(window, (int)i);
-                else if (!(window->style & 1))
+                else if (!(window->style & MS_ACTIONBAR))
                     menu_select(window, (int)i);
                 break;
             }
         return 0;
     }
-    if (message == WM_CHAR && !(p & 0x40))
+    if (message == WM_CHAR && !(p & KC_KEYUP))
     {
         unsigned key = q >> 16, character = q & 0xffff;
-        if ((p & 2) && key == 0x0f)
+        if ((p & KC_VIRTUALKEY) && key == VK_ESC)
         {
             menu_finish(window);
             return 0;
         }
-        if ((p & 2) && (key == 0x16 || key == 0x18))
+        if ((p & KC_VIRTUALKEY) && (key == VK_UP || key == VK_DOWN))
         {
-            int direction = key == 0x18 ? 1 : -1;
+            int direction = key == VK_DOWN ? 1 : -1;
             if (menu->count)
                 menu_select(window,
                             (menu->selected + direction + (int)menu->count) % (int)menu->count);
             return 0;
         }
-        if ((p & 2) && (key == 0x1e || key == 8))
+        if ((p & KC_VIRTUALKEY) && (key == VK_ENTER || key == VK_NEWLINE))
         {
             menu_activate(window, menu->selected);
             return 0;
         }
-        if (p & 1)
+        if (p & KC_CHAR)
             for (size_t i = 0; i < menu->count; i++)
             {
                 const char *mnemonic =
@@ -661,29 +720,29 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
             }
         return 0;
     }
-    if (message == 0x184)
+    if (message == MM_QUERYITEMCOUNT)
         return (MRESULT)(uintptr_t)menu->count;
-    if (message == 0x180)
+    if (message == MM_INSERTITEM)
     {
         MENUITEM wire;
         if (!controlRead(first, &wire, sizeof wire))
-            return (MRESULT)(intptr_t)-1;
+            return (MRESULT)(intptr_t)MIT_ERROR;
         char *text = second ? controlCopyText(second) : strdup("");
         if (!text)
-            return (MRESULT)(intptr_t)-1;
+            return (MRESULT)(intptr_t)MIT_MEMERROR;
         int position = wire.iPosition;
-        if (position == -1)
+        if (position == MIT_END)
             position = (int)menu->count;
-        if (position < 0 || (size_t)position > menu->count || menu->count >= 4096)
+        if (position < 0 || (size_t)position > menu->count || menu->count >= MENU_MAX_ITEMS)
         {
             free(text);
-            return (MRESULT)(intptr_t)-1;
+            return (MRESULT)(intptr_t)MIT_ERROR;
         }
         PmMenuItem *items = realloc(menu->items, (menu->count + 1) * sizeof *items);
         if (!items)
         {
             free(text);
-            return (MRESULT)(intptr_t)-1;
+            return (MRESULT)(intptr_t)MIT_MEMERROR;
         }
         menu->items = items;
         memmove(items + position + 1, items + position,
@@ -693,7 +752,7 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
         menu_layout(window);
         return (MRESULT)(intptr_t)position;
     }
-    if (message == 0x183) /* MM_SETITEM: low param1 is reserved, id comes from MENUITEM. */
+    if (message == MM_SETITEM) /* The low word of mp1 is reserved; MENUITEM carries the id. */
     {
         MENUITEM definition;
         if ((p & 0xffff) || !controlRead(second, &definition, sizeof definition))
@@ -711,7 +770,7 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
     }
     Window *found = NULL;
     PmMenuItem *item = menu_find(window, p & 0xffff, p >> 16, &found);
-    if (message == 0x182)
+    if (message == MM_QUERYITEM)
     {
         if (!item)
             return 0;
@@ -721,12 +780,12 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
                     item->text ? item->text : "");
         return (MRESULT)(uintptr_t)controlWrite(second, &item->item, sizeof item->item);
     }
-    if (message == 0x18c)
+    if (message == MM_QUERYITEMTEXTLENGTH)
         return (MRESULT)(uintptr_t)(item && item->text ? strlen(item->text) : 0);
-    if (message == 0x18b)
+    if (message == MM_QUERYITEMTEXT)
     {
         SHORT capacity = (SHORT)(p >> 16);
-        if (!item || !item->text || !(item->item.afStyle & 1) || capacity <= 0)
+        if (!item || !item->text || !(item->item.afStyle & MIS_TEXT) || capacity <= 0)
             return 0;
         size_t count = strlen(item->text);
         if (count >= (size_t)capacity)
@@ -734,7 +793,7 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
         return (MRESULT)(uintptr_t)(controlTextOutput(second, item->text, (size_t)capacity) ? count
                                                                                             : 0);
     }
-    if (message == 0x18e)
+    if (message == MM_SETITEMTEXT)
     {
         if (!item)
             return 0;
@@ -746,16 +805,16 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
         menu_layout(found);
         return (MRESULT)(uintptr_t)TRUE;
     }
-    if (message == 0x191)
+    if (message == MM_QUERYITEMATTR)
         return (MRESULT)(uintptr_t)(item ? item->item.afAttribute & q : 0);
-    if (message == 0x18f)
-        return (MRESULT)(intptr_t)(item ? item->item.iPosition : -1);
-    if (message == 0x190)
+    if (message == MM_ITEMPOSITIONFROMID)
+        return (MRESULT)(intptr_t)(item ? item->item.iPosition : MIT_NONE);
+    if (message == MM_ITEMIDFROMPOSITION)
         return (MRESULT)(intptr_t)((p & 0xffff) < menu->count ? menu->items[p & 0xffff].item.id
-                                                              : -1);
-    if (message == 0x193)
+                                                              : MIT_ERROR);
+    if (message == MM_ISITEMVALID)
         return (MRESULT)(uintptr_t)(item != NULL);
-    if (message == 0x192)
+    if (message == MM_SETITEMATTR)
     {
         if (!item)
             return 0;
@@ -764,21 +823,21 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
         WinInvalidateRect(found->hwnd, NULL, FALSE);
         return (MRESULT)(uintptr_t)TRUE;
     }
-    if (message == 0x18d)
+    if (message == MM_SETITEMHANDLE)
     {
         if (!item)
             return 0;
         item->item.hItem = q;
         return (MRESULT)(uintptr_t)TRUE;
     }
-    if (message == 0x181 || message == 0x188)
+    if (message == MM_DELETEITEM || message == MM_REMOVEITEM)
     {
         if (!item)
             return 0;
         size_t index = (size_t)(item - found->menu->items);
-        return (MRESULT)(uintptr_t)lx_pm_menu_remove(found->hwnd, index, message == 0x181);
+        return (MRESULT)(uintptr_t)lx_pm_menu_remove(found->hwnd, index, message == MM_DELETEITEM);
     }
-    if (message == 0x186)
+    if (message == MM_ENDMENUMODE)
     {
         menu_finish(window);
         return (MRESULT)(uintptr_t)TRUE;
@@ -812,10 +871,11 @@ BOOL lx_pm_menu_attach(HWND handle, HWND parent_handle)
         parent->children = window;
     }
     window->owner = parent;
-    window->style |= 1;  /* MS_ACTIONBAR */
-    window->id = 0x8005; /* FID_MENU */
-    if (!WinSetWindowPos(handle, HWND_TOP, 0, parent->h - lx_pm_display_scale(24), parent->w,
-                         lx_pm_display_scale(24), SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ZORDER))
+    window->style |= MS_ACTIONBAR;
+    window->id = FID_MENU;
+    if (!WinSetWindowPos(handle, HWND_TOP, 0, parent->h - lx_pm_display_scale(MENU_ROW_HEIGHT),
+                         parent->w, lx_pm_display_scale(MENU_ROW_HEIGHT),
+                         SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ZORDER))
         return FALSE;
     return WinInvalidateRect(handle, NULL, FALSE) && WinUpdateWindow(handle);
 }

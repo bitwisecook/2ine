@@ -15,7 +15,7 @@ static BOOL exclude_window(PmRegion *visible, Window *window, const LxHostRect *
     PmRegion cut = {0};
     cut.rects = &rect;
     cut.count = 1;
-    return regionBoolean(visible, visible, &cut, 7);
+    return regionBoolean(visible, visible, &cut, CRGN_DIFF);
 }
 
 static HWND update_lock;
@@ -66,14 +66,16 @@ BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
     PmRegion initial = {0};
     initial.rects = &rect;
     initial.count = WinIsRectEmpty(0, &rect) ? 0 : 1;
-    if (!regionBoolean(visible, &initial, ps->clip_lease.resource, ps->clip_lease.resource ? 6 : 2))
+    if (!regionBoolean(visible, &initial, ps->clip_lease.resource,
+                       ps->clip_lease.resource ? CRGN_AND : CRGN_COPY))
         return FALSE;
     for (Window *w = window; w->parent && w->parent != &desktop_window; w = w->parent)
-        if (((w->style | w->class_style) & WS_CLIPSIBLINGS) || (ps->clip_flags & 8))
+        if (((w->style | w->class_style) & WS_CLIPSIBLINGS) || (ps->clip_flags & PSF_CLIPSIBLINGS))
             for (Window *above = w->parent->children; above && above != w; above = above->sibling)
                 if (!exclude_window(visible, above, &origin))
                     goto fail;
-    if (((window->style | window->class_style) & WS_CLIPCHILDREN) || (ps->clip_flags & 0x10))
+    if (((window->style | window->class_style) & WS_CLIPCHILDREN) ||
+        (ps->clip_flags & PSF_CLIPCHILDREN))
         for (Window *child = window->children; child; child = child->sibling)
             if (!exclude_window(visible, child, &origin))
                 goto fail;
@@ -100,7 +102,7 @@ LONG lx_pm_visible_box(HPS handle, RECTL *rectangle)
             bitmap ? (RECTL){0, 0, (LONG)bitmap->width, (LONG)bitmap->height} : ps->viewport;
         PmRegion source = {.rects = &bounds, .count = WinIsRectEmpty(0, &bounds) ? 0 : 1};
         result = regionBoolean(&visible, &source, ps->clip_lease.resource,
-                               ps->clip_lease.resource ? 6 : 2);
+                               ps->clip_lease.resource ? CRGN_AND : CRGN_COPY);
     }
     if (!result)
     {
@@ -110,7 +112,7 @@ LONG lx_pm_visible_box(HPS handle, RECTL *rectangle)
     *rectangle = (RECTL){0};
     for (size_t i = 0; i < visible.count; i++)
         WinUnionRect(0, rectangle, rectangle, &visible.rects[i]);
-    LONG type = !visible.count ? 1 : visible.count == 1 ? 2 : 3;
+    LONG type = !visible.count ? RGN_NULL : visible.count == 1 ? RGN_RECT : RGN_COMPLEX;
     free(visible.rects);
     return type;
 }

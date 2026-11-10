@@ -14,24 +14,34 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
-static void *segments[2];
+
+/* Selectors the fixture allocator hands out: FIRST_SELECTOR, then successive LDT entries. */
+enum
+{
+    SEGMENTS = 2,
+    FIRST_SELECTOR = 0x100,
+    SELECTOR_STRIDE = 8,
+    SEGMENT_SIZE = 65536
+};
+
+static void *segments[SEGMENTS];
 
 static void *segment(uint16 *selector, int code)
 {
     (void)code;
-    for (unsigned i = 0; i < 2; i++)
+    for (unsigned i = 0; i < SEGMENTS; i++)
         if (!segments[i])
         {
-            *selector = (uint16)(0x100 + i * 8);
-            return segments[i] = calloc(1, 65536);
+            *selector = (uint16)(FIRST_SELECTOR + i * SELECTOR_STRIDE);
+            return segments[i] = calloc(1, SEGMENT_SIZE);
         }
     return NULL;
 }
 
 static void release(uint16 selector)
 {
-    unsigned slot = (selector - 0x100) / 8;
-    CHECK(slot < 2 && segments[slot]);
+    unsigned slot = (selector - FIRST_SELECTOR) / SELECTOR_STRIDE;
+    CHECK(slot < SEGMENTS && segments[slot]);
     free(segments[slot]);
     segments[slot] = NULL;
 }
@@ -39,7 +49,7 @@ static void release(uint16 selector)
 static uint32 foreign(void *memory)
 {
     (void)memory;
-    return 487;
+    return 487; /* any result that identifies this callback */
 }
 
 int main(int argc, char **argv)

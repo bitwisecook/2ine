@@ -4,6 +4,38 @@
 #include "os2/include/private/pmgrep.h"
 #include "emulator/abi.h"
 
+/* Toolkit bsedos.h resource type. */
+enum
+{
+    RT_BITMAP = 2
+};
+
+/* Guest bitmap headers: the 12-byte BITMAPINFOHEADER of OS/2 1.x, the 64-byte
+   BITMAPINFOHEADER2 and the 40-byte Windows BITMAPINFOHEADER, whose leading fields
+   BITMAPINFOHEADER2 shares. The file headers are BITMAPFILEHEADER2 and the
+   BITMAPARRAYFILEHEADER2 prefix before it. */
+enum
+{
+    BMIH_SIZE = 12,
+    BMIH_CX_OFFSET = 4,
+    BMIH_CY_OFFSET = 6,
+    BMIH_CPLANES_OFFSET = 8,
+    BMIH_CBITCOUNT_OFFSET = 10,
+    BMIH2_SIZE = 64,
+    WINDOWS_BMIH_SIZE = 40,
+    BMIH2_CX_OFFSET = 4,
+    BMIH2_CY_OFFSET = 8,
+    BMIH2_CPLANES_OFFSET = 12,
+    BMIH2_CBITCOUNT_OFFSET = 14,
+    BMIH2_ULCOMPRESSION_OFFSET = 16,
+    BMIH2_CCLRUSED_OFFSET = 32,
+    RGB_SIZE = 3,
+    RGB2_SIZE = 4,
+    BFH2_SIZE = 14,
+    BFH2_OFFBITS_OFFSET = 10,
+    BAFH2_PREFIX_SIZE = 14
+};
+
 typedef struct
 {
     unsigned width, height, planes, depth, fixed, palette_entry, colors, compression;
@@ -16,28 +48,29 @@ static BOOL bitmap_layout(const uint8 *p, BitmapLayout *b)
         return FALSE;
     memset(b, 0, sizeof *b);
     b->fixed = lx_guest_load_u32(p);
-    if (b->fixed == 12)
+    if (b->fixed == BMIH_SIZE)
     {
-        b->width = lx_guest_load_u16(p + 4);
-        b->height = lx_guest_load_u16(p + 6);
-        b->planes = lx_guest_load_u16(p + 8);
-        b->depth = lx_guest_load_u16(p + 10);
-        b->palette_entry = 3;
+        b->width = lx_guest_load_u16(p + BMIH_CX_OFFSET);
+        b->height = lx_guest_load_u16(p + BMIH_CY_OFFSET);
+        b->planes = lx_guest_load_u16(p + BMIH_CPLANES_OFFSET);
+        b->depth = lx_guest_load_u16(p + BMIH_CBITCOUNT_OFFSET);
+        b->palette_entry = RGB_SIZE;
     }
-    else if (b->fixed == 40 || b->fixed == 64)
+    else if (b->fixed == WINDOWS_BMIH_SIZE || b->fixed == BMIH2_SIZE)
     {
-        b->width = lx_guest_load_u32(p + 4);
-        b->height = lx_guest_load_u32(p + 8);
-        b->planes = lx_guest_load_u16(p + 12);
-        b->depth = lx_guest_load_u16(p + 14);
-        b->compression = lx_guest_load_u32(p + 16);
-        b->palette_entry = 4;
-        b->colors = lx_guest_load_u32(p + 32);
+        b->width = lx_guest_load_u32(p + BMIH2_CX_OFFSET);
+        b->height = lx_guest_load_u32(p + BMIH2_CY_OFFSET);
+        b->planes = lx_guest_load_u16(p + BMIH2_CPLANES_OFFSET);
+        b->depth = lx_guest_load_u16(p + BMIH2_CBITCOUNT_OFFSET);
+        b->compression = lx_guest_load_u32(p + BMIH2_ULCOMPRESSION_OFFSET);
+        b->palette_entry = RGB2_SIZE;
+        b->colors = lx_guest_load_u32(p + BMIH2_CCLRUSED_OFFSET);
     }
     else
         return FALSE;
-    if (!b->width || !b->height || b->width > 16384 || b->height > 16384 ||
-        (uint64)b->width * b->height > 16777216 || b->planes != 1 ||
+    if (!b->width || !b->height || b->width > LX_PM_RASTER_MAX_DIMENSION ||
+        b->height > LX_PM_RASTER_MAX_DIMENSION ||
+        (uint64)b->width * b->height > LX_PM_RASTER_MAX_PELS || b->planes != 1 ||
         (b->depth != 1 && b->depth != 4 && b->depth != 8 && b->depth != 24 && b->depth != 32))
         return FALSE;
     if (b->depth <= 8)
@@ -50,9 +83,10 @@ static BOOL bitmap_layout(const uint8 *p, BitmapLayout *b)
     }
     else if (b->colors)
         return FALSE;
+    /* Scan lines are padded to a 32-bit boundary. */
     b->stride = ((size_t)b->width * b->depth + 31) / 32 * 4;
     b->bytes = b->stride * b->height;
-    return b->compression == 0;
+    return b->compression == BCA_UNCOMP;
 }
 
 static BOOL bitmap_decode(PmBitmap *bitmap, const BitmapLayout *b, const uint8 *bits,
@@ -96,13 +130,14 @@ ULONG lx_pm_bitmap_create_data(HPS ps, PVOID header, ULONG options, PVOID bits, 
 {
     BitmapLayout layout;
     if (!lx_pm_valid_ps(ps) || !header ||
-        (lx_guest_load_u32(header) != 12 && lx_guest_load_u32(header) != 64) || (options & ~4u) ||
-        !bitmap_layout(header, &layout) || ((options & 4) && (!bits || !info)))
+        (lx_guest_load_u32(header) != BMIH_SIZE && lx_guest_load_u32(header) != BMIH2_SIZE) ||
+        (options & ~(unsigned)CBM_INIT) || !bitmap_layout(header, &layout) ||
+        ((options & CBM_INIT) && (!bits || !info)))
         return 0;
     ULONG handle = lx_pm_bitmap_create(layout.width, layout.height, layout.planes, layout.depth);
     if (!handle)
         return 0;
-    if (options & 4)
+    if (options & CBM_INIT)
     {
         BitmapLayout source;
         LxHandleBorrow borrow = {0};
@@ -127,22 +162,25 @@ ULONG lx_pm_bitmap_load(HPS ps, HMODULE module, ULONG id, LONG width, LONG heigh
         return 0;
     uint32 size = 0;
     void *resource = NULL;
-    if (GProcessState.queryResourceSize(module, 2, id, &size) || size < 26 ||
-        GProcessState.getResource(module, 2, id, &resource))
+    if (GProcessState.queryResourceSize(module, RT_BITMAP, id, &size) ||
+        size < BFH2_SIZE + BMIH_SIZE || GProcessState.getResource(module, RT_BITMAP, id, &resource))
         return 0;
     const uint8 *p = resource;
-    size_t offset = lx_guest_load_u16(p) == 0x4142 ? 14 : 0;
+    /* An array resource is read through its first member. */
+    size_t offset = lx_guest_load_u16(p) == BFT_BITMAPARRAY ? BAFH2_PREFIX_SIZE : 0;
     ULONG result = 0;
-    if (size - offset < 26 || lx_guest_load_u16(p + offset) != 0x4d42)
+    if (size - offset < BFH2_SIZE + BMIH_SIZE || lx_guest_load_u16(p + offset) != BFT_BMAP)
         goto done;
-    uint32 fixed = lx_guest_load_u32(p + offset + 14);
-    if (fixed > size - offset - 14 || (fixed != 12 && fixed != 40 && fixed != 64))
+    uint32 fixed = lx_guest_load_u32(p + offset + BFH2_SIZE);
+    if (fixed > size - offset - BFH2_SIZE ||
+        (fixed != BMIH_SIZE && fixed != WINDOWS_BMIH_SIZE && fixed != BMIH2_SIZE))
         goto done;
     BitmapLayout b;
-    if (!bitmap_layout(p + offset + 14, &b) ||
-        (size_t)b.colors * b.palette_entry > size - offset - 14 - b.fixed)
+    if (!bitmap_layout(p + offset + BFH2_SIZE, &b) ||
+        (size_t)b.colors * b.palette_entry > size - offset - BFH2_SIZE - b.fixed)
         goto done;
-    uint32 bits = lx_guest_load_u32(p + offset + 10);
+    /* offBits counts from the start of the resource, not from the member's header. */
+    uint32 bits = lx_guest_load_u32(p + offset + BFH2_OFFBITS_OFFSET);
     if (bits > size || b.bytes > size - bits)
         goto done;
     result = lx_pm_bitmap_create(b.width, b.height, b.planes, b.depth);
@@ -150,7 +188,7 @@ ULONG lx_pm_bitmap_load(HPS ps, HMODULE module, ULONG id, LONG width, LONG heigh
     {
         LxHandleBorrow borrow = {0};
         PmBitmap *bitmap = lx_pm_bitmap(result, &borrow);
-        BOOL decoded = bitmap_decode(bitmap, &b, p + bits, p + offset + 14 + b.fixed);
+        BOOL decoded = bitmap_decode(bitmap, &b, p + bits, p + offset + BFH2_SIZE + b.fixed);
         lx_handle_release(&borrow);
         if (!decoded)
         {
@@ -216,8 +254,9 @@ PmBitmap *lx_pm_bitmap(ULONG handle, LxHandleBorrow *borrow)
 ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsigned depth)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || !width || !height || width > 16384 || height > 16384 ||
-        (uint64_t)width * height > 16777216 || planes != 1 ||
+    if (!anchor || !width || !height || width > LX_PM_RASTER_MAX_DIMENSION ||
+        height > LX_PM_RASTER_MAX_DIMENSION || (uint64_t)width * height > LX_PM_RASTER_MAX_PELS ||
+        planes != 1 ||
         (depth != 1 && depth != 2 && depth != 4 && depth != 8 && depth != 16 && depth != 24 &&
          depth != 32))
         return 0;
@@ -300,7 +339,8 @@ BOOL lx_pm_raster_read(HPS handle, LONG x, LONG y, unsigned width, unsigned heig
                        uint32_t *pixels)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || !pixels || x < 0 || y < 0 || !width || !height || width > 16384 || height > 16384)
+    if (!ps || !pixels || x < 0 || y < 0 || !width || !height ||
+        width > LX_PM_RASTER_MAX_DIMENSION || height > LX_PM_RASTER_MAX_DIMENSION)
         return FALSE;
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     if (bitmap)
@@ -338,7 +378,8 @@ BOOL lx_pm_raster_write(HPS handle, LONG x, LONG y, unsigned width, unsigned hei
                         const uint32_t *pixels)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || !pixels || !width || !height || width > 16384 || height > 16384)
+    if (!ps || !pixels || !width || !height || width > LX_PM_RASTER_MAX_DIMENSION ||
+        height > LX_PM_RASTER_MAX_DIMENSION)
         return FALSE;
     lx_pm_boundary(ps, x, y, width, height);
     if (ps->gpi.initialized && !ps->gpi.display_enabled)
