@@ -4,6 +4,8 @@
 #include "os2/opengl/opengl/internal.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/gl/pgl.h"
+#include <limits.h>
 #include "os2/ps/common/pm_text.h"
 
 static void release_bitmap(GlContext *c)
@@ -26,11 +28,59 @@ LxHostMonitor *GlLock;
 static LxHostThreadLocalKey *ThreadKey;
 static LxGuestMapping *Visuals;
 
+/* VISUALCONFIG as the guest sees it: ULONG fields and 32-bit pointers, in Toolkit
+   order. */
 enum
 {
-    VISUAL_BYTES = 88,
+    VISUAL_VID,
+    VISUAL_RGBA,
+    VISUAL_RED_SIZE,
+    VISUAL_GREEN_SIZE,
+    VISUAL_BLUE_SIZE,
+    VISUAL_ALPHA_SIZE,
+    VISUAL_RED_MASK,
+    VISUAL_GREEN_MASK,
+    VISUAL_BLUE_MASK,
+    VISUAL_ACCUM_RED_SIZE,
+    VISUAL_ACCUM_GREEN_SIZE,
+    VISUAL_ACCUM_BLUE_SIZE,
+    VISUAL_ACCUM_ALPHA_SIZE,
+    VISUAL_DOUBLE_BUFFER,
+    VISUAL_STEREO,
+    VISUAL_BUFFER_SIZE,
+    VISUAL_DEPTH_SIZE,
+    VISUAL_STENCIL_SIZE,
+    VISUAL_AUX_BUFFERS,
+    VISUAL_LEVEL,
+    VISUAL_RESERVED,
+    VISUAL_NEXT,
+    VISUAL_WORDS
+};
+
+/* Two RGBA visuals, single- then double-buffered, followed by the NULL-terminated
+   pointer list pglQueryConfigs returns. */
+enum
+{
+    VISUAL_BYTES = VISUAL_WORDS * 4,
     VISUAL_COUNT = 2,
-    VISUAL_LIST_OFFSET = 176
+    VISUAL_LIST_OFFSET = VISUAL_COUNT * VISUAL_BYTES,
+    VISUAL_PAGE_SIZE = 4096
+};
+
+/* Every visual has 8-bit colour channels, a 24-bit depth buffer and an 8-bit
+   stencil. */
+enum
+{
+    CHANNEL_BITS = 8,
+    COLOR_BUFFER_BITS = 32,
+    DEPTH_BITS = 24,
+    STENCIL_BITS = 8
+};
+
+/* pglChooseConfig reads at most this many attribute words. */
+enum
+{
+    ATTRIBUTE_LIST_LIMIT = 128
 };
 
 static void release_current(GlThread *t)
@@ -128,18 +178,31 @@ int gl_pgl_initialize(void)
 {
     GlLock = lx_host_monitor_create();
     ThreadKey = lx_host_thread_local_create(destroy_thread);
-    Visuals = lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    Visuals = lx_execution_map(GProcessState.execution, 0, VISUAL_PAGE_SIZE,
+                               LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!GlLock || !ThreadKey || !Visuals)
         return 0;
     uint32_t base = lx_execution_mapping_address(Visuals);
     uint8_t *memory = lx_execution_mapping_host(Visuals);
     for (unsigned i = 0; i < VISUAL_COUNT; i++)
     {
-        uint32_t words[22] = {i + 1, 1, 8, 8, 8,  8,  0xff0000, 0xff00, 0xff, 0, 0,
-                              0,     0, i, 0, 32, 24, 8,        0,      0,    0, 0};
-        for (unsigned n = 0; n < 22; n++)
-            lx_guest_store_u32(memory + i * VISUAL_BYTES + n * 4, words[n]);
-        lx_guest_store_u32(memory + VISUAL_LIST_OFFSET + i * 4, base + i * VISUAL_BYTES);
+        uint32_t words[VISUAL_WORDS] = {[VISUAL_VID] = i + 1,
+                                        [VISUAL_RGBA] = 1,
+                                        [VISUAL_RED_SIZE] = CHANNEL_BITS,
+                                        [VISUAL_GREEN_SIZE] = CHANNEL_BITS,
+                                        [VISUAL_BLUE_SIZE] = CHANNEL_BITS,
+                                        [VISUAL_ALPHA_SIZE] = CHANNEL_BITS,
+                                        [VISUAL_RED_MASK] = 0xff0000,
+                                        [VISUAL_GREEN_MASK] = 0xff00,
+                                        [VISUAL_BLUE_MASK] = 0xff,
+                                        [VISUAL_DOUBLE_BUFFER] = i,
+                                        [VISUAL_BUFFER_SIZE] = COLOR_BUFFER_BITS,
+                                        [VISUAL_DEPTH_SIZE] = DEPTH_BITS,
+                                        [VISUAL_STENCIL_SIZE] = STENCIL_BITS};
+        for (unsigned n = 0; n < VISUAL_WORDS; n++)
+            lx_guest_store_u32(memory + i * VISUAL_BYTES + n * sizeof(uint32_t), words[n]);
+        lx_guest_store_u32(memory + VISUAL_LIST_OFFSET + i * sizeof(uint32_t),
+                           base + i * VISUAL_BYTES);
     }
     return lx_execution_protect(GProcessState.execution, Visuals, LX_GUEST_READ);
 }
@@ -178,12 +241,13 @@ static uint32_t choose(uint8_t *a)
         return 0;
     uint32_t list = gl_word(a, 4);
     int rgba = 0, double_buffer = 0, single_buffer = 0, ended = 0;
-    for (unsigned i = 0; i < 128; i++)
+    for (unsigned i = 0; i < ATTRIBUTE_LIST_LIMIT; i++)
     {
-        uint8_t value_bytes[4];
-        uint64_t address = (uint64_t)list + 4 * i;
+        uint8_t value_bytes[sizeof(uint32_t)];
+        uint64_t address = (uint64_t)list + sizeof(uint32_t) * i;
         if (!list || address > UINT32_MAX ||
-            !lx_execution_read(GProcessState.execution, (uint32_t)address, value_bytes, 4))
+            !lx_execution_read(GProcessState.execution, (uint32_t)address, value_bytes,
+                               sizeof value_bytes))
             return 0;
         uint32_t token = lx_guest_load_u32(value_bytes);
         if (!token)
@@ -191,59 +255,62 @@ static uint32_t choose(uint8_t *a)
             ended = 1;
             break;
         }
-        if (token == 1)
-            continue; /* PGL_USE_GL */
-        if (token == 4)
+        /* Boolean attributes stand alone; the others are followed by a value. */
+        if (token == PGL_USE_GL)
+            continue;
+        if (token == PGL_RGBA)
         {
             rgba = 1;
             continue;
         }
-        if (token == 5)
+        if (token == PGL_DOUBLEBUFFER)
         {
             double_buffer = 1;
             continue;
         }
-        if (token == 18)
+        if (token == PGL_SINGLEBUFFER)
         {
             single_buffer = 1;
             continue;
         }
-        if (token == 6)
+        if (token == PGL_STEREO)
             return 0; /* Stereo visuals are unavailable. */
-        if (++i == 128 || address > UINT32_MAX - 4 ||
-            !lx_execution_read(GProcessState.execution, (uint32_t)address + 4, value_bytes, 4))
+        if (++i == ATTRIBUTE_LIST_LIMIT || address > UINT32_MAX - sizeof(uint32_t) ||
+            !lx_execution_read(GProcessState.execution, (uint32_t)address + sizeof(uint32_t),
+                               value_bytes, sizeof value_bytes))
             return 0;
         int32_t value = (int32_t)lx_guest_load_u32(value_bytes);
         if (value < 0)
             return 0;
         switch (token)
         {
-            case 2:
-                if (value > 32)
+            /* A request is met when it asks for no more than the visuals provide. */
+            case PGL_BUFFER_SIZE:
+                if (value > COLOR_BUFFER_BITS)
                     return 0;
                 break;
-            case 3:
-            case 7:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
+            case PGL_LEVEL:
+            case PGL_AUX_BUFFERS:
+            case PGL_ACCUM_RED_SIZE:
+            case PGL_ACCUM_GREEN_SIZE:
+            case PGL_ACCUM_BLUE_SIZE:
+            case PGL_ACCUM_ALPHA_SIZE:
                 if (value)
                     return 0;
                 break;
-            case 8:
-            case 9:
-            case 10:
-            case 11:
-                if (value > 8)
+            case PGL_RED_SIZE:
+            case PGL_GREEN_SIZE:
+            case PGL_BLUE_SIZE:
+            case PGL_ALPHA_SIZE:
+                if (value > CHANNEL_BITS)
                     return 0;
                 break;
-            case 12:
-                if (value > 24)
+            case PGL_DEPTH_SIZE:
+                if (value > DEPTH_BITS)
                     return 0;
                 break;
-            case 13:
-                if (value > 8)
+            case PGL_STENCIL_SIZE:
+                if (value > STENCIL_BITS)
                     return 0;
                 break;
             default:
@@ -269,9 +336,11 @@ static uint32_t create(uint8_t *a)
     GlContext *c = calloc(1, sizeof *c);
     if (!c)
         return 0;
-    c->config = (LxHostGlConfig){visual != base, 8, 8, 8, 8, 24, 8};
+    c->config = (LxHostGlConfig){visual != base, CHANNEL_BITS, CHANNEL_BITS, CHANNEL_BITS,
+                                 CHANNEL_BITS,   DEPTH_BITS,   STENCIL_BITS};
     c->hab = hab;
     c->render_mode = GL_RENDER;
+    /* GL's initial component counts for each client array, in GL_ARRAY_* order. */
     static const int sizes[] = {4, 3, 4, 1, 4, 1};
     for (unsigned i = 0; i < GL_ARRAY_COUNT; i++)
         c->arrays[i] =
@@ -444,7 +513,8 @@ static uint32_t capability(uint8_t *a)
 {
     if (!anchor(gl_word(a, 0)))
         return 0;
-    LxHostGlConfig config = {0, 8, 8, 8, 8, 24, 8};
+    LxHostGlConfig config = {0,          CHANNEL_BITS, CHANNEL_BITS, CHANNEL_BITS, CHANNEL_BITS,
+                             DEPTH_BITS, STENCIL_BITS};
     LxHostGlContext *probe = lx_host_gl_create(&config, NULL);
     if (!probe)
         return 0;
@@ -554,17 +624,26 @@ static uint32_t release_front_bitmap(uint8_t *a)
     return 1;
 }
 
+/* Bitmap fonts cover one code page's 256 characters; glyph pixels at least half
+   covered are set, rows bottom-up as glBitmap reads them. */
+enum
+{
+    FONT_GLYPH_COUNT = 256,
+    GLYPH_COVERAGE_THRESHOLD = 128
+};
+
 static uint32_t bitmap_font(GlContext *c, HPS ps, int first, int count, uint32_t base)
 {
-    if (!c || c->inside || !lx_pm_valid_ps(ps) || first < 0 || first > 255 || count < 0 ||
-        count > 256 - first || !base || (uint64_t)base + count > UINT32_MAX)
+    if (!c || c->inside || !lx_pm_valid_ps(ps) || first < 0 || first >= FONT_GLYPH_COUNT ||
+        count < 0 || count > FONT_GLYPH_COUNT - first || !base ||
+        (uint64_t)base + count > UINT32_MAX)
         return 0;
     int32_t compiling = 0;
     c->api->glGetIntegerv(GL_LIST_INDEX, &compiling);
     if (compiling)
         return 0;
     LxHostFont *font = lx_pm_font(ps);
-    LxHostGlyph glyphs[256] = {{0}};
+    LxHostGlyph glyphs[FONT_GLYPH_COUNT] = {{0}};
     uint32_t result = 0;
     for (int n = 0; n < count; n++)
         if (!lx_host_font_glyph(font, lx_pm_codepoint(first + n), &glyphs[n]))
@@ -579,7 +658,7 @@ static uint32_t bitmap_font(GlContext *c, HPS ps, int first, int count, uint32_t
     for (int n = 0; n < count; n++)
     {
         LxHostGlyph *g = &glyphs[n];
-        size_t stride = ((unsigned)g->width + 7) / 8;
+        size_t stride = ((unsigned)g->width + CHAR_BIT - 1) / CHAR_BIT;
         uint8_t *bits = calloc(g->height ? (size_t)g->height : 1, stride ? stride : 1);
         if (!bits)
         {
@@ -588,8 +667,9 @@ static uint32_t bitmap_font(GlContext *c, HPS ps, int first, int count, uint32_t
         }
         for (int y = 0; y < g->height; y++)
             for (int x = 0; x < g->width; x++)
-                if (g->coverage[(size_t)y * g->width + x] >= 128)
-                    bits[(size_t)(g->height - 1 - y) * stride + x / 8] |= 0x80u >> (x % 8);
+                if (g->coverage[(size_t)y * g->width + x] >= GLYPH_COVERAGE_THRESHOLD)
+                    bits[(size_t)(g->height - 1 - y) * stride + x / CHAR_BIT] |=
+                        0x80u >> (x % CHAR_BIT);
         c->api->glNewList(base + n, GL_COMPILE);
         c->api->glBitmap(g->width, g->height, -g->left, g->height - g->top, g->advance, 0, bits);
         c->api->glEndList();

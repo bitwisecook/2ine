@@ -84,6 +84,7 @@ socket headers apart from the host's.
 | `dive.h` | Dive* (DIVE) |
 | `som/som.h` | SOM |
 | `sys/*.h`, `net/*.h`, `netinet/in.h`, `arpa/inet.h`, `netdb.h`, `nerrno.h`, `resolv.h`, `unistd.h` | 32-bit sockets and socket errors (TCPIP32) |
+| `gl/pgl.h` | pglChooseConfig attribute tokens (OPENGL) |
 | `stack16/sys/socket.h`, `stack16/netdb.h` | 16-bit-stack socket and database sets (SO32DLL, TCP32DLL) |
 
 `include/private/` holds the DDK-style private companions: `bsep.h` (DOSCALLS
