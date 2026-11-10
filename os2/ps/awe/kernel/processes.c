@@ -21,14 +21,6 @@
 #include <stdio.h>
 #include <strings.h>
 
-/* DosSearchPath flags (the Toolkit's bsedos.h values). */
-enum
-{
-    SEARCH_CUR_DIRECTORY = 0x0001,
-    SEARCH_ENVIRONMENT = 0x0002,
-    SEARCH_IGNORENETERRS = 0x0004
-};
-
 enum
 {
     /* Longest program name taken from the command line, before ".EXE" is added. */
