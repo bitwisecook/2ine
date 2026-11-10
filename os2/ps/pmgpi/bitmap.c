@@ -1,5 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* OS/2 bitmap headers are byte-packed; resources retain absolute file offsets. */
+/* Bitmaps and their transfers: GpiCreateBitmap, GpiBitBlt, GpiDrawBits and the scan-line
+   transfers. Guest bitmap headers are byte-packed, so fields are read at fixed offsets. */
 #include "os2/include/private/export.h"
 #include "os2/include/pmerr.h"
 #include "os2/include/pmsei.h"
@@ -7,6 +8,7 @@
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 #include "emulator/abi.h"
+#include "os2/ps/pmgpi/internal.h"
 
 ULONG GpiCreateBitmap(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info)
 {
@@ -40,11 +42,11 @@ BOOL GpiQueryBitmapParameters(ULONG handle, PVOID data)
     if (ok)
     {
         uint8 *p = data;
-        lx_guest_store_u32(p, 12);
-        lx_guest_store_u16(p + 4, bitmap->width);
-        lx_guest_store_u16(p + 6, bitmap->height);
-        lx_guest_store_u16(p + 8, bitmap->planes);
-        lx_guest_store_u16(p + 10, bitmap->depth);
+        lx_guest_store_u32(p, BMIH_SIZE);
+        lx_guest_store_u16(p + BMIH_CX_OFFSET, bitmap->width);
+        lx_guest_store_u16(p + BMIH_CY_OFFSET, bitmap->height);
+        lx_guest_store_u16(p + BMIH_CPLANES_OFFSET, bitmap->planes);
+        lx_guest_store_u16(p + BMIH_CBITCOUNT_OFFSET, bitmap->depth);
     }
     lx_handle_release(&borrow);
     return ok;
@@ -54,18 +56,20 @@ BOOL GpiQueryBitmapInfoHeader(ULONG handle, PVOID data)
 {
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
-    BOOL ok = bitmap && data && lx_guest_load_u32(data) == 64;
+    BOOL ok = bitmap && data && lx_guest_load_u32(data) == BMIH2_SIZE;
     if (ok)
     {
         uint8 *p = data;
-        memset(p, 0, 64);
-        lx_guest_store_u32(p, 64);
-        lx_guest_store_u32(p + 4, bitmap->width);
-        lx_guest_store_u32(p + 8, bitmap->height);
-        lx_guest_store_u16(p + 12, bitmap->planes);
-        lx_guest_store_u16(p + 14, bitmap->depth);
-        lx_guest_store_u32(p + 20, (uint32)(((size_t)bitmap->width * bitmap->depth + 31) / 32 * 4 *
-                                            bitmap->height));
+        memset(p, 0, BMIH2_SIZE);
+        lx_guest_store_u32(p, BMIH2_SIZE);
+        lx_guest_store_u32(p + BMIH2_CX_OFFSET, bitmap->width);
+        lx_guest_store_u32(p + BMIH2_CY_OFFSET, bitmap->height);
+        lx_guest_store_u16(p + BMIH2_CPLANES_OFFSET, bitmap->planes);
+        lx_guest_store_u16(p + BMIH2_CBITCOUNT_OFFSET, bitmap->depth);
+        /* Scan lines are padded to 32 bits. */
+        lx_guest_store_u32(
+            p + BMIH2_CBIMAGE_OFFSET,
+            (uint32)(((size_t)bitmap->width * bitmap->depth + 31) / 32 * 4 * bitmap->height));
     }
     lx_handle_release(&borrow);
     return ok;
@@ -76,7 +80,8 @@ BOOL GpiQueryDeviceBitmapFormats(HPS ps, LONG count, PLONG output)
     if (!lx_pm_valid_ps(ps) || count < 0 || (count && !output))
         return FALSE;
     /* Plane and depth pairs, preferred format first; a display offers nothing above its depth. */
-    const unsigned depth = GProcessState.display_depth ? GProcessState.display_depth : 24;
+    const unsigned depth =
+        GProcessState.display_depth ? GProcessState.display_depth : GPI_DEFAULT_DISPLAY_DEPTH;
     LONG formats[10] = {1, (LONG)depth};
     LONG available = 2;
     for (unsigned i = 0, others[] = {8, 4, 1}; i < 3; i++)
@@ -128,16 +133,18 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
     if (!lx_pm_valid_ps(destination) || (uses_source && !bitmap && !lx_pm_valid_ps(source)) ||
         ((count != 3 && count != 4) && (uses_source || count != 2)) || !points || rop < 0 ||
         rop > 255 || options > BBO_IGNORE)
-        return 0;
+        return GPI_ERROR;
     int64_t w = (int64_t)points[1].x - points[0].x, h = (int64_t)points[1].y - points[0].y;
     int64_t sw = count == 4 ? (int64_t)points[3].x - points[2].x : w,
             sh = count == 4 ? (int64_t)points[3].y - points[2].y : h;
-    if (w <= 0 || h <= 0 || sw <= 0 || sh <= 0 || w > 16384 || h > 16384 || sw > 16384 ||
-        sh > 16384 || w * h > 16777216 || sw * sh > 16777216)
-        return 0;
-    uint32 *src = calloc((size_t)sw * sh, 4);
+    if (w <= 0 || h <= 0 || sw <= 0 || sh <= 0 || w > LX_PM_RASTER_MAX_DIMENSION ||
+        h > LX_PM_RASTER_MAX_DIMENSION || sw > LX_PM_RASTER_MAX_DIMENSION ||
+        sh > LX_PM_RASTER_MAX_DIMENSION || w * h > LX_PM_RASTER_MAX_PELS ||
+        sw * sh > LX_PM_RASTER_MAX_PELS)
+        return GPI_ERROR;
+    uint32 *src = calloc((size_t)sw * sh, sizeof *src);
     if (!src)
-        return 0;
+        return GPI_ERROR;
     BOOL ok = TRUE;
     if (!uses_source)
         ok = TRUE;
@@ -150,7 +157,7 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
             for (LONG row = 0; row < sh; row++)
                 memcpy(src + (size_t)row * sw,
                        bitmap->pixels + (size_t)(points[2].y + row) * bitmap->width + points[2].x,
-                       (size_t)sw * 4);
+                       (size_t)sw * sizeof *src);
     }
     else
         ok = lx_pm_raster_read(source, points[2].x, points[2].y, (unsigned)sw, (unsigned)sh, src);
@@ -175,7 +182,7 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
     if (ok)
         ok = lx_pm_blit_rect(destination, &target, read, gpi_blit_pel, &blit);
     free(src);
-    return ok ? 1 : 0;
+    return ok ? GPI_OK : GPI_ERROR;
 }
 
 LONG GpiBitBlt(HPS destination, HPS source, LONG count, PPOINTL points, LONG rop, ULONG options)
@@ -192,20 +199,21 @@ LONG GpiWCBitBlt(HPS destination, ULONG handle, LONG count, PPOINTL points, LONG
     TRACE_NATIVE("GpiWCBitBlt(%u, %u, %d, %p, %X, %u)", (uint)destination, (uint)handle, (int)count,
                  points, (uint)rop, (uint)options);
     if (!ps || !points || (count != 3 && count != 4))
-        return 0;
+        return GPI_ERROR;
     POINTL device[4];
     memcpy(device, points, (size_t)count * sizeof *device);
     if (!lx_pm_transform_point(ps, &device[0], TRUE) ||
         !lx_pm_transform_point(ps, &device[1], TRUE))
-        return 0;
+        return GPI_ERROR;
     /* Unlike GpiBitBlt, the target rectangle's upper-right corner is inclusive here. */
     device[1].x++;
     device[1].y++;
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = handle ? lx_pm_bitmap(handle, &borrow) : NULL;
     /* A pattern-only ROP passes no bitmap; bitmap_blt rejects any other ROP without a source. */
-    LONG result =
-        bitmap || !handle ? bitmap_blt(destination, 0, bitmap, count, device, rop, options) : 0;
+    LONG result = bitmap || !handle
+                      ? bitmap_blt(destination, 0, bitmap, count, device, rop, options)
+                      : GPI_ERROR;
     lx_handle_release(&borrow);
     return result;
 }
@@ -213,7 +221,8 @@ LONG GpiWCBitBlt(HPS destination, ULONG handle, LONG count, PPOINTL points, LONG
 BOOL GpiSetBitmapId(HPS handle, ULONG bitmap, LONG id)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || id < 1 || id > 254 || ps->logical_fonts[id].defined || ps->bitmap_ids[id].resource)
+    if (!ps || id < 1 || id > GPI_LCID_MAX || ps->logical_fonts[id].defined ||
+        ps->bitmap_ids[id].resource)
         return FALSE;
     LxHandleBorrow borrow = {0};
     if (!lx_pm_bitmap(bitmap, &borrow))
@@ -225,7 +234,7 @@ BOOL GpiSetBitmapId(HPS handle, ULONG bitmap, LONG id)
 ULONG GpiQueryBitmapHandle(HPS handle, LONG id)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || id < 1 || id > 254)
+    if (!ps || id < 1 || id > GPI_LCID_MAX)
         return 0;
     PmBitmap *bitmap = ps->bitmap_ids[id].resource;
     return bitmap ? bitmap->handle : 0;
@@ -238,51 +247,54 @@ LONG GpiQueryBitmapBits(HPS handle, LONG start, LONG scans, PVOID bits, PVOID in
     PresentationSpace *ps = lx_pm_font_space(handle);
     PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
     if (!bitmap || !information || start < 0 || scans < 0 || (ULONG)start > bitmap->height)
-        return -1;
+        return GPI_ALTERROR;
     uint8 *info = information;
     unsigned fixed = lx_guest_load_u32(info);
-    if (fixed != 12 && fixed != 64)
-        return -1;
-    unsigned planes = lx_guest_load_u16(info + (fixed == 12 ? 8 : 12));
-    unsigned depth = lx_guest_load_u16(info + (fixed == 12 ? 10 : 14));
+    if (fixed != BMIH_SIZE && fixed != BMIH2_SIZE)
+        return GPI_ALTERROR;
+    BOOL old = fixed == BMIH_SIZE;
+    unsigned planes = lx_guest_load_u16(info + (old ? BMIH_CPLANES_OFFSET : BMIH2_CPLANES_OFFSET));
+    unsigned depth =
+        lx_guest_load_u16(info + (old ? BMIH_CBITCOUNT_OFFSET : BMIH2_CBITCOUNT_OFFSET));
     if (planes != 1 || (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
-        return -1;
+        return GPI_ALTERROR;
     unsigned rows =
         (ULONG)scans > bitmap->height - (ULONG)start ? bitmap->height - (ULONG)start : (ULONG)scans;
     if (rows && !bits)
-        return -1;
+        return GPI_ALTERROR;
     unsigned colors = depth <= 8 ? 1u << depth : 0;
-    uint32 palette[256] = {0};
+    uint32 palette[GPI_MAX_PALETTE_COLORS] = {0};
     static const uint32 vga[16] = {0,        0x800000, 0x008000, 0x808000, 0x000080, 0x800080,
                                    0x008080, 0xc0c0c0, 0x808080, 0xff0000, 0x00ff00, 0xffff00,
                                    0x0000ff, 0xff00ff, 0x00ffff, 0xffffff};
     for (unsigned i = 0; i < colors; i++)
         palette[i] = bitmap->palette_count && depth >= bitmap->depth
                          ? (i < bitmap->palette_count ? bitmap->palette[i] : 0)
-                     : depth == 1 ? (i ? 0xffffff : 0)
+                     : depth == 1 ? (i ? RGB_WHITE : RGB_BLACK)
                      : depth == 4 ? vga[i]
+                                  /* 3-3-2 colour cube */
                                   : ((i >> 5) * 255 / 7) << 16 | (((i >> 2) & 7) * 255 / 7) << 8 |
                                         (i & 3) * 85;
     size_t stride = ((size_t)bitmap->width * depth + 31) / 32 * 4;
-    memset(info, 0, fixed + colors * (fixed == 12 ? 3 : 4));
+    memset(info, 0, fixed + colors * (old ? RGB_SIZE : RGB2_SIZE));
     lx_guest_store_u32(info, fixed);
-    if (fixed == 12)
+    if (old)
     {
-        lx_guest_store_u16(info + 4, bitmap->width);
-        lx_guest_store_u16(info + 6, bitmap->height);
+        lx_guest_store_u16(info + BMIH_CX_OFFSET, bitmap->width);
+        lx_guest_store_u16(info + BMIH_CY_OFFSET, bitmap->height);
     }
     else
     {
-        lx_guest_store_u32(info + 4, bitmap->width);
-        lx_guest_store_u32(info + 8, bitmap->height);
-        lx_guest_store_u32(info + 20, stride * bitmap->height);
-        lx_guest_store_u32(info + 32, colors);
+        lx_guest_store_u32(info + BMIH2_CX_OFFSET, bitmap->width);
+        lx_guest_store_u32(info + BMIH2_CY_OFFSET, bitmap->height);
+        lx_guest_store_u32(info + BMIH2_CBIMAGE_OFFSET, stride * bitmap->height);
+        lx_guest_store_u32(info + BMIH2_CCLRUSED_OFFSET, colors);
     }
-    lx_guest_store_u16(info + (fixed == 12 ? 8 : 12), 1);
-    lx_guest_store_u16(info + (fixed == 12 ? 10 : 14), depth);
+    lx_guest_store_u16(info + (old ? BMIH_CPLANES_OFFSET : BMIH2_CPLANES_OFFSET), 1);
+    lx_guest_store_u16(info + (old ? BMIH_CBITCOUNT_OFFSET : BMIH2_CBITCOUNT_OFFSET), depth);
     for (unsigned i = 0; i < colors; i++)
     {
-        uint8 *entry = info + fixed + i * (fixed == 12 ? 3 : 4);
+        uint8 *entry = info + fixed + i * (old ? RGB_SIZE : RGB2_SIZE);
         entry[0] = (uint8)palette[i];
         entry[1] = (uint8)(palette[i] >> 8);
         entry[2] = (uint8)(palette[i] >> 16);
@@ -332,29 +344,30 @@ LONG GpiDrawBits(HPS handle, PVOID bits, PVOID information, LONG count, PPOINTL 
                  options);
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || !bits || !information || !points || (count != 3 && count != 4))
-        return 0;
+        return GPI_ERROR;
     TRACE_NATIVE("GpiDrawBits points={%d,%d;%d,%d;%d,%d;%d,%d}", points[0].x, points[0].y,
                  points[1].x, points[1].y, points[2].x, points[2].y, count == 4 ? points[3].x : 0,
                  count == 4 ? points[3].y : 0);
-    if (options > 2)
+    if (options > BBO_IGNORE)
     {
         WinSetErrorInfo(PMERR_FUNCTION_NOT_SUPPORTED, 0, NULL);
-        return 0;
+        return GPI_ERROR;
     }
     POINTL p[4];
     memcpy(p, points, (size_t)count * sizeof *p);
     if (!lx_pm_transform_point(ps, &p[0], TRUE) || !lx_pm_transform_point(ps, &p[1], TRUE))
-        return 0;
+        return GPI_ERROR;
     int64_t width = (int64_t)p[1].x - p[0].x, height = (int64_t)p[1].y - p[0].y;
     int64_t sw = count == 4 ? (int64_t)p[3].x - p[2].x : width;
     int64_t sh = count == 4 ? (int64_t)p[3].y - p[2].y : height;
-    if (width <= 0 || height <= 0 || width > 16384 || height > 16384 || width * height > 16777216 ||
-        sw <= 0 || sh <= 0 || sw > 16384 || sh > 16384)
-        return 0;
-    ULONG source = lx_pm_bitmap_create_data(handle, information, 4, bits, information);
+    if (width <= 0 || height <= 0 || width > LX_PM_RASTER_MAX_DIMENSION ||
+        height > LX_PM_RASTER_MAX_DIMENSION || width * height > LX_PM_RASTER_MAX_PELS || sw <= 0 ||
+        sh <= 0 || sw > LX_PM_RASTER_MAX_DIMENSION || sh > LX_PM_RASTER_MAX_DIMENSION)
+        return GPI_ERROR;
+    ULONG source = lx_pm_bitmap_create_data(handle, information, CBM_INIT, bits, information);
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = source ? lx_pm_bitmap(source, &borrow) : NULL;
-    LONG result = 0;
+    LONG result = GPI_ERROR;
     PmBitmap scaled = {.width = (unsigned)width, .height = (unsigned)height};
     if (!bitmap || p[2].x < 0 || p[2].y < 0 || (uint64)p[2].x + sw > bitmap->width ||
         (uint64)p[2].y + sh > bitmap->height)
@@ -368,11 +381,14 @@ LONG GpiDrawBits(HPS handle, PVOID bits, PVOID information, LONG count, PPOINTL 
         {
             unsigned x0 = (unsigned)((uint64)x * sw / width),
                      y0 = (unsigned)((uint64)y * sh / height);
-            unsigned x1 =
-                options == 2 ? x0 + 1 : (unsigned)(((uint64)(x + 1) * sw + width - 1) / width);
-            unsigned y1 =
-                options == 2 ? y0 + 1 : (unsigned)(((uint64)(y + 1) * sh + height - 1) / height);
-            uint32 value = options == 1 ? UINT32_MAX : 0;
+            /* BBO_OR and BBO_AND combine every source pel the target pel covers. */
+            unsigned x1 = options == BBO_IGNORE
+                              ? x0 + 1
+                              : (unsigned)(((uint64)(x + 1) * sw + width - 1) / width);
+            unsigned y1 = options == BBO_IGNORE
+                              ? y0 + 1
+                              : (unsigned)(((uint64)(y + 1) * sh + height - 1) / height);
+            uint32 value = options == BBO_AND ? UINT32_MAX : 0;
             for (unsigned sy = y0; sy < y1; sy++)
                 for (unsigned sx = x0; sx < x1; sx++)
                 {
@@ -387,14 +403,14 @@ LONG GpiDrawBits(HPS handle, PVOID bits, PVOID information, LONG count, PPOINTL 
                     }
                     else
                         pixel = bitmap->pixels[(size_t)iy * bitmap->width + ix];
-                    value = options == 1 ? value & pixel : value | pixel;
+                    value = options == BBO_AND ? value & pixel : value | pixel;
                 }
             if (bitmap->depth <= 8)
                 value = bitmap->palette[value];
             scaled.pixels[(size_t)y * width + x] = value;
         }
     p[2] = (POINTL){0, 0};
-    result = bitmap_blt(handle, 0, &scaled, 3, p, rop, 2);
+    result = bitmap_blt(handle, 0, &scaled, 3, p, rop, BBO_IGNORE);
 done:
     TRACE_NATIVE("GpiDrawBits result=%d source=%ux%u depth=%u target=%lldx%lld", result,
                  bitmap ? bitmap->width : 0, bitmap ? bitmap->height : 0,
@@ -412,7 +428,7 @@ LONG GpiSetBitmapBits(HPS handle, LONG start, LONG scans, PVOID bits, PVOID info
     PmBitmap *destination = ps ? ps->bitmap_lease.resource : NULL;
     if (!destination || !information || start < 0 || scans < 0 ||
         (ULONG)start > destination->height || (scans && !bits))
-        return -1;
+        return GPI_ALTERROR;
     if (!scans || (ULONG)start == destination->height)
         return 0;
     unsigned rows = (ULONG)scans > destination->height - (ULONG)start
@@ -420,28 +436,30 @@ LONG GpiSetBitmapBits(HPS handle, LONG start, LONG scans, PVOID bits, PVOID info
                         : (ULONG)scans;
     uint8 *source = information;
     ULONG fixed = lx_guest_load_u32(source);
-    if (fixed != 12 && fixed != 64)
-        return -1;
-    ULONG width = fixed == 12 ? lx_guest_load_u16(source + 4) : lx_guest_load_u32(source + 4);
-    ULONG depth = lx_guest_load_u16(source + (fixed == 12 ? 10 : 14));
+    if (fixed != BMIH_SIZE && fixed != BMIH2_SIZE)
+        return GPI_ALTERROR;
+    ULONG width = fixed == BMIH_SIZE ? lx_guest_load_u16(source + BMIH_CX_OFFSET)
+                                     : lx_guest_load_u32(source + BMIH2_CX_OFFSET);
+    ULONG depth = lx_guest_load_u16(
+        source + (fixed == BMIH_SIZE ? BMIH_CBITCOUNT_OFFSET : BMIH2_CBITCOUNT_OFFSET));
     if (width != destination->width ||
         (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
-        return -1;
+        return GPI_ALTERROR;
     ULONG colors = depth <= 8 ? 1u << depth : 0;
-    if (fixed == 64 && lx_guest_load_u32(source + 32))
-        colors = lx_guest_load_u32(source + 32);
-    if (colors > 256)
-        return -1;
-    size_t size = fixed + colors * (fixed == 12 ? 3 : 4);
+    if (fixed == BMIH2_SIZE && lx_guest_load_u32(source + BMIH2_CCLRUSED_OFFSET))
+        colors = lx_guest_load_u32(source + BMIH2_CCLRUSED_OFFSET);
+    if (colors > GPI_MAX_PALETTE_COLORS)
+        return GPI_ALTERROR;
+    size_t size = fixed + colors * (fixed == BMIH_SIZE ? RGB_SIZE : RGB2_SIZE);
     uint8 *info = malloc(size);
     if (!info)
-        return -1;
+        return GPI_ALTERROR;
     memcpy(info, source, size);
-    if (fixed == 12)
-        lx_guest_store_u16(info + 6, rows);
+    if (fixed == BMIH_SIZE)
+        lx_guest_store_u16(info + BMIH_CY_OFFSET, rows);
     else
-        lx_guest_store_u32(info + 8, rows);
-    ULONG temporary = lx_pm_bitmap_create_data(handle, info, 4, bits, info);
+        lx_guest_store_u32(info + BMIH2_CY_OFFSET, rows);
+    ULONG temporary = lx_pm_bitmap_create_data(handle, info, CBM_INIT, bits, info);
     free(info);
     LxHandleBorrow borrow = {0};
     PmBitmap *decoded = lx_pm_bitmap(temporary, &borrow);
@@ -455,5 +473,5 @@ LONG GpiSetBitmapBits(HPS handle, LONG start, LONG scans, PVOID bits, PVOID info
     lx_handle_release(&borrow);
     if (temporary)
         lx_pm_bitmap_delete(temporary);
-    return decoded ? (LONG)rows : -1;
+    return decoded ? (LONG)rows : GPI_ALTERROR;
 }

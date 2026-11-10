@@ -32,4 +32,4 @@ named after the Toolkit's INCL_GPI* groups.
 | `text.c` | GpiCharString*, character angle/shear/direction, text alignment |
 | `metafiles.c` | Metafiles (IBM: `gpimeta.c`, `gpimtof.c`, `mt2*.c`) |
 | `device.c` | Dev* |
-| `internal.h` | State helpers shared by the units |
+| `internal.h` | State helpers and constants shared by the units |

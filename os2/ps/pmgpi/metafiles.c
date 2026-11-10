@@ -16,6 +16,12 @@ typedef struct PmMetaFile
     uint8 *bytes;
 } PmMetaFile;
 
+/* Bounds the host memory one metafile may hold. */
+enum
+{
+    METAFILE_MAX_BYTES = 64 * 1024 * 1024
+};
+
 static void destroy_meta(void *v)
 {
     PmMetaFile *m = v;
@@ -25,7 +31,7 @@ static void destroy_meta(void *v)
 
 static ULONG create_meta(const void *data, size_t length)
 {
-    if (!data || !length || length > 64 * 1024 * 1024)
+    if (!data || !length || length > METAFILE_MAX_BYTES)
         return 0;
     PmMetaFile *m = calloc(1, sizeof *m);
     if (!m)
@@ -64,7 +70,7 @@ ULONG GpiLoadMetaFile(HAB hab, PSZ name)
         return 0;
     size_t length = 0;
     LxHostFsError status;
-    void *bytes = lx_host_file_snapshot(path, 64 * 1024 * 1024, &length, &status);
+    void *bytes = lx_host_file_snapshot(path, METAFILE_MAX_BYTES, &length, &status);
     free(path);
     ULONG result = bytes ? create_meta(bytes, length) : 0;
     free(bytes);
@@ -86,7 +92,7 @@ LONG GpiQueryMetaFileLength(ULONG h)
 {
     LxHandleBorrow b = {0};
     if (!lx_handle_borrow(h, LX_HANDLE_PM_METAFILE, &b))
-        return -1;
+        return GPI_ALTERROR;
     LONG n = ((PmMetaFile *)b.resource)->length;
     lx_handle_release(&b);
     return n;
@@ -164,5 +170,5 @@ LONG GpiPlayMetaFile(HPS ps, ULONG handle, LONG count, PLONG options, PLONG segm
     (void)description_length;
     (void)description;
     gpi_unsupported();
-    return -1;
+    return GPI_ALTERROR;
 }
