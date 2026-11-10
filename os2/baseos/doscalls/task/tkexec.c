@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* DosExecPgm: child processes launched through the host loader. */
 #include "os2/baseos/doscalls/internal.h"
 #include "emulator/launch_record.h"
 #include <ctype.h>
@@ -38,9 +39,20 @@ static void freeLaunchPlan(LaunchPlan *plan)
     memset(plan, 0, sizeof *plan);
 }
 
+enum
+{
+    /* DosExecPgm tracing shows at most this much of the argument block. */
+    TRACE_ARGUMENT_BYTES = 1024,
+    /* BEGINLIBPATH, ENDLIBPATH and LIBPATHSTRICT. */
+    EXTENDED_LIBPATH_COUNT = 3,
+    /* calcEnvp adds the extended LIBPATH values, one directory per drive, the current
+       drive, the launch record, IS_2INE, the child arguments and a terminator. */
+    LAUNCH_VARIABLE_COUNT = EXTENDED_LIBPATH_COUNT + DRIVE_COUNT + 5
+};
+
 static char *driveDirectoryPath(int drive, const char *directory, const char *name)
 {
-    size_t size = strlen(directory) + (name ? strlen(name) : 0) + 6;
+    size_t size = strlen(directory) + (name ? strlen(name) : 0) + sizeof "X:\\" + sizeof "\\";
     char *path = malloc(size);
     if (path)
         snprintf(path, size, "%c:\\%s%s%s", 'A' + drive, directory, name && *directory ? "\\" : "",
@@ -59,14 +71,14 @@ static APIRET resolveStartDirectory(const char *directory, LaunchStart *start)
         drive = toupper((unsigned char)path[0]) - 'A';
         path += 2;
     }
-    if (drive < 0 || drive >= 26 || !GProcessState.disks[drive])
+    if (drive < 0 || drive >= DRIVE_COUNT || !GProcessState.disks[drive])
         return ERROR_INVALID_DRIVE;
     const char *base = *path == '\\' || *path == '/' ? "" : GProcessState.current_dir[drive];
     if (!base)
         base = "";
     while (*path == '\\' || *path == '/')
         path++;
-    size_t size = strlen(base) + strlen(path) + 2;
+    size_t size = strlen(base) + strlen(path) + sizeof "\\";
     char *joined = malloc(size);
     if (!joined)
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -305,10 +317,10 @@ APIRET DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ 
     if (GProcessState.trace_native && pArg)
     {
         fprintf(stderr, "2INE TRACE: DosExecPgm arg block:");
-        for (const char *p = pArg; p < (pArg + 1024); p++)
+        for (const char *p = pArg; p < (pArg + TRACE_ARGUMENT_BYTES); p++)
         {
             if (*p)
-                fprintf(stderr, " %c", (*p >= 32 && *p < 127) ? *p : '.');
+                fprintf(stderr, " %c", (*p >= ' ' && *p <= '~') ? *p : '.');
             else
             {
                 fprintf(stderr, " |");
@@ -334,22 +346,31 @@ APIRET16 Dos16ExecPgm(PCHAR pObjname, SHORT cbObjname, USHORT execFlag, PSZ pArg
     return ret;
 }
 
-static int hostControlVariable(const char *entry)
+static int hasPrefix(const char *entry, const char *prefix)
 {
-    return !strncmp(entry, "TWOINE_", 7) || !strncmp(entry, "SDL_", 4) ||
-           !strncmp(entry, "LD_LIBRARY_PATH=", 16) || !strncmp(entry, "DYLD_LIBRARY_PATH=", 18) ||
-           !strncmp(entry, "TRACE_NATIVE=", 13) || !strncmp(entry, "TRACE_EVENTS=", 13) ||
-           !strncmp(entry, "DISPLAY=", 8) || !strncmp(entry, "WAYLAND_DISPLAY=", 16) ||
-           !strncmp(entry, "XDG_RUNTIME_DIR=", 16) || !strncmp(entry, "LIBGL_", 6) ||
-           !strncmp(entry, "GALLIUM_", 8);
+    return !strncmp(entry, prefix, strlen(prefix));
 }
 
+/* Host variables steer the emulator and its display, so they never reach the guest
+   environment. */
+static int hostControlVariable(const char *entry)
+{
+    return hasPrefix(entry, "TWOINE_") || hasPrefix(entry, "SDL_") ||
+           hasPrefix(entry, "LD_LIBRARY_PATH=") || hasPrefix(entry, "DYLD_LIBRARY_PATH=") ||
+           hasPrefix(entry, "TRACE_NATIVE=") || hasPrefix(entry, "TRACE_EVENTS=") ||
+           hasPrefix(entry, "DISPLAY=") || hasPrefix(entry, "WAYLAND_DISPLAY=") ||
+           hasPrefix(entry, "XDG_RUNTIME_DIR=") || hasPrefix(entry, "LIBGL_") ||
+           hasPrefix(entry, "GALLIUM_");
+}
+
+/* A child inherits the host's control variables except the per-launch ones, which
+   calcEnvp sets afresh. */
 static int inheritedHostVariable(const char *entry)
 {
-    return hostControlVariable(entry) && strncmp(entry, "TWOINE_CHILD_ARGUMENTS=", 23) &&
-           strncmp(entry, "TWOINE_DRIVE_CWD_", 17) && strncmp(entry, "TWOINE_EXT_LIBPATH_", 19) &&
-           strncmp(entry, "TWOINE_CURRENT_DRIVE=", 21) &&
-           strncmp(entry, LX_LAUNCH_RECORD_VARIABLE "=", sizeof LX_LAUNCH_RECORD_VARIABLE);
+    return hostControlVariable(entry) && !hasPrefix(entry, "TWOINE_CHILD_ARGUMENTS=") &&
+           !hasPrefix(entry, "TWOINE_DRIVE_CWD_") && !hasPrefix(entry, "TWOINE_EXT_LIBPATH_") &&
+           !hasPrefix(entry, "TWOINE_CURRENT_DRIVE=") &&
+           !hasPrefix(entry, LX_LAUNCH_RECORD_VARIABLE "=");
 }
 
 static char **calcEnvp(const char *os2env, const char *exe, const char *arguments,
@@ -361,7 +382,7 @@ static char **calcEnvp(const char *os2env, const char *exe, const char *argument
         *err = ERROR_INVALID_PARAMETER;
         return NULL;
     }
-    size_t count = 34;
+    size_t count = LAUNCH_VARIABLE_COUNT;
     for (const char *p = guest; *p; p += strlen(p) + 1)
         count++;
     char *const *host = lx_host_environment();
@@ -383,7 +404,7 @@ static char **calcEnvp(const char *os2env, const char *exe, const char *argument
                 goto failed;
         }
     for (const char *p = guest; *p; p += strlen(p) + 1)
-        if (!hostControlVariable(p) && strncmp(p, "IS_2INE=", 8))
+        if (!hostControlVariable(p) && !hasPrefix(p, "IS_2INE="))
         {
             result[at] = strdup(p);
             if (!result[at++])
@@ -392,32 +413,32 @@ static char **calcEnvp(const char *os2env, const char *exe, const char *argument
     const char *extended[] = {GProcessState.begin_libpath, GProcessState.end_libpath,
                               GProcessState.libpath_strict ? "T" : "F"};
     const char *extended_names[] = {"BEGIN", "END", "STRICT"};
-    for (unsigned i = 0; i < 3; i++)
+    for (unsigned i = 0; i < EXTENDED_LIBPATH_COUNT; i++)
     {
-        size_t length = strlen(extended[i]) + 40;
+        size_t length = strlen(extended[i]) + sizeof "TWOINE_EXT_LIBPATH_STRICT=";
         result[at] = malloc(length);
         if (!result[at])
             goto failed;
         snprintf(result[at++], length, "TWOINE_EXT_LIBPATH_%s=%s", extended_names[i], extended[i]);
     }
     const int start_drive = start ? start->drive : -1;
-    for (int drive = 0; drive < 26; drive++)
+    for (int drive = 0; drive < DRIVE_COUNT; drive++)
     {
         const char *directory =
             drive == start_drive ? start->directory : GProcessState.current_dir[drive];
         if (directory)
         {
-            size_t length = strlen(directory) + 32;
+            size_t length = strlen(directory) + sizeof "TWOINE_DRIVE_CWD_X=";
             result[at] = malloc(length);
             if (!result[at])
                 goto failed;
             snprintf(result[at++], length, "TWOINE_DRIVE_CWD_%c=%s", 'A' + drive, directory);
         }
     }
-    result[at] = malloc(32);
+    result[at] = malloc(sizeof "TWOINE_CURRENT_DRIVE=X");
     if (!result[at])
         goto failed;
-    snprintf(result[at++], 32, "TWOINE_CURRENT_DRIVE=%c",
+    snprintf(result[at++], sizeof "TWOINE_CURRENT_DRIVE=X", "TWOINE_CURRENT_DRIVE=%c",
              'A' + (start_drive >= 0 ? start_drive : GProcessState.current_disk - 1));
     if (start && start->record)
     {
@@ -427,11 +448,11 @@ static char **calcEnvp(const char *os2env, const char *exe, const char *argument
             goto failed;
         snprintf(result[at++], length, LX_LAUNCH_RECORD_VARIABLE "=%s", start->record);
     }
-    result[at] = malloc(strlen(exe) + 9);
+    result[at] = malloc(strlen(exe) + sizeof "IS_2INE=");
     if (!result[at])
         goto failed;
     sprintf(result[at++], "IS_2INE=%s", exe);
-    result[at] = malloc(strlen(arguments) + 24);
+    result[at] = malloc(strlen(arguments) + sizeof "TWOINE_CHILD_ARGUMENTS=");
     if (!result[at])
         goto failed;
     sprintf(result[at], "TWOINE_CHILD_ARGUMENTS=%s", arguments);

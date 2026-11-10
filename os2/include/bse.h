@@ -12,6 +12,7 @@
 
 #include "os2/include/os2def.h"
 #include "os2/include/bsedos.h"
+#include "os2/include/bsedev.h"
 #include "os2/include/bsesub.h"
 #include "os2/include/bseerr.h"
 

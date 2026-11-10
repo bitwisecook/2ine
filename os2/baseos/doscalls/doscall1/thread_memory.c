@@ -5,19 +5,30 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Thread-local memory: slots in the per-thread area the TIB points at. */
 #include "os2/baseos/doscalls/internal.h"
+
+/* The thread-local area holds 32 ULONG slots; one allocation takes one to eight
+   contiguous slots. */
+enum
+{
+    TLS_SLOT_COUNT = 32,
+    TLS_ALLOCATION_MAXIMUM = 8,
+    TLS_SLOT_SIZE = sizeof(ULONG),
+    TLS_ALLOCATION_BITS = 0xFF
+};
 
 APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
 {
     TRACE_NATIVE("DosAllocThreadLocalMemory(%u, %p)", (uint)cb, p);
 
-    if (!cb || cb > 8) // OS/2 allocates one to eight contiguous words.
+    if (!cb || cb > TLS_ALLOCATION_MAXIMUM)
         return ERROR_INVALID_PARAMETER;
     else if (!p)
         return ERROR_INVALID_PARAMETER;
 
     APIRET retval = NO_ERROR;
-    uint32 mask = 0xFF >> (8 - cb);
+    uint32 mask = TLS_ALLOCATION_BITS >> (TLS_ALLOCATION_MAXIMUM - cb);
 
     grabLock(&GMutexDosCalls);
 
@@ -32,15 +43,14 @@ APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
     }
 
     int i;
-    for (i = 0; i <= 32 - (int)cb; i++, mask <<= 1)
+    for (i = 0; i <= TLS_SLOT_COUNT - (int)cb; i++, mask <<= 1)
     {
         if (((GProcessState.tlsmask ^ mask) & mask) == mask)
             break;
     }
 
-    if (i > 32 - (int)cb)
-        retval =
-            ERROR_NOT_ENOUGH_MEMORY; // there are only 32 slots, couldn't find anything contiguous.
+    if (i > TLS_SLOT_COUNT - (int)cb)
+        retval = ERROR_NOT_ENOUGH_MEMORY;
     else
     {
         assert(GProcessState.tlsallocs[i] == 0);
@@ -65,13 +75,17 @@ APIRET DosFreeThreadLocalMemory(ULONG *p)
     if (GProcessState.tlspage)
     {
         const uintptr_t distance = (uintptr_t)p - (uintptr_t)GProcessState.tlspage;
-        const uint32 slot = distance < 128 && !(distance & 3) ? (uint32)distance / 4 : 32;
-        if (slot < 32)
+        const uint32 slot =
+            distance < TLS_SLOT_COUNT * TLS_SLOT_SIZE && !(distance & (TLS_SLOT_SIZE - 1))
+                ? (uint32)distance / TLS_SLOT_SIZE
+                : TLS_SLOT_COUNT;
+        if (slot < TLS_SLOT_COUNT)
         {
             const uint8 slots = GProcessState.tlsallocs[slot];
             if (slots > 0)
             {
-                const uint32 mask = ((uint32)(0xFF >> (8 - slots))) << slot;
+                const uint32 mask =
+                    ((uint32)(TLS_ALLOCATION_BITS >> (TLS_ALLOCATION_MAXIMUM - slots))) << slot;
                 assert((GProcessState.tlsmask & mask) == mask);
                 GProcessState.tlsmask &= ~mask;
                 GProcessState.tlsallocs[slot] = 0;

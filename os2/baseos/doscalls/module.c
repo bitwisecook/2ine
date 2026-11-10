@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* DOSCALLS initialisation: handle tables, standard streams and info segments. */
 #include "os2/baseos/doscalls/internal.h"
 #include "os2/include/bsesub.h"
 #include "os2/baseos/doscalls/generated/doscalls-lx.h"
@@ -13,12 +14,32 @@ LX_PRIVATE LxHostMutex *GMutexDosCalls;
 LX_PRIVATE LxHostMutex *GMutexDosBeep;
 LX_PRIVATE LxHostMutex *GMutexDir16;
 
+/* A new process has OS/2's default 20 file handles; 0 to 2 are the standard streams. */
+enum
+{
+    INITIAL_FILE_HANDLES = 20,
+    STANDARD_HANDLE_COUNT = 3
+};
+
+/* GINFOSEG values for the 16-bit API. */
+enum
+{
+    /* In tenths of a millisecond. */
+    INFOSEG_TIMER_INTERVAL = 100,
+    INFOSEG_MINOR_VERSION = 40,
+    INFOSEG_SESSION_LIMIT = 99,
+    INFOSEG_MAX_SLICE_MS = 10,
+    /* Drive 3 is C:. */
+    INFOSEG_BOOT_DRIVE_C = 3
+};
+
 LX_PRIVATE ExitListItem *GExitList = NULL;
 
 LX_PRIVATE HFileInfo *HFiles = NULL;
 LX_PRIVATE uint32 MaxHFiles = 0;
 
 LX_PRIVATE Thread *GThreads;
+/* Thread 1 is the main thread. */
 LX_PRIVATE uint32 GNextThreadId = 2;
 LX_PRIVATE uint32 GNextThreadStack = 0x18000000;
 
@@ -86,7 +107,7 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
         abort();
     initializeThreadSuspension();
 
-    MaxHFiles = 20;
+    MaxHFiles = INITIAL_FILE_HANDLES;
     HFiles = (HFileInfo *)malloc(sizeof(HFileInfo) * MaxHFiles);
     if (!HFiles)
     {
@@ -100,13 +121,13 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     for (uint32 i = 0; i < MaxHFiles; i++, info++)
     {
         info->handle = 0;
-        info->type = 0;
+        info->type = FHT_DISKFILE;
         info->attr = 0;
         info->flags = 0;
     }
 
     FIXME("We can iterate /proc/self/fd to get all currently-open files");
-    for (int i = 0; i <= 2; i++)
+    for (int i = 0; i < STANDARD_HANDLE_COUNT; i++)
     {
         initFileInfo(lx_host_file_standard(i), &HFiles[i], 0);
     }
@@ -138,7 +159,7 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
 
     memset(ginfo, '\0', sizeof(GINFOSEG));
     memset(linfo, '\0', sizeof(LINFOSEG));
-    const uint64 now = lx_host_realtime_us() / 1000000;
+    const uint64 now = lx_host_realtime_us() / US_PER_SECOND;
     LxHostCalendar value = {0};
     lx_host_calendar((int64_t)now, 1, &value);
     ginfo->time = (uint32)now;
@@ -146,26 +167,26 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     ginfo->minutes = value.minute;
     ginfo->seconds = value.second;
     ginfo->timezone = 0;
-    ginfo->cusecTimerInterval = 100;
+    ginfo->cusecTimerInterval = INFOSEG_TIMER_INTERVAL;
     ginfo->day = value.day;
     ginfo->month = value.month;
     ginfo->year = value.year;
     ginfo->weekday = value.weekday;
-    ginfo->uchMajorVersion = 20;
+    ginfo->uchMajorVersion = OS2_VERSION_MAJOR;
     FIXME("are these backwards?");
-    ginfo->uchMinorVersion = 40;
+    ginfo->uchMinorVersion = INFOSEG_MINOR_VERSION;
     FIXME("are these backwards?");
     ginfo->sgCurrent = 1;
-    ginfo->sgMax = 99;
+    ginfo->sgMax = INFOSEG_SESSION_LIMIT;
     ginfo->cHugeShift = 0;
     ginfo->fProtectModeOnly = 1;
     ginfo->pidForeground = GProcessState.pib.process_id;
     ginfo->csecMaxWait = 1;
     ginfo->cmsecMinSlice = 1;
-    ginfo->cmsecMaxSlice = 10;
-    ginfo->bootdrive = 3;
-    ginfo->csgWindowableVioMax = 99;
-    ginfo->csgPMMax = 99;
+    ginfo->cmsecMaxSlice = INFOSEG_MAX_SLICE_MS;
+    ginfo->bootdrive = INFOSEG_BOOT_DRIVE_C;
+    ginfo->csgWindowableVioMax = INFOSEG_SESSION_LIMIT;
+    ginfo->csgPMMax = INFOSEG_SESSION_LIMIT;
     linfo->pidCurrent = GProcessState.pib.process_id;
     linfo->pidParent = GProcessState.pib.parent_id;
     GProcessState.freeSharedMemory = DosFreeMem;

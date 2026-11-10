@@ -7,6 +7,12 @@
  */
 #include "os2/baseos/doscalls/internal.h"
 
+/* A sleep wakes this often to notice a termination request. */
+enum
+{
+    SLEEP_SLICE_MS = 10
+};
+
 APIRET DosSleep(ULONG msec)
 {
     TRACE_NATIVE("DosSleep(%u)", (uint)msec);
@@ -14,7 +20,7 @@ APIRET DosSleep(ULONG msec)
     do
     {
         lx_execution_poll_termination(GProcessState.execution);
-        ULONG slice = msec > 10 ? 10 : msec;
+        ULONG slice = msec > SLEEP_SLICE_MS ? SLEEP_SLICE_MS : msec;
         lx_host_sleep_ms(slice);
         msec -= slice;
     } while (msec);

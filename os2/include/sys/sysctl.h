@@ -21,6 +21,8 @@ extern "C"
 
     /* Stack configuration */
 
+#define OS2_CTL_NET 4
+
     OS2EXPORT int OS2API OS2_sysctl(const int *name, unsigned count, void *output, size_t *length,
                                     const void *input, size_t input_length);
 

@@ -20,6 +20,18 @@ extern "C"
 
     /* Resolver */
 
+#define OS2_MAXNS 3
+
+#define OS2_MAXDNSRCH 6
+
+#define OS2_RES_INIT 0x00000001
+
+#define OS2_RES_RECURSE 0x00000040
+
+#define OS2_RES_DEFNAMES 0x00000080
+
+#define OS2_RES_DNSRCH 0x00000200
+
     OS2EXPORT int OS2API OS2_res_init(void);
 
 #ifdef __cplusplus

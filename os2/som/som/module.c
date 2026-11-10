@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-
+/* SOM: a native module with no exports; PMWP binds the original guest SOM.DLL. */
 #include "os2/include/private/export.h"
 #include "os2/include/som/som.h"
 

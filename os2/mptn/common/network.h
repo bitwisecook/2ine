@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* Interface, route and host-ID queries shared by the TCPIP32 and SO32DLL socket layers. */
 #ifndef TWOINE_OS2_NETWORK_H
 #define TWOINE_OS2_NETWORK_H
 #include <stdint.h>

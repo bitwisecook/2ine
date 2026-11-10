@@ -44,7 +44,7 @@ int Os2LegacyGetHostName(char *name, int length)
 
 char *Os2LegacyInetText(uint32_t address)
 {
-    static LX_HOST_THREAD_LOCAL char text[16];
+    static LX_HOST_THREAD_LOCAL char text[sizeof "255.255.255.255"];
     const char *formatted = lx_host_socket_format_address(address);
     if (!formatted)
         return NULL;

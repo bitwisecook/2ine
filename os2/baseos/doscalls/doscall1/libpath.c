@@ -5,7 +5,14 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* BEGINLIBPATH, ENDLIBPATH and LIBPATHSTRICT for the current process. */
 #include "os2/baseos/doscalls/internal.h"
+
+/* BEGINLIBPATH and ENDLIBPATH values are limited to 1023 characters. */
+enum
+{
+    EXTENDED_LIBPATH_LIMIT = 1024
+};
 
 APIRET DosQueryExtLIBPATH(PSZ path, ULONG flags)
 {
@@ -23,7 +30,8 @@ APIRET DosQueryExtLIBPATH(PSZ path, ULONG flags)
 
 APIRET DosSetExtLIBPATH(PSZ path, ULONG flags)
 {
-    if (flags < BEGIN_LIBPATH || flags > LIBPATHSTRICT || (path && strlen(path) >= 1024))
+    if (flags < BEGIN_LIBPATH || flags > LIBPATHSTRICT ||
+        (path && strlen(path) >= EXTENDED_LIBPATH_LIMIT))
         return ERROR_INVALID_PARAMETER;
     if (flags == LIBPATHSTRICT && path && *path && strcasecmp(path, "T") && strcasecmp(path, "F"))
         return ERROR_INVALID_PARAMETER;

@@ -5,11 +5,9 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Dos*Queue: named queues carried by host mailboxes so other processes can share them. */
 
-#include "os2/include/private/export16.h"
-#include "os2/include/bsedos.h"
-#include "os2/include/bsedos16.h"
-#include "os2/include/private/bsep.h"
+#include "os2/baseos/doscalls/internal.h"
 
 #include "emulator/handles.h"
 #include "emulator/abi.h"
@@ -41,7 +39,36 @@ typedef struct Packet
 
 enum
 {
-    QUEUE_PAYLOAD_LIMIT = 65536
+    QUEUE_PAYLOAD_LIMIT = 65536,
+    QUE_ORDER_MASK = QUE_FIFO | QUE_LIFO | QUE_PRIORITY,
+    QUE_VALID_FLAGS = QUE_ORDER_MASK | QUE_CONVERT_ADDRESS,
+    QUE_PRIORITY_MAXIMUM = 15,
+    /* A blocking read polls the mailbox at this interval. */
+    QUEUE_POLL_MS = 10,
+    /* A 16-bit queue element must lie within one 64 KB segment. */
+    QUEUE16_SEGMENT_LIMIT = 0x10000,
+    /* RAM semaphores are one ULONG. */
+    SEMAPHORE16_SIZE = 4
+};
+
+/* Queue names live under \QUEUES\, in names of at most 255 characters. */
+#define QUEUE_PREFIX "\\QUEUES\\"
+
+enum
+{
+    QUEUE_PREFIX_LENGTH = sizeof QUEUE_PREFIX - 1,
+    QUEUE_NAME_MAXIMUM = 255
+};
+
+/* lx_host_mailbox_open and lx_host_mailbox_receive results and peek modes
+   (host/mailbox.h). */
+enum
+{
+    MAILBOX_MISSING = 1,
+    MAILBOX_EXISTS = 2,
+    MAILBOX_UNKNOWN_TOKEN = 2,
+    MAILBOX_PEEK_END = 3,
+    MAILBOX_PEEK_SUCCESSOR = 2
 };
 
 static LxHostOnce registry_once = LX_HOST_ONCE_INIT;
@@ -82,7 +109,7 @@ static int notify_revision(Queue *queue)
     if (!failed && queue->semaphore16 && revision != queue->revision)
     {
         LxGuestArgument sem = {0};
-        if (!lx_guest_argument_far(GProcessState.execution, queue->semaphore16, 4,
+        if (!lx_guest_argument_far(GProcessState.execution, queue->semaphore16, SEMAPHORE16_SIZE,
                                    LX_GUEST_READ | LX_GUEST_WRITE, 1, 0, &sem))
             failed = 1;
         else
@@ -147,9 +174,10 @@ static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, in
 {
     if (!output)
         return ERROR_INVALID_PARAMETER;
-    if (!name || strncasecmp(name, "\\QUEUES\\", 8) || !name[8] || strlen(name) > 255)
+    if (!name || strncasecmp(name, QUEUE_PREFIX, QUEUE_PREFIX_LENGTH) ||
+        !name[QUEUE_PREFIX_LENGTH] || strlen(name) > QUEUE_NAME_MAXIMUM)
         return ERROR_QUE_INVALID_NAME;
-    if ((flags & ~7u) || (flags & 3) == 3)
+    if ((flags & ~(ULONG)QUE_VALID_FLAGS) || (flags & QUE_ORDER_MASK) == QUE_ORDER_MASK)
         return ERROR_INVALID_PARAMETER;
     for (Queue *q = queue_registry; q; q = q->next)
         if (!private && !strcasecmp(q->name, name))
@@ -163,31 +191,31 @@ static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, in
                 *owner = q->owner;
             return NO_ERROR;
         }
-    uint64_t hash = 1469598103934665603ULL;
+    uint64_t hash = FNV1A_64_OFFSET_BASIS;
     const char *ball = getenv("TWOINE_BALL");
     for (const char *p = ball ? ball : ""; *p; p++)
-        hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
-    hash = (hash ^ 0xff) * 1099511628211ULL;
+        hash = (hash ^ (unsigned char)*p) * FNV1A_64_PRIME;
+    hash = (hash ^ FNV_SCOPE_SEPARATOR) * FNV1A_64_PRIME;
     for (const char *p = name; *p; p++)
     {
         unsigned char c = *p;
         if (c >= 'a' && c <= 'z')
             c -= 'a' - 'A';
-        hash = (hash ^ c) * 1099511628211ULL;
+        hash = (hash ^ c) * FNV1A_64_PRIME;
     }
     char identifier[40];
     snprintf(identifier, sizeof identifier, "queue-%016llx", (unsigned long long)hash);
     Queue *queue = calloc(1, sizeof *queue);
     if (!queue)
         return ERROR_QUE_NO_MEMORY;
-    int result = lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), identifier, create, flags & 3,
-                                      &queue->mailbox, &queue->owner);
+    int result = lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), identifier, create,
+                                      flags & QUE_ORDER_MASK, &queue->mailbox, &queue->owner);
     if (result)
     {
         free(queue);
-        return result == 1   ? ERROR_QUE_NAME_NOT_EXIST
-               : result == 2 ? ERROR_QUE_DUPLICATE
-                             : ERROR_QUE_NO_MEMORY;
+        return result == MAILBOX_MISSING  ? ERROR_QUE_NAME_NOT_EXIST
+               : result == MAILBOX_EXISTS ? ERROR_QUE_DUPLICATE
+                                          : ERROR_QUE_NO_MEMORY;
     }
     queue->flags = flags;
     queue->legacy = legacy;
@@ -329,16 +357,16 @@ static uint32 queue_receive_operation(void *argument)
     unsigned importance;
     uint32 token = *element;
     int received;
-    while ((received =
-                lx_host_mailbox_receive(queue->mailbox, bytes, sizeof(Packet) + QUEUE_PAYLOAD_LIMIT,
-                                        &size, &importance, &token, peek ? 2 : 0)) == 1 &&
+    while ((received = lx_host_mailbox_receive(
+                queue->mailbox, bytes, sizeof(Packet) + QUEUE_PAYLOAD_LIMIT, &size, &importance,
+                &token, peek ? MAILBOX_PEEK_SUCCESSOR : 0)) == MAILBOX_MISSING &&
            !nowait && !__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
-        lx_host_sleep_ms(10);
-    APIRET result = received == 1   ? ERROR_QUE_EMPTY
-                    : received == 2 ? ERROR_QUE_ELEMENT_NOT_EXIST
-                    : received == 3 ? ERROR_QUE_PREV_AT_END
-                    : received      ? ERROR_QUE_MEMORY_ERROR
-                                    : NO_ERROR;
+        lx_host_sleep_ms(QUEUE_POLL_MS);
+    APIRET result = received == MAILBOX_MISSING         ? ERROR_QUE_EMPTY
+                    : received == MAILBOX_UNKNOWN_TOKEN ? ERROR_QUE_ELEMENT_NOT_EXIST
+                    : received == MAILBOX_PEEK_END      ? ERROR_QUE_PREV_AT_END
+                    : received                          ? ERROR_QUE_MEMORY_ERROR
+                                                        : NO_ERROR;
     if (__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
         result = ERROR_QUE_INVALID_HANDLE;
     if (!result)
@@ -376,7 +404,8 @@ static uint32 queue_receive_operation(void *argument)
                         USHORT selector = 0;
                         result = Dos16AllocSeg((USHORT)packet.length, &selector, 0);
                         if (!result)
-                            memory = GProcessState.convert1616to32((ULONG)selector << 16);
+                            memory = GProcessState.convert1616to32((ULONG)selector
+                                                                   << SELECTOR_OFFSET_BITS);
                         if (!result && !memory)
                         {
                             Dos16FreeSeg(selector);
@@ -395,7 +424,7 @@ static uint32 queue_receive_operation(void *argument)
                     request->ulData = packet.request;
                     *length = packet.length;
                     *output = memory;
-                    *priority = (queue->flags & 3) == QUE_PRIORITY ? importance : 0;
+                    *priority = (queue->flags & QUE_ORDER_MASK) == QUE_PRIORITY ? importance : 0;
                     *element = token;
                 }
             }
@@ -410,8 +439,8 @@ static APIRET receive_queue(HQUEUE handle, PREQUESTDATA request, PULONG length, 
 {
     if (!request || !length || !output || !priority || !element)
         return ERROR_INVALID_PARAMETER;
-    if (nowait > 1)
-        return 433; /* ERROR_QUE_INVALID_WAIT */
+    if (nowait > DCWW_NOWAIT)
+        return ERROR_QUE_INVALID_WAIT;
     LxHandleBorrow borrow;
     if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
         return ERROR_QUE_INVALID_HANDLE;
@@ -481,9 +510,10 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
     APIRET result = NO_ERROR;
     uint32 address = (uint32)(uintptr_t)data;
     PVOID source = data;
-    if (priority > 15)
-        priority = 15;
-    if (queue->owner == GProcessState.pib.process_id && (queue->flags & 3) != QUE_PRIORITY)
+    if (priority > QUE_PRIORITY_MAXIMUM)
+        priority = QUE_PRIORITY_MAXIMUM;
+    if (queue->owner == GProcessState.pib.process_id &&
+        (queue->flags & QUE_ORDER_MASK) != QUE_PRIORITY)
         priority = 0;
     if (__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
         result = ERROR_QUE_INVALID_HANDLE;
@@ -587,7 +617,7 @@ static APIRET queue_notification16(Queue *queue, ULONG semaphore)
     if (!semaphore)
         return NO_ERROR;
     LxGuestArgument argument = {0};
-    if (!lx_guest_argument_far(GProcessState.execution, semaphore, 4,
+    if (!lx_guest_argument_far(GProcessState.execution, semaphore, SEMAPHORE16_SIZE,
                                LX_GUEST_READ | LX_GUEST_WRITE, 1, 0, &argument))
         return ERROR_INVALID_PARAMETER;
     lx_guest_argument_finish(&argument, 0);
@@ -644,10 +674,11 @@ APIRET16 Dos16ReadQueue(USHORT id, PULONG request, PUSHORT length, PULONG buffer
         }
         ULONG pointer = host ? GProcessState.convert32to1616(host) : 0;
         if (bytes > QUEUE_PAYLOAD_LIMIT ||
-            (output && (!pointer || bytes > 65536u - (pointer & 0xffff))))
+            (output && (!pointer || bytes > QUEUE16_SEGMENT_LIMIT - (pointer & UINT16_MAX))))
             result = ERROR_QUE_MEMORY_ERROR;
         else
         {
+            /* The 16-bit REQUESTDATA packs the pid and the request word into one ULONG. */
             *request = (USHORT)data.pid | ((ULONG)(USHORT)data.ulData << 16);
             *length = (USHORT)bytes;
             *buffer = pointer;

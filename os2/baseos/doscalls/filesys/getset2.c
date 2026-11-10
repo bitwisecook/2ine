@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Current disk, verify flag, device configuration, version and info segments. */
 #include "os2/baseos/doscalls/internal.h"
 
 static USHORT write_verify;
@@ -61,7 +62,7 @@ APIRET DosSetDefaultDisk(ULONG disknum)
 {
     TRACE_NATIVE("DosSetDefaultDisk(%u)", (uint)disknum);
 
-    if ((disknum < 1) || (disknum > 26) || (!GProcessState.disks[disknum - 1]))
+    if ((disknum < 1) || (disknum > DRIVE_COUNT) || (!GProcessState.disks[disknum - 1]))
         return ERROR_INVALID_DRIVE;
 
     GProcessState.current_disk = disknum;
@@ -116,8 +117,8 @@ APIRET16 Dos16GetVersion(PUSHORT pver)
 {
     TRACE_NATIVE("Dos16GetVersion(%p)", pver);
     uint8 *bytes = (uint8 *)pver;
-    bytes[0] = 45; // OS/2 Warp 4.52 reports this.
-    bytes[1] = 20;
+    bytes[0] = OS2_VERSION_MINOR;
+    bytes[1] = OS2_VERSION_MAJOR;
     return NO_ERROR;
 }
 
@@ -133,11 +134,12 @@ APIRET16 Dos16GetInfoSeg(PSEL globalseg, PSEL localseg)
     TRACE_NATIVE("Dos16GetInfoSeg(%p, %p)", globalseg, localseg);
     if (getenv("TWOINE_TRACE_SEGMENTS"))
         fprintf(stderr, "2INE InfoSeg: ginfosel=%u(%04X) linfosel=%u(%04X) -> %04X/%04X\n",
-                (uint)ginfosel, (uint)(ginfosel << 3 | 7), (uint)linfosel,
-                (uint)(linfosel << 3 | 7), (uint)(ginfosel << 3 | 7), (uint)(linfosel << 3 | 7));
+                (uint)ginfosel, (uint)ldtSelector(ginfosel), (uint)linfosel,
+                (uint)ldtSelector(linfosel), (uint)ldtSelector(ginfosel),
+                (uint)ldtSelector(linfosel));
     if (globalseg)
-        *globalseg = ginfosel << 3 | 7;
+        *globalseg = ldtSelector(ginfosel);
     if (localseg)
-        *localseg = linfosel << 3 | 7;
+        *localseg = ldtSelector(linfosel);
     return NO_ERROR;
 }

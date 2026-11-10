@@ -3,6 +3,14 @@
 #include "os2/baseos/doscalls/internal.h"
 #define MUX_LIMIT 64u
 
+enum
+{
+    DCMW_WAIT_MASK = DCMW_WAIT_ANY | DCMW_WAIT_ALL,
+    MUX_VALID_FLAGS = DC_SEM_SHARED | DCMW_WAIT_MASK,
+    /* Shared members are polled, since their posts come from other processes. */
+    MUX_SHARED_POLL_MS = 10
+};
+
 typedef struct MuxMember
 {
     SEMRECORD record;
@@ -103,15 +111,16 @@ static APIRET add_member(MuxWait *mux, const SEMRECORD *record)
 APIRET DosCreateMuxWaitSem(PSZ name, PHMUX output, ULONG count, PSEMRECORD records, ULONG flags)
 {
     TRACE_NATIVE("DosCreateMuxWaitSem('%s', %p, %u, %p, %X)", name, output, count, records, flags);
-    if (!output || count > MUX_LIMIT || (count && !records) || (flags & ~7u) ||
-        ((flags & 6) != DCMW_WAIT_ANY && (flags & 6) != DCMW_WAIT_ALL))
+    if (!output || count > MUX_LIMIT || (count && !records) || (flags & ~(ULONG)MUX_VALID_FLAGS) ||
+        ((flags & DCMW_WAIT_MASK) != DCMW_WAIT_ANY && (flags & DCMW_WAIT_MASK) != DCMW_WAIT_ALL))
         return ERROR_INVALID_PARAMETER;
-    if (name && (strncasecmp(name, "\\SEM32\\", 7) || !name[7] || strlen(name) > 255))
+    if (name && (strncasecmp(name, SEM32_PREFIX, SEM32_PREFIX_LENGTH) ||
+                 !name[SEM32_PREFIX_LENGTH] || strlen(name) > SEMAPHORE_NAME_MAXIMUM))
         return ERROR_INVALID_NAME;
     MuxWait *mux = calloc(1, sizeof *mux);
     if (!mux)
         return ERROR_NOT_ENOUGH_MEMORY;
-    mux->flags = flags | (name ? 1 : 0);
+    mux->flags = flags | (name ? DC_SEM_SHARED : 0);
     mux->opens = 1;
     if (name && !(mux->name = strdup(name)))
     {
@@ -294,7 +303,7 @@ static APIRET try_member(MuxMember *member)
 static APIRET try_mux(MuxWait *mux, PULONG user)
 {
     APIRET result = ERROR_TIMEOUT;
-    if ((mux->flags & 6) == DCMW_WAIT_ANY)
+    if ((mux->flags & DCMW_WAIT_MASK) == DCMW_WAIT_ANY)
     {
         for (ULONG i = 0; i < mux->count; i++)
         {
@@ -358,7 +367,7 @@ static uint32 wait_operation(void *argument)
     MuxWait *mux = call->borrow.resource;
     ULONG timeout = call->timeout;
     const uint64 deadline =
-        timeout == UINT32_MAX ? UINT64_MAX : lx_host_monotonic_us() + (uint64)timeout * 1000;
+        timeout == UINT32_MAX ? UINT64_MAX : lx_host_monotonic_us() + (uint64)timeout * US_PER_MS;
     lock_muxes();
     mux->waiters++;
     call->registered = TRUE;
@@ -381,10 +390,11 @@ static uint32 wait_operation(void *argument)
         uint64 now = lx_host_monotonic_us();
         if (now >= deadline)
             break;
-        ULONG remaining =
-            deadline == UINT64_MAX ? UINT32_MAX : (ULONG)((deadline - now + 999) / 1000);
-        if (mux->count && member_shared(&mux->members[0]) && remaining > 10)
-            remaining = 10;
+        ULONG remaining = deadline == UINT64_MAX
+                              ? UINT32_MAX
+                              : (ULONG)((deadline - now + US_PER_MS - 1) / US_PER_MS);
+        if (mux->count && member_shared(&mux->members[0]) && remaining > MUX_SHARED_POLL_MS)
+            remaining = MUX_SHARED_POLL_MS;
         LxHostLockResult waited = lx_host_monitor_wait(monitor, remaining);
         if (waited == LX_HOST_LOCK_TIMEOUT)
         {

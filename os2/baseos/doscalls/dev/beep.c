@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* DosBeep: square-wave tones mixed into the host audio stream. */
 #include "os2/baseos/doscalls/internal.h"
 
 int DosBeepGenerator(void *userdata, float *stream, int samples, int freq)
@@ -65,9 +66,17 @@ int DosBeepGenerator(void *userdata, float *stream, int samples, int freq)
     return 1;
 }
 
+/* DosBeep accepts 37 Hz to 32767 Hz; the PC speaker timer ticks every 55 ms. */
+enum
+{
+    BEEP_FREQUENCY_MINIMUM = 0x25,
+    BEEP_FREQUENCY_MAXIMUM = 0x7FFF,
+    BEEP_TICK_MS = 55
+};
+
 APIRET DosBeep_implementation(ULONG freq, ULONG duration)
 {
-    if ((freq < 0x25) || (freq > 0x7FFF))
+    if ((freq < BEEP_FREQUENCY_MINIMUM) || (freq > BEEP_FREQUENCY_MAXIMUM))
     {
         return ERROR_INVALID_FREQUENCY;
     }
@@ -78,8 +87,8 @@ APIRET DosBeep_implementation(ULONG freq, ULONG duration)
 
     /* Round duration to the 55-ms PC speaker tick. */
     FIXME("sanity check this");
-    const ULONG duration_diff = duration % 55;
-    const ULONG mix_duration = duration + (duration_diff ? (55 - duration_diff) : 0);
+    const ULONG duration_diff = duration % BEEP_TICK_MS;
+    const ULONG mix_duration = duration + (duration_diff ? (BEEP_TICK_MS - duration_diff) : 0);
 
     /* Return before playback ends so consecutive calls can queue without a gap. */
 
@@ -96,9 +105,9 @@ APIRET DosBeep_implementation(ULONG freq, ULONG duration)
     dos_beep_info.next_freq = freq;
 
     /* Leave one audio tick queued to bridge scheduler delays between consecutive calls. */
-    if (duration > 55)
+    if (duration > BEEP_TICK_MS)
     {
-        lx_host_sleep_ms(duration - 55);
+        lx_host_sleep_ms(duration - BEEP_TICK_MS);
     }
 
     const int rc = GProcessState.registerAudioGenerator(DosBeepGenerator, &dos_beep_info, 1);

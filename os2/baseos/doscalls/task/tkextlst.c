@@ -5,7 +5,16 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Exit lists and process exit. */
 #include "os2/baseos/doscalls/internal.h"
+
+enum
+{
+    EXITLIST_FUNCTION_MASK = 0xFF,
+    EXITLIST_PRIORITY_SHIFT = 8,
+    EXITLIST_PRIORITY_MASK = 0xFF
+};
+
 #include "emulator/launch_record.h"
 
 void runDosExitList(const uint32 why)
@@ -36,9 +45,9 @@ static void finishProcessExit(uint32 exitcode)
 {
     processExitCode = exitcode;
     processingExitList = 1;
-    /* LINFOSEG rfProcStatus bit 0 marks exit-list processing for 16-bit services. */
+    /* 16-bit services check this to recognise exit-list processing. */
     if (linfo)
-        linfo->rfProcStatus |= 1;
+        linfo->rfProcStatus |= LINFO_EXIT_LIST;
     releaseThreadSuspension();
     lx_launch_record_exit(exitcode);
     runDosExitList(TC_EXIT);
@@ -78,10 +87,11 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
 {
     TRACE_NATIVE("DosExitList(%u, %p)", (uint)ordercode, fn);
 
-    const uint8 cmd = ordercode & 0xFF;
+    /* The low byte is the EXLST_* function; the next byte is the add priority. */
+    const uint8 cmd = ordercode & EXITLIST_FUNCTION_MASK;
     if (fn == NULL && cmd != EXLST_EXIT)
         return ERROR_INVALID_FUNCTION;
-    const uint8 arg = (ordercode >> 8) & 0xFF;
+    const uint8 arg = (ordercode >> EXITLIST_PRIORITY_SHIFT) & EXITLIST_PRIORITY_MASK;
     ExitListItem *prev = NULL;
     ExitListItem *item = NULL;
 

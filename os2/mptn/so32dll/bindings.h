@@ -120,15 +120,15 @@ static uint32 bridge32_Os2LegacyIoctl(uint8 *a)
     if (lx_execution_borrow(GProcessState.execution, socket_word(a, 2), length,
                             LX_GUEST_READ | LX_GUEST_WRITE, &value))
     {
-        if ((command & 0xffff) == 0x6914 && length >= 8)
+        if ((command & UINT16_MAX) == OS2_OSIOCGIFCONF && length >= 2 * sizeof(uint32))
         {
             LxGuestBorrow entries = {0};
             uint32 capacity = lx_guest_load_u32(value.host);
             size_t used;
             if (capacity <= INT32_MAX &&
                 lx_execution_borrow(GProcessState.execution,
-                                    lx_guest_load_u32((uint8 *)value.host + 4), capacity,
-                                    LX_GUEST_WRITE, &entries))
+                                    lx_guest_load_u32((uint8 *)value.host + sizeof(uint32)),
+                                    capacity, LX_GUEST_WRITE, &entries))
             {
                 result = socket_result(lx_os2_network_ifconf(entries.host, capacity, &used, 0));
                 if (!result)

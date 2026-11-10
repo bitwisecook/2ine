@@ -84,7 +84,7 @@ OS2_hostent *OS2_gethostbyaddr(const void *address, int length, int family)
 {
     static LX_HOST_THREAD_LOCAL OS2_hostent output;
     LxHostSocketHost host;
-    if (!address || length != 4 || family != OS2_AF_INET)
+    if (!address || length != sizeof(OS2_in_addr) || family != OS2_AF_INET)
         errno = EINVAL;
     if (!lx_mptn_host_by_address(address, length, family, &host, &ResolverError))
         return NULL;
@@ -156,19 +156,45 @@ uint32_t OS2_gethostid(void)
     return lx_os2_network_host_id();
 }
 
+/* _ress is two 512-byte __res_state records (Toolkit resolv.h, 4-byte packing);
+   _res is the first, and res_init copies it to the second. */
+enum
+{
+    RES_STATE_SIZE = 512,
+    RES_STATE_COUNT = 2,
+    RES_OBJECT_SIZE = 4096,
+    RES_RETRANS_OFFSET = 0,
+    RES_RETRY_OFFSET = 4,
+    RES_OPTIONS_OFFSET = 8,
+    RES_NSCOUNT_OFFSET = 12,
+    RES_NSADDR_LIST_OFFSET = 16,
+    RES_DEFDNAME_OFFSET = 66,
+    RES_DNSRCH_OFFSET = 324,
+    RES_NDOTS_OFFSET = 356,
+    RES_DEFDNAME_SIZE = 256,
+    /* Search names are kept in the object after both records. */
+    RES_STRINGS_OFFSET = 1024,
+    /* Retransmit after five seconds, twice. */
+    RES_RETRANS_SECONDS = 5,
+    RES_RETRY_COUNT = 2,
+    RES_NDOTS = 1,
+    NAMESERVER_PORT = 53
+};
+
 int lx_tcpip_resolver_initialize(void)
 {
     if (ResolverObject.mapping)
         return 1;
-    ResolverObject.mapping =
-        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    ResolverObject.mapping = lx_execution_map(GProcessState.execution, 0, RES_OBJECT_SIZE,
+                                              LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!ResolverObject.mapping)
         return 0;
     ResolverObject.addr = ResolverObject.mapped = lx_execution_mapping_host(ResolverObject.mapping);
     ResolverObject.guest_base = lx_execution_mapping_address(ResolverObject.mapping);
-    ResolverObject.size = 4096;
+    ResolverObject.size = RES_OBJECT_SIZE;
     ResolverObject.bits = 32;
-    ResolverObject.alias = 0xffff;
+    /* No 16-bit alias selector. */
+    ResolverObject.alias = UINT16_MAX;
     ResolverMutex = lx_host_mutex_create(0, 0);
     if (!ResolverMutex)
     {
@@ -187,38 +213,41 @@ int OS2_res_init(void)
         return -1;
     lx_host_mutex_lock(ResolverMutex, UINT32_MAX);
     uint8 *data = ResolverObject.addr;
-    memset(data, 0, 4096);
-    lx_guest_store_u32(data, 5);
-    lx_guest_store_u32(data + 4, 2);
-    lx_guest_store_u32(data + 8, 0x2c1);
+    memset(data, 0, RES_OBJECT_SIZE);
+    lx_guest_store_u32(data + RES_RETRANS_OFFSET, RES_RETRANS_SECONDS);
+    lx_guest_store_u32(data + RES_RETRY_OFFSET, RES_RETRY_COUNT);
+    lx_guest_store_u32(data + RES_OPTIONS_OFFSET,
+                       OS2_RES_INIT | OS2_RES_RECURSE | OS2_RES_DEFNAMES | OS2_RES_DNSRCH);
     unsigned count = 0;
-    for (size_t i = 0; i < network.dns.server_count && count < 3; i++)
+    for (size_t i = 0; i < network.dns.server_count && count < OS2_MAXNS; i++)
     {
         uint32_t ip = lx_host_socket_parse_address(network.dns.servers[i]);
         if (ip == UINT32_MAX)
             continue;
         OS2_sockaddr_in address = {0};
-        address.sin_len = 16;
-        address.sin_family = 2;
-        address.sin_port = lx_host_socket_network16(53);
+        address.sin_len = sizeof address;
+        address.sin_family = OS2_AF_INET;
+        address.sin_port = lx_host_socket_network16(NAMESERVER_PORT);
         address.sin_addr.s_addr = ip;
-        memcpy(data + 16 + count++ * 16, &address, 16);
+        memcpy(data + RES_NSADDR_LIST_OFFSET + count++ * sizeof address, &address, sizeof address);
     }
-    lx_guest_store_u32(data + 12, count);
-    lx_guest_store_u32(data + 356, 1); /* ndots */
-    unsigned offset = 1024;
-    for (size_t i = 0; i < network.dns.search_count && i < 6; i++)
+    lx_guest_store_u32(data + RES_NSCOUNT_OFFSET, count);
+    lx_guest_store_u32(data + RES_NDOTS_OFFSET, RES_NDOTS);
+    unsigned offset = RES_STRINGS_OFFSET;
+    for (size_t i = 0; i < network.dns.search_count && i < OS2_MAXDNSRCH; i++)
     {
         size_t n = strlen(network.dns.search[i]) + 1;
-        if (n > 256 || offset + n > 4096)
+        if (n > RES_DEFDNAME_SIZE || offset + n > RES_OBJECT_SIZE)
             continue;
         memcpy(data + offset, network.dns.search[i], n);
-        lx_guest_store_u32(data + 324 + i * 4, ResolverObject.guest_base + offset);
+        lx_guest_store_u32(data + RES_DNSRCH_OFFSET + i * sizeof(uint32_t),
+                           ResolverObject.guest_base + offset);
+        /* The first search domain is also the default domain. */
         if (!i)
-            memcpy(data + 66, network.dns.search[i], n);
+            memcpy(data + RES_DEFDNAME_OFFSET, network.dns.search[i], n);
         offset += (unsigned)n;
     }
-    memcpy(data + 512, data, 512);
+    memcpy(data + RES_STATE_SIZE, data, RES_STATE_SIZE);
     lx_host_mutex_unlock(ResolverMutex);
     lx_host_network_destroy(&network);
     return 0;

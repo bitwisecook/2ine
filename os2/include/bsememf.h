@@ -33,6 +33,28 @@ extern "C"
         PAG_DEFAULT = 0x400
     };
 
+    enum
+    {
+        fPERM = PAG_EXECUTE | PAG_READ | PAG_WRITE,
+        fSHARE = OBJ_GETTABLE | OBJ_GIVEABLE
+    };
+
+    enum
+    {
+        DOSSUB_INIT = 0x01,
+        DOSSUB_GROW = 0x02,
+        DOSSUB_SPARSE_OBJ = 0x04,
+        DOSSUB_SERIALIZE = 0x08
+    };
+
+    /* DosQueryMem states */
+    enum
+    {
+        PAG_SHARED = 0x00002000,
+        PAG_FREE = 0x00004000,
+        PAG_BASE = 0x00010000
+    };
+
 #ifdef __cplusplus
 }
 #endif

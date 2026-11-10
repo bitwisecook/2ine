@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* SSLEAY32: the OpenSSL 1.0 client subset, carried by the host TLS library. */
 #include "os2/include/private/export.h"
 #include "os2/thirdparty/ssleay32/ssleay32.h"
 #include "emulator/handles.h"
@@ -56,72 +57,103 @@ int Os2SslInit(void)
 
 void Os2SslErrors(void) {}
 
+/* Method handles are the protocol versions they select (OpenSSL's names); 1 is the
+   version-flexible SSLv23 method and 2 is SSLv2. */
+enum
+{
+    METHOD_FLEXIBLE = 1,
+    METHOD_SSL2 = 2,
+    SSL3_VERSION = 0x0300,
+    TLS1_VERSION = 0x0301,
+    TLS1_1_VERSION = 0x0302,
+    TLS1_2_VERSION = 0x0303
+};
+
+/* SSL_get_error results. */
+enum
+{
+    SSL_ERROR_NONE = 0,
+    SSL_ERROR_SSL = 1,
+    SSL_ERROR_WANT_READ = 2,
+    SSL_ERROR_WANT_WRITE = 3,
+    SSL_ERROR_ZERO_RETURN = 6
+};
+
+enum
+{
+    SSL_CTRL_SET_TLSEXT_HOSTNAME = 55,
+    X509_V_OK = 0,
+    X509_V_ERR_APPLICATION_VERIFICATION = 50
+};
+
 uint32_t Os2SslClientMethod(void)
 {
-    return 1;
+    return METHOD_FLEXIBLE;
 }
 
 uint32_t Os2SslMethod(void)
 {
-    return 1;
+    return METHOD_FLEXIBLE;
 }
 
 uint32_t Os2SslV2ClientMethod(void)
 {
-    return 2;
+    return METHOD_SSL2;
 }
 
 uint32_t Os2SslV2Method(void)
 {
-    return 2;
+    return METHOD_SSL2;
 }
 
 uint32_t Os2SslV3ClientMethod(void)
 {
-    return 0x0300;
+    return SSL3_VERSION;
 }
 
 uint32_t Os2SslV3Method(void)
 {
-    return 0x0300;
+    return SSL3_VERSION;
 }
 
 uint32_t Os2SslTls1ClientMethod(void)
 {
-    return 0x0301;
+    return TLS1_VERSION;
 }
 
 uint32_t Os2SslTls1Method(void)
 {
-    return 0x0301;
+    return TLS1_VERSION;
 }
 
 uint32_t Os2SslTls11ClientMethod(void)
 {
-    return 0x0302;
+    return TLS1_1_VERSION;
 }
 
 uint32_t Os2SslTls11Method(void)
 {
-    return 0x0302;
+    return TLS1_1_VERSION;
 }
 
 uint32_t Os2SslTls12ClientMethod(void)
 {
-    return 0x0303;
+    return TLS1_2_VERSION;
 }
 
 uint32_t Os2SslTls12Method(void)
 {
-    return 0x0303;
+    return TLS1_2_VERSION;
 }
 
 uint32_t Os2SslContextNew(uint32_t method)
 {
-    if (method != 1 && method != 2 && (method < 0x0300 || method > 0x0303))
+    if (method != METHOD_FLEXIBLE && method != METHOD_SSL2 &&
+        (method < SSL3_VERSION || method > TLS1_2_VERSION))
         return 0;
     int upgrade = lxRuntimeTlsUpgrade();
-    if (!upgrade && method != 1 && method != 0x0303)
+    /* Without the upgrade only TLS 1.2 is negotiated, so older fixed methods fail. */
+    if (!upgrade && method != METHOD_FLEXIBLE && method != TLS1_2_VERSION)
         return 0;
     SslContext *c = calloc(1, sizeof *c);
     if (!c)
@@ -133,7 +165,7 @@ uint32_t Os2SslContextNew(uint32_t method)
         context_destroy(c);
         return 0;
     }
-    if (!lx_host_tls_context_protocol(c->host, 0x0303, upgrade ? 0 : 0x0303))
+    if (!lx_host_tls_context_protocol(c->host, TLS1_2_VERSION, upgrade ? 0 : TLS1_2_VERSION))
     {
         context_destroy(c);
         return 0;
@@ -269,8 +301,8 @@ int32_t Os2SslCtrl(uint32_t h, int command, int32_t value, const char *pointer)
     if (!s)
         return 0;
     int result = 0;
-    /* SSL_CTRL_SET_TLSEXT_HOSTNAME: also supplies the expected certificate name. */
-    if (command == 55 && value == 0 && pointer && *pointer && !s->host)
+    /* The SNI host name also supplies the expected certificate name. */
+    if (command == SSL_CTRL_SET_TLSEXT_HOSTNAME && value == 0 && pointer && *pointer && !s->host)
     {
         char *copy = strdup(pointer);
         if (copy)
@@ -298,11 +330,11 @@ static int start(SslSession *s)
 
 static int converted(SslSession *s, int result, int eof)
 {
-    s->last_error = result == LX_TLS_WANT_READ    ? 2
-                    : result == LX_TLS_WANT_WRITE ? 3
-                    : result < 0                  ? 1
-                    : !result && eof              ? 6
-                                                  : 0;
+    s->last_error = result == LX_TLS_WANT_READ    ? SSL_ERROR_WANT_READ
+                    : result == LX_TLS_WANT_WRITE ? SSL_ERROR_WANT_WRITE
+                    : result < 0                  ? SSL_ERROR_SSL
+                    : !result && eof              ? SSL_ERROR_ZERO_RETURN
+                                                  : SSL_ERROR_NONE;
     return result < 0 ? -1 : result;
 }
 
@@ -393,8 +425,8 @@ int32_t Os2SslVerifyResult(uint32_t h)
     LxHandleBorrow b = {0};
     SslSession *s = session(h, &b);
     if (!s)
-        return 50; /* X509_V_ERR_APPLICATION_VERIFICATION */
-    int result = s->verified ? 0 : 50;
+        return X509_V_ERR_APPLICATION_VERIFICATION;
+    int result = s->verified ? X509_V_OK : X509_V_ERR_APPLICATION_VERIFICATION;
     release(s, &b);
     return result;
 }

@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* DosShutdown: flushes every open file. */
 #include "os2/baseos/doscalls/internal.h"
 
 APIRET DosShutdown(ULONG reserved)

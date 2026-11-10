@@ -2,9 +2,21 @@
 /* Guest strings are copied; output buffers are borrowed for the call. Invalid
    guest memory returns ERROR_INVALID_PARAMETER without touching Open32's last
    error, which REGISTRY does not own. */
+enum
+{
+    /* Bounds on guest names and data, so that a wild length cannot run away. */
+    REGISTRY_STRING_LIMIT = 32768,
+    REGISTRY_NAME_MAXIMUM = 32767,
+    REGISTRY_SUBKEY_LIMIT = 1024 * 1024,
+    REGISTRY_DATA_LIMIT = 16 * 1024 * 1024,
+    FILETIME_SIZE = 8
+};
+
 static char *registry_string(uint32 pointer)
 {
-    return pointer ? lx_execution_copy_string(GProcessState.execution, pointer, 32768) : NULL;
+    return pointer
+               ? lx_execution_copy_string(GProcessState.execution, pointer, REGISTRY_STRING_LIMIT)
+               : NULL;
 }
 
 static BOOL registry_span(ULONG address, uint64_t size, unsigned access, BOOL optional,
@@ -12,7 +24,7 @@ static BOOL registry_span(ULONG address, uint64_t size, unsigned access, BOOL op
 {
     if (!address && (optional || !size))
         return TRUE;
-    return size <= 16u * 1024u * 1024u && size <= UINT32_MAX &&
+    return size <= REGISTRY_DATA_LIMIT && size <= UINT32_MAX &&
            (uint64_t)address + size <= (UINT64_C(1) << 32) &&
            lx_execution_borrow(GProcessState.execution, address, (size_t)size, access, borrow);
 }
@@ -21,7 +33,8 @@ static BOOL registry_span(ULONG address, uint64_t size, unsigned access, BOOL op
 static BOOL registry_subkey(ULONG address, PSZ *output)
 {
     *output =
-        address ? lx_execution_copy_string(GProcessState.execution, address, 1024u * 1024u) : NULL;
+        address ? lx_execution_copy_string(GProcessState.execution, address, REGISTRY_SUBKEY_LIMIT)
+                : NULL;
     return !address || *output;
 }
 
@@ -166,7 +179,8 @@ static uint32 bridge32_RegQueryValueEx(uint8 *a)
     uint32 result = ERROR_INVALID_PARAMETER;
     if ((!np || name) && !rp &&
         (!tp || lx_execution_borrow(GProcessState.execution, tp, 4, LX_GUEST_WRITE, &type)) &&
-        (!sp || lx_execution_borrow(GProcessState.execution, sp, 4, 3, &size)))
+        (!sp || lx_execution_borrow(GProcessState.execution, sp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                                    &size)))
     {
         ULONG count = sp ? lx_guest_load_u32(size.host) : 0, kind = 0;
         uint8 empty = 0;
@@ -201,13 +215,15 @@ static uint32 bridge32_RegEnumValue(uint8 *a)
     LxGuestBorrow name = {0}, length = {0}, type = {0}, data = {0}, size = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if (!np || lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GProcessState.execution, sp, 4, 3, &length) ||
+        !lx_execution_borrow(GProcessState.execution, sp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                             &length) ||
         (tp && !lx_execution_borrow(GProcessState.execution, tp, 4, LX_GUEST_WRITE, &type)) ||
-        (cp && !lx_execution_borrow(GProcessState.execution, cp, 4, 3, &size)))
+        (cp && !lx_execution_borrow(GProcessState.execution, cp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                                    &size)))
         goto done;
     ULONG characters = lx_guest_load_u32(length.host),
           count = cp ? lx_guest_load_u32(size.host) : 0, kind = 0;
-    if (characters > 32767)
+    if (characters > REGISTRY_NAME_MAXIMUM)
     {
         result = ERROR_MORE_DATA;
         goto done;
@@ -246,13 +262,17 @@ static uint32 bridge32_RegEnumKeyEx(uint8 *a)
     uint32 tp = lx_guest_load_u32(a + 28), result = ERROR_INVALID_PARAMETER;
     LxGuestBorrow name = {0}, size = {0}, class_name = {0}, class_size = {0}, timestamp = {0};
     if (!np || lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GProcessState.execution, sp, 4, 3, &size) || (cp && !cs) ||
-        (cs && !lx_execution_borrow(GProcessState.execution, cs, 4, 3, &class_size)) ||
-        (tp && !lx_execution_borrow(GProcessState.execution, tp, 8, LX_GUEST_WRITE, &timestamp)))
+        !lx_execution_borrow(GProcessState.execution, sp, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                             &size) ||
+        (cp && !cs) ||
+        (cs && !lx_execution_borrow(GProcessState.execution, cs, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                                    &class_size)) ||
+        (tp && !lx_execution_borrow(GProcessState.execution, tp, FILETIME_SIZE, LX_GUEST_WRITE,
+                                    &timestamp)))
         goto done;
     ULONG length = lx_guest_load_u32(size.host);
     ULONG class_length = cs ? lx_guest_load_u32(class_size.host) : 0;
-    if (length > 32768 || class_length > 32768)
+    if (length > REGISTRY_STRING_LIMIT || class_length > REGISTRY_STRING_LIMIT)
     {
         result = ERROR_MORE_DATA;
         goto done;
@@ -289,7 +309,7 @@ static uint32 bridge32_RegEnumKey(uint8 *a)
     LxGuestBorrow output = {0};
     if (!lx_guest_load_u32(a + 8))
         return ERROR_INVALID_PARAMETER;
-    if (capacity > 32768)
+    if (capacity > REGISTRY_STRING_LIMIT)
         return ERROR_MORE_DATA;
     if (capacity && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
                                          capacity, LX_GUEST_WRITE, &output))
@@ -303,7 +323,7 @@ static uint32 bridge32_RegEnumKey(uint8 *a)
 
 static uint32 bridge32_RegQueryInfoKey(uint8 *a)
 {
-    ULONG result = 87;
+    ULONG result = ERROR_INVALID_PARAMETER;
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
@@ -321,7 +341,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n2 = 0;
     if (v2)
     {
-        valid = registry_span(v2, 4, 3, FALSE, &b2) && valid;
+        valid =
+            registry_span(v2, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b2) && valid;
         if (b2.host)
             n2 = lx_guest_load_u32(b2.host);
     }
@@ -329,7 +350,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n3 = 0;
     if (v3)
     {
-        valid = registry_span(v3, 4, 3, FALSE, &b3) && valid;
+        valid =
+            registry_span(v3, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b3) && valid;
         if (b3.host)
             n3 = lx_guest_load_u32(b3.host);
     }
@@ -337,7 +359,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n4 = 0;
     if (v4)
     {
-        valid = registry_span(v4, 4, 3, FALSE, &b4) && valid;
+        valid =
+            registry_span(v4, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b4) && valid;
         if (b4.host)
             n4 = lx_guest_load_u32(b4.host);
     }
@@ -345,7 +368,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n5 = 0;
     if (v5)
     {
-        valid = registry_span(v5, 4, 3, FALSE, &b5) && valid;
+        valid =
+            registry_span(v5, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b5) && valid;
         if (b5.host)
             n5 = lx_guest_load_u32(b5.host);
     }
@@ -353,7 +377,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n6 = 0;
     if (v6)
     {
-        valid = registry_span(v6, 4, 3, FALSE, &b6) && valid;
+        valid =
+            registry_span(v6, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b6) && valid;
         if (b6.host)
             n6 = lx_guest_load_u32(b6.host);
     }
@@ -361,7 +386,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n7 = 0;
     if (v7)
     {
-        valid = registry_span(v7, 4, 3, FALSE, &b7) && valid;
+        valid =
+            registry_span(v7, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b7) && valid;
         if (b7.host)
             n7 = lx_guest_load_u32(b7.host);
     }
@@ -369,7 +395,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n8 = 0;
     if (v8)
     {
-        valid = registry_span(v8, 4, 3, FALSE, &b8) && valid;
+        valid =
+            registry_span(v8, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b8) && valid;
         if (b8.host)
             n8 = lx_guest_load_u32(b8.host);
     }
@@ -377,7 +404,8 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n9 = 0;
     if (v9)
     {
-        valid = registry_span(v9, 4, 3, FALSE, &b9) && valid;
+        valid =
+            registry_span(v9, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b9) && valid;
         if (b9.host)
             n9 = lx_guest_load_u32(b9.host);
     }
@@ -385,14 +413,15 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
     ULONG n10 = 0;
     if (v10)
     {
-        valid = registry_span(v10, 4, 3, FALSE, &b10) && valid;
+        valid =
+            registry_span(v10, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b10) && valid;
         if (b10.host)
             n10 = lx_guest_load_u32(b10.host);
     }
     LxGuestBorrow b1 = {0};
-    valid = registry_span(v1, n2, 2, TRUE, &b1) && valid;
+    valid = registry_span(v1, n2, LX_GUEST_WRITE, TRUE, &b1) && valid;
     LxGuestBorrow b11 = {0};
-    valid = registry_span(v11, 8, 2, TRUE, &b11) && valid;
+    valid = registry_span(v11, FILETIME_SIZE, LX_GUEST_WRITE, TRUE, &b11) && valid;
     if (valid)
         result = (ULONG)RegQueryInfoKey((ULONG)v0, b1.host, v2 ? &n2 : NULL, v3 ? &n3 : NULL,
                                         v4 ? &n4 : NULL, v5 ? &n5 : NULL, v6 ? &n6 : NULL,
@@ -432,7 +461,7 @@ static uint32 bridge32_RegQueryInfoKey(uint8 *a)
 
 static uint32 bridge32_RegQueryValue(uint8 *a)
 {
-    ULONG result = 87;
+    ULONG result = ERROR_INVALID_PARAMETER;
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
@@ -442,14 +471,15 @@ static uint32 bridge32_RegQueryValue(uint8 *a)
     ULONG n3 = 0;
     if (v3)
     {
-        valid = registry_span(v3, 4, 3, FALSE, &b3) && valid;
+        valid =
+            registry_span(v3, sizeof(ULONG), LX_GUEST_READ | LX_GUEST_WRITE, FALSE, &b3) && valid;
         if (b3.host)
             n3 = lx_guest_load_u32(b3.host);
     }
     PSZ s1 = NULL;
     valid = registry_subkey(v1, &s1) && valid;
     LxGuestBorrow b2 = {0};
-    valid = registry_span(v2, n3, 2, TRUE, &b2) && valid;
+    valid = registry_span(v2, n3, LX_GUEST_WRITE, TRUE, &b2) && valid;
     if (valid)
         result = (ULONG)RegQueryValue((ULONG)v0, s1, b2.host, v3 ? &n3 : NULL);
     if (b3.host)
@@ -462,7 +492,7 @@ static uint32 bridge32_RegQueryValue(uint8 *a)
 
 static uint32 bridge32_RegSetValue(uint8 *a)
 {
-    ULONG result = 87;
+    ULONG result = ERROR_INVALID_PARAMETER;
     BOOL valid = TRUE;
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
@@ -472,7 +502,7 @@ static uint32 bridge32_RegSetValue(uint8 *a)
     PSZ s1 = NULL;
     valid = registry_subkey(v1, &s1) && valid;
     LxGuestBorrow b3 = {0};
-    valid = registry_span(v3, v4, 1, FALSE, &b3) && valid;
+    valid = registry_span(v3, v4, LX_GUEST_READ, FALSE, &b3) && valid;
     if (valid)
         result = (ULONG)RegSetValue((ULONG)v0, s1, (ULONG)v2, b3.host, (ULONG)v4);
     free(s1);

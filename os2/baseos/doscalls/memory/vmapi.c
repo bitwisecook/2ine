@@ -5,7 +5,20 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Private and shared memory objects: DosAllocMem, DosAllocSharedMem and their queries. */
 #include "os2/baseos/doscalls/internal.h"
+
+enum
+{
+    /* OS/2 memory objects start on 64 KB boundaries. */
+    OBJECT_ALIGNMENT = 0x10000,
+    /* A tiled object's 64 KB tile n is addressed by LDT selector index n. */
+    TILE_SHIFT = 16
+};
+
+/* Shared objects take one address in every process, from this range. */
+static const uint64_t SHARED_ARENA_BASE = 0x30000000;
+static const uint64_t SHARED_ARENA_LIMIT = 0x70000000;
 
 static LxGuestMapping *allocateTiledMemory(size_t size)
 {
@@ -27,7 +40,7 @@ static LxGuestMapping *allocateTiledMemory(size_t size)
             uint32 address = base + (uint32)installed;
             if (!GProcessState.findSelector(address, &selector, &offset, 0))
                 break;
-            if (offset || selector != address >> 16)
+            if (offset || selector != address >> TILE_SHIFT)
             {
                 GProcessState.freeSelector(selector);
                 break;
@@ -38,7 +51,7 @@ static LxGuestMapping *allocateTiledMemory(size_t size)
         while (installed)
         {
             installed -= tile_size;
-            GProcessState.freeSelector((base + (uint32)installed) >> 16);
+            GProcessState.freeSelector((base + (uint32)installed) >> TILE_SHIFT);
         }
         lx_execution_unmap(GProcessState.execution, mapping);
     }
@@ -52,7 +65,7 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     if ((!ppb) || (cb == 0))
         return ERROR_INVALID_PARAMETER;
 
-    const size_t pagesize = 4096;
+    const size_t pagesize = GUEST_PAGE_SIZE;
     if (cb > UINT32_MAX - (pagesize - 1))
         return ERROR_NOT_ENOUGH_MEMORY;
     size_t size = (size_t)cb;
@@ -71,7 +84,7 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
                       ? allocateTiledMemory(size)
                       : lx_execution_map_aligned(GProcessState.execution, 0, size,
                                                  LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE,
-                                                 0x10000);
+                                                 OBJECT_ALIGNMENT);
         if (!mapping)
             return ERROR_NOT_ENOUGH_MEMORY;
         addr = lx_execution_mapping_host(mapping);
@@ -118,13 +131,13 @@ APIRET DosSetMem(PVOID pb, ULONG cb, ULONG flag)
 void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
 {
     /* Case-fold OS/2 names into stable, collision-resistant host object names. */
-    uint64_t hash = 1469598103934665603ULL; // FNV-1a 64-bit offset basis.
+    uint64_t hash = FNV1A_64_OFFSET_BASIS;
     const char *ball = getenv("TWOINE_BALL");
     if (ball)
     {
         for (const char *p = ball; *p; p++)
-            hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
-        hash = (hash ^ 0xff) * 1099511628211ULL;
+            hash = (hash ^ (unsigned char)*p) * FNV1A_64_PRIME;
+        hash = (hash ^ FNV_SCOPE_SEPARATOR) * FNV1A_64_PRIME;
     }
     for (const char *ptr = os2name; *ptr; ptr++)
     {
@@ -132,7 +145,7 @@ void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
         if ((ch >= 'A') && (ch <= 'Z'))
             ch += 'a' - 'A';
         hash ^= ch;
-        hash *= 1099511628211ULL; // FNV-1a 64-bit prime.
+        hash *= FNV1A_64_PRIME;
     }
     snprintf(buf, buflen, "/2ine-shm2-%016llx", (unsigned long long)hash);
 }
@@ -155,7 +168,7 @@ static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG
                 ULONG address = lx_execution_mapping_address(block->mapping);
                 void *host = block->addr;
                 ungrabLock(&GMutexDosCalls);
-                APIRET result = DosGetSharedMemAddress(address, flags & 7u);
+                APIRET result = DosGetSharedMemAddress(address, flags & fPERM);
                 if (!result)
                     *output = host;
                 return result;
@@ -179,7 +192,7 @@ static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG
         ULONG owner, permissions;
         if (!lx_host_shared_query_access(object, GProcessState.pib.process_id, &owner, &attributes,
                                          &permissions) ||
-            ((flags & 7u) & ~(attributes & 7u)))
+            ((flags & fPERM) & ~(attributes & fPERM)))
         {
             lx_host_shared_close(object);
             return ERROR_ACCESS_DENIED;
@@ -188,7 +201,8 @@ static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG
     /* OS/2 shared pointers retain one linear address in every attached process. */
     uint64_t address = 0;
     LxGuestMapping *mapping =
-        lx_host_shared_slot(object, 0x30000000, 0x70000000, 65536, &address)
+        lx_host_shared_slot(object, SHARED_ARENA_BASE, SHARED_ARENA_LIMIT, OBJECT_ALIGNMENT,
+                            &address)
             ? lx_execution_map_shared_at(GProcessState.execution, object, (uint32)address)
             : NULL;
     lx_host_shared_close(object);
@@ -212,7 +226,7 @@ static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG
     block->mapping = mapping;
     block->addr = lx_execution_mapping_host(mapping);
     block->size = lx_execution_mapping_size(mapping);
-    block->flags = (flags & 7u) | (attributes & (OBJ_GETTABLE | OBJ_GIVEABLE));
+    block->flags = (flags & fPERM) | (attributes & (OBJ_GETTABLE | OBJ_GIVEABLE));
     grabLock(&GMutexDosCalls);
     block->next = GSharedMem;
     GSharedMem = block;
@@ -256,7 +270,7 @@ APIRET DosAllocSharedMem(PPVOID output, PSZ name, ULONG size, ULONG flags)
 {
     TRACE_NATIVE("DosAllocSharedMem(%p, '%s', %u, %u)", output, name ? name : "", (uint)size,
                  (uint)flags);
-    if (!size || size > UINT32_MAX - 4095)
+    if (!size || size > UINT32_MAX - (GUEST_PAGE_SIZE - 1))
         return ERROR_INVALID_PARAMETER;
     if (!name || !*name)
     {
@@ -267,9 +281,11 @@ APIRET DosAllocSharedMem(PPVOID output, PSZ name, ULONG size, ULONG flags)
         char generated[96];
         snprintf(generated, sizeof generated, "\\SHAREMEM\\2INE-ANON-%08x-%08x",
                  (unsigned)GProcessState.pib.process_id, (unsigned)identity);
-        return mapSharedMemory(output, generated, (size + 4095) & ~4095u, flags, TRUE);
+        return mapSharedMemory(output, generated,
+                               (size + GUEST_PAGE_SIZE - 1) & ~(GUEST_PAGE_SIZE - 1u), flags, TRUE);
     }
-    return mapNamedSharedMemory(output, name, (size + 4095) & ~4095u, flags);
+    return mapNamedSharedMemory(output, name,
+                                (size + GUEST_PAGE_SIZE - 1) & ~(GUEST_PAGE_SIZE - 1u), flags);
 }
 
 APIRET DosGiveSharedMem(PVOID pb, PID pid, ULONG flag)
@@ -304,8 +320,8 @@ APIRET DosGiveSharedMem(PVOID pb, PID pid, ULONG flag)
                 else
                 {
                     if (flag & PAG_DEFAULT)
-                        flag = block->flags & 7u;
-                    result = (flag & ~(block->flags & 7u)) ? ERROR_ACCESS_DENIED : NO_ERROR;
+                        flag = block->flags & fPERM;
+                    result = (flag & ~(block->flags & fPERM)) ? ERROR_ACCESS_DENIED : NO_ERROR;
                     strcpy(name, block->shared_name);
                 }
                 break;
@@ -339,7 +355,7 @@ APIRET DosGetSharedMemAddress(ULONG address, ULONG flags)
                                      &permission))
         goto done;
     if (owner == GProcessState.pib.process_id || (attributes & OBJ_GETTABLE))
-        permission = attributes & 7u;
+        permission = attributes & fPERM;
     else if (!permission)
         goto done;
     if (flags & PAG_DEFAULT)
@@ -453,9 +469,8 @@ APIRET DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag)
             size_t remaining = block->size - (address - base);
             if (*pcb > remaining)
                 *pcb = remaining;
-            *pflag = PAG_READ | PAG_WRITE | PAG_COMMIT |
-                     (block->shared_name[0] ? 0x2000u : 0) | /* PAG_SHARED */
-                     (address == base ? 0x10000u : 0);       /* PAG_BASE */
+            *pflag = PAG_READ | PAG_WRITE | PAG_COMMIT | (block->shared_name[0] ? PAG_SHARED : 0) |
+                     (address == base ? PAG_BASE : 0);
             ungrabLock(&GMutexDosCalls);
             TRACE_RET("DosQueryMem(%p) -> size=%u flags=%x", pb, (uint)*pcb, (uint)*pflag);
             return NO_ERROR;

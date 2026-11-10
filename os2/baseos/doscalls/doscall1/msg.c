@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Message files: DosGetMessage, DosInsertMessage and DosPutMessage. */
 
 #include "os2/include/private/export16.h"
 #include "os2/include/bsedos.h"
@@ -56,6 +57,20 @@ APIRET16 Dos16PutMessage(USHORT handle, USHORT size, PCHAR message)
 #define MSGFILE_TABLE_END_OFFSET 0x14
 #define MSGFILE_FORMAT_OFF32 0x0200
 #define MSGFILE_FORMAT_OFF16 0x0201
+/* Files shorter than the header through its reserved byte cannot be message files. */
+#define MSGFILE_MINIMUM_SIZE 0x15
+/* Format 0 and 1 files keep a 16-bit offset table at a fixed position. */
+#define MSGFILE_LEGACY_TABLE_OFFSET 31
+
+/* Messages take substitutions %1 to %9. */
+enum
+{
+    MESSAGE_SUBSTITUTION_LIMIT = 9,
+    /* A 16:16 far pointer in a 16-bit caller's substitution table. */
+    FAR_POINTER_SIZE = 4,
+    /* A substitution string lies within one 64 KB segment. */
+    SUBSTITUTION_STRING_LIMIT = 0x10000
+};
 
 static uint16 readLE16(const uint8 *ptr)
 {
@@ -82,9 +97,9 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
     {
         const char *directories = NULL;
         for (const char *env = GProcessState.pib.environment; env && *env; env += strlen(env) + 1)
-            if (!strncmp(env, "DPATH=", 6))
+            if (!strncmp(env, "DPATH=", sizeof "DPATH=" - 1))
             {
-                directories = env + 6;
+                directories = env + sizeof "DPATH=" - 1;
                 break;
             }
         for (const char *at = directories; at && *at && !data;)
@@ -108,7 +123,7 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
     }
     if (!data)
         return NULL;
-    if (len < 0x15)
+    if (len < MSGFILE_MINIMUM_SIZE)
     {
         free(data);
         return NULL;
@@ -134,9 +149,10 @@ static const uint8 *findMessage(const uint8 *data, const size_t datalen, const u
     const int legacy = format == 0 || format == 1;
     if (!legacy && format != MSGFILE_FORMAT_OFF16 && format != MSGFILE_FORMAT_OFF32)
         return NULL;
-    const uint16 tableoff = legacy ? 31 : readLE16(data + MSGFILE_TABLE_OFFSET);
+    const uint16 tableoff =
+        legacy ? MSGFILE_LEGACY_TABLE_OFFSET : readLE16(data + MSGFILE_TABLE_OFFSET);
     const int off32 = !(format & 1);
-    const size_t entsize = off32 ? 4 : 2;
+    const size_t entsize = off32 ? sizeof(uint32) : sizeof(uint16);
 
     if (msgnum < first)
         return NULL;
@@ -288,14 +304,15 @@ APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cb
     }
 
     // The 16-bit caller's substitution table entries are 16:16 pointers.
-    PCHAR flatTable[9] = {0};
-    LxGuestArgument substitutions[9] = {0};
-    const uint16 ntable = (cTable < 9) ? cTable : 9;
+    PCHAR flatTable[MESSAGE_SUBSTITUTION_LIMIT] = {0};
+    LxGuestArgument substitutions[MESSAGE_SUBSTITUTION_LIMIT] = {0};
+    const uint16 ntable =
+        (cTable < MESSAGE_SUBSTITUTION_LIMIT) ? cTable : MESSAGE_SUBSTITUTION_LIMIT;
     for (uint16 i = 0; i < ntable; i++)
     {
-        uint32 pointer = lx_guest_load_u32((uint8 *)pTable + i * 4);
-        if (!lx_guest_argument_strings(GProcessState.execution, pointer, 1, 65536, 1,
-                                       &substitutions[i]))
+        uint32 pointer = lx_guest_load_u32((uint8 *)pTable + i * FAR_POINTER_SIZE);
+        if (!lx_guest_argument_strings(GProcessState.execution, pointer, 1,
+                                       SUBSTITUTION_STRING_LIMIT, 1, &substitutions[i]))
         {
             for (uint16 j = 0; j < i; j++)
                 lx_guest_argument_finish(&substitutions[j], 0);
@@ -320,7 +337,7 @@ APIRET DosInsertMessage(PVOID table, ULONG count, PCHAR message, ULONG message_s
 {
     TRACE_NATIVE("DosInsertMessage(%p, %u, '%.*s', %u, %p, %u, %p)", table, (uint)count,
                  (int)message_size, message, (uint)message_size, output, (uint)capacity, actual);
-    if (count > 9 || (count && !table) || !message || !output || !actual)
+    if (count > MESSAGE_SUBSTITUTION_LIMIT || (count && !table) || !message || !output || !actual)
         return ERROR_INVALID_PARAMETER;
     PCHAR *values = table;
     ULONG written = 0;

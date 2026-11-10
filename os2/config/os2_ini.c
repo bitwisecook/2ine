@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* Readers for native OS/2 and 2INEPRF1 profiles, and the 2INEPRF1 writer. */
 #include "os2/config/os2_ini.h"
 #include "formats/endian.h"
 #include <stdlib.h>
@@ -18,11 +19,15 @@
 #define KEY_NAME 12
 #define KEY_DATA_LENGTH 16
 #define KEY_DATA 20
+/* 2INEPRF1 entry header: application, key and data lengths. */
+#define ENTRY_APPLICATION_LENGTH 0
+#define ENTRY_KEY_LENGTH 4
+#define ENTRY_DATA_LENGTH 8
 
 int tb_profile_recognised(const unsigned char *p, size_t n)
 {
     return (n >= TB_PROFILE_MAGIC_SIZE && !memcmp(p, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE)) ||
-           (n >= 4 && tb_le32(p) == TB_OS2_INI_SIGNATURE);
+           (n >= sizeof(uint32_t) && tb_le32(p) == TB_OS2_INI_SIGNATURE);
 }
 
 static int native_string(const unsigned char *p, size_t n, uint32_t at, uint32_t size)
@@ -93,7 +98,9 @@ int tb_profile_walk(const unsigned char *p, size_t n, TbProfileVisitor visit, vo
     {
         if (n - at < TB_PROFILE_ENTRY_HEADER_SIZE)
             return 0;
-        uint32_t a = tb_le32(p + at), k = tb_le32(p + at + 4), bytes = tb_le32(p + at + 8);
+        uint32_t a = tb_le32(p + at + ENTRY_APPLICATION_LENGTH),
+                 k = tb_le32(p + at + ENTRY_KEY_LENGTH),
+                 bytes = tb_le32(p + at + ENTRY_DATA_LENGTH);
         at += TB_PROFILE_ENTRY_HEADER_SIZE;
         if (!a || !k || a > TB_PROFILE_NAME_LIMIT || k > TB_PROFILE_NAME_LIMIT || a > n - at ||
             k > n - at - a || bytes > n - at - a - k ||
@@ -118,9 +125,10 @@ void tb_profile_put_header(unsigned char *out, uint32_t count)
 size_t tb_profile_put_entry(unsigned char *out, const char *application, size_t a, const char *key,
                             size_t k, const unsigned char *data, size_t n)
 {
-    tb_put_le32(out, (uint32_t)a + 1);
-    tb_put_le32(out + 4, (uint32_t)k + 1);
-    tb_put_le32(out + 8, (uint32_t)n);
+    /* Name lengths count the terminating NUL. */
+    tb_put_le32(out + ENTRY_APPLICATION_LENGTH, (uint32_t)a + 1);
+    tb_put_le32(out + ENTRY_KEY_LENGTH, (uint32_t)k + 1);
+    tb_put_le32(out + ENTRY_DATA_LENGTH, (uint32_t)n);
     size_t at = TB_PROFILE_ENTRY_HEADER_SIZE;
     memcpy(out + at, application, a);
     out[at + a] = 0;

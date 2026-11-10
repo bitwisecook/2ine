@@ -59,27 +59,28 @@ int OS2_os2_ioctl(int sock, uint32_t command, void *argument, int length)
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
     }
-    unsigned cmd = command & 0xffff;
-    if ((cmd == 0x667e || cmd == 0x667f) && length >= 4)
+    unsigned cmd = command & UINT16_MAX;
+    if ((cmd == OS2_FIONBIO || cmd == OS2_FIONREAD) && length >= (int)sizeof(int))
     {
         int value;
-        memcpy(&value, argument, 4);
-        int result = cmd == 0x667e ? lx_host_socket_nonblocking(sock, value != 0)
-                                   : lx_host_socket_available(sock, &value);
-        if (!result && cmd == 0x667f)
-            memcpy(argument, &value, 4);
+        memcpy(&value, argument, sizeof value);
+        int result = cmd == OS2_FIONBIO ? lx_host_socket_nonblocking(sock, value != 0)
+                                        : lx_host_socket_available(sock, &value);
+        if (!result && cmd == OS2_FIONREAD)
+            memcpy(argument, &value, sizeof value);
         return lx_tcpip_socket_result(result);
     }
-    if (cmd == 0x6914 || cmd == 0x6924)
+    if (cmd == OS2_OSIOCGIFCONF || cmd == OS2_SIOCGIFCONF)
     {
+        /* ifconf: the buffer length, then the buffer pointer. */
         uint32_t capacity, pointer;
-        if (length < 8)
+        if (length < (int)(2 * sizeof(uint32_t)))
         {
             errno = EFAULT;
             return lx_tcpip_socket_result(-1);
         }
-        memcpy(&capacity, argument, 4);
-        memcpy(&pointer, (char *)argument + 4, 4);
+        memcpy(&capacity, argument, sizeof capacity);
+        memcpy(&pointer, (char *)argument + sizeof capacity, sizeof pointer);
         if (capacity > INT32_MAX)
         {
             errno = EINVAL;
@@ -90,7 +91,7 @@ int OS2_os2_ioctl(int sock, uint32_t command, void *argument, int length)
         if (!result)
         {
             capacity = (uint32_t)used;
-            memcpy(argument, &capacity, 4);
+            memcpy(argument, &capacity, sizeof capacity);
         }
         return lx_tcpip_socket_result(result);
     }
@@ -100,7 +101,7 @@ int OS2_os2_ioctl(int sock, uint32_t command, void *argument, int length)
 int OS2_ioctl(int sock, uint32_t command, void *argument)
 {
     /* The three-argument BSD API carries the extent in the command itself. */
-    return OS2_os2_ioctl(sock, command, argument, (int)((command >> 16) & 0x1fff));
+    return OS2_os2_ioctl(sock, command, argument, (int)OS2_IOCPARM_LEN(command));
 }
 
 int OS2_sock_init(void)
@@ -159,7 +160,7 @@ int OS2_connect(int sock, const struct OS2_sockaddr *os2addr, int addrlen)
 {
     TRACE_NATIVE("connect(%d, %p, %d)", sock, os2addr, addrlen);
 
-    if (!os2addr || addrlen < 16)
+    if (!os2addr || addrlen < (int)sizeof(OS2_sockaddr))
     {
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
@@ -271,7 +272,7 @@ int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
     TRACE_NATIVE("getsockname(%d, %p, %p)", sock, os2name, os2namelen);
 
-    if (!os2name || !os2namelen || *os2namelen < 16)
+    if (!os2name || !os2namelen || *os2namelen < (int)sizeof(OS2_sockaddr))
     {
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
@@ -291,7 +292,7 @@ int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
 int OS2_bind(int sock, const OS2_sockaddr *os2name, int os2namelen)
 {
     TRACE_NATIVE("bind(%d, %p, %d)", sock, os2name, os2namelen);
-    if (!os2name || os2namelen < 16)
+    if (!os2name || os2namelen < (int)sizeof(OS2_sockaddr))
     {
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
@@ -316,7 +317,7 @@ int OS2_accept(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
     TRACE_NATIVE("bind(%d, %p, %p)", sock, os2name, os2namelen);
     LxHostSocketAddress bsdaddr;
-    if (os2name && (!os2namelen || *os2namelen < 16))
+    if (os2name && (!os2namelen || *os2namelen < (int)sizeof(OS2_sockaddr)))
     {
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
@@ -452,7 +453,8 @@ int OS2_Rlisten(int sock, int backlog)
 int OS2_recvfrom(int sock, void *buffer, int length, int flags, OS2_sockaddr *address,
                  int *address_length)
 {
-    if (length < 0 || (!buffer && length) || (address && (!address_length || *address_length < 16)))
+    if (length < 0 || (!buffer && length) ||
+        (address && (!address_length || *address_length < (int)sizeof(OS2_sockaddr))))
     {
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
@@ -471,7 +473,7 @@ int OS2_recvfrom(int sock, void *buffer, int length, int flags, OS2_sockaddr *ad
 int OS2_sendto(int sock, const void *buffer, int length, int flags, const OS2_sockaddr *address,
                int address_length)
 {
-    if (length < 0 || (!buffer && length) || !address || address_length < 16)
+    if (length < 0 || (!buffer && length) || !address || address_length < (int)sizeof(OS2_sockaddr))
     {
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
@@ -489,7 +491,7 @@ int OS2_sendto(int sock, const void *buffer, int length, int flags, const OS2_so
 
 int OS2_getpeername(int sock, OS2_sockaddr *address, int *length)
 {
-    if (!address || !length || *length < 16)
+    if (!address || !length || *length < (int)sizeof(OS2_sockaddr))
     {
         errno = EFAULT;
         return lx_tcpip_socket_result(-1);
@@ -513,14 +515,15 @@ int OS2_getsockopt(int sock, int level, int option, void *value, int *length)
     }
     int result = lx_tcpip_socket_result(
         lx_host_socket_get_option(sock, mapOS2SocketOption(option), value, length));
-    if (!result && option == OS2_SO_ERROR && *length == 4)
+    /* SO_ERROR reports a host errno; OS/2 socket errors start at SOCBASEERR. */
+    if (!result && option == OS2_SO_ERROR && *length == (int)sizeof(int))
     {
         int number;
-        memcpy(&number, value, 4);
+        memcpy(&number, value, sizeof number);
         if (number)
         {
             number += SOCBASEERR;
-            memcpy(value, &number, 4);
+            memcpy(value, &number, sizeof number);
         }
     }
     return result;
@@ -549,9 +552,18 @@ uint16_t OS2_ntohs(uint16_t value)
     return OS2_htons(value);
 }
 
+/* writev gathers into one host buffer, so both the vector count and the total size
+   are bounded. */
+enum
+{
+    WRITEV_VECTOR_LIMIT = 1024
+};
+
+static const size_t WRITEV_BYTE_LIMIT = 16u * 1024 * 1024;
+
 int OS2_writev(int sock, const OS2_iovec *vectors, int count)
 {
-    if (count < 0 || count > 1024 || (!vectors && count))
+    if (count < 0 || count > WRITEV_VECTOR_LIMIT || (!vectors && count))
     {
         errno = EINVAL;
         return lx_tcpip_socket_result(-1);
@@ -559,7 +571,7 @@ int OS2_writev(int sock, const OS2_iovec *vectors, int count)
     size_t total = 0;
     for (int i = 0; i < count; i++)
     {
-        if (vectors[i].length > 16u * 1024 * 1024 - total)
+        if (vectors[i].length > WRITEV_BYTE_LIMIT - total)
         {
             errno = EMSGSIZE;
             return lx_tcpip_socket_result(-1);

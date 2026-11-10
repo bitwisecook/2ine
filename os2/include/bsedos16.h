@@ -157,6 +157,14 @@ extern "C"
 
     /* INCL_DOSMEMMGR: 16-bit entry points and structures */
 
+    enum
+    {
+        SEG_NONSHARED = 0x0000,
+        SEG_GIVEABLE = 0x0001,
+        SEG_GETTABLE = 0x0002,
+        SEG_DISCARDABLE = 0x0004
+    };
+
     OS2EXPORT APIRET16 OS2API16 Dos16GetSeg(USHORT sel);
 
     OS2EXPORT APIRET16 OS2API16 Dos16LockSeg(USHORT sel);

@@ -5,7 +5,71 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Directory searches: DosFindFirst/Next/Close and their 16-bit forms. */
 #include "os2/baseos/doscalls/internal.h"
+
+/* The 16-bit DosFindFirst levels 1 and 2 return FILEFINDBUF and FILEFINDBUF2, which
+   have no oNextEntryOffset, no alignment padding and a USHORT attribute. The flat
+   search keeps them apart from the 32-bit levels with these private values. */
+#define FIND_LEVEL_16_STANDARD ((ULONG) - 1)
+#define FIND_LEVEL_16_EASIZE ((ULONG) - 2)
+
+/* Search records. Field offsets follow oNextEntryOffset in the 32-bit records; the
+   "L" records widen cbFile and cbFileAlloc to 64 bits. */
+enum
+{
+    FIND_NEXT_OFFSET_SIZE = 4,
+    FIND_CREATION_OFFSET = 0,
+    FIND_ACCESS_OFFSET = 4,
+    FIND_WRITE_OFFSET = 8,
+    FIND_SIZE_OFFSET = 12,
+    FIND_ALLOC_OFFSET = 16,
+    FIND_ATTRIBUTES_OFFSET = 20,
+    FIND_EASIZE_OFFSET = 24,
+    FIND_16_EASIZE_OFFSET = 22,
+    FIND_LARGE_SIZE_HIGH_OFFSET = 16,
+    FIND_LARGE_ALLOC_OFFSET = 20,
+    FIND_LARGE_ALLOC_HIGH_OFFSET = 24,
+    FIND_LARGE_ATTRIBUTES_OFFSET = 28,
+    FIND_LARGE_EASIZE_OFFSET = 32,
+    /* achName, which follows the cchName byte, in each record. */
+    FIND_16_NAME_OFFSET = 23,
+    FIND_16_EASIZE_NAME_OFFSET = 27,
+    FIND_NAME_OFFSET = 29,
+    FIND_EASIZE_NAME_OFFSET = 33,
+    FIND_LARGE_NAME_OFFSET = 37,
+    FIND_LARGE_EASIZE_NAME_OFFSET = 41,
+    /* 32-bit records start on a ULONG boundary. */
+    FIND_RECORD_ALIGNMENT = 4
+};
+
+/* The smallest record each level returns: one with an empty name. */
+enum
+{
+    FIND_16_MINIMUM = 24,
+    FIND_16_EASIZE_MINIMUM = 28,
+    FIND_STANDARD_MINIMUM = 32,
+    FIND_EASIZE_MINIMUM = 36,
+    FIND_STANDARDL_MINIMUM = 40,
+    FIND_EASIZEL_MINIMUM = 44
+};
+
+enum
+{
+    FIND_ATTRIBUTE_BITS =
+        FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_DIRECTORY | FILE_ARCHIVED,
+    /* The low byte lists may-have attributes, the high byte must-have ones. */
+    FIND_MUST_HAVE_SHIFT = 8,
+    FIND_MAY_HAVE_MASK = 0x00FF,
+    FIND_MUST_HAVE_MASK = 0xFF00,
+    FIND_VALID_ATTRIBUTES = FIND_ATTRIBUTE_BITS | FIND_ATTRIBUTE_BITS << FIND_MUST_HAVE_SHIFT,
+    /* Search buffers are limited to one 64 KB segment. */
+    FIND_BUFFER_MAXIMUM = 0xFFFF,
+    /* 16-bit callers pass HDIR_CREATE as a USHORT. */
+    HDIR16_CREATE = 0xFFFF,
+    /* Handle 1 is HDIR_SYSTEM; 16-bit search handles are allocated above it. */
+    HDIR16_FIRST_ALLOCATED = 2
+};
 
 int wildcardMatch(const char *str, const char *pattern)
 {
@@ -63,21 +127,21 @@ void destroyDirectoryResource(void *value)
 
 ULONG findNextSizeNeeded(const ULONG level, const ULONG count)
 {
-    const ULONG minimum = level == (ULONG)-2          ? 28
-                          : level == (ULONG)-1        ? 24
-                          : level == FIL_STANDARD     ? 32
-                          : level == FIL_QUERYEASIZE  ? 36
-                          : level == FIL_STANDARDL    ? 40
-                          : level == FIL_QUERYEASIZEL ? 44
-                                                      : 0;
+    const ULONG minimum = level == FIND_LEVEL_16_EASIZE     ? FIND_16_EASIZE_MINIMUM
+                          : level == FIND_LEVEL_16_STANDARD ? FIND_16_MINIMUM
+                          : level == FIL_STANDARD           ? FIND_STANDARD_MINIMUM
+                          : level == FIL_QUERYEASIZE        ? FIND_EASIZE_MINIMUM
+                          : level == FIL_STANDARDL          ? FIND_STANDARDL_MINIMUM
+                          : level == FIL_QUERYEASIZEL       ? FIND_EASIZEL_MINIMUM
+                                                            : 0;
     return !minimum || count > UINT32_MAX / minimum ? UINT32_MAX : count * minimum;
 }
 
 int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
 {
     const ULONG attr = dirf->attr;
-    const ULONG musthave = (attr & 0xFF00) >> 8;
-    const ULONG mayhave = (attr & 0x00FF);
+    const ULONG musthave = (attr & FIND_MUST_HAVE_MASK) >> FIND_MUST_HAVE_SHIFT;
+    const ULONG mayhave = (attr & FIND_MAY_HAVE_MASK);
 
     const char *pattern = dirf->pattern, *name;
     LxHostFileInfo statbuf;
@@ -127,16 +191,18 @@ int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
             (musthave & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED) & ~special))
             continue;
 
-        const int legacy = dirf->level == (ULONG)-1 || dirf->level == (ULONG)-2;
+        const int legacy =
+            dirf->level == FIND_LEVEL_16_STANDARD || dirf->level == FIND_LEVEL_16_EASIZE;
         const int large = dirf->level == FIL_STANDARDL || dirf->level == FIL_QUERYEASIZEL;
-        const int eas = dirf->level == (ULONG)-2 || dirf->level == FIL_QUERYEASIZE ||
+        const int eas = dirf->level == FIND_LEVEL_16_EASIZE || dirf->level == FIL_QUERYEASIZE ||
                         dirf->level == FIL_QUERYEASIZEL;
-        const ULONG name_offset = legacy  ? (eas ? 27 : 23)
-                                  : large ? (eas ? 41 : 37)
-                                          : (eas ? 33 : 29);
+        const ULONG name_offset =
+            legacy  ? (eas ? FIND_16_EASIZE_NAME_OFFSET : FIND_16_NAME_OFFSET)
+            : large ? (eas ? FIND_LARGE_EASIZE_NAME_OFFSET : FIND_LARGE_NAME_OFFSET)
+                    : (eas ? FIND_EASIZE_NAME_OFFSET : FIND_NAME_OFFSET);
         ULONG extent = name_offset + (ULONG)namelen + 1;
         if (!legacy)
-            extent = (extent + 3) & ~3u;
+            extent = (extent + FIND_RECORD_ALIGNMENT - 1) & ~(FIND_RECORD_ALIGNMENT - 1u);
         if (extent > *pcbBuf)
         {
             *err = ERROR_BUFFER_OVERFLOW;
@@ -144,42 +210,42 @@ int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
         }
         uint8 *out = *ppfindbuf;
         memset(out, 0, extent);
-        uint8 *fields = out + (legacy ? 0 : 4);
+        uint8 *fields = out + (legacy ? 0 : FIND_NEXT_OFFSET_SIZE);
         FDATE date;
         FTIME time;
         if (statbuf.created)
             unixTimeToOs2(statbuf.created, &date, &time);
         else
             initFileCreationDateTime(&date, &time);
-        lx_guest_store_u16(fields, date.day | date.month << 5 | date.year << 9);
-        lx_guest_store_u16(fields + 2, time.twosecs | time.minutes << 5 | time.hours << 11);
+        storeDateTime16(fields + FIND_CREATION_OFFSET, date, time);
         unixTimeToOs2(statbuf.accessed, &date, &time);
-        lx_guest_store_u16(fields + 4, date.day | date.month << 5 | date.year << 9);
-        lx_guest_store_u16(fields + 6, time.twosecs | time.minutes << 5 | time.hours << 11);
+        storeDateTime16(fields + FIND_ACCESS_OFFSET, date, time);
         unixTimeToOs2(statbuf.modified, &date, &time);
-        lx_guest_store_u16(fields + 8, date.day | date.month << 5 | date.year << 9);
-        lx_guest_store_u16(fields + 10, time.twosecs | time.minutes << 5 | time.hours << 11);
-        lx_guest_store_u32(fields + 12, (uint32)statbuf.size);
+        storeDateTime16(fields + FIND_WRITE_OFFSET, date, time);
+        lx_guest_store_u32(fields + FIND_SIZE_OFFSET, (uint32)statbuf.size);
         if (large)
         {
-            lx_guest_store_u32(fields + 16, (uint32)(statbuf.size >> 32));
-            lx_guest_store_u32(fields + 20, (uint32)statbuf.allocated);
-            lx_guest_store_u32(fields + 24, (uint32)(statbuf.allocated >> 32));
+            lx_guest_store_u32(fields + FIND_LARGE_SIZE_HIGH_OFFSET, (uint32)(statbuf.size >> 32));
+            lx_guest_store_u32(fields + FIND_LARGE_ALLOC_OFFSET, (uint32)statbuf.allocated);
+            lx_guest_store_u32(fields + FIND_LARGE_ALLOC_HIGH_OFFSET,
+                               (uint32)(statbuf.allocated >> 32));
         }
         else
-            lx_guest_store_u32(fields + 16, (uint32)statbuf.allocated);
+            lx_guest_store_u32(fields + FIND_ALLOC_OFFSET, (uint32)statbuf.allocated);
         const uint32 attributes =
             (isdir ? FILE_DIRECTORY : 0) | (readonly ? FILE_READONLY : 0) | special;
         if (legacy)
-            lx_guest_store_u16(fields + 20, attributes);
+            lx_guest_store_u16(fields + FIND_ATTRIBUTES_OFFSET, attributes);
         else
         {
-            lx_guest_store_u32(fields + (large ? 28 : 20), attributes);
+            lx_guest_store_u32(fields +
+                                   (large ? FIND_LARGE_ATTRIBUTES_OFFSET : FIND_ATTRIBUTES_OFFSET),
+                               attributes);
             lx_guest_store_u32(out, extent);
         }
         if (eas)
         {
-            const size_t length = strlen(dirf->path) + namelen + 2;
+            const size_t length = strlen(dirf->path) + namelen + sizeof "/";
             char *path = malloc(length);
             if (!path)
             {
@@ -192,7 +258,10 @@ int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
             free(path);
             if (*err)
                 return 0;
-            lx_guest_store_u32(fields + (legacy ? 22 : large ? 32 : 24), status.cbList);
+            lx_guest_store_u32(fields + (legacy  ? FIND_16_EASIZE_OFFSET
+                                         : large ? FIND_LARGE_EASIZE_OFFSET
+                                                 : FIND_EASIZE_OFFSET),
+                               status.cbList);
         }
         out[name_offset - 1] = (uint8)namelen;
         memcpy(out + name_offset, name, namelen + 1);
@@ -231,7 +300,8 @@ APIRET findNext(DirFinder *dirf, PVOID pfindbuf, ULONG cbBuf, PULONG pcFileNames
         }
         last = current;
     }
-    if (last && dirf->level != (ULONG)-1 && dirf->level != (ULONG)-2)
+    /* The last 32-bit record's zero oNextEntryOffset ends the list. */
+    if (last && dirf->level != FIND_LEVEL_16_STANDARD && dirf->level != FIND_LEVEL_16_EASIZE)
         lx_guest_store_u32(last, 0);
     if (i && err == ERROR_BUFFER_OVERFLOW)
         err = NO_ERROR;
@@ -254,13 +324,13 @@ APIRET DosFindFirstLocked(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute, PVOID
     TRACE_NATIVE("DosFindFirst('%s', %p, %u, %p, %u, %p, %u)", pszFileSpec, phdir,
                  (uint)flAttribute, pfindbuf, (uint)cbBuf, pcFileNames, (uint)ulInfoLevel);
 
-    if (flAttribute & 0xffffc8c8) // reserved bits that must be zero.
+    if (flAttribute & ~FIND_VALID_ATTRIBUTES)
         return ERROR_INVALID_PARAMETER;
-    else if (cbBuf > 0xFFFF)
+    else if (cbBuf > FIND_BUFFER_MAXIMUM)
         return ERROR_INVALID_PARAMETER;
     else if ((ulInfoLevel != FIL_STANDARD) && (ulInfoLevel != FIL_QUERYEASIZE) &&
              (ulInfoLevel != FIL_STANDARDL) && (ulInfoLevel != FIL_QUERYEASIZEL) &&
-             (ulInfoLevel != (ULONG)-1) && (ulInfoLevel != (ULONG)-2))
+             (ulInfoLevel != FIND_LEVEL_16_STANDARD) && (ulInfoLevel != FIND_LEVEL_16_EASIZE))
         return ERROR_INVALID_PARAMETER;
     else if (!pcFileNames)
         return ERROR_INVALID_PARAMETER;
@@ -297,7 +367,7 @@ APIRET DosFindFirstLocked(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute, PVOID
     LxHandleBorrow directory = {0};
     uint32 handle = *phdir;
     /* Older callers pass the 16-bit create sentinel through the flat API. */
-    const BOOL create = handle == HDIR_CREATE || handle == 0xffffu;
+    const BOOL create = handle == HDIR_CREATE || handle == HDIR16_CREATE;
     DirFinder *dirf = NULL;
     if (*phdir == HDIR_SYSTEM)
     {
@@ -407,7 +477,7 @@ APIRET DosFindNext(HDIR handle, PVOID data, ULONG size, PULONG count)
     APIRET result;
     if (!directory)
         result = ERROR_INVALID_HANDLE;
-    else if (size > 0xFFFF || !count || (!data && *count))
+    else if (size > FIND_BUFFER_MAXIMUM || !count || (!data && *count))
         result = ERROR_INVALID_PARAMETER;
     else if (size < findNextSizeNeeded(directory->level, *count))
         result = ERROR_BUFFER_OVERFLOW;
@@ -443,12 +513,12 @@ static APIRET16 findFirst16(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, P
     grabLock(&GMutexDir16);
     USHORT id = (USHORT)*phdir;
     ULONG handle;
-    if (id == 0xffff)
+    if (id == HDIR16_CREATE)
     {
-        for (id = 2; id < 0xffff && hdir16[id]; id++)
+        for (id = HDIR16_FIRST_ALLOCATED; id < HDIR16_CREATE && hdir16[id]; id++)
         {
         }
-        if (id == 0xffff)
+        if (id == HDIR16_CREATE)
         {
             ungrabLock(&GMutexDir16);
             return ERROR_NO_MORE_FILES;
@@ -482,7 +552,8 @@ APIRET16 Dos16FindFirst(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, PVOID
 {
     if (res)
         return ERROR_INVALID_PARAMETER;
-    return findFirst16(pszFileSpec, phdir, flAttribute, pfindbuf, cbBuf, pcFileNames, (ULONG)-1);
+    return findFirst16(pszFileSpec, phdir, flAttribute, pfindbuf, cbBuf, pcFileNames,
+                       FIND_LEVEL_16_STANDARD);
 }
 
 APIRET16 Dos16FindFirst2(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, PVOID pfindbuf,
@@ -495,8 +566,8 @@ APIRET16 Dos16FindFirst2(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, PVOI
     if (level != FIL_STANDARD && level != FIL_QUERYEASIZE && level != FIL_STANDARDL &&
         level != FIL_QUERYEASIZEL)
         return ERROR_INVALID_LEVEL;
-    ULONG wire_level = level == FIL_STANDARD      ? (ULONG)-1
-                       : level == FIL_QUERYEASIZE ? (ULONG)-2
+    ULONG wire_level = level == FIL_STANDARD      ? FIND_LEVEL_16_STANDARD
+                       : level == FIL_QUERYEASIZE ? FIND_LEVEL_16_EASIZE
                                                   : level;
     return findFirst16(pszFileSpec, phdir, flAttribute, pfindbuf, cbBuf, pcFileNames, wire_level);
 }

@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Mutex semaphores and their ownership, including abandonment by dying threads. */
 #include "os2/baseos/doscalls/internal.h"
 
 typedef struct SemaphoreSharing
@@ -83,7 +84,9 @@ enum
     MUTEX_COUNT,
     MUTEX_DIED,
     MUTEX_WORDS,
-    MUTEX_BUCKETS = 256
+    MUTEX_BUCKETS = 256,
+    /* Heap blocks are 16-byte aligned, so their low address bits do not spread. */
+    MUTEX_BUCKET_SHIFT = 4
 };
 
 typedef struct MutexState
@@ -98,7 +101,7 @@ static MutexState *mutex_states[MUTEX_BUCKETS];
 
 static MutexState **mutex_bucket(void *resource)
 {
-    return &mutex_states[((uintptr_t)resource >> 4) % MUTEX_BUCKETS];
+    return &mutex_states[((uintptr_t)resource >> MUTEX_BUCKET_SHIFT) % MUTEX_BUCKETS];
 }
 
 static MutexState *find_mutex_state(void *resource)
@@ -275,11 +278,12 @@ void destroyMutexResource(void *value)
 APIRET DosCreateMutexSem(PSZ name, PHMTX output, ULONG attr, BOOL32 state)
 {
     TRACE_NATIVE("DosCreateMutexSem('%s', %p, %u, %u)", name, output, (uint)attr, (uint)state);
-    if (!output || (attr & ~1u) || state > 1)
+    if (!output || (attr & ~(ULONG)DC_SEM_SHARED) || state > 1)
         return ERROR_INVALID_PARAMETER;
     if (name && *name)
     {
-        if (strncasecmp(name, "\\SEM32\\", 7) || strlen(name) > 255 || !name[7])
+        if (strncasecmp(name, SEM32_PREFIX, SEM32_PREFIX_LENGTH) ||
+            strlen(name) > SEMAPHORE_NAME_MAXIMUM || !name[SEM32_PREFIX_LENGTH])
             return ERROR_INVALID_NAME;
         uint64 hash = eventScope();
         for (const char *p = name; *p; p++)
@@ -287,7 +291,7 @@ APIRET DosCreateMutexSem(PSZ name, PHMTX output, ULONG attr, BOOL32 state)
             unsigned char c = (unsigned char)*p;
             if (c >= 'A' && c <= 'Z')
                 c += 'a' - 'A';
-            hash = (hash ^ c) * 1099511628211ULL;
+            hash = (hash ^ c) * FNV1A_64_PRIME;
         }
         char identifier[64];
         snprintf(identifier, sizeof identifier, "/2ine-mutex1-%016llx", (unsigned long long)hash);
@@ -309,7 +313,7 @@ APIRET DosCreateMutexSem(PSZ name, PHMTX output, ULONG attr, BOOL32 state)
     LxHostMutex *mutex = lx_host_mutex_create(1, state);
     if (!mutex)
         return ERROR_NOT_ENOUGH_MEMORY;
-    if (!set_sharing(mutex, (attr & 1) || name) || !track_mutex(mutex, NULL, TRUE))
+    if (!set_sharing(mutex, (attr & DC_SEM_SHARED) || name) || !track_mutex(mutex, NULL, TRUE))
     {
         destroyMutexResource(mutex);
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -325,7 +329,8 @@ APIRET DosOpenMutexSem(PSZ name, PHMTX output)
     APIRET local = openSemaphore(name, LX_HANDLE_MUTEX, output);
     if (local != ERROR_SEM_NOT_FOUND || !name || !*name)
         return local;
-    if (strncasecmp(name, "\\SEM32\\", 7) || strlen(name) > 255 || !name[7])
+    if (strncasecmp(name, SEM32_PREFIX, SEM32_PREFIX_LENGTH) ||
+        strlen(name) > SEMAPHORE_NAME_MAXIMUM || !name[SEM32_PREFIX_LENGTH])
         return ERROR_INVALID_NAME;
     uint64 hash = eventScope();
     for (const char *p = name; *p; p++)
@@ -333,7 +338,7 @@ APIRET DosOpenMutexSem(PSZ name, PHMTX output)
         unsigned char c = (unsigned char)*p;
         if (c >= 'A' && c <= 'Z')
             c += 'a' - 'A';
-        hash = (hash ^ c) * 1099511628211ULL;
+        hash = (hash ^ c) * FNV1A_64_PRIME;
     }
     char identifier[64];
     snprintf(identifier, sizeof identifier, "/2ine-mutex1-%016llx", (unsigned long long)hash);

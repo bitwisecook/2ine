@@ -1,9 +1,21 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* DOSCALLS flat 32-bit ABI. Host pointer outputs use private temporary storage. */
+
+/* Bounds on guest strings and buffers, so that a missing terminator or a wild length
+   cannot run away. */
+enum
+{
+    BRIDGE_PATH_LIMIT = 32768,
+    BRIDGE_STRING_LIMIT = 65536,
+    BRIDGE_BUFFER_LIMIT = 65536,
+    STARTDATA_TEXT_LIMIT = 1024,
+    STARTDATA_INPUTS_LIMIT = 4096
+};
+
 static uint32 bridge32_DosQueryAppType(uint8 *arguments)
 {
-    char *name =
-        lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(arguments), 32768);
+    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(arguments),
+                                          BRIDGE_PATH_LIMIT);
     LxGuestBorrow output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if (name && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments + 4), 4,
@@ -127,8 +139,8 @@ static uint32 bridge32_DosSetRelMaxFH(uint8 *arguments)
     const uint32 request_pointer = lx_guest_load_u32(arguments),
                  current_pointer = lx_guest_load_u32(arguments + 4);
     LxGuestBorrow request = {0}, current = {0};
-    if ((request_pointer &&
-         !lx_execution_borrow(GProcessState.execution, request_pointer, 4, 3, &request)) ||
+    if ((request_pointer && !lx_execution_borrow(GProcessState.execution, request_pointer, 4,
+                                                 LX_GUEST_READ | LX_GUEST_WRITE, &request)) ||
         (current_pointer && !lx_execution_borrow(GProcessState.execution, current_pointer, 4,
                                                  LX_GUEST_WRITE, &current)))
     {
@@ -241,7 +253,8 @@ static uint32 bridge32_DosSetSignalExceptionFocus(uint8 *arguments)
 static uint32 bridge32_DosSetExceptionHandler(uint8 *arguments)
 {
     LxGuestBorrow record;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments), 8, 3, &record))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments), 8,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &record))
         return ERROR_INVALID_PARAMETER;
     const uint32 result = DosSetExceptionHandler(record.host);
     lx_execution_release(&record);
@@ -251,7 +264,8 @@ static uint32 bridge32_DosSetExceptionHandler(uint8 *arguments)
 static uint32 bridge32_DosUnsetExceptionHandler(uint8 *arguments)
 {
     LxGuestBorrow record;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments), 8, 3, &record))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments), 8,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &record))
         return ERROR_INVALID_PARAMETER;
     const uint32 result = DosUnsetExceptionHandler(record.host);
     lx_execution_release(&record);
@@ -718,11 +732,12 @@ static uint32 wireFind(uint8 *a, int first)
     if (first && !name)
         return ERROR_INVALID_PARAMETER;
     LxGuestBorrow handle = {0}, data = {0}, count = {0};
-    if ((first &&
-         !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, 3, &handle)) ||
+    if ((first && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4,
+                                       LX_GUEST_READ | LX_GUEST_WRITE, &handle)) ||
         (size &&
          !lx_execution_borrow(GProcessState.execution, pointer, size, LX_GUEST_WRITE, &data)) ||
-        !lx_execution_borrow(GProcessState.execution, count_pointer, 4, 3, &count))
+        !lx_execution_borrow(GProcessState.execution, count_pointer, 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &count))
     {
         lx_execution_release(&handle);
         lx_execution_release(&data);
@@ -785,7 +800,8 @@ static uint32 bridge32_DosQueryCurrentDisk(uint8 *a)
 static uint32 bridge32_DosQueryCurrentDir(uint8 *a)
 {
     LxGuestBorrow length = {0}, data = {0};
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 4, 3, &length))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &length))
         return ERROR_INVALID_PARAMETER;
     ULONG size = lx_guest_load_u32(length.host);
     if (size && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), size,
@@ -932,7 +948,8 @@ static uint32 bridge32_DosScanEnv(uint8 *a)
 
 static uint32 bridge32_DosSearchPath(uint8 *a)
 {
-    char *path = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 65536);
+    char *path = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4),
+                                          BRIDGE_STRING_LIMIT);
     char *file =
         lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 8), CCHMAXPATH);
     const uint32 size = lx_guest_load_u32(a + 16);
@@ -1051,12 +1068,12 @@ static uint32 bridge32_DosExecPgm(uint8 *a)
     const uint32 env_pointer = lx_guest_load_u32(a + 16);
     char *name =
         lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 24), CCHMAXPATH);
-    char *args = args_pointer
-                     ? lx_execution_copy_strings(GProcessState.execution, args_pointer, 65536, 2)
-                     : NULL;
-    char *env = env_pointer
-                    ? lx_execution_copy_strings(GProcessState.execution, env_pointer, 65536, 0)
-                    : NULL;
+    char *args = args_pointer ? lx_execution_copy_strings(GProcessState.execution, args_pointer,
+                                                          BRIDGE_STRING_LIMIT, 2)
+                              : NULL;
+    char *env = env_pointer ? lx_execution_copy_strings(GProcessState.execution, env_pointer,
+                                                        BRIDGE_STRING_LIMIT, 0)
+                            : NULL;
     LxGuestBorrow error = {0}, result = {0};
     if (!name || (args_pointer && !args) || (env_pointer && !env) || size > INT32_MAX ||
         (size && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), size,
@@ -1105,7 +1122,8 @@ static uint32 bridge32_DosCreateThread(uint8 *a)
 static uint32 bridge32_DosWaitThread(uint8 *a)
 {
     LxGuestBorrow output;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 4, 3, &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
         return ERROR_INVALID_PARAMETER;
     TID id = lx_guest_load_u32(output.host);
     const uint32 result = DosWaitThread(&id, lx_guest_load_u32(a + 4));
@@ -1193,7 +1211,8 @@ static uint32 bridge32_DosSetFileInfo(uint8 *a)
 static uint32 bridge32_DosDupHandle(uint8 *a)
 {
     LxGuestBorrow output;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, 3, &output))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
         return ERROR_INVALID_PARAMETER;
     HFILE handle = lx_guest_load_u32(output.host);
     const uint32 result = DosDupHandle(lx_guest_load_u32(a), &handle);
@@ -1554,10 +1573,11 @@ static uint32 bridge32_DosQueryFSAttach(uint8 *a)
     LxGuestBorrow length = {0}, output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if ((lx_guest_load_u32(a) && !name) ||
-        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), 4, 3, &length))
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &length))
         goto done;
     ULONG size = lx_guest_load_u32(length.host);
-    if (size > 65536 ||
+    if (size > BRIDGE_BUFFER_LIMIT ||
         (size && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), size,
                                       LX_GUEST_WRITE, &output)))
         goto done;
@@ -1580,8 +1600,9 @@ static uint32 bridge32_DosDevIOCtl(uint8 *a)
     for (unsigned i = 0; i < 4; i++)
     {
         uint32 pointer = lx_guest_load_u32(a + offsets[i]);
-        if (sizes[i] > 1048576 || (pointer && !lx_execution_borrow(GProcessState.execution, pointer,
-                                                                   sizes[i], 3, &slots[i])))
+        if (sizes[i] > 1048576 ||
+            (pointer && !lx_execution_borrow(GProcessState.execution, pointer, sizes[i],
+                                             LX_GUEST_READ | LX_GUEST_WRITE, &slots[i])))
             goto done;
     }
     ULONG parameters = slots[1].host ? lx_guest_load_u32(slots[1].host) : 0;
@@ -1602,7 +1623,7 @@ done:
 static uint32 bridge32_DosQueryFSInfo(uint8 *a)
 {
     const uint32 size = lx_guest_load_u32(a + 12);
-    if (size > 65536)
+    if (size > BRIDGE_BUFFER_LIMIT)
         return ERROR_INVALID_PARAMETER;
     LxGuestBorrow output;
     if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), size,
@@ -2122,13 +2143,14 @@ static uint32 bridge32_DosStartSession(uint8 *a)
 {
     LxGuestBorrow input = {0}, sid = {0}, pid = {0}, object = {0};
     uint32 pointer = lx_guest_load_u32(a), result = ERROR_INVALID_PARAMETER;
-    char *strings[5] = {0};
+    char *strings[STARTDATA_STRING_COUNT] = {0};
     char *environment = NULL;
-    if (!lx_execution_borrow(GProcessState.execution, pointer, 2, LX_GUEST_READ, &input))
+    if (!lx_execution_borrow(GProcessState.execution, pointer, sizeof(USHORT), LX_GUEST_READ,
+                             &input))
         return result;
     unsigned length = lx_guest_load_u16(input.host);
     lx_execution_release(&input);
-    if (length < 24 || length > 60 ||
+    if (length < STARTDATA_MINIMUM_LENGTH || length > STARTDATA_MAXIMUM_LENGTH ||
         !lx_execution_borrow(GProcessState.execution, pointer, length, LX_GUEST_READ, &input) ||
         !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
                              &sid) ||
@@ -2138,17 +2160,21 @@ static uint32 bridge32_DosStartSession(uint8 *a)
     const uint8 *p = input.host;
     STARTDATA data = {0};
     data.Length = length;
-    data.Related = lx_guest_load_u16(p + 2);
-    data.FgBg = lx_guest_load_u16(p + 4);
-    data.TraceOpt = lx_guest_load_u16(p + 6);
-    for (unsigned i = 0; i < 5; i++)
+    data.Related = lx_guest_load_u16(p + STARTDATA_RELATED_OFFSET);
+    data.FgBg = lx_guest_load_u16(p + STARTDATA_FGBG_OFFSET);
+    data.TraceOpt = lx_guest_load_u16(p + STARTDATA_TRACEOPT_OFFSET);
+    const unsigned offsets[STARTDATA_STRING_COUNT] = {
+        STARTDATA_TITLE_OFFSET, STARTDATA_NAME_OFFSET, STARTDATA_INPUTS_OFFSET,
+        STARTDATA_TERMQ_OFFSET, STARTDATA_ICONFILE_OFFSET};
+    for (unsigned i = 0; i < STARTDATA_STRING_COUNT; i++)
     {
-        unsigned at = i == 4 ? 32 : 8 + i * 4;
-        uint32 address = at + 4 <= length ? lx_guest_load_u32(p + at) : 0;
+        unsigned at = offsets[i];
+        uint32 address = at + sizeof(ULONG) <= length ? lx_guest_load_u32(p + at) : 0;
         if (address)
         {
-            strings[i] =
-                lx_execution_copy_string(GProcessState.execution, address, i == 2 ? 4096 : 1024);
+            strings[i] = lx_execution_copy_string(
+                GProcessState.execution, address,
+                at == STARTDATA_INPUTS_OFFSET ? STARTDATA_INPUTS_LIMIT : STARTDATA_TEXT_LIMIT);
             if (!strings[i])
                 goto done;
         }
@@ -2158,36 +2184,39 @@ static uint32 bridge32_DosStartSession(uint8 *a)
     data.PgmInputs = (PBYTE)strings[2];
     data.TermQ = (PBYTE)strings[3];
     data.IconFile = strings[4];
-    if (length >= 28 && lx_guest_load_u32(p + 24))
+    if (length >= STARTDATA_INHERITOPT_OFFSET &&
+        lx_guest_load_u32(p + STARTDATA_ENVIRONMENT_OFFSET))
     {
-        environment =
-            lx_execution_copy_strings(GProcessState.execution, lx_guest_load_u32(p + 24), 65536, 0);
+        environment = lx_execution_copy_strings(GProcessState.execution,
+                                                lx_guest_load_u32(p + STARTDATA_ENVIRONMENT_OFFSET),
+                                                BRIDGE_STRING_LIMIT, 0);
         if (!environment)
             goto done;
         data.Environment = (PBYTE)environment;
     }
-    if (length >= 30)
-        data.InheritOpt = lx_guest_load_u16(p + 28);
-    if (length >= 32)
-        data.SessionType = lx_guest_load_u16(p + 30);
-    if (length >= 40)
-        data.PgmHandle = lx_guest_load_u32(p + 36);
-    if (length >= 42)
-        data.PgmControl = lx_guest_load_u16(p + 40);
-    if (length >= 44)
-        data.InitXPos = lx_guest_load_u16(p + 42);
-    if (length >= 46)
-        data.InitYPos = lx_guest_load_u16(p + 44);
-    if (length >= 48)
-        data.InitXSize = lx_guest_load_u16(p + 46);
-    if (length >= 50)
-        data.InitYSize = lx_guest_load_u16(p + 48);
-    if (length >= 52)
-        data.Reserved = lx_guest_load_u16(p + 50);
-    if (length >= 60)
+    /* Each later field is read only when Length covers it. */
+    if (length >= STARTDATA_SESSIONTYPE_OFFSET)
+        data.InheritOpt = lx_guest_load_u16(p + STARTDATA_INHERITOPT_OFFSET);
+    if (length >= STARTDATA_ICONFILE_OFFSET)
+        data.SessionType = lx_guest_load_u16(p + STARTDATA_SESSIONTYPE_OFFSET);
+    if (length >= STARTDATA_PGMCONTROL_OFFSET)
+        data.PgmHandle = lx_guest_load_u32(p + STARTDATA_PGMHANDLE_OFFSET);
+    if (length >= STARTDATA_INITXPOS_OFFSET)
+        data.PgmControl = lx_guest_load_u16(p + STARTDATA_PGMCONTROL_OFFSET);
+    if (length >= STARTDATA_INITYPOS_OFFSET)
+        data.InitXPos = lx_guest_load_u16(p + STARTDATA_INITXPOS_OFFSET);
+    if (length >= STARTDATA_INITXSIZE_OFFSET)
+        data.InitYPos = lx_guest_load_u16(p + STARTDATA_INITYPOS_OFFSET);
+    if (length >= STARTDATA_INITYSIZE_OFFSET)
+        data.InitXSize = lx_guest_load_u16(p + STARTDATA_INITXSIZE_OFFSET);
+    if (length >= STARTDATA_RESERVED_OFFSET)
+        data.InitYSize = lx_guest_load_u16(p + STARTDATA_INITYSIZE_OFFSET);
+    if (length >= STARTDATA_OBJECTBUFFER_OFFSET)
+        data.Reserved = lx_guest_load_u16(p + STARTDATA_RESERVED_OFFSET);
+    if (length >= STARTDATA_MAXIMUM_LENGTH)
     {
-        data.ObjectBuffLen = lx_guest_load_u32(p + 56);
-        uint32 address = lx_guest_load_u32(p + 52);
+        data.ObjectBuffLen = lx_guest_load_u32(p + STARTDATA_OBJECTBUFFLEN_OFFSET);
+        uint32 address = lx_guest_load_u32(p + STARTDATA_OBJECTBUFFER_OFFSET);
         if (address && !lx_execution_borrow(GProcessState.execution, address, data.ObjectBuffLen,
                                             LX_GUEST_WRITE, &object))
             goto done;
@@ -2198,14 +2227,14 @@ static uint32 bridge32_DosStartSession(uint8 *a)
     ULONG session;
     PID process;
     result = DosStartSession(&data, &session, &process);
-    if (!result && data.Related == 1)
+    if (!result && data.Related == SSF_RELATED_CHILD)
     {
         lx_guest_store_u32(sid.host, session);
         lx_guest_store_u32(pid.host, process);
     }
 done:
     free(environment);
-    for (unsigned i = 0; i < 5; i++)
+    for (unsigned i = 0; i < STARTDATA_STRING_COUNT; i++)
         free(strings[i]);
     lx_execution_release(&input);
     lx_execution_release(&sid);
@@ -2221,7 +2250,8 @@ static uint32 bridge32_DosMapCase(uint8 *arguments)
     const uint32 pointer = lx_guest_load_u32(arguments + 8);
     LxGuestBorrow codepage = {0}, buffer = {0};
     if (!lx_execution_borrow(GProcessState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
-        (size && !lx_execution_borrow(GProcessState.execution, pointer, size, 3, &buffer)))
+        (size && !lx_execution_borrow(GProcessState.execution, pointer, size,
+                                      LX_GUEST_READ | LX_GUEST_WRITE, &buffer)))
     {
         lx_execution_release(&codepage);
         return ERROR_INVALID_PARAMETER;
@@ -2355,7 +2385,8 @@ static uint32 bridge32_DosTrueGetMessage(uint8 *a)
         uint32 pointer = lx_guest_load_u32((uint8 *)table.host + i * 4);
         if (pointer)
         {
-            substitutions[i] = lx_execution_copy_string(GProcessState.execution, pointer, 65536);
+            substitutions[i] =
+                lx_execution_copy_string(GProcessState.execution, pointer, BRIDGE_STRING_LIMIT);
             if (!substitutions[i])
                 goto done;
         }
@@ -2396,7 +2427,8 @@ static uint32 bridge32_DosInsertMessage(uint8 *a)
     for (unsigned i = 0; i < count; i++)
     {
         values[i] = lx_execution_copy_string(GProcessState.execution,
-                                             lx_guest_load_u32((uint8 *)table.host + i * 4), 65536);
+                                             lx_guest_load_u32((uint8 *)table.host + i * 4),
+                                             BRIDGE_STRING_LIMIT);
         if (!values[i])
             goto done;
     }

@@ -5,7 +5,25 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* 32-bit and 16-bit thread creation, waits and termination. */
 #include "os2/baseos/doscalls/internal.h"
+
+/* 32-bit thread stacks are 64 KB multiples below THREAD_STACK_LIMIT, separated by an
+   unmapped 64 KB gap so that an overrun faults instead of reaching another stack. */
+enum
+{
+    THREAD_STACK_GRANULE = 0x10000,
+    THREAD_STACK_DEFAULT = 0x10000,
+    THREAD_STACK_MAXIMUM = 0x1000000,
+    THREAD_STACK_GAP = 0x10000,
+    /* Headroom above the initial ESP. */
+    THREAD_STACK_TOP_RESERVE = 16,
+    THREAD_CREATE_FLAGS = CREATE_SUSPENDED | STACK_COMMITTED,
+    /* 16-bit stacks are one segment. */
+    THREAD16_STACK_SIZE = 0x10000
+};
+
+static const uint32 THREAD_STACK_LIMIT = 0x1FFF0000u;
 
 void destroyThreadResource(void *value)
 {
@@ -105,9 +123,10 @@ APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, 
 {
     TRACE_NATIVE("DosCreateThread(%p, %p, %u, %u, %u)", ptid, entry, (uint)argument, (uint)flags,
                  (uint)bytes);
-    if (!ptid || !entry || (flags & ~3u) || bytes > 0x1000000)
+    if (!ptid || !entry || (flags & ~(ULONG)THREAD_CREATE_FLAGS) || bytes > THREAD_STACK_MAXIMUM)
         return ERROR_INVALID_PARAMETER;
-    const uint32 size = bytes ? (bytes + 0xffff) & ~0xffffu : 0x10000;
+    const uint32 size = bytes ? (bytes + THREAD_STACK_GRANULE - 1) & ~(THREAD_STACK_GRANULE - 1u)
+                              : THREAD_STACK_DEFAULT;
     Thread *thread = calloc(1, sizeof *thread);
     if (!thread)
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -118,11 +137,12 @@ APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, 
         free(thread);
         return ERROR_MAX_THRDS_REACHED;
     }
-    while (GNextThreadStack <= 0x1fff0000u - size)
+    while (GNextThreadStack <= THREAD_STACK_LIMIT - size)
     {
         uint32 base = GNextThreadStack;
-        GNextThreadStack += size + 0x10000;
-        thread->stack = lx_execution_map(GProcessState.execution, base, size, 3, 1);
+        GNextThreadStack += size + THREAD_STACK_GAP;
+        thread->stack = lx_execution_map(GProcessState.execution, base, size,
+                                         LX_GUEST_READ | LX_GUEST_WRITE, 1);
         if (thread->stack)
             break;
     }
@@ -136,7 +156,7 @@ APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, 
                                 lx_execution_mapping_address(thread->stack), size, 0);
     thread->invocation = lx_execution_prepare_thread32(
         GProcessState.execution, (uint32)(uintptr_t)entry,
-        lx_execution_mapping_address(thread->stack) + size - 16, argument);
+        lx_execution_mapping_address(thread->stack) + size - THREAD_STACK_TOP_RESERVE, argument);
     thread->id = GNextThreadId++;
     thread->control = createThreadControl(thread->id, (flags & CREATE_SUSPENDED) != 0);
     if (thread->invocation && thread->control)
@@ -289,8 +309,8 @@ void *neThreadEntry(void *argument)
 {
     NeThreadStart *start = argument;
     uint8 tibspace[LXTIBSIZE] = {0};
-    GProcessState.initOs2Tib(tibspace, GProcessState.convert1616to32(start->stack), 65536,
-                             start->tid);
+    GProcessState.initOs2Tib(tibspace, GProcessState.convert1616to32(start->stack),
+                             THREAD16_STACK_SIZE, start->tid);
     start->tib_selector = GProcessState.setOs2Tib(tibspace);
     bindThreadControl(start->control);
     lx_execution_checkpoint(GProcessState.execution);
@@ -309,7 +329,7 @@ APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
     grabLock(&GMutexDosCalls);
     const uint32 tid = GNextThreadId++;
     ungrabLock(&GMutexDosCalls);
-    if (tid > 0xffff)
+    if (tid > UINT16_MAX)
     {
         free(start);
         return ERROR_MAX_THRDS_REACHED;

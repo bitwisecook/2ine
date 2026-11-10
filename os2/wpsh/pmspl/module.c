@@ -8,22 +8,57 @@
 #include "os2/wpsh/pmspl/internal.h"
 #include "os2/wpsh/pmspl/generated/pmspl-lx.h"
 
+/* NERR_QNotFound comes from the LAN Server error range (Toolkit neterr.h, pmerr.h). */
+#ifndef NERR_QNotFound
+#define NERR_QNotFound 2150
+#endif
+#ifndef NERR_DestNotFound
+#define NERR_DestNotFound 2152
+#endif
+
+/* Queue records with 32-bit guest pointers: level 0 is the bare name, levels 1 and 2
+   PRQINFO, 3 and 4 PRQINFO3, 5 a name pointer and 6 PRQINFO6. */
+enum
+{
+    QNLEN = 12,
+    PRQINFO0_SIZE = QNLEN + 1,
+    PRQINFO_SIZE = 44,
+    PRQINFO_PRIORITY = 14,
+    PRQINFO_PRPROC = 24,
+    PRQINFO_DESTINATIONS = 28,
+    PRQINFO_COMMENT = 36,
+    PRQINFO3_SIZE = 44,
+    PRQINFO3_PRIORITY = 4,
+    PRQINFO3_TYPE = 10,
+    PRQINFO3_PRPROC = 16,
+    PRQINFO3_COMMENT = 24,
+    PRQINFO3_PRINTERS = 32,
+    PRQINFO3_DRIVER_NAME = 36,
+    PRQINFO3_DRIVER_DATA = 40,
+    PRQINFO5_SIZE = 4,
+    PRQINFO6_SIZE = 52,
+    /* Every queue reports priority 1 and the PMPRINT queue processor. */
+    QUEUE_PRIORITY = 1,
+    /* DRIVDATA is ULONG-aligned within the caller's buffer. */
+    DRIVDATA_ALIGNMENT = 4
+};
+
 static size_t queue_record_size(ULONG level)
 {
     switch (level)
     {
         case 0:
-            return 13;
+            return PRQINFO0_SIZE;
         case 1:
         case 2:
-            return 44;
+            return PRQINFO_SIZE;
         case 3:
         case 4:
-            return 44;
+            return PRQINFO3_SIZE;
         case 5:
-            return 4;
+            return PRQINFO5_SIZE;
         case 6:
-            return 52;
+            return PRQINFO6_SIZE;
         default:
             return 0;
     }
@@ -41,15 +76,16 @@ ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capac
                        PULONG returned, PULONG total, PULONG needed)
 {
     if (!returned || !total || !needed)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     if (!queue_record_size(level))
-        return 124; /* ERROR_INVALID_LEVEL */
+        return ERROR_INVALID_LEVEL;
     int index = queue ? lx_printer_index(queue) : -1;
     if (queue && (index < 0 || !lx_printer_queue_is(queue, (unsigned)index)))
     {
         *returned = *total = *needed = 0;
-        return 2150; /* NERR_QNotFound */
+        return NERR_QNotFound;
     }
+    /* The catalogue holds two queues: the PDF and PCL file printers. */
     unsigned count = queue ? 1 : 2;
     size_t record = queue_record_size(level), bytes = record * count;
     for (unsigned i = 0; i < count && level; i++)
@@ -65,16 +101,17 @@ ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capac
         {
             bytes +=
                 strlen(lx_printer_queues[selected]) + 1 + strlen(lx_printer_drivers[selected]) + 1;
-            bytes = ((bytes + 3) & ~(size_t)3) + LX_PRINTER_DRIVER_DATA_SIZE;
+            bytes = ((bytes + DRIVDATA_ALIGNMENT - 1) & ~(size_t)(DRIVDATA_ALIGNMENT - 1)) +
+                    LX_PRINTER_DRIVER_DATA_SIZE;
         }
     }
     *returned = 0;
     *total = count;
     *needed = (ULONG)bytes;
     if (capacity < bytes)
-        return 234; /* ERROR_MORE_DATA */
+        return ERROR_MORE_DATA;
     if (!output || base > UINT32_MAX - bytes)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     uint8 *buffer = output;
     memset(buffer, 0, bytes);
     size_t tail = record * count;
@@ -91,23 +128,28 @@ ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capac
             continue;
         if (level == 1 || level == 2)
         {
-            lx_guest_store_u16(entry + 14, 1);
-            queue_string(buffer, base, &tail, entry + 24, "PMPRINT");
-            queue_string(buffer, base, &tail, entry + 28, lx_printer_queues[selected]);
-            queue_string(buffer, base, &tail, entry + 36, lx_printer_descriptions[selected]);
+            lx_guest_store_u16(entry + PRQINFO_PRIORITY, QUEUE_PRIORITY);
+            queue_string(buffer, base, &tail, entry + PRQINFO_PRPROC, "PMPRINT");
+            queue_string(buffer, base, &tail, entry + PRQINFO_DESTINATIONS,
+                         lx_printer_queues[selected]);
+            queue_string(buffer, base, &tail, entry + PRQINFO_COMMENT,
+                         lx_printer_descriptions[selected]);
         }
         else
         {
-            lx_guest_store_u16(entry + 4, 1);
+            lx_guest_store_u16(entry + PRQINFO3_PRIORITY, QUEUE_PRIORITY);
             if ((int)selected == preferred)
-                lx_guest_store_u16(entry + 10, 0x0004); /* PRQ3_TYPE_APPDEFAULT */
-            queue_string(buffer, base, &tail, entry + 16, "PMPRINT");
-            queue_string(buffer, base, &tail, entry + 24, lx_printer_descriptions[selected]);
-            queue_string(buffer, base, &tail, entry + 32, lx_printer_queues[selected]);
-            queue_string(buffer, base, &tail, entry + 36, lx_printer_drivers[selected]);
+                lx_guest_store_u16(entry + PRQINFO3_TYPE, PRQ3_TYPE_APPDEFAULT);
+            queue_string(buffer, base, &tail, entry + PRQINFO3_PRPROC, "PMPRINT");
+            queue_string(buffer, base, &tail, entry + PRQINFO3_COMMENT,
+                         lx_printer_descriptions[selected]);
+            queue_string(buffer, base, &tail, entry + PRQINFO3_PRINTERS,
+                         lx_printer_queues[selected]);
+            queue_string(buffer, base, &tail, entry + PRQINFO3_DRIVER_NAME,
+                         lx_printer_drivers[selected]);
             /* DRIVDATA stays inside the caller's queue buffer. */
-            tail = (tail + 3) & ~(size_t)3;
-            lx_guest_store_u32(entry + 40, base + (uint32)tail);
+            tail = (tail + DRIVDATA_ALIGNMENT - 1) & ~(size_t)(DRIVDATA_ALIGNMENT - 1);
+            lx_guest_store_u32(entry + PRQINFO3_DRIVER_DATA, base + (uint32)tail);
             lx_printer_driver_data(buffer + tail, selected);
             tail += LX_PRINTER_DRIVER_DATA_SIZE;
         }
@@ -120,7 +162,7 @@ ULONG SplQueryQueue(PSZ computer, PSZ queue, ULONG level, PVOID buffer, ULONG ca
                     PULONG needed)
 {
     if ((computer && *computer) || !queue || !*queue)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     ULONG returned, total;
     return lx_spl_catalogue(queue, level, buffer, capacity, (uint32)(uintptr_t)buffer, &returned,
                             &total, needed);
@@ -130,7 +172,7 @@ ULONG SplEnumQueue(PSZ computer, ULONG level, PVOID buffer, ULONG capacity, PULO
                    PULONG total, PULONG needed, PVOID reserved)
 {
     if ((computer && *computer) || reserved)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     return lx_spl_catalogue(NULL, level, buffer, capacity, (uint32)(uintptr_t)buffer, returned,
                             total, needed);
 }
@@ -139,14 +181,14 @@ ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity,
                     PULONG needed)
 {
     if (!needed)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     if (level > 3)
-        return 124;
+        return ERROR_INVALID_LEVEL;
     int index = lx_printer_index(name);
     if (index < 0 || !lx_printer_queue_is(name, (unsigned)index))
     {
         *needed = 0;
-        return 2152; /* NERR_DestNotFound */
+        return NERR_DestNotFound;
     }
     size_t record = level == 0 ? 9 : level == 1 ? 44 : level == 2 ? 4 : 32;
     size_t bytes = record;
@@ -159,9 +201,9 @@ ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity,
                  strlen(lx_printer_drivers[index]) + 1 + 2;
     *needed = (ULONG)bytes;
     if (capacity < bytes)
-        return 234;
+        return ERROR_MORE_DATA;
     if (!output || base > UINT32_MAX - bytes)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     uint8 *buffer = output;
     memset(buffer, 0, bytes);
     size_t tail = record;
@@ -186,7 +228,7 @@ ULONG SplQueryDevice(PSZ computer, PSZ device, ULONG level, PVOID buffer, ULONG 
                      PULONG needed)
 {
     if ((computer && *computer) || !device || !*device)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     return lx_spl_device(device, level, buffer, capacity, (uint32)(uintptr_t)buffer, needed);
 }
 
@@ -194,9 +236,9 @@ ULONG lx_spl_printers(ULONG level, ULONG types, PVOID output, ULONG capacity, ui
                       PULONG returned, PULONG total, PULONG needed)
 {
     if (level)
-        return 124;
+        return ERROR_INVALID_LEVEL;
     if (!returned || !total || !needed || !(types & 0x107) || (types & ~0x107u))
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     ULONG selected[4], kinds[4], count = 0;
     for (unsigned i = 0; i < 2; i++)
     {
@@ -219,11 +261,11 @@ ULONG lx_spl_printers(ULONG level, ULONG types, PVOID output, ULONG capacity, ui
     *total = count;
     *needed = bytes;
     if (capacity < bytes)
-        return 234;
+        return ERROR_MORE_DATA;
     if (!count)
         return 0;
     if (!output || base > UINT32_MAX - bytes)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     uint8 *buffer = output;
     memset(buffer, 0, bytes);
     size_t tail = count * 20;
@@ -245,10 +287,10 @@ ULONG SplEnumPrinter(PSZ computer, ULONG level, ULONG types, PVOID buffer, ULONG
                      PULONG returned, PULONG total, PULONG needed, PVOID reserved)
 {
     if ((computer && *computer) || reserved)
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     uint32 base = 0;
     if (capacity &&
         !lx_execution_address(GProcessState.execution, buffer, capacity, LX_GUEST_WRITE, &base))
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     return lx_spl_printers(level, types, buffer, capacity, base, returned, total, needed);
 }
