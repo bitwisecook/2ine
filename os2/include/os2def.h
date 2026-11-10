@@ -81,6 +81,17 @@ extern "C"
     typedef int(APIENTRY *PFN)(void);
 
     typedef ULONG ERRORID;
+
+    /* ERRORID severity codes (high word) */
+    enum
+    {
+        SEVERITY_NOERROR = 0x0000,
+        SEVERITY_WARNING = 0x0004,
+        SEVERITY_ERROR = 0x0008,
+        SEVERITY_SEVERE = 0x000C,
+        SEVERITY_UNRECOVERABLE = 0x0010
+    };
+
     typedef HANDLE HSEM;
 
     typedef HANDLE HAB, *PHAB;

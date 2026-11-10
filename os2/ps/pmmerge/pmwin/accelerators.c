@@ -1,14 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Accelerator tables translate a QMSG in place and retain their packed resource bytes. */
 #include "os2/include/private/pmwinp.h"
+#include "os2/include/bsedos.h"
 #include "emulator/abi.h"
 #include <ctype.h>
-
-/* Resource type (the Toolkit's bsedos.h). */
-enum
-{
-    RT_ACCELTABLE = 8
-};
 
 /* ACCELTABLE: a USHORT count and code page, then 6-byte ACCEL entries of fs, key and cmd. */
 enum

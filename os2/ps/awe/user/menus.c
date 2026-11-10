@@ -44,7 +44,6 @@ enum
 /* RT_RESNAMES: a ULONG count, that many ULONG identities, then the names in the same order. */
 enum
 {
-    RT_RESNAMES = 255,
     RESNAMES_COUNT_SIZE = 4,
     RESNAMES_ID_SIZE = 4,
     RESNAMES_SIZE_MAX = 1048576

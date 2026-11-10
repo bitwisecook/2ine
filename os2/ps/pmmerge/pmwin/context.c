@@ -7,32 +7,17 @@
  */
 /* Per-thread PM state: WinInitialize, its teardown at thread exit, and the PM error state. */
 #include "os2/include/private/pmwinp.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "host/clipboard.h"
 #include "emulator/abi.h"
 #include <ctype.h>
 
-/* Resource types (the Toolkit's bsedos.h). */
-enum
-{
-    RT_STRING = 5,
-    RT_MESSAGE = 10
-};
-
 /* Initial capacity of an anchor block's window and presentation space tables. */
 enum
 {
     INITIAL_HANDLE_SLOTS = 16
-};
-
-/* Error severities (the Toolkit's os2def.h). */
-enum
-{
-    SEVERITY_WARNING = 0x0004,
-    SEVERITY_ERROR = 0x0008,
-    SEVERITY_SEVERE = 0x000C,
-    SEVERITY_UNRECOVERABLE = 0x0010
 };
 
 /* WinGetErrorInfo's block: an ERRINFO, its one-entry message offset table and the message. */

@@ -7,17 +7,12 @@
  */
 /* System cursor handles retain the host cursor and distinguish shared resources from copies. */
 #include "os2/include/private/pmwinp.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "host/fs.h"
 #include "emulator/launch_record.h"
 #include "os2/include/private/pmwctlp.h"
-
-/* Toolkit bsedos.h resource type. */
-enum
-{
-    RT_POINTER = 1
-};
 
 enum
 {

@@ -12,15 +12,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* PRQINFO3 and PRQINFO6 sizes, the fsType offset, its PRQ3_TYPE_APPDEFAULT bit, the
-   level 0 queue name size (QNLEN + 1) and the HCINFO size. */
+/* PRQINFO3 and PRQINFO6 sizes, the fsType offset, the level 0 queue name size and the
+   HCINFO size. */
 enum
 {
     PRQINFO3_SIZE = 44,
     PRQINFO6_SIZE = 52,
     FSTYPE = 10,
-    APPDEFAULT = 4,
-    QUEUE_NAME_SIZE = 13,
+    QUEUE_NAME_SIZE = QNLEN + 1,
     HCINFO_SIZE = 68
 };
 
@@ -67,14 +66,15 @@ static void check_default_queue(int expected)
                            NULL) == 0);
         CHECK(returned == 2 && total == 2);
         size_t record = levels[i] == 6 ? PRQINFO6_SIZE : PRQINFO3_SIZE;
-        CHECK(buffer[FSTYPE] == (expected == 0 ? APPDEFAULT : 0) && buffer[FSTYPE + 1] == 0);
-        CHECK(buffer[record + FSTYPE] == (expected == 1 ? APPDEFAULT : 0) &&
+        CHECK(buffer[FSTYPE] == (expected == 0 ? PRQ3_TYPE_APPDEFAULT : 0) &&
+              buffer[FSTYPE + 1] == 0);
+        CHECK(buffer[record + FSTYPE] == (expected == 1 ? PRQ3_TYPE_APPDEFAULT : 0) &&
               buffer[record + FSTYPE + 1] == 0);
         for (int queue = 0; queue < 2; queue++)
         {
             CHECK(SplQueryQueue(NULL, queue ? "2INEPCL" : "2INEPDF", levels[i], buffer,
                                 sizeof buffer, &needed) == 0);
-            CHECK(buffer[FSTYPE] == (queue == expected ? APPDEFAULT : 0) &&
+            CHECK(buffer[FSTYPE] == (queue == expected ? PRQ3_TYPE_APPDEFAULT : 0) &&
                   buffer[FSTYPE + 1] == 0);
         }
     }

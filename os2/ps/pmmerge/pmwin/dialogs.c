@@ -2,6 +2,7 @@
 /* Dialog windows: modal processing, dismissal, item enumeration and dialog units. Modal state
    survives reentrant destruction until its message loop returns. */
 #include "os2/include/private/pmwinp.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
@@ -18,12 +19,6 @@ enum
     SYSTEM_FONT_AVERAGE_WIDTH = 6,
     SYSTEM_FONT_HEIGHT = 16,
     MAX_DIALOG_POINTS = 65536
-};
-
-/* Resource type (the Toolkit's bsedos.h). */
-enum
-{
-    RT_DIALOG = 4
 };
 
 /* The logical color index WinDefDlgProc loads with the dialog background. */

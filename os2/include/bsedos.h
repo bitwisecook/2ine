@@ -697,7 +697,8 @@ extern "C"
         RT_ACCELTABLE = 8,
         RT_RCDATA = 9,
         RT_MESSAGE = 10,
-        RT_DLGINCLUDE = 11
+        RT_DLGINCLUDE = 11,
+        RT_RESNAMES = 255
     };
 
     OS2EXPORT APIRET OS2API DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output);
@@ -925,6 +926,17 @@ extern "C"
         SSF_TYPE_WINDOWEDVDM = 7,
         SSF_TYPE_PDD = 8,
         SSF_TYPE_VDD = 9
+    };
+
+    /* STARTDATA SessionType control flags */
+    enum
+    {
+        SSF_CONTROL_VISIBLE = 0x0000,
+        SSF_CONTROL_INVISIBLE = 0x0001,
+        SSF_CONTROL_MAXIMIZE = 0x0002,
+        SSF_CONTROL_MINIMIZE = 0x0004,
+        SSF_CONTROL_NOAUTOCLOSE = 0x0008,
+        SSF_CONTROL_SETPOS = 0x8000
     };
 
     typedef struct

@@ -203,7 +203,7 @@ static BOOL commit_font(PmFontDialog *d)
     d->data.flStyle = emphasis(d);
     f->fsSelection =
         (m.italic ? FATTR_SEL_ITALIC : 0) | (m.bold ? FATTR_SEL_BOLD : 0) | d->data.flStyle;
-    d->data.flType = m.italic ? 1 : 0; /* FTYPE_ITALIC */
+    d->data.flType = m.italic ? FTYPE_ITALIC : 0;
     memcpy(f->szFacename, m.face, sizeof f->szFacename);
     f->szFacename[sizeof f->szFacename - 1] = 0;
     f->usCodePage = FONT_CODEPAGE;
@@ -423,7 +423,8 @@ static void populate_font(PmFontDialog *d)
     if (d->count)
     {
         const FontEntry *start = &d->fonts[wanted ? wanted - 1 : 0];
-        unsigned bold = d->data.usWeight >= FWEIGHT_BOLD, italic = (d->data.flType & 1) != 0;
+        unsigned bold = d->data.usWeight >= FWEIGHT_BOLD,
+                 italic = (d->data.flType & FTYPE_ITALIC) != 0;
         if (by_attributes)
         {
             bold = start->bold;

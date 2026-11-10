@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* OS/2 string bundles contain a codepage word and sixteen counted ASCIIZ strings. */
 #include "os2/include/private/pmwinp.h"
+#include "os2/include/bsedos.h"
 #include "formats/resources/icon.h"
 #include "host/fs.h"
 #include "host/sync.h"
@@ -8,13 +9,6 @@
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include <ctype.h>
-
-/* Toolkit bsedos.h resource types. */
-enum
-{
-    RT_STRING = 5,
-    RT_MESSAGE = 10
-};
 
 enum
 {

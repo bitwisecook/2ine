@@ -112,7 +112,7 @@ void destroyDeviceContexts(AnchorBlock *anchor)
 HDC lx_pm_query_dc(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    return ps ? ps->dc : (HDC)-1;
+    return ps ? ps->dc : HDC_ERROR;
 }
 
 BOOL lx_pm_associate_dc(HPS handle, HDC dc)

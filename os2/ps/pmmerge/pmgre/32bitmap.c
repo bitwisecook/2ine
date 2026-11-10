@@ -1,14 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Selected bitmap lifetimes are pinned by the presentation space. Pixels are bottom-up RGB. */
 #include "os2/include/private/pmwinp.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/private/pmgrep.h"
 #include "emulator/abi.h"
-
-/* Toolkit bsedos.h resource type. */
-enum
-{
-    RT_BITMAP = 2
-};
 
 /* Guest bitmap headers: the 12-byte BITMAPINFOHEADER of OS/2 1.x, the 64-byte
    BITMAPINFOHEADER2 and the 40-byte Windows BITMAPINFOHEADER, whose leading fields

@@ -85,6 +85,9 @@ extern "C"
 
     OS2EXPORT HDC OS2API GpiQueryDevice(HPS ps);
 
+/* GpiQueryDevice error result */
+#define HDC_ERROR ((HDC) - 1L)
+
     OS2EXPORT BOOL OS2API GpiAssociate(HPS ps, HDC dc);
 
     OS2EXPORT BOOL OS2API GpiErase(HPS hps);
@@ -653,6 +656,17 @@ extern "C"
     enum
     {
         FWEIGHT_BOLD = 7
+    };
+
+    /* FACENAMEDESC options for GpiQueryFaceString */
+    enum
+    {
+        FTYPE_ITALIC = 0x0001,
+        FTYPE_ITALIC_DONT_CARE = 0x0002,
+        FTYPE_OBLIQUE = 0x0004,
+        FTYPE_OBLIQUE_DONT_CARE = 0x0008,
+        FTYPE_ROUNDED = 0x0010,
+        FTYPE_ROUNDED_DONT_CARE = 0x0020
     };
 
     enum

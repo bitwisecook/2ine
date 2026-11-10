@@ -1,17 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Resource menus and menu messages share the same item and popup lifetime. */
 #include "os2/include/private/pmwinp.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/private/pmwctlp.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/ps/common/pm_text.h"
 #include "emulator/abi.h"
 #include <ctype.h>
-
-/* Toolkit bsedos.h resource type. */
-enum
-{
-    RT_MENU = 3
-};
 
 /* MT and MTI menu template layouts: an MT header, then MTI items whose text and nested
    submenu template follow inline. The MTI pad word carries the item attributes. */

@@ -2,23 +2,13 @@
 /* WinStartApp maps program details onto a session. The startup directory and
    environment travel with the launch; this process's own state never changes. */
 #include "os2/include/private/export.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/pmerr.h"
 #include "os2/include/pmsei.h"
 #include "os2/include/pmshl.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/private/bsep.h"
 #include "emulator/handles.h"
-
-/* Toolkit bsedos.h STARTDATA values and the os2def.h error severity. */
-enum
-{
-    SSF_CONTROL_INVISIBLE = 0x0001,
-    SSF_CONTROL_MAXIMIZE = 0x0002,
-    SSF_CONTROL_MINIMIZE = 0x0004,
-    SSF_CONTROL_NOAUTOCLOSE = 0x0008,
-    SSF_CONTROL_SETPOS = 0x8000,
-    SEVERITY_ERROR_ID = 8
-};
 
 /* STARTDATA length through ObjectBuffLen: every field is present. */
 enum
@@ -206,6 +196,6 @@ ULONG WinStartApp(HWND notify, PPROGDETAILS details, PSZ parameters, PVOID reser
     ULONG error = reserved ? PMERR_INVALID_PARAMETERS : 0;
     ULONG handle = error ? 0 : lx_pmshapi_start_app(notify, details, parameters, options, &error);
     if (error)
-        WinSetErrorInfo(((ULONG)SEVERITY_ERROR_ID << 16) | error, 0);
+        WinSetErrorInfo(((ULONG)SEVERITY_ERROR << 16) | error, 0);
     return handle;
 }
