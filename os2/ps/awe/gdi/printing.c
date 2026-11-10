@@ -9,6 +9,7 @@
 #include "os2/include/pmdev.h"
 #include "os2/include/private/pmsplp.h"
 #include "host/print.h"
+#include "os2/ps/awe/win32.h"
 
 /* The abort procedure runs guest code at each page and document boundary, before any device
    output. It may itself end the job or delete the DC, so state is looked up again afterwards. */
@@ -16,6 +17,60 @@ enum
 {
     SP_ERROR = -1,
     SP_APPABORT = -2
+};
+
+enum
+{
+    /* Windows 95 extended DOCINFO with lpszDatatype and then fwType. */
+    DOCINFO_SIZE_WITH_DATATYPE = 16,
+    DOCINFO_SIZE_WITH_TYPE = 20,
+    PRINT_TITLE_LIMIT = 4096,
+    EXTTEXTOUT_STRING_LIMIT = 65536,
+    /* DEVMODE up to and including dmCollate: every field the queues act on. */
+    DEVMODE_CHECKED_SIZE = 70,
+    /* sizeof(DEVMODE): 126 bytes of fields plus tail padding. */
+    DEVMODE_STRUCT_SIZE = 128,
+    /* Both queues render at 300 dpi; a page is measured in device pixels. */
+    PRINTER_DPI = 300,
+    LETTER_WIDTH_PIXELS = 2550,
+    LETTER_HEIGHT_PIXELS = 3300,
+    LEGAL_HEIGHT_PIXELS = 4200,
+    A4_WIDTH_PIXELS = 2480,
+    A4_HEIGHT_PIXELS = 3508,
+    /* DeviceCapabilities paper sizes are in tenths of a millimetre. */
+    LETTER_WIDTH_TENTH_MM = 2159,
+    LETTER_HEIGHT_TENTH_MM = 2794,
+    LEGAL_HEIGHT_TENTH_MM = 3556,
+    A4_WIDTH_TENTH_MM = 2100,
+    A4_HEIGHT_TENTH_MM = 2970,
+    PAPER_COUNT = 3,
+    /* DC_BINNAMES and DC_PAPERNAMES fill fixed-width name slots. */
+    BIN_NAME_LENGTH = 24,
+    PAPER_NAME_LENGTH = 64,
+    /* Landscape is portrait turned through 90 degrees. */
+    LANDSCAPE_ROTATION_DEGREES = 90,
+    /* The Win32 default miter limit. */
+    DEFAULT_MITER_LIMIT = 10
+};
+
+/* lx_pm_printer_kind and the queue index: the PDF queue prints colour, the PCL queue mono. */
+enum
+{
+    PRINTER_INDEX_PDF = 0,
+    PRINTER_KIND_PDF = 1,
+    PRINTER_KIND_PCL = 2,
+    PRINTER_PDF_BITS_PER_PIXEL = 24,
+    PRINTER_PCL_BITS_PER_PIXEL = 1
+};
+
+/* Win16 EXTTEXTOUT escape input: POINT16 origin, then text and advance pointers. */
+enum
+{
+    EXTTEXTOUT_X = 0,
+    EXTTEXTOUT_Y = 2,
+    EXTTEXTOUT_TEXT = 4,
+    EXTTEXTOUT_ADVANCES = 8,
+    EXTTEXTOUT_SIZE = 12
 };
 
 static LONG print_boundary(ULONG handle, Open32DC **context)
@@ -28,7 +83,7 @@ static LONG print_boundary(ULONG handle, Open32DC **context)
     if (proceed)
         return 1;
     if (dc->print_active)
-        DevEscape(GpiQueryDevice(handle), 8153, 0, NULL, NULL, NULL);
+        DevEscape(GpiQueryDevice(handle), DEVESC_ABORTDOC, 0, NULL, NULL, NULL);
     dc->print_active = dc->print_page = FALSE;
     return SP_APPABORT;
 }
@@ -37,17 +92,20 @@ LONG StartDoc(ULONG handle, PVOID info)
 {
     Open32DC *dc = open32FindDC(handle);
     ULONG size = info ? lx_guest_load_u32(info) : 0;
-    if (!dc || dc->kind != 5 || dc->print_active || (size != 12 && size != 16 && size != 20))
+    if (!dc || dc->kind != OPEN32_DC_PRINTER || dc->print_active ||
+        (size != WIN32_DOCINFO_SIZE && size != DOCINFO_SIZE_WITH_DATATYPE &&
+         size != DOCINFO_SIZE_WITH_TYPE))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
-    uint32 name = lx_guest_load_u32((uint8 *)info + 4),
-           output = lx_guest_load_u32((uint8 *)info + 8);
-    char *title = name ? lx_execution_copy_string(GProcessState.execution, name, 4096)
+    uint32 name = lx_guest_load_u32((uint8 *)info + WIN32_DOCINFO_DOCUMENT_NAME),
+           output = lx_guest_load_u32((uint8 *)info + WIN32_DOCINFO_OUTPUT);
+    char *title = name ? lx_execution_copy_string(GProcessState.execution, name, PRINT_TITLE_LIMIT)
                        : strdup("Print Job"),
          *destination =
-             output ? lx_execution_copy_string(GProcessState.execution, output, 4096) : NULL;
+             output ? lx_execution_copy_string(GProcessState.execution, output, PRINT_TITLE_LIMIT)
+                    : NULL;
     if (!title || (output && !destination) ||
         (destination && *destination && strcasecmp(destination, "FILE:")))
     {
@@ -62,8 +120,8 @@ LONG StartDoc(ULONG handle, PVOID info)
         if (dc->print_active)
             result = SP_ERROR;
         else
-            result =
-                DevEscape(GpiQueryDevice(handle), 8150, (LONG)strlen(title) + 1, title, NULL, NULL);
+            result = DevEscape(GpiQueryDevice(handle), DEVESC_STARTDOC, (LONG)strlen(title) + 1,
+                               title, NULL, NULL);
     }
     free(title);
     free(destination);
@@ -99,7 +157,7 @@ LONG EndPage(ULONG handle)
         return result;
     if (!dc->print_active || !dc->print_page)
         return SP_ERROR;
-    result = DevEscape(GpiQueryDevice(handle), 16300, 0, NULL, NULL, NULL);
+    result = DevEscape(GpiQueryDevice(handle), DEVESC_NEWFRAME, 0, NULL, NULL, NULL);
     if (result > 0)
         dc->print_page = FALSE;
     return result;
@@ -115,7 +173,7 @@ LONG EndDoc(ULONG handle)
         return result;
     if (!dc->print_active)
         return SP_ERROR;
-    result = DevEscape(GpiQueryDevice(handle), 8151, 0, NULL, NULL, NULL);
+    result = DevEscape(GpiQueryDevice(handle), DEVESC_ENDDOC, 0, NULL, NULL, NULL);
     dc->print_active = dc->print_page = FALSE;
     return result;
 }
@@ -125,7 +183,7 @@ LONG AbortDoc(ULONG handle)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !dc->print_active)
         return SP_ERROR;
-    LONG result = DevEscape(GpiQueryDevice(handle), 8153, 0, NULL, NULL, NULL);
+    LONG result = DevEscape(GpiQueryDevice(handle), DEVESC_ABORTDOC, 0, NULL, NULL, NULL);
     dc->print_active = dc->print_page = FALSE;
     return result;
 }
@@ -139,30 +197,44 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
     }
     if (!mode)
         return TRUE;
-    uint8 settings[70];
+    uint8 settings[DEVMODE_CHECKED_SIZE];
     if ((uintptr_t)mode > UINT32_MAX ||
         !lx_execution_read(GProcessState.execution, (uint32)(uintptr_t)mode, settings,
                            sizeof settings) ||
-        lx_guest_load_u16(settings + 36) < sizeof settings || !memchr(settings, 0, 32))
+        lx_guest_load_u16(settings + WIN32_DEVMODE_SIZE_FIELD) < sizeof settings ||
+        !memchr(settings, 0, WIN32_CCHDEVICENAME))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    if (kind < 1 || kind > 2 || strcasecmp((const char *)settings, lx_printer_queues[kind - 1]))
+    if (kind < PRINTER_KIND_PDF || kind > PRINTER_KIND_PCL ||
+        strcasecmp((const char *)settings, lx_printer_queues[kind - 1]))
     {
         open32SetError(ERROR_INVALID_PRINTER_NAME);
         return FALSE;
     }
-    ULONG fields = lx_guest_load_u32(settings + 40), paper = lx_guest_load_u16(settings + 46),
-          orientation = lx_guest_load_u16(settings + 44);
-    SHORT quality = (SHORT)lx_guest_load_u16(settings + 58);
-    if ((fields & ~0x3d03u) || ((fields & 1) && orientation != 1 && orientation != 2) ||
-        ((fields & 2) && paper != 1 && paper != 5 && paper != 9) ||
-        ((fields & 0x100) && !lx_guest_load_u16(settings + 54)) ||
-        ((fields & 0x400) && quality != 300 && (quality < -4 || quality > -1)) ||
-        ((fields & 0x1000) && lx_guest_load_u16(settings + 62) > 3) ||
-        ((fields & 0x800) && lx_guest_load_u16(settings + 60) != (kind == 1 ? 2 : 1)) ||
-        ((fields & 0x2000) && lx_guest_load_u16(settings + 64) != 300))
+    ULONG fields = lx_guest_load_u32(settings + WIN32_DEVMODE_FIELDS),
+          paper = lx_guest_load_u16(settings + WIN32_DEVMODE_PAPER_SIZE),
+          orientation = lx_guest_load_u16(settings + WIN32_DEVMODE_ORIENTATION);
+    SHORT quality = (SHORT)lx_guest_load_u16(settings + WIN32_DEVMODE_PRINT_QUALITY);
+    const unsigned supported = WIN32_DM_ORIENTATION | WIN32_DM_PAPERSIZE | WIN32_DM_COPIES |
+                               WIN32_DM_PRINTQUALITY | WIN32_DM_COLOR | WIN32_DM_DUPLEX |
+                               WIN32_DM_YRESOLUTION;
+    if ((fields & ~supported) ||
+        ((fields & WIN32_DM_ORIENTATION) && orientation != WIN32_DMORIENT_PORTRAIT &&
+         orientation != WIN32_DMORIENT_LANDSCAPE) ||
+        ((fields & WIN32_DM_PAPERSIZE) && paper != WIN32_DMPAPER_LETTER &&
+         paper != WIN32_DMPAPER_LEGAL && paper != WIN32_DMPAPER_A4) ||
+        ((fields & WIN32_DM_COPIES) && !lx_guest_load_u16(settings + WIN32_DEVMODE_COPIES)) ||
+        ((fields & WIN32_DM_PRINTQUALITY) && quality != PRINTER_DPI &&
+         (quality < WIN32_DMRES_HIGH || quality > WIN32_DMRES_DRAFT)) ||
+        ((fields & WIN32_DM_DUPLEX) &&
+         lx_guest_load_u16(settings + WIN32_DEVMODE_DUPLEX) > WIN32_DMDUP_HORIZONTAL) ||
+        ((fields & WIN32_DM_COLOR) &&
+         lx_guest_load_u16(settings + WIN32_DEVMODE_COLOR) !=
+             (kind == PRINTER_KIND_PDF ? WIN32_DMCOLOR_COLOR : WIN32_DMCOLOR_MONOCHROME)) ||
+        ((fields & WIN32_DM_YRESOLUTION) &&
+         lx_guest_load_u16(settings + WIN32_DEVMODE_Y_RESOLUTION) != PRINTER_DPI))
     {
         open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
@@ -173,7 +245,7 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
 /* The virtual queues print Letter, Legal and A4 at 300 dpi in either orientation. */
 BOOL open32PrinterApply(ULONG handle, PVOID mode)
 {
-    uint8 settings[70];
+    uint8 settings[DEVMODE_CHECKED_SIZE];
     if (!mode)
         return TRUE;
     if (!lx_execution_read(GProcessState.execution, (uint32)(uintptr_t)mode, settings,
@@ -182,12 +254,17 @@ BOOL open32PrinterApply(ULONG handle, PVOID mode)
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    ULONG fields = lx_guest_load_u32(settings + 40);
-    ULONG paper = fields & 2 ? lx_guest_load_u16(settings + 46) : 9;
-    unsigned width = paper == 9 ? 2480 : 2550, height = paper == 9   ? 3508
-                                                        : paper == 5 ? 4200
-                                                                     : 3300;
-    BOOL landscape = (fields & 1) && lx_guest_load_u16(settings + 44) == 2;
+    ULONG fields = lx_guest_load_u32(settings + WIN32_DEVMODE_FIELDS);
+    ULONG paper = fields & WIN32_DM_PAPERSIZE
+                      ? lx_guest_load_u16(settings + WIN32_DEVMODE_PAPER_SIZE)
+                      : WIN32_DMPAPER_A4;
+    unsigned width = paper == WIN32_DMPAPER_A4 ? A4_WIDTH_PIXELS : LETTER_WIDTH_PIXELS,
+             height = paper == WIN32_DMPAPER_A4      ? A4_HEIGHT_PIXELS
+                      : paper == WIN32_DMPAPER_LEGAL ? LEGAL_HEIGHT_PIXELS
+                                                     : LETTER_HEIGHT_PIXELS;
+    BOOL landscape =
+        (fields & WIN32_DM_ORIENTATION) &&
+        lx_guest_load_u16(settings + WIN32_DEVMODE_ORIENTATION) == WIN32_DMORIENT_LANDSCAPE;
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !lx_pm_printer_page(GpiQueryDevice(handle), landscape ? height : width,
                                    landscape ? width : height))
@@ -195,12 +272,13 @@ BOOL open32PrinterApply(ULONG handle, PVOID mode)
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
-    if (fields & 0x100)
-        dc->print_copies = lx_guest_load_u16(settings + 54);
-    if (fields & 0x400)
-        dc->print_draft = (SHORT)lx_guest_load_u16(settings + 58) == -1;
-    if (fields & 0x1000)
-        dc->print_duplex = lx_guest_load_u16(settings + 62);
+    if (fields & WIN32_DM_COPIES)
+        dc->print_copies = lx_guest_load_u16(settings + WIN32_DEVMODE_COPIES);
+    if (fields & WIN32_DM_PRINTQUALITY)
+        dc->print_draft =
+            (SHORT)lx_guest_load_u16(settings + WIN32_DEVMODE_PRINT_QUALITY) == WIN32_DMRES_DRAFT;
+    if (fields & WIN32_DM_DUPLEX)
+        dc->print_duplex = lx_guest_load_u16(settings + WIN32_DEVMODE_DUPLEX);
     return lx_pm_printer_options(GpiQueryDevice(handle), dc->print_copies, dc->print_duplex,
                                  dc->print_draft);
 }
@@ -230,7 +308,8 @@ BOOL open32AbortCheck(ULONG h)
 BOOL ResetDC(ULONG h, PVOID mode)
 {
     Open32DC *dc = open32FindDC(h);
-    if (!dc || (dc->kind != 5 && dc->kind != 6) || dc->print_page || !mode)
+    if (!dc || (dc->kind != OPEN32_DC_PRINTER && dc->kind != OPEN32_DC_PRINTER_INFORMATION) ||
+        dc->print_page || !mode)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -252,80 +331,85 @@ ULONG DeviceCapabilities(PSZ device, PSZ port, ULONG capability, PVOID output, P
         open32SetError(ERROR_INVALID_PRINTER_NAME);
         return UINT32_MAX;
     }
-    static const USHORT papers[3] = {1, 5, 9};
-    static const ULONG sizes[3][2] = {{2159, 2794}, {2159, 3556}, {2100, 2970}};
+    static const USHORT papers[PAPER_COUNT] = {WIN32_DMPAPER_LETTER, WIN32_DMPAPER_LEGAL,
+                                               WIN32_DMPAPER_A4};
+    static const ULONG sizes[PAPER_COUNT][2] = {{LETTER_WIDTH_TENTH_MM, LETTER_HEIGHT_TENTH_MM},
+                                                {LETTER_WIDTH_TENTH_MM, LEGAL_HEIGHT_TENTH_MM},
+                                                {A4_WIDTH_TENTH_MM, A4_HEIGHT_TENTH_MM}};
     switch (capability)
     {
-        case 1:
-            return 0x2c03; /* DEVMODE fields */
-        case 2:
-            for (unsigned i = 0; output && i < 3; i++)
+        case WIN32_DC_FIELDS:
+            return WIN32_DM_ORIENTATION | WIN32_DM_PAPERSIZE | WIN32_DM_PRINTQUALITY |
+                   WIN32_DM_COLOR | WIN32_DM_YRESOLUTION;
+        case WIN32_DC_PAPERS:
+            for (unsigned i = 0; output && i < PAPER_COUNT; i++)
                 lx_guest_store_u16((uint8 *)output + i * 2, papers[i]);
-            return 3;
-        case 3:
-            for (unsigned i = 0; output && i < 3; i++)
+            return PAPER_COUNT;
+        case WIN32_DC_PAPERSIZE:
+            for (unsigned i = 0; output && i < PAPER_COUNT; i++)
             {
                 lx_guest_store_u32((uint8 *)output + i * 8, sizes[i][0]);
                 lx_guest_store_u32((uint8 *)output + i * 8 + 4, sizes[i][1]);
             }
-            return 3;
-        case 4:
-            return 2100u | (2794u << 16);
-        case 5:
-            return 2159u | (3556u << 16);
-        case 6:
+            return PAPER_COUNT;
+        case WIN32_DC_MINEXTENT:
+            return A4_WIDTH_TENTH_MM | ((unsigned)LETTER_HEIGHT_TENTH_MM << 16);
+        case WIN32_DC_MAXEXTENT:
+            return LETTER_WIDTH_TENTH_MM | ((unsigned)LEGAL_HEIGHT_TENTH_MM << 16);
+        case WIN32_DC_BINS:
             if (output)
-                lx_guest_store_u16(output, 7);
+                lx_guest_store_u16(output, WIN32_DMBIN_AUTO);
             return 1;
-        case 7:
+        case WIN32_DC_DUPLEX:
             return 0;
-        case 8:
-            return 128;
-        case 9:
+        case WIN32_DC_SIZE:
+            return DEVMODE_STRUCT_SIZE;
+        case WIN32_DC_EXTRA:
             return 0;
-        case 10:
-            return 0x320;
-        case 11:
+        case WIN32_DC_VERSION:
+            return WIN32_DM_SPECVERSION;
+        case WIN32_DC_DRIVER:
             return 1;
-        case 12:
+        case WIN32_DC_BINNAMES:
             if (output)
             {
-                memset(output, 0, 24);
+                memset(output, 0, BIN_NAME_LENGTH);
                 memcpy(output, "Auto", 5);
             }
             return 1;
-        case 13:
+        case WIN32_DC_ENUMRESOLUTIONS:
             if (output)
             {
-                lx_guest_store_u32(output, 300);
-                lx_guest_store_u32((uint8 *)output + 4, 300);
+                lx_guest_store_u32(output, PRINTER_DPI);
+                lx_guest_store_u32((uint8 *)output + 4, PRINTER_DPI);
             }
             return 1;
-        case 14:
+        case WIN32_DC_FILEDEPENDENCIES:
             return 0;
-        case 15:
+        case WIN32_DC_TRUETYPE:
             return 0;
-        case 16:
+        case WIN32_DC_PAPERNAMES:
             if (output)
             {
-                memset(output, 0, 192);
+                memset(output, 0, PAPER_COUNT * PAPER_NAME_LENGTH);
                 memcpy(output, "Letter", 7);
-                memcpy((uint8 *)output + 64, "Legal", 6);
-                memcpy((uint8 *)output + 128, "A4", 3);
+                memcpy((uint8 *)output + PAPER_NAME_LENGTH, "Legal", 6);
+                memcpy((uint8 *)output + 2 * PAPER_NAME_LENGTH, "A4", 3);
             }
-            return 3;
-        case 17:
-            return 90;
-        case 18:
+            return PAPER_COUNT;
+        case WIN32_DC_ORIENTATION:
+            return LANDSCAPE_ROTATION_DEGREES;
+        case WIN32_DC_COPIES:
             return 1;
-        case 19:
+        case WIN32_DC_BINADJUST:
             return 0;
-        case 20:
+        case WIN32_DC_EMF_COMPLIANT:
             return 0;
-        case 22:
-            return printer == 0;
-        case 32:
-            return printer == 0 ? 24 : 1;
+        case WIN32_DC_COLLATE:
+            return printer == PRINTER_INDEX_PDF;
+        case WIN32_DC_COLORDEVICE:
+            return printer == PRINTER_INDEX_PDF ? PRINTER_PDF_BITS_PER_PIXEL
+                                                : PRINTER_PCL_BITS_PER_PIXEL;
         default:
             return UINT32_MAX;
     }
@@ -339,36 +423,46 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    if (code == 8)
+    if (code == WIN32_QUERYESCSUPPORT)
     {
         if (count < 2)
             return 0;
         ULONG query = count >= 4 ? lx_guest_load_u32(input) : lx_guest_load_u16(input);
-        return query == 1 || query == 2 || query == 8 || query == 9 || query == 10 || query == 11 ||
-               query == 12 || query == 13 || query == 14 || query == 7 || query == 17 ||
-               query == 19 || query == 20 || query == 23 || query == 28 || query == 29 ||
-               query == 30 || query == 31 || query == 37 || query == 0x101 || query == 0x200 ||
-               query == 0x1000 || query == 0x1001 || query == 0x1002 || query == 0x1006;
+        return query == WIN32_NEWFRAME || query == WIN32_ABORTDOC ||
+               query == WIN32_QUERYESCSUPPORT || query == WIN32_SETABORTPROC ||
+               query == WIN32_STARTDOC || query == WIN32_ENDDOC || query == WIN32_GETPHYSPAGESIZE ||
+               query == WIN32_GETPRINTINGOFFSET || query == WIN32_GETSCALINGFACTOR ||
+               query == WIN32_DRAFTMODE || query == WIN32_SETCOPYCOUNT ||
+               query == WIN32_PASSTHROUGH || query == WIN32_GETTECHNOLOGY ||
+               query == WIN32_SETMITERLIMIT || query == WIN32_ENABLEDUPLEX ||
+               query == WIN32_GETSETPAPERBINS || query == WIN32_GETSETPRINTORIENT ||
+               query == WIN32_ENUMPAPERBINS || query == WIN32_POSTSCRIPT_DATA ||
+               query == WIN32_GETEXTENTTABLE || query == WIN32_EXTTEXTOUT ||
+               query == WIN32_BEGIN_PATH || query == WIN32_CLIP_TO_PATH ||
+               query == WIN32_END_PATH || query == WIN32_SET_ARC_DIRECTION;
     }
-    if (code == 15)
+    if (code == WIN32_MFCOMMENT)
         return 0;
-    if (code == 7 || code == 17 || code == 28 || code == 30)
+    if (code == WIN32_DRAFTMODE || code == WIN32_SETCOPYCOUNT || code == WIN32_ENABLEDUPLEX ||
+        code == WIN32_GETSETPRINTORIENT)
     {
         /* Job properties: a printer DC and a word, dword or 20-byte input. */
         if (!input)
             return 0;
         if (count != 2 && count != 4 && count != 20)
             return -1;
-        if (dc->kind != 5 && dc->kind != 6)
+        if (dc->kind != OPEN32_DC_PRINTER && dc->kind != OPEN32_DC_PRINTER_INFORMATION)
             return 0;
         LONG value = count == 4 ? (LONG)lx_guest_load_u32(input) : (SHORT)lx_guest_load_u16(input);
         HDC device = GpiQueryDevice(h);
-        if (code == 7)
+        if (code == WIN32_DRAFTMODE)
             dc->print_draft = value != 0;
-        else if (code == 17)
+        else if (code == WIN32_SETCOPYCOUNT)
             dc->print_copies = value > 0 ? (ULONG)value : 1;
-        else if (code == 28)
-            dc->print_duplex = value == 0 ? 1 : value == 1 ? 2 : 3;
+        else if (code == WIN32_ENABLEDUPLEX)
+            dc->print_duplex = value == 0   ? WIN32_DMDUP_SIMPLEX
+                               : value == 1 ? WIN32_DMDUP_VERTICAL
+                                            : WIN32_DMDUP_HORIZONTAL;
         else
         {
             unsigned width = 0, height = 0;
@@ -379,7 +473,7 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
                 return -1;
         }
         lx_pm_printer_options(device, dc->print_copies, dc->print_duplex, dc->print_draft);
-        if (code == 17 && output)
+        if (code == WIN32_SETCOPYCOUNT && output)
         {
             if (count == 2)
                 lx_guest_store_u16(output, (uint16)(dc->print_copies ? dc->print_copies : 1));
@@ -388,7 +482,7 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
         }
         return 1;
     }
-    if (code == 20)
+    if (code == WIN32_GETTECHNOLOGY)
     {
         /* The virtual queues and the display are raster devices. */
         if (!output)
@@ -399,13 +493,13 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
         return 1;
     }
     /* SETLINECAP, SETLINEJOIN and GETFACENAME apply only to PostScript drivers. */
-    if (code == 21 || code == 22 || code == 0x201)
+    if (code == WIN32_SETLINECAP || code == WIN32_SETLINEJOIN || code == WIN32_GETFACENAME)
         return 0;
-    if (code == 23)
+    if (code == WIN32_SETMITERLIMIT)
     {
         if (!input || !output || (count != 2 && count != 4))
             return 0;
-        LONG previous = dc->miter_limit > 0 ? (LONG)dc->miter_limit : 10;
+        LONG previous = dc->miter_limit > 0 ? (LONG)dc->miter_limit : DEFAULT_MITER_LIMIT;
         LONG value = count == 4 ? (LONG)lx_guest_load_u32(input) : (SHORT)lx_guest_load_u16(input);
         if (value > 0)
             dc->miter_limit = value;
@@ -415,21 +509,21 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
             lx_guest_store_u16(output, (uint16)previous);
         return 1;
     }
-    if (code == 29)
+    if (code == WIN32_GETSETPAPERBINS)
     {
         /* The queues have one bin: the current bin and the bin count. */
-        if (dc->kind != 5 && dc->kind != 6)
+        if (dc->kind != OPEN32_DC_PRINTER && dc->kind != OPEN32_DC_PRINTER_INFORMATION)
             return 0;
         if (output)
         {
-            lx_guest_store_u16(output, 7);
+            lx_guest_store_u16(output, WIN32_DMBIN_AUTO);
             lx_guest_store_u16((uint8 *)output + 2, 1);
         }
         return 1;
     }
-    if (code == 31)
+    if (code == WIN32_ENUMPAPERBINS)
     {
-        if (dc->kind != 5 && dc->kind != 6)
+        if (dc->kind != OPEN32_DC_PRINTER && dc->kind != OPEN32_DC_PRINTER_INFORMATION)
             return 0;
         if (!input || (count != 2 && count != 4))
             return 0;
@@ -437,33 +531,37 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
             count == 4 ? (LONG)lx_guest_load_u32(input) : (SHORT)lx_guest_load_u16(input);
         if (output && capacity >= 1)
         {
-            lx_guest_store_u16(output, 7);
-            memset((uint8 *)output + (size_t)capacity * 2, 0, 24);
+            lx_guest_store_u16(output, WIN32_DMBIN_AUTO);
+            memset((uint8 *)output + (size_t)capacity * 2, 0, BIN_NAME_LENGTH);
             memcpy((uint8 *)output + (size_t)capacity * 2, "Auto", 5);
         }
         return 1;
     }
-    if (code == 0x101)
+    if (code == WIN32_GETEXTENTTABLE)
     {
         if (count != 2 || !output)
             return -1;
         ULONG first = ((uint8 *)input)[0], last = ((uint8 *)input)[1];
         if (last < first)
             return -1;
-        uint8 widths[1024];
+        /* One 32-bit width per byte-coded character. */
+        uint8 widths[(UINT8_MAX + 1) * 4];
         if (!GetCharWidth(h, first, last, widths))
             return -1;
         for (ULONG i = 0; i <= last - first; i++)
             lx_guest_store_u16((uint8 *)output + i * 2, (uint16)lx_guest_load_u32(widths + i * 4));
         return 1;
     }
-    if (code == 0x200)
+    if (code == WIN32_EXTTEXTOUT)
     {
-        if (count != 12 || !input)
+        if (count != EXTTEXTOUT_SIZE || !input)
             return 0;
         const uint8 *record = input;
-        ULONG text = lx_guest_load_u32(record + 4), advances = lx_guest_load_u32(record + 8);
-        char *string = text ? lx_execution_copy_string(GProcessState.execution, text, 65536) : NULL;
+        ULONG text = lx_guest_load_u32(record + EXTTEXTOUT_TEXT),
+              advances = lx_guest_load_u32(record + EXTTEXTOUT_ADVANCES);
+        char *string =
+            text ? lx_execution_copy_string(GProcessState.execution, text, EXTTEXTOUT_STRING_LIMIT)
+                 : NULL;
         if (!string)
             return 0;
         ULONG length = (ULONG)strlen(string);
@@ -471,30 +569,30 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
         BOOL ready = !advances || !length ||
                      lx_execution_borrow(GProcessState.execution, advances, (size_t)length * 4,
                                          LX_GUEST_READ, &widths);
-        LONG result =
-            ready && ExtTextOut(h, lx_guest_load_u16(record), lx_guest_load_u16(record + 2), 0,
-                                NULL, string, length, (PLONG)widths.host);
+        LONG result = ready && ExtTextOut(h, lx_guest_load_u16(record + EXTTEXTOUT_X),
+                                          lx_guest_load_u16(record + EXTTEXTOUT_Y), 0, NULL, string,
+                                          length, (PLONG)widths.host);
         lx_execution_release(&widths);
         free(string);
         return result;
     }
-    if (code == 0x1000)
+    if (code == WIN32_BEGIN_PATH)
         return BeginPath(h) ? 1 : -1;
-    if (code == 0x1001)
-        return open32PathClip(h, 5) ? 1 : -1;
-    if (code == 0x1002)
+    if (code == WIN32_CLIP_TO_PATH)
+        return open32PathClip(h, WIN32_RGN_COPY) ? 1 : -1;
+    if (code == WIN32_END_PATH)
         return EndPath(h) ? 1 : -1;
-    if (code == 0x1006)
+    if (code == WIN32_SET_ARC_DIRECTION)
     {
         if (count < 2 || !input)
             return 0;
-        LONG previous = dc->arc_clockwise ? 2 : 1;
+        LONG previous = dc->arc_clockwise ? WIN32_AD_CLOCKWISE : WIN32_AD_COUNTERCLOCKWISE;
         LONG value = count >= 4 ? (LONG)lx_guest_load_u32(input) : (SHORT)lx_guest_load_u16(input);
-        if (value == 1 || value == 2)
-            dc->arc_clockwise = value == 2;
+        if (value == WIN32_AD_COUNTERCLOCKWISE || value == WIN32_AD_CLOCKWISE)
+            dc->arc_clockwise = value == WIN32_AD_CLOCKWISE;
         return previous;
     }
-    if (code == 19 || code == 37)
+    if (code == WIN32_PASSTHROUGH || code == WIN32_POSTSCRIPT_DATA)
     {
         /* PASSTHROUGH: a word count, then raw device data, sent as DEVESC_RAWDATA. */
         if (!input || count < 2)
@@ -502,24 +600,24 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
         LONG size = lx_guest_load_u16(input);
         if (size > count - 2)
             return 0;
-        return DevEscape(GpiQueryDevice(h), 0x3faf, size, (uint8 *)input + 2, NULL, NULL);
+        return DevEscape(GpiQueryDevice(h), DEVESC_RAWDATA, size, (uint8 *)input + 2, NULL, NULL);
     }
-    if (code == 1)
+    if (code == WIN32_NEWFRAME)
     {
         LONG result = EndPage(h);
         if (result > 0)
             StartPage(h);
         return result;
     }
-    if (code == 2)
+    if (code == WIN32_ABORTDOC)
         return AbortDoc(h);
-    if (code == 10)
+    if (code == WIN32_STARTDOC)
     {
         if (!input || !count)
             return 0;
         ULONG address = 0;
-        LxGuestMapping *title =
-            lx_execution_map(GProcessState.execution, 0, (size_t)count + 1, 3, 0);
+        LxGuestMapping *title = lx_execution_map(GProcessState.execution, 0, (size_t)count + 1,
+                                                 LX_GUEST_READ | LX_GUEST_WRITE, 0);
         if (!title)
         {
             open32SetError(ERROR_NOT_ENOUGH_MEMORY);
@@ -528,24 +626,25 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
         memcpy(lx_execution_mapping_host(title), input, (size_t)count);
         ((char *)lx_execution_mapping_host(title))[count] = 0;
         address = lx_execution_mapping_address(title);
-        uint8 info[12] = {0};
-        lx_guest_store_u32(info, 12);
-        lx_guest_store_u32(info + 4, address);
+        uint8 info[WIN32_DOCINFO_SIZE] = {0};
+        lx_guest_store_u32(info + WIN32_DOCINFO_SIZE_FIELD, WIN32_DOCINFO_SIZE);
+        lx_guest_store_u32(info + WIN32_DOCINFO_DOCUMENT_NAME, address);
         LONG result = StartDoc(h, info);
         lx_execution_unmap(GProcessState.execution, title);
         if (result > 0)
             StartPage(h);
         return result;
     }
-    if (code == 11)
+    if (code == WIN32_ENDDOC)
         return EndDoc(h);
-    if (code == 12 || code == 13 || code == 14)
+    if (code == WIN32_GETPHYSPAGESIZE || code == WIN32_GETPRINTINGOFFSET ||
+        code == WIN32_GETSCALINGFACTOR)
     {
         if (!output)
             return 0;
         /* The virtual pages have no unprintable margin and no device scaling. */
-        ULONG x = code == 12 ? (ULONG)GetDeviceCaps(h, 110) : 0,
-              y = code == 12 ? (ULONG)GetDeviceCaps(h, 111) : 0;
+        ULONG x = code == WIN32_GETPHYSPAGESIZE ? (ULONG)GetDeviceCaps(h, WIN32_PHYSICALWIDTH) : 0,
+              y = code == WIN32_GETPHYSPAGESIZE ? (ULONG)GetDeviceCaps(h, WIN32_PHYSICALHEIGHT) : 0;
         lx_guest_store_u32(output, x);
         lx_guest_store_u32((uint8 *)output + 4, y);
         return 1;
