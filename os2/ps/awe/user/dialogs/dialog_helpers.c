@@ -9,9 +9,20 @@
 #include "emulator/handles.h"
 #include <stdio.h>
 
+enum
+{
+    /* A dialog unit is a quarter of the font's average width and an eighth of its height. */
+    DIALOG_UNITS_PER_CHAR_X = 4,
+    DIALOG_UNITS_PER_CHAR_Y = 8,
+    /* Tab order visits visible, enabled WS_TABSTOP controls. */
+    TAB_STOP_STYLE = WIN32_WS_VISIBLE | WIN32_WS_TABSTOP,
+    /* Bounds on a list box item that DlgDirSelectEx reads back. */
+    LIST_ITEM_TEXT_MAX = INT16_MAX
+};
+
 LONG GetDlgCtrlID(ULONG window)
 {
-    return (LONG)WinQueryWindowUShort(open32ClientWindow(window), -1);
+    return (LONG)WinQueryWindowUShort(open32ClientWindow(window), QWS_ID);
 }
 
 BOOL CheckRadioButton(ULONG dialog, LONG first, LONG last, LONG checked)
@@ -61,12 +72,12 @@ BOOL SetDlgItemInt(ULONG dialog, LONG id, ULONG value, BOOL sign)
 
 ULONG GetNextDlgTabItem(ULONG dialog, ULONG control, BOOL previous)
 {
-    ULONG first = WinQueryWindow(open32ClientWindow(dialog), 2), candidate = 0;
+    ULONG first = WinQueryWindow(open32ClientWindow(dialog), QW_TOP), candidate = 0;
     BOOL passed = !control;
-    for (ULONG child = first; child; child = WinQueryWindow(child, 0))
+    for (ULONG child = first; child; child = WinQueryWindow(child, QW_NEXT))
     {
-        ULONG style = (ULONG)GetWindowLong(child, -16);
-        BOOL eligible = (style & 0x10010000u) == 0x10010000u && !(style & 0x08000000u);
+        ULONG style = (ULONG)GetWindowLong(child, WIN32_GWL_STYLE);
+        BOOL eligible = (style & TAB_STOP_STYLE) == TAB_STOP_STYLE && !(style & WIN32_WS_DISABLED);
         if (child == control)
         {
             if (previous && candidate)
@@ -83,10 +94,10 @@ ULONG GetNextDlgTabItem(ULONG dialog, ULONG control, BOOL previous)
     }
     if (previous)
         return candidate;
-    for (ULONG child = first; child && child != control; child = WinQueryWindow(child, 0))
+    for (ULONG child = first; child && child != control; child = WinQueryWindow(child, QW_NEXT))
     {
-        ULONG style = (ULONG)GetWindowLong(child, -16);
-        if ((style & 0x10010000u) == 0x10010000u && !(style & 0x08000000u))
+        ULONG style = (ULONG)GetWindowLong(child, WIN32_GWL_STYLE);
+        if ((style & TAB_STOP_STYLE) == TAB_STOP_STYLE && !(style & WIN32_WS_DISABLED))
             return open32PublicWindow(child);
     }
     return control;
@@ -105,7 +116,8 @@ BOOL MapDialogRect(ULONG dialog, PVOID rectangle)
         LONG n = (LONG)lx_guest_load_u32((uint8 *)rectangle + i * 4);
         LONG unit = i & 1 ? units >> 16 : units & 0xFFFF;
         lx_guest_store_u32((uint8 *)rectangle + i * 4,
-                           (ULONG)((int64_t)n * unit / (i & 1 ? 8 : 4)));
+                           (ULONG)((int64_t)n * unit /
+                                   (i & 1 ? DIALOG_UNITS_PER_CHAR_Y : DIALOG_UNITS_PER_CHAR_X)));
     }
     return TRUE;
 }
@@ -117,26 +129,29 @@ BOOL IsDialogMessage(ULONG dialog, PVOID message)
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    ULONG target = lx_guest_load_u32(message), kind = lx_guest_load_u32((uint8 *)message + 4),
-          key = lx_guest_load_u32((uint8 *)message + 8);
+    ULONG target = lx_guest_load_u32((uint8 *)message + WIN32_MSG_HWND),
+          kind = lx_guest_load_u32((uint8 *)message + WIN32_MSG_MESSAGE),
+          key = lx_guest_load_u32((uint8 *)message + WIN32_MSG_WPARAM);
     if (target != dialog && !IsChild(dialog, target))
         return FALSE;
-    if (kind == 0x100)
+    if (kind == WIN32_WM_KEYDOWN)
     {
-        ULONG code = (ULONG)SendMessage(target, 0x87, key, 0);
-        if (code & 4)
+        ULONG code = (ULONG)SendMessage(target, WIN32_WM_GETDLGCODE, key, 0);
+        if (code & WIN32_DLGC_WANTALLKEYS)
             return FALSE;
-        if (key == 9 && !(code & 2))
+        if (key == WIN32_VK_TAB && !(code & WIN32_DLGC_WANTTAB))
         {
-            ULONG next = GetNextDlgTabItem(dialog, target, (GetKeyState(16) & 0x8000) != 0);
+            /* The high bit of a key state means the key is down. */
+            ULONG next =
+                GetNextDlgTabItem(dialog, target, (GetKeyState(WIN32_VK_SHIFT) & 0x8000) != 0);
             if (next)
                 SetFocus(next);
             return TRUE;
         }
-        if ((key == 13 || key == 27) && !(code & 4))
+        if ((key == WIN32_VK_RETURN || key == WIN32_VK_ESCAPE) && !(code & WIN32_DLGC_WANTALLKEYS))
         {
-            ULONG id = key == 13 ? 1 : 2;
-            SendMessage(dialog, 0x111, id, GetDlgItem(dialog, id));
+            ULONG id = key == WIN32_VK_RETURN ? WIN32_IDOK : WIN32_IDCANCEL;
+            SendMessage(dialog, WIN32_WM_COMMAND, id, GetDlgItem(dialog, id));
             return TRUE;
         }
     }
@@ -152,27 +167,30 @@ BOOL DlgDirSelectEx(ULONG dialog, PSZ output, LONG capacity, LONG id)
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    LONG index = SendDlgItemMessage(dialog, id, 0x188, 0, 0);
+    LONG index = SendDlgItemMessage(dialog, id, WIN32_LB_GETCURSEL, 0, 0);
     if (index < 0)
     {
         output[0] = 0;
         return FALSE;
     }
-    LONG length = SendDlgItemMessage(dialog, id, 0x18A, index, 0);
-    if (length < 0 || length > 32767)
+    LONG length = SendDlgItemMessage(dialog, id, WIN32_LB_GETTEXTLEN, index, 0);
+    if (length < 0 || length > LIST_ITEM_TEXT_MAX)
     {
         output[0] = 0;
         return FALSE;
     }
     LxGuestMapping *mapping =
-        lx_execution_map(GProcessState.execution, 0, ((size_t)length + 4096) & ~(size_t)4095, 3, 0);
+        lx_execution_map(GProcessState.execution, 0,
+                         ((size_t)length + OPEN32_PAGE_SIZE) & ~(size_t)(OPEN32_PAGE_SIZE - 1),
+                         LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     char *text = lx_execution_mapping_host(mapping);
-    SendDlgItemMessage(dialog, id, 0x189, index, lx_execution_mapping_address(mapping));
+    SendDlgItemMessage(dialog, id, WIN32_LB_GETTEXT, index, lx_execution_mapping_address(mapping));
+    /* DlgDirList lists directories as [name] and drives as [-x-]. */
     BOOL directory = length > 1 && text[0] == '[' && text[length - 1] == ']';
     if (directory)
     {

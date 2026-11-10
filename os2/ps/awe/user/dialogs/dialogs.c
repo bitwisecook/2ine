@@ -3,9 +3,54 @@
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/user/input/keyboard.h"
-#include "os2/include/private/pmwinp.h"
+#include "os2/include/private/pmwctlp.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/bsedos.h"
+#include <stddef.h>
 #include <stdio.h>
+
+enum
+{
+    /* PM's packed dialog template: a DLGTEMPLATE header, then DLGTITEM records. Its offsets
+       are USHORTs, so a template stays below 64 KB and 0xFFFF means "none". */
+    TEMPLATE_HEADER = offsetof(DLGTEMPLATE, adlgti),
+    TEMPLATE_ITEM = sizeof(DLGTITEM),
+    TEMPLATE_TYPE = offsetof(DLGTEMPLATE, type),
+    TEMPLATE_ITEMS_OFFSET = offsetof(DLGTEMPLATE, offadlgti),
+    TEMPLATE_MAX = 65536,
+    TEMPLATE_NONE = 0xFFFF,
+    /* PM template text that is a resource ordinal: a 0xFF byte, then the USHORT ordinal. */
+    TEXT_ORDINAL_MARKER = 0xFF,
+    TEXT_ORDINAL_SIZE = 3,
+    /* PRESPARAMS: a ULONG byte count, then PARAM entries of ULONG id and ULONG size. */
+    PRESPARAMS_HEADER = 4,
+    PARAM_HEADER = 8,
+    /* The template's text and the PM font tables use the PC code page. */
+    TEMPLATE_CODEPAGE = 437,
+    /* Windows template limits on the guest stream and the control count. */
+    WINDOWS_TEMPLATE_MAX = 1024 * 1024,
+    WINDOWS_TEMPLATE_ITEMS_MAX = 1024,
+    /* A Windows template string or class that is an ordinal starts with this word. */
+    WINDOWS_TEMPLATE_ORDINAL = 0xFFFF,
+    /* DLGTEMPLATEEX opens with version 1 and this signature. */
+    DLGTEMPLATEEX_VERSION = 1,
+    DLGTEMPLATEEX_SIGNATURE = 0xFFFF,
+    /* The predefined window class atoms of a Windows template item. */
+    WINDOWS_CLASS_BUTTON = 0x0080,
+    WINDOWS_CLASS_EDIT = 0x0081,
+    WINDOWS_CLASS_STATIC = 0x0082,
+    WINDOWS_CLASS_LISTBOX = 0x0083,
+    WINDOWS_CLASS_SCROLLBAR = 0x0084,
+    WINDOWS_CLASS_COMBOBOX = 0x0085,
+    /* A dialog unit is a quarter of the font's average width and an eighth of its height. */
+    DIALOG_UNITS_PER_CHAR_X = 4,
+    DIALOG_UNITS_PER_CHAR_Y = 8,
+    DEFAULT_DPI = 96,
+    POINTS_PER_INCH = 72,
+    TEMPLATE_FONT_LCID = 1,
+    /* PM frame controls (FID_*) have IDs from 0x8000 and keep their frame-relative place. */
+    FIRST_FRAME_CONTROL_ID = 0x8000
+};
 
 typedef struct Open32Dialog
 {
@@ -22,11 +67,11 @@ BOOL open32NativeDialogWindow(ULONG handle)
     if (open32FileDialogWindow(handle) || open32NativeControlOwned(handle))
         return TRUE;
     for (Open32Dialog *dialog = dialogs; dialog; dialog = dialog->previous)
-        for (ULONG parent = handle; parent; parent = WinQueryWindow(parent, 5))
+        for (ULONG parent = handle; parent; parent = WinQueryWindow(parent, QW_PARENT))
             if (dialog->window && parent == dialog->window)
                 return TRUE;
     for (Open32Dialog *dialog = modeless_dialogs; dialog; dialog = dialog->previous)
-        for (ULONG parent = handle; parent; parent = WinQueryWindow(parent, 5))
+        for (ULONG parent = handle; parent; parent = WinQueryWindow(parent, QW_PARENT))
             if (dialog->window && parent == dialog->window)
                 return TRUE;
     return FALSE;
@@ -60,10 +105,12 @@ static void keep_controls_at_top(HWND dialog, LONG delta)
 {
     if (!delta)
         return;
-    for (HWND child = WinQueryWindow(dialog, 3); child; child = WinQueryWindow(child, 1))
+    for (HWND child = WinQueryWindow(dialog, QW_BOTTOM); child;
+         child = WinQueryWindow(child, QW_PREV))
     {
         SWP position;
-        if ((USHORT)WinQueryWindowUShort(child, -1) < 0x8000 && WinQueryWindowPos(child, &position))
+        if ((USHORT)WinQueryWindowUShort(child, QWS_ID) < FIRST_FRAME_CONTROL_ID &&
+            WinQueryWindowPos(child, &position))
             WinSetWindowPos(child, 0, position.x, position.y + delta, 0, 0,
                             SWP_MOVE | SWP_NOADJUST | SWP_NOREDRAW);
     }
@@ -88,14 +135,14 @@ static MRESULT OS2API dialog_procedure(HWND handle, ULONG message, MPARAM first,
     if (message == WM_INITDLG)
     {
         dialog->window = handle;
-        windows_message = 0x110;
+        windows_message = WIN32_WM_INITDIALOG;
         b = dialog->parameter;
     }
     else if (message == WM_DESTROY)
-        windows_message = 2;
+        windows_message = WIN32_WM_DESTROY;
     else if (message == WM_COMMAND || message == WM_CONTROL)
     {
-        windows_message = 0x111;
+        windows_message = WIN32_WM_COMMAND;
         b = WinWindowFromID(handle, a & 0xffff);
         if (message == WM_COMMAND)
             a &= 0xffff;
@@ -151,7 +198,7 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
     }
     if ((!module || module == UINT32_MAX) && GProcessState.main_module)
         module = GProcessState.main_module->handle;
-    ULONG identity = open32ResourceIdentity(module, resource, 4); /* RT_DIALOG */
+    ULONG identity = open32ResourceIdentity(module, resource, RT_DIALOG);
     if (!identity)
     {
         open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
@@ -164,7 +211,7 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
     open32NativeControlsPrune();
     if (dialog.finished)
         return dialog.result;
-    if (result == 0xffff)
+    if (result == DID_ERROR)
     {
         open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return -1;
@@ -247,18 +294,18 @@ LONG SendDlgItemMessage(ULONG dialog, LONG identity, ULONG message, ULONG first,
 
 ULONG IsDlgButtonChecked(ULONG dialog, LONG identity)
 {
-    return (ULONG)SendDlgItemMessage(dialog, identity, 0xf0, 0, 0);
+    return (ULONG)SendDlgItemMessage(dialog, identity, WIN32_BM_GETCHECK, 0, 0);
 }
 
 BOOL CheckDlgButton(ULONG dialog, LONG identity, ULONG check)
 {
     ULONG child = GetDlgItem(dialog, identity);
-    if (!child || check > 2)
+    if (!child || check > WIN32_BST_INDETERMINATE)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    SendDlgItemMessage(dialog, identity, 0xf1, check, 0);
+    SendDlgItemMessage(dialog, identity, WIN32_BM_SETCHECK, check, 0);
     return TRUE;
 }
 
@@ -271,7 +318,7 @@ ULONG CreateDialogParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure
     }
     if ((!module || module == UINT32_MAX) && GProcessState.main_module)
         module = GProcessState.main_module->handle;
-    ULONG identity = open32ResourceIdentity(module, resource, 4); /* RT_DIALOG */
+    ULONG identity = open32ResourceIdentity(module, resource, RT_DIALOG);
     if (!identity)
     {
         open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
@@ -313,8 +360,9 @@ LONG DefDlgProc(ULONG window, ULONG message, ULONG first, ULONG second)
     if (classed) /* dialog_procedure supplies the default once this call returns. */
         return (LONG)lx_execution_callback32_4(GProcessState.execution, classed->procedure, window,
                                                message, first, second);
-    if (message == 0x111 || message == 16)
-        return (LONG)(uintptr_t)WinDefDlgProc(window, message == 16 ? WM_CLOSE : WM_COMMAND,
+    if (message == WIN32_WM_COMMAND || message == WIN32_WM_CLOSE)
+        return (LONG)(uintptr_t)WinDefDlgProc(window,
+                                              message == WIN32_WM_CLOSE ? WM_CLOSE : WM_COMMAND,
                                               (MPARAM)(uintptr_t)first, (MPARAM)(uintptr_t)second);
     return DefWindowProc(window, message, first, second);
 }
@@ -331,7 +379,7 @@ typedef struct DialogReader
 static USHORT dialog_word(DialogReader *reader)
 {
     uint8 wire[2];
-    if (!reader->valid || reader->offset > 1024u * 1024u - 2 ||
+    if (!reader->valid || reader->offset > WINDOWS_TEMPLATE_MAX - 2 ||
         reader->address > UINT32_MAX - reader->offset - 2 ||
         !lx_execution_read(GProcessState.execution, reader->address + reader->offset, wire, 2))
     {
@@ -347,7 +395,7 @@ static BOOL dialog_string(DialogReader *reader, char text[1024], USHORT *ordinal
     USHORT c = dialog_word(reader);
     size_t count = 0;
     *ordinal = 0;
-    if (c == 0xFFFF)
+    if (c == WINDOWS_TEMPLATE_ORDINAL)
     {
         *ordinal = dialog_word(reader);
         text[0] = 0;
@@ -359,7 +407,7 @@ static BOOL dialog_string(DialogReader *reader, char text[1024], USHORT *ordinal
         uint8 wide[2];
         char byte = '?';
         lx_guest_store_u16(wide, c);
-        WideCharToMultiByte(437, 0, wide, 1, &byte, 1, NULL, NULL);
+        WideCharToMultiByte(TEMPLATE_CODEPAGE, 0, wide, 1, &byte, 1, NULL, NULL);
         text[count++] = byte;
         c = dialog_word(reader);
     }
@@ -371,10 +419,14 @@ static BOOL dialog_string(DialogReader *reader, char text[1024], USHORT *ordinal
 
 static ULONG dialog_pm_style(ULONG style, unsigned *kind)
 {
-    if (*kind == 2 || *kind == 3 || *kind == 5 || *kind == 6 || *kind == 7 || *kind == 10)
+    if (*kind == PM_CLASS_COMBOBOX || *kind == PM_CLASS_BUTTON || *kind == PM_CLASS_STATIC ||
+        *kind == PM_CLASS_ENTRYFIELD || *kind == PM_CLASS_LISTBOX || *kind == PM_CLASS_MLE)
         return open32ControlStyle(style, kind);
-    return (style & 0x10000000 ? WS_VISIBLE : 0) | (style & 0x08000000 ? WS_DISABLED : 0) |
-           (style & 0x10000 ? 0x20000 : 0) | (style & 0x20000 ? 0x10000 : 0) | (style & 0xFFFF);
+    /* Other classes keep their class-specific low word. */
+    return (style & WIN32_WS_VISIBLE ? WS_VISIBLE : 0) |
+           (style & WIN32_WS_DISABLED ? WS_DISABLED : 0) |
+           (style & WIN32_WS_TABSTOP ? WS_TABSTOP : 0) | (style & WIN32_WS_GROUP ? WS_GROUP : 0) |
+           (style & 0xFFFF);
 }
 
 typedef struct DialogMenu
@@ -383,8 +435,7 @@ typedef struct DialogMenu
     char name[256], class_name[256];
 } DialogMenu;
 
-/* Dialog units follow the template font: a quarter of its average width and an eighth of
-   its height. Returns FALSE when PM's own units already apply. */
+/* Dialog units follow the template font. Returns FALSE when PM's own units already apply. */
 static BOOL template_font_units(const char *face, USHORT points, LONG *width, LONG *height)
 {
     HPS space = WinGetPS(HWND_DESKTOP);
@@ -394,9 +445,11 @@ static BOOL template_font_units(const char *face, USHORT points, LONG *width, LO
     attributes.usRecordLength = sizeof attributes;
     snprintf(attributes.szFacename, sizeof attributes.szFacename, "%s", face);
     attributes.lMaxBaselineExt =
-        (LONG)points * (LONG)(GProcessState.display_dpi ? GProcessState.display_dpi : 96) / 72;
+        (LONG)points * (LONG)(GProcessState.display_dpi ? GProcessState.display_dpi : DEFAULT_DPI) /
+        POINTS_PER_INCH;
     FONTMETRICS metrics;
-    BOOL found = GpiCreateLogFont(space, NULL, 1, &attributes) > 0 && GpiSetCharSet(space, 1) &&
+    BOOL found = GpiCreateLogFont(space, NULL, TEMPLATE_FONT_LCID, &attributes) > 0 &&
+                 GpiSetCharSet(space, TEMPLATE_FONT_LCID) &&
                  GpiQueryFontMetrics(space, sizeof metrics, &metrics) &&
                  metrics.lAveCharWidth > 0 && metrics.lMaxBaselineExt > 0;
     if (found)
@@ -404,8 +457,8 @@ static BOOL template_font_units(const char *face, USHORT points, LONG *width, LO
         *width = metrics.lAveCharWidth;
         *height = metrics.lMaxBaselineExt;
     }
-    GpiSetCharSet(space, 0);
-    GpiDeleteSetId(space, 1);
+    GpiSetCharSet(space, LCID_DEFAULT);
+    GpiDeleteSetId(space, TEMPLATE_FONT_LCID);
     WinReleasePS(space);
     return found;
 }
@@ -417,16 +470,17 @@ static ULONG dialog_dword(DialogReader *reader)
 }
 
 /* OS/2 applications load PM templates from their own resources and may hand them to
-   the indirect dialog calls. PM's header has type 0 and items at offset 14. */
+   the indirect dialog calls. PM's header has type 0 and items straight after it. */
 static PDLGTEMPLATE native_template(ULONG address)
 {
-    uint8 header[14];
+    uint8 header[TEMPLATE_HEADER];
     if (!lx_execution_read(GProcessState.execution, address, header, sizeof header))
         return NULL;
     ULONG size = lx_guest_load_u16(header);
-    if (size < 44 || lx_guest_load_u16(header + 2) || lx_guest_load_u16(header + 6) != 14)
+    if (size < TEMPLATE_HEADER + TEMPLATE_ITEM || lx_guest_load_u16(header + TEMPLATE_TYPE) ||
+        lx_guest_load_u16(header + TEMPLATE_ITEMS_OFFSET) != TEMPLATE_HEADER)
         return NULL;
-    uint8 *bytes = calloc(65536, 1);
+    uint8 *bytes = calloc(TEMPLATE_MAX, 1);
     if (bytes && !lx_execution_read(GProcessState.execution, address, bytes, size))
     {
         free(bytes);
@@ -446,8 +500,8 @@ static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
     }
     DialogReader reader = {address, 0, TRUE};
     ULONG style = dialog_dword(&reader);
-    /* DLGTEMPLATEEX opens with version 1 and signature 0xFFFF, then help and extended style. */
-    BOOL extended = style == 0xFFFF0001u;
+    /* DLGTEMPLATEEX continues with the help ID and extended style before the style. */
+    BOOL extended = style == ((ULONG)DLGTEMPLATEEX_SIGNATURE << 16 | DLGTEMPLATEEX_VERSION);
     if (extended)
     {
         dialog_dword(&reader);
@@ -459,14 +513,14 @@ static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
     ULONG count = dialog_word(&reader);
     SHORT x = dialog_word(&reader), y = dialog_word(&reader), width = dialog_word(&reader),
           height = dialog_word(&reader);
-    if (!reader.valid || count > 1024 || width < 0 || height < 0)
+    if (!reader.valid || count > WINDOWS_TEMPLATE_ITEMS_MAX || width < 0 || height < 0)
         return NULL;
-    uint8 *bytes = calloc(65536, 1);
+    uint8 *bytes = calloc(TEMPLATE_MAX, 1);
     if (!bytes)
         return NULL;
     DLGTEMPLATE *t = (PDLGTEMPLATE)bytes;
-    DLGTITEM *items = (DLGTITEM *)(bytes + 14);
-    size_t offset = 14 + (count + 1) * 30;
+    DLGTITEM *items = (DLGTITEM *)(bytes + TEMPLATE_HEADER);
+    size_t offset = TEMPLATE_HEADER + (count + 1) * TEMPLATE_ITEM;
     char text[1024], class_name[1024];
     USHORT ordinal;
     if (!dialog_string(&reader, text, &ordinal))
@@ -485,30 +539,32 @@ static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
     }
     if (!dialog_string(&reader, text, &ordinal))
         goto convert_bad;
-    t->codepage = 437;
-    t->offadlgti = 14;
-    t->iItemFocus = 0xFFFF;
+    t->codepage = TEMPLATE_CODEPAGE;
+    t->offadlgti = TEMPLATE_HEADER;
+    t->iItemFocus = TEMPLATE_NONE;
     items[0].cChildren = count;
-    items[0].offClassName = 1;
+    items[0].offClassName = PM_CLASS_FRAME;
     items[0].x = x;
     items[0].y = y;
     items[0].cx = width;
     items[0].cy = height;
-    unsigned dialog_kind = 1;
+    unsigned dialog_kind = PM_CLASS_FRAME;
     items[0].flStyle = dialog_pm_style(style, &dialog_kind);
     items[0].cchText = strlen(text);
     items[0].offText = offset;
     memcpy(bytes + offset, text, strlen(text) + 1);
     offset += strlen(text) + 1;
-    items[0].offPresParams = 0xFFFF;
+    items[0].offPresParams = TEMPLATE_NONE;
+    /* The frame's control data is its FCF_* creation flags. */
     items[0].offCtlData = offset;
-    ULONG frame =
-        (style & 0xC00000 ? 1 : 0) | (style & 0x80000 ? 2 : 0) | (style & 0x40000 ? 8 : 0);
+    ULONG frame = (style & WIN32_WS_CAPTION ? FCF_TITLEBAR : 0) |
+                  (style & WIN32_WS_SYSMENU ? FCF_SYSMENU : 0) |
+                  (style & WIN32_WS_THICKFRAME ? FCF_SIZEBORDER : 0);
     lx_guest_store_u32(bytes + offset, frame);
     offset += 4;
-    unsigned font_parameters = 0xFFFF;
+    unsigned font_parameters = TEMPLATE_NONE;
     LONG font_width = 0, font_height = 0;
-    if (style & 0x40) /* DS_SETFONT */
+    if (style & WIN32_DS_SETFONT)
     {
         USHORT points = dialog_word(&reader), weight = 0, italic = 0;
         if (extended)
@@ -521,15 +577,16 @@ static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
         /* One PP_FONTNAMESIZE block serves the frame and every control. */
         char font[1100];
         int length = snprintf(font, sizeof font, "%u.%s%s%s", points, text,
-                              weight >= 700 ? ".Bold" : "", italic ? ".Italic" : "");
-        if (length < 0 || (size_t)length >= sizeof font || offset + length + 13 >= 65536)
+                              weight >= WIN32_FW_BOLD ? ".Bold" : "", italic ? ".Italic" : "");
+        if (length < 0 || (size_t)length >= sizeof font ||
+            offset + length + (PRESPARAMS_HEADER + PARAM_HEADER + 1) >= TEMPLATE_MAX)
             goto convert_bad;
         font_parameters = (unsigned)offset;
-        lx_guest_store_u32(bytes + offset, (ULONG)length + 9);
-        lx_guest_store_u32(bytes + offset + 4, 15);
-        lx_guest_store_u32(bytes + offset + 8, (ULONG)length + 1);
-        memcpy(bytes + offset + 12, font, (size_t)length + 1);
-        offset += (size_t)length + 13;
+        lx_guest_store_u32(bytes + offset, (ULONG)length + (PARAM_HEADER + 1));
+        lx_guest_store_u32(bytes + offset + PRESPARAMS_HEADER, PP_FONTNAMESIZE);
+        lx_guest_store_u32(bytes + offset + PRESPARAMS_HEADER + 4, (ULONG)length + 1);
+        memcpy(bytes + offset + PRESPARAMS_HEADER + PARAM_HEADER, font, (size_t)length + 1);
+        offset += (size_t)length + (PRESPARAMS_HEADER + PARAM_HEADER + 1);
         items[0].offPresParams = font_parameters;
         template_font_units(text, points, &font_width, &font_height);
     }
@@ -555,27 +612,29 @@ static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
             dialog_word(&reader);
         if (!dialog_string(&reader, class_name, &ordinal))
             goto convert_bad;
-        unsigned kind = ordinal == 0x80   ? 3
-                        : ordinal == 0x81 ? ((control_style & 4) ? 10 : 6)
-                        : ordinal == 0x82 ? 5
-                        : ordinal == 0x83 ? 7
-                        : ordinal == 0x84 ? 8
-                        : ordinal == 0x85 ? 2
-                                          : 0;
+        unsigned kind =
+            ordinal == WINDOWS_CLASS_BUTTON ? PM_CLASS_BUTTON
+            : ordinal == WINDOWS_CLASS_EDIT
+                ? ((control_style & WIN32_ES_MULTILINE) ? PM_CLASS_MLE : PM_CLASS_ENTRYFIELD)
+            : ordinal == WINDOWS_CLASS_STATIC    ? PM_CLASS_STATIC
+            : ordinal == WINDOWS_CLASS_LISTBOX   ? PM_CLASS_LISTBOX
+            : ordinal == WINDOWS_CLASS_SCROLLBAR ? PM_CLASS_SCROLLBAR
+            : ordinal == WINDOWS_CLASS_COMBOBOX  ? PM_CLASS_COMBOBOX
+                                                 : 0;
         if (!kind)
         {
             if (!strcasecmp(class_name, "BUTTON"))
-                kind = 3;
+                kind = PM_CLASS_BUTTON;
             else if (!strcasecmp(class_name, "EDIT"))
-                kind = 6;
+                kind = PM_CLASS_ENTRYFIELD;
             else if (!strcasecmp(class_name, "STATIC"))
-                kind = 5;
+                kind = PM_CLASS_STATIC;
             else if (!strcasecmp(class_name, "LISTBOX"))
-                kind = 7;
+                kind = PM_CLASS_LISTBOX;
             else if (!strcasecmp(class_name, "COMBOBOX"))
-                kind = 2;
+                kind = PM_CLASS_COMBOBOX;
             else if (!strcasecmp(class_name, "SCROLLBAR"))
-                kind = 8;
+                kind = PM_CLASS_SCROLLBAR;
         }
         item->flStyle = dialog_pm_style(control_style, &kind);
         if (kind)
@@ -583,27 +642,27 @@ static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
         else
         {
             size_t n = strlen(class_name);
-            if (!n || offset + n + 1 >= 65536)
+            if (!n || offset + n + 1 >= TEMPLATE_MAX)
                 goto convert_bad;
             item->cchClassName = n;
             item->offClassName = offset;
             memcpy(bytes + offset, class_name, n + 1);
             offset += n + 1;
         }
-        item->offCtlData = 0xFFFF;
+        item->offCtlData = TEMPLATE_NONE;
         item->offPresParams = font_parameters;
         if (!dialog_string(&reader, text, &ordinal))
             goto convert_bad;
         size_t n = strlen(text);
-        if (offset + n + 4 >= 65536)
+        if (offset + n + 4 >= TEMPLATE_MAX)
             goto convert_bad;
         item->offText = offset;
         if (ordinal)
         {
-            item->cchText = 3;
-            bytes[offset] = 0xFF;
+            item->cchText = TEXT_ORDINAL_SIZE;
+            bytes[offset] = TEXT_ORDINAL_MARKER;
             lx_guest_store_u16(bytes + offset + 1, ordinal);
-            offset += 3;
+            offset += TEXT_ORDINAL_SIZE;
         }
         else
         {
@@ -611,13 +670,15 @@ static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
             memcpy(bytes + offset, text, n + 1);
             offset += n + 1;
         }
+        /* A DLGTEMPLATE item's creation data size counts its own size word; a
+           DLGITEMTEMPLATEEX's does not. */
         ULONG extra = dialog_word(&reader);
         if (extra)
             reader.offset += extended ? extra : extra - 2;
     }
-    if (!reader.valid || offset > 65535)
+    if (!reader.valid || offset > TEMPLATE_MAX - 1)
         goto convert_bad;
-    POINTL unit = {4, 8};
+    POINTL unit = {DIALOG_UNITS_PER_CHAR_X, DIALOG_UNITS_PER_CHAR_Y};
     if (font_width && WinMapDlgPoints(HWND_DESKTOP, &unit, 1, TRUE) && unit.x > 0 && unit.y > 0)
         for (ULONG i = 0; i <= count; i++)
         {
