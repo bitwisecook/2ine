@@ -8,6 +8,7 @@
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmdev.h"
 #include "os2/include/pmstddlg.h"
+#include "os2/include/pmerr.h"
 #include "emulator/abi.h"
 #include "host/fs.h"
 #include "host/sync.h"
@@ -24,55 +25,110 @@ enum
     SETUP_LIMIT = 32768,
     PAGE_MINIMUM_WIDTH = 220,
     PAGE_MINIMUM_HEIGHT = 100,
-    CLASS_DEFAULT_STYLE = 0x90,
-    SYSTEM_POINTER_FILE = 19,
-    SYSTEM_POINTER_FOLDER = 20,
-    SYSTEM_POINTER_PROGRAM = 22,
-    DETAIL_COLUMNS = 5,
-    DETAIL_RECORD = 0x54,
-    DETAIL_DATA_BYTES = 12,
-    DETAIL_DATA_FLAGS = 0x8202,
-    DETAIL_TITLE_FLAGS = 0x10e04,
-    WPERR_BUFFER_OVERFLOW_CODE = 0x1713,
-    WPERR_OBJECT_NOT_FOUND_CODE = 0x1714,
+    /* PMWP.DLL's minimum settings page heights for file system and program classes. */
+    PAGE_MINIMUM_HEIGHT_FILE = 120,
+    PAGE_MINIMUM_HEIGHT_PROGRAM = 125,
     FIND_CLASS_LIMIT = 64,
-    EA_ASCII = 0xfffd,
-    EA_MULTI_VALUE = 0xffdf,
+    /* Bounds the walk up a folder chain, so a store with a location cycle ends. */
+    FOLDER_NESTING_LIMIT = 64,
+    /* Without DCPY_EXISTING, DosCopy refuses to replace an existing target. */
     DOS_COPY_FAIL_IF_EXISTS = 0,
-    OR_FROMCOPY_CODE = 0x10000008,
-    FILE_SYSTEM_ATTRIBUTE = 4,
-    DRAG_MOVE = 0x20,
-    DRAG_LINK = 0x18,
-    DM_ENDCONVERSATION_MESSAGE = 0x32b,
-    DMFL_TARGETSUCCESSFUL_FLAG = 1,
-    DMFL_TARGETFAIL_FLAG = 2,
-    QC_FIRST_CODE = 0,
-    QC_NEXT_CODE = 1,
-    QC_LAST_CODE = 2,
-    OK_DELETE_RESULT = 1,
-    NO_DELETE_RESULT = 2,
+    LAST_DRIVE_NUMBER = 26,
+    PROGRAM_DETAIL_KEY_COUNT = 4,
+    PRINT_LINES = 60,
+    PRINT_FIELD_LIMIT = 9,
+    PRINT_FIELD_BYTES = 256,
+    PRINT_TOKEN_BYTES = 64
+};
+
+/* Workplace Shell values (wpobject.h, wpfolder.h, wpdisk.h, pmwp.h). */
+enum
+{
+    CLSSTYLE_NEVERTEMPLATE = 0x10,
+    CLSSTYLE_NEVERMOVE = PMWP_OBJSTYLE_NOMOVE,
+    CLSSTYLE_NEVERCOPY = PMWP_OBJSTYLE_NOCOPY,
+    CLSSTYLE_NEVERDELETE = PMWP_OBJSTYLE_NODELETE,
+    CLSSTYLE_NEVERPRINT = PMWP_OBJSTYLE_NOPRINT,
+    OPEN_CONTENTS = 1,
+    OPEN_TREE = 101,
+    OPEN_DETAILS = 102,
+    OPEN_AUTO = 120,
+    OR_REFERENCE = 0x10000000,
+    OR_FROMCOPY = 0x00000008 | OR_REFERENCE,
+    QC_FIRST = 0,
+    QC_NEXT = 1,
+    QC_LAST = 2,
+    OK_DELETE = 1,
+    NO_DELETE = 2,
+    RC_DROP_ITEMCOMPLETE = 1
+};
+
+/* CLASSFIELDINFO (wpobject.h) records for the details view. */
+enum
+{
+    DETAIL_COLUMNS = 5,
+    /* The first two columns are the icon and title; the rest read wpQueryDetailsData. */
+    DETAIL_FIRST_DATA_COLUMN = 2,
+    DETAIL_RECORD = 0x54,
+    DETAIL_CB = 0x00,
+    DETAIL_FL_DATA = 0x04,
+    DETAIL_FL_TITLE = 0x08,
+    DETAIL_TITLE_DATA = 0x0c,
+    DETAIL_NEXT_FIELD_INFO = 0x18,
+    DETAIL_OFF_FIELD_DATA = 0x20,
+    DETAIL_LEN_FIELD_DATA = 0x24,
+    DETAIL_FIELD_BYTES = 4,
+    DETAIL_DATA_BYTES = (DETAIL_COLUMNS - DETAIL_FIRST_DATA_COLUMN) * DETAIL_FIELD_BYTES,
+    DETAIL_DATA_FLAGS = CFA_RIGHT | CFA_SEPARATOR | CFA_FIREADONLY,
+    DETAIL_TITLE_FLAGS =
+        CFA_CENTER | CFA_SEPARATOR | CFA_HORZSEPARATOR | CFA_STRING | CFA_FITITLEREADONLY
+};
+
+/* A FEALIST holding one FEA whose value is an EAT_MVMT list: the header word, code
+   page and count, then a type and length before each value. */
+enum
+{
+    FEALIST_CB_LIST = 0,
+    FEA_FLAGS = 4,
+    FEA_NAME_LENGTH = 5,
+    FEA_VALUE_LENGTH = 6,
+    FEA_NAME = 8,
+    MVMT_CODEPAGE = 2,
+    MVMT_COUNT = 4,
+    MVMT_HEADER_BYTES = 6,
+    EA_VALUE_HEADER_BYTES = 4,
+    /* Room for the .TYPE FEA header around the type strings. */
+    TYPE_LIST_OVERHEAD = 512
+};
+
+/* Instance data, store keys and guest record offsets. */
+enum
+{
     FOLDER_FLAGS = 0x00,
     FOLDER_FLAGS_KEY = 1,
-    FOLDER_VIEW_ICON = 1,
-    FOLDER_VIEW_TREE = 101,
-    FOLDER_VIEW_DETAILS = 102,
     DISK_DRIVE_KEY = 1,
     FILE_TYPE_TEXT = 0x00,
     FILE_TYPE_KEY = 1,
     DISK_DRIVE = 0x00,
+    /* sizeof(PROGDETAILS); its string pointers start at pszTitle. */
     PROGRAM_DETAIL_BYTES = 72,
-    PRINT_LINES = 60,
-    DEVICE_QUEUED = 2,
-    CAPS_WIDTH_INDEX = 4,
-    CAPS_HEIGHT_INDEX = 5,
-    ESCAPE_START_DOCUMENT = 8150,
-    ESCAPE_END_DOCUMENT = 8151,
-    ESCAPE_NEW_FRAME = 16300,
+    PROGDETAILS_LENGTH = 0,
+    PROGDETAILS_TITLE = 12,
+    PROGDETAILS_EXECUTABLE = 16,
+    SIZEL_CY = 4,
+    /* PRINTDEST */
     PRINT_DEST_TYPE = 4,
     PRINT_DEST_TOKEN = 8,
     PRINT_DEST_COUNT = 12,
     PRINT_DEST_DATA = 16,
-    PRINT_FIELD_LIMIT = 9
+    /* DRAGITEM and DRAGINFO */
+    DRAGITEM_HWND = 0x00,
+    DRAGITEM_ID = 0x04,
+    DRAGITEM_RMF = 0x0c,
+    DRAGITEM_CONTAINER = 0x10,
+    DRAGITEM_SOURCE = 0x14,
+    DRAGITEM_TARGET = 0x18,
+    DRAGINFO_OPERATION = 0x06
 };
 
 static uint32 class_of(uint32 self)
@@ -201,7 +257,7 @@ uint32 pmwpClassForName(const char *name)
     for (int id = 0; id < PMWP_CLASS_COUNT; id++)
         if (!strcmp(pmwpClassRows[id].name, name))
             return pmwpClassNew((PmwpClassId)id, 0, 0);
-    char module[260];
+    char module[CCHMAXPATH];
     return pmwpStoreClassModule(name, module, sizeof module) ? load_class(name, module) : 0;
 }
 
@@ -317,18 +373,21 @@ CLASS_TITLE(shadow, "Shadow")
         (void)a;                                                                                   \
         return value;                                                                              \
     }
-CLASS_VALUE(style_folder, 0x80)
+CLASS_VALUE(style_folder, CLSSTYLE_NEVERPRINT)
 CLASS_VALUE(style_data_file, 0x00)
-CLASS_VALUE(style_transient, 0x90)
-CLASS_VALUE(style_desktop, 0xd8)
-CLASS_VALUE(style_disk, 0xda)
-CLASS_VALUE(style_program, 0x80)
-CLASS_VALUE(style_shadow, 0x90)
+CLASS_VALUE(style_transient, CLSSTYLE_NEVERPRINT | CLSSTYLE_NEVERTEMPLATE)
+CLASS_VALUE(style_desktop, CLSSTYLE_NEVERPRINT | CLSSTYLE_NEVERDELETE | CLSSTYLE_NEVERTEMPLATE |
+                               CLSSTYLE_NEVERCOPY)
+CLASS_VALUE(style_disk, CLSSTYLE_NEVERPRINT | CLSSTYLE_NEVERDELETE | CLSSTYLE_NEVERTEMPLATE |
+                            CLSSTYLE_NEVERCOPY | CLSSTYLE_NEVERMOVE)
+CLASS_VALUE(style_program, CLSSTYLE_NEVERPRINT)
+CLASS_VALUE(style_shadow, CLSSTYLE_NEVERPRINT | CLSSTYLE_NEVERTEMPLATE)
+/* 0x67 has no Toolkit OPEN_* name. */
 CLASS_VALUE(view_folder, 0x67)
-CLASS_VALUE(view_data_file, 4)
-CLASS_VALUE(view_desktop, 1)
-CLASS_VALUE(view_disk, 0x78)
-CLASS_VALUE(view_program, 4)
+CLASS_VALUE(view_data_file, PMWP_OPEN_RUNNING)
+CLASS_VALUE(view_desktop, OPEN_CONTENTS)
+CLASS_VALUE(view_disk, OPEN_AUTO)
+CLASS_VALUE(view_program, PMWP_OPEN_RUNNING)
 CLASS_VALUE(folder_animation_icons, 1)
 
 static uint32 report_help(uint8 *a, uint32 panel)
@@ -355,19 +414,19 @@ static uint32 wpclsQueryIcon(uint8 *a)
     uint32 self = ARG(a, 0), own = pmwpClassField(self, PMWP_CLS_ICON);
     if (own)
         return own;
-    LONG pointer = SYSTEM_POINTER_FILE;
+    LONG pointer = SPTR_FILE;
     if (pmwpInvokeClass(PMWP_SOMClass_somDescendedFrom, self, pmwpClassObject(PMWP_WPFOLDER), 0, 0))
-        pointer = SYSTEM_POINTER_FOLDER;
+        pointer = SPTR_FOLDER;
     else if (pmwpInvokeClass(PMWP_SOMClass_somDescendedFrom, self, pmwpClassObject(PMWP_WPPROGRAM),
                              0, 0))
-        pointer = SYSTEM_POINTER_PROGRAM;
+        pointer = SPTR_PROGRAM;
     return WinQuerySysPointer(HWND_DESKTOP, pointer, FALSE);
 }
 
 static uint32 wpclsQueryStyle(uint8 *a)
 {
     (void)a;
-    return CLASS_DEFAULT_STYLE;
+    return CLSSTYLE_NEVERPRINT | CLSSTYLE_NEVERTEMPLATE;
 }
 
 static uint32 wpclsQueryDefaultView(uint8 *a)
@@ -389,8 +448,7 @@ static uint32 wpclsQueryDefaultHelp(uint8 *a)
            lx_execution_write(GProcessState.execution, ARG(a, 2), library, sizeof library);
 }
 
-/* Five columns, of which the last three read the 12 bytes from wpQueryDetailsData. The
-   records are one guest array shared by every class, as in PMWP.DLL. */
+/* The records are one guest array shared by every class, as in PMWP.DLL. */
 static uint32 details_columns(void)
 {
     static uint32 columns;
@@ -405,15 +463,17 @@ static uint32 details_columns(void)
     for (uint32 i = 0; i < DETAIL_COLUMNS; i++)
     {
         uint32 record = block + i * DETAIL_RECORD;
-        pmwpStore32(record, DETAIL_RECORD);
-        pmwpStore32(record + 4, DETAIL_DATA_FLAGS);
-        pmwpStore32(record + 8, DETAIL_TITLE_FLAGS);
-        pmwpStore32(record + 0x0c, pmwpConstantString(titles[i]));
-        pmwpStore32(record + 0x18, i + 1 < DETAIL_COLUMNS ? record + DETAIL_RECORD : 0);
-        if (i >= 2)
+        pmwpStore32(record + DETAIL_CB, DETAIL_RECORD);
+        pmwpStore32(record + DETAIL_FL_DATA, DETAIL_DATA_FLAGS);
+        pmwpStore32(record + DETAIL_FL_TITLE, DETAIL_TITLE_FLAGS);
+        pmwpStore32(record + DETAIL_TITLE_DATA, pmwpConstantString(titles[i]));
+        pmwpStore32(record + DETAIL_NEXT_FIELD_INFO,
+                    i + 1 < DETAIL_COLUMNS ? record + DETAIL_RECORD : 0);
+        if (i >= DETAIL_FIRST_DATA_COLUMN)
         {
-            pmwpStore32(record + 0x20, (i - 2) * 4);
-            pmwpStore32(record + 0x24, 4);
+            pmwpStore32(record + DETAIL_OFF_FIELD_DATA,
+                        (i - DETAIL_FIRST_DATA_COLUMN) * DETAIL_FIELD_BYTES);
+            pmwpStore32(record + DETAIL_LEN_FIELD_DATA, DETAIL_FIELD_BYTES);
         }
     }
     uint32 expected = 0;
@@ -455,7 +515,8 @@ static uint32 wpclsQuerySettingsPageSize(uint8 *a)
     uint32 width = pmwpClassField(self, PMWP_CLS_PAGE_WIDTH);
     uint32 height = pmwpClassField(self, PMWP_CLS_PAGE_HEIGHT);
     return pmwpStore32(size, width < PAGE_MINIMUM_WIDTH ? PAGE_MINIMUM_WIDTH : width) &&
-           pmwpStore32(size + 4, height < PAGE_MINIMUM_HEIGHT ? PAGE_MINIMUM_HEIGHT : height);
+           pmwpStore32(size + SIZEL_CY,
+                       height < PAGE_MINIMUM_HEIGHT ? PAGE_MINIMUM_HEIGHT : height);
 }
 
 /* Subclasses raise the minimum page height; the width minimum stays the base one. */
@@ -463,18 +524,18 @@ static uint32 page_size_with_height(uint8 *a, uint32 minimum)
 {
     if (!wpclsQuerySettingsPageSize(a))
         return FALSE;
-    uint32 height = ARG(a, 1) + 4;
+    uint32 height = ARG(a, 1) + SIZEL_CY;
     return pmwpLoad32(height) >= minimum || pmwpStore32(height, minimum);
 }
 
 static uint32 page_size_120(uint8 *a)
 {
-    return page_size_with_height(a, 120);
+    return page_size_with_height(a, PAGE_MINIMUM_HEIGHT_FILE);
 }
 
 static uint32 page_size_125(uint8 *a)
 {
-    return page_size_with_height(a, 125);
+    return page_size_with_height(a, PAGE_MINIMUM_HEIGHT_PROGRAM);
 }
 
 static uint32 wpclsNew(uint8 *a)
@@ -552,7 +613,7 @@ static BOOL within_folder(const PmwpRecord *record, const char *folder, BOOL nes
         return TRUE;
     char location[PATH_LIMIT];
     snprintf(location, sizeof location, "%s", record->location);
-    for (unsigned depth = 0; nested && depth < 64; depth++)
+    for (unsigned depth = 0; nested && depth < FOLDER_NESTING_LIMIT; depth++)
     {
         ULONG parent = pmwpStoreFind(location);
         PmwpRecord up = {0};
@@ -589,7 +650,7 @@ static BOOL deliver(uint32 self, FindState *state, uint32 buffer, uint32 count_a
             if (delivered == capacity)
             {
                 pmwpStore32(count_address, delivered);
-                pmwpSetClassField(self, PMWP_CLS_ERROR, WPERR_BUFFER_OVERFLOW_CODE);
+                pmwpSetClassField(self, PMWP_CLS_ERROR, WPERR_BUFFER_OVERFLOW);
                 return FALSE;
             }
             pmwpStore32(buffer + delivered++ * 4, object);
@@ -599,7 +660,7 @@ static BOOL deliver(uint32 self, FindState *state, uint32 buffer, uint32 count_a
     pmwpStore32(count_address, delivered);
     if (!delivered)
     {
-        pmwpSetClassField(self, PMWP_CLS_ERROR, WPERR_OBJECT_NOT_FOUND_CODE);
+        pmwpSetClassField(self, PMWP_CLS_ERROR, WPERR_OBJECT_NOT_FOUND);
         return FALSE;
     }
     return TRUE;
@@ -729,29 +790,29 @@ static uint32 wpRefresh(uint8 *a)
 static BOOL write_type_attribute(const char *path, const char *types)
 {
     static const char name[] = ".TYPE";
-    uint8 list[TITLE_LIMIT + 512];
-    size_t value = 4 + 4 + sizeof name, at = value + 6, count = 0;
+    uint8 list[TITLE_LIMIT + TYPE_LIST_OVERHEAD];
+    size_t value = FEA_NAME + sizeof name, at = value + MVMT_HEADER_BYTES, count = 0;
     for (const char *p = types; *p;)
     {
         const char *end = strchr(p, '\n');
         size_t length = end ? (size_t)(end - p) : strlen(p);
-        if (at + 4 + length > sizeof list)
+        if (at + EA_VALUE_HEADER_BYTES + length > sizeof list)
             return FALSE;
-        lx_guest_store_u16(list + at, EA_ASCII);
+        lx_guest_store_u16(list + at, EAT_ASCII);
         lx_guest_store_u16(list + at + 2, (uint16)length);
-        memcpy(list + at + 4, p, length);
-        at += 4 + length;
+        memcpy(list + at + EA_VALUE_HEADER_BYTES, p, length);
+        at += EA_VALUE_HEADER_BYTES + length;
         count++;
         p += length + (end ? 1 : 0);
     }
-    lx_guest_store_u16(list + value, EA_MULTI_VALUE);
-    lx_guest_store_u16(list + value + 2, 0);
-    lx_guest_store_u16(list + value + 4, (uint16)count);
-    lx_guest_store_u32(list, (uint32)at);
-    list[4] = 0;
-    list[5] = sizeof name - 1;
-    lx_guest_store_u16(list + 6, (uint16)(at - value));
-    memcpy(list + 8, name, sizeof name);
+    lx_guest_store_u16(list + value, EAT_MVMT);
+    lx_guest_store_u16(list + value + MVMT_CODEPAGE, 0);
+    lx_guest_store_u16(list + value + MVMT_COUNT, (uint16)count);
+    lx_guest_store_u32(list + FEALIST_CB_LIST, (uint32)at);
+    list[FEA_FLAGS] = 0;
+    list[FEA_NAME_LENGTH] = sizeof name - 1;
+    lx_guest_store_u16(list + FEA_VALUE_LENGTH, (uint16)(at - value));
+    memcpy(list + FEA_NAME, name, sizeof name);
     char *host = pmwpHostPath(path);
     LxHostFsError error;
     LxHostFile *file =
@@ -807,7 +868,7 @@ static uint32 fs_wpCopyObject(uint8 *a)
 {
     uint32 self = ARG(a, 0), folder = ARG(a, 1);
     ULONG handle = handle_of(self), destination = folder ? handle_of(folder) : 0;
-    char source[PATH_LIMIT], target[PATH_LIMIT + 260];
+    char source[PATH_LIMIT], target[PATH_LIMIT + CCHMAXPATH];
     if (!handle || !destination || pmwpObjectField(self, PMWP_OBJ_STYLE) & PMWP_OBJSTYLE_NOCOPY ||
         !object_file_name(self, source, sizeof source, TRUE) ||
         !target_file(folder, source, target, sizeof target) ||
@@ -822,7 +883,7 @@ static uint32 fs_wpCopyObject(uint8 *a)
         return 0;
     if (ARG(a, 2))
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpLockObject, object, 0, 0, 0);
-    pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpObjectReady, object, OR_FROMCOPY_CODE, self, 0);
+    pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpObjectReady, object, OR_FROMCOPY, self, 0);
     return object;
 }
 
@@ -830,7 +891,7 @@ static uint32 fs_wpMoveObject(uint8 *a)
 {
     uint32 self = ARG(a, 0), folder = ARG(a, 1);
     ULONG handle = handle_of(self), destination = folder ? handle_of(folder) : 0;
-    char source[PATH_LIMIT], target[PATH_LIMIT + 260];
+    char source[PATH_LIMIT], target[PATH_LIMIT + CCHMAXPATH];
     if (!handle || !destination || pmwpObjectField(self, PMWP_OBJ_STYLE) & PMWP_OBJSTYLE_NOMOVE ||
         !object_file_name(self, source, sizeof source, TRUE) ||
         !target_file(folder, source, target, sizeof target))
@@ -862,8 +923,7 @@ static uint32 fs_wpSetTitle(uint8 *a)
 static uint32 fs_wpQueryStyle(uint8 *a)
 {
     uint32 self = ARG(a, 0), style = pmwpObjectField(self, PMWP_OBJ_STYLE);
-    if (pmwpInvoke(PMWP_WPFILESYSTEM, PMWP_WPFileSystem_wpQueryAttr, self, 0, 0, 0) &
-        FILE_SYSTEM_ATTRIBUTE)
+    if (pmwpInvoke(PMWP_WPFILESYSTEM, PMWP_WPFileSystem_wpQueryAttr, self, 0, 0, 0) & FILE_SYSTEM)
         style |= PMWP_OBJSTYLE_NOMOVE | PMWP_OBJSTYLE_NODELETE | PMWP_OBJSTYLE_NORENAME;
     return style;
 }
@@ -899,15 +959,15 @@ static uint32 fs_wpFormatDragItem(uint8 *a)
     if (item && object_file_name(self, path, sizeof path, TRUE))
     {
         const char *name = base_name(path);
-        if (!pmwpLoad32(item + 0x14))
-            pmwpStore32(item + 0x14, DrgAddStrHandle((PSZ)name));
-        if (!pmwpLoad32(item + 0x18))
-            pmwpStore32(item + 0x18, DrgAddStrHandle((PSZ)name));
-        if (!pmwpLoad32(item + 0x0c))
-            pmwpStore32(item + 0x0c, DrgAddStrHandle("<DRM_OS2FILE,DRF_UNKNOWN>"));
+        if (!pmwpLoad32(item + DRAGITEM_SOURCE))
+            pmwpStore32(item + DRAGITEM_SOURCE, DrgAddStrHandle((PSZ)name));
+        if (!pmwpLoad32(item + DRAGITEM_TARGET))
+            pmwpStore32(item + DRAGITEM_TARGET, DrgAddStrHandle((PSZ)name));
+        if (!pmwpLoad32(item + DRAGITEM_RMF))
+            pmwpStore32(item + DRAGITEM_RMF, DrgAddStrHandle("<DRM_OS2FILE,DRF_UNKNOWN>"));
         path[name - path] = 0;
-        if (!pmwpLoad32(item + 0x10))
-            pmwpStore32(item + 0x10, DrgAddStrHandle(path));
+        if (!pmwpLoad32(item + DRAGITEM_CONTAINER))
+            pmwpStore32(item + DRAGITEM_CONTAINER, DrgAddStrHandle(path));
     }
     return pmwpFormatDragItem(self, item);
 }
@@ -1010,7 +1070,7 @@ static BOOL print_lines(HDC device, HPS space, const char *text, size_t size, LO
         at = end + 1;
         if (++line == PRINT_LINES && at < size)
         {
-            if (DevEscape(device, ESCAPE_NEW_FRAME, 0, NULL, NULL, NULL) < 0)
+            if (DevEscape(device, DEVESC_NEWFRAME, 0, NULL, NULL, NULL) < 0)
                 return FALSE;
             line = 0;
         }
@@ -1033,12 +1093,14 @@ static uint32 df_wpPrintObject(uint8 *a)
     for (LONG i = 0; i < count; i++)
     {
         uint32 field = pmwpLoad32(data + (uint32)i * 4);
-        fields[i] = field ? lx_execution_copy_string(GProcessState.execution, field, 256) : NULL;
+        fields[i] =
+            field ? lx_execution_copy_string(GProcessState.execution, field, PRINT_FIELD_BYTES)
+                  : NULL;
     }
     uint32 token_address = pmwpLoad32(destination + PRINT_DEST_TOKEN);
-    char *token = token_address
-                      ? lx_execution_copy_string(GProcessState.execution, token_address, 64)
-                      : strdup("*");
+    char *token = token_address ? lx_execution_copy_string(GProcessState.execution, token_address,
+                                                           PRINT_TOKEN_BYTES)
+                                : strdup("*");
     char *host = pmwpHostPath(path);
     FILE *file = host ? fopen(host, "rb") : NULL;
     char *text = NULL;
@@ -1058,17 +1120,17 @@ static uint32 df_wpPrintObject(uint8 *a)
     {
         LONG caps[2] = {0};
         SIZEL page = {0, 0};
-        HPS space = DevQueryCaps(device, CAPS_WIDTH_INDEX, 2, caps)
+        HPS space = DevQueryCaps(device, CAPS_WIDTH, 2, caps)
                         ? GpiCreatePS(hab, device, &page, PU_PELS | GPIA_ASSOC)
                         : 0;
         if (space)
         {
             const char *name = base_name(path);
-            if (DevEscape(device, ESCAPE_START_DOCUMENT, (LONG)strlen(name), (PVOID)name, NULL,
-                          NULL) >= 0)
+            if (DevEscape(device, DEVESC_STARTDOC, (LONG)strlen(name), (PVOID)name, NULL, NULL) >=
+                0)
             {
                 result = print_lines(device, space, text, (size_t)size, caps[1]);
-                if (DevEscape(device, ESCAPE_END_DOCUMENT, 0, NULL, NULL, NULL) < 0)
+                if (DevEscape(device, DEVESC_ENDDOC, 0, NULL, NULL, NULL) < 0)
                     result = FALSE;
             }
             GpiDestroyPS(space);
@@ -1171,11 +1233,11 @@ static uint32 wpQueryContent(uint8 *a)
     size_t count = 0;
     ULONG *children = folder_children(self, &count);
     uint32 result = 0;
-    if (count && option == QC_FIRST_CODE)
+    if (count && option == QC_FIRST)
         result = pmwpAwaken(children[0]);
-    else if (count && option == QC_LAST_CODE)
+    else if (count && option == QC_LAST)
         result = pmwpAwaken(children[count - 1]);
-    else if (option == QC_NEXT_CODE && current)
+    else if (option == QC_NEXT && current)
     {
         ULONG handle = handle_of(current);
         for (size_t i = 0; i + 1 < count; i++)
@@ -1193,13 +1255,13 @@ static uint32 wpDeleteContents(uint8 *a)
 {
     size_t count = 0;
     ULONG *children = folder_children(ARG(a, 0), &count);
-    uint32 result = OK_DELETE_RESULT;
+    uint32 result = OK_DELETE;
     for (size_t i = 0; i < count; i++)
     {
         uint32 child = pmwpAwaken(children[i]);
-        if (!child || pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDelete, child, ARG(a, 1), 0, 0) !=
-                          OK_DELETE_RESULT)
-            result = NO_DELETE_RESULT;
+        if (!child ||
+            pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDelete, child, ARG(a, 1), 0, 0) != OK_DELETE)
+            result = NO_DELETE;
     }
     free(children);
     return result;
@@ -1235,9 +1297,9 @@ static uint32 fdr_wpRestoreState(uint8 *a)
 
 static uint32 folder_view_from_name(const char *name)
 {
-    return !strcasecmp(name, "ICON")      ? FOLDER_VIEW_ICON
-           : !strcasecmp(name, "TREE")    ? FOLDER_VIEW_TREE
-           : !strcasecmp(name, "DETAILS") ? FOLDER_VIEW_DETAILS
+    return !strcasecmp(name, "ICON")      ? OPEN_CONTENTS
+           : !strcasecmp(name, "TREE")    ? OPEN_TREE
+           : !strcasecmp(name, "DETAILS") ? OPEN_DETAILS
                                           : 0;
 }
 
@@ -1304,7 +1366,7 @@ static uint32 fdr_wpDelete(uint8 *a)
     uint32 self = ARG(a, 0);
     uint32 result =
         pmwpInvoke(PMWP_WPFOLDER, PMWP_WPFolder_wpDeleteContents, self, ARG(a, 1), 0, 0);
-    return result == OK_DELETE_RESULT ? pmwpObjectDelete(self, ARG(a, 1)) : result;
+    return result == OK_DELETE ? pmwpObjectDelete(self, ARG(a, 1)) : result;
 }
 
 static uint32 fdr_wpRefresh(uint8 *a)
@@ -1314,38 +1376,38 @@ static uint32 fdr_wpRefresh(uint8 *a)
 
 static void end_conversation(uint32 item, BOOL done)
 {
-    DrgSendTransferMsg(
-        pmwpLoad32(item), DM_ENDCONVERSATION_MESSAGE, (MPARAM)(uintptr_t)pmwpLoad32(item + 4),
-        (MPARAM)(uintptr_t)(done ? DMFL_TARGETSUCCESSFUL_FLAG : DMFL_TARGETFAIL_FLAG));
+    DrgSendTransferMsg(pmwpLoad32(item + DRAGITEM_HWND), DM_ENDCONVERSATION,
+                       (MPARAM)(uintptr_t)pmwpLoad32(item + DRAGITEM_ID),
+                       (MPARAM)(uintptr_t)(done ? DMFL_TARGETSUCCESSFUL : DMFL_TARGETFAIL));
 }
 
 /* A folder performs the requested operation on the dragged object. */
 static uint32 fdr_wpDrop(uint8 *a)
 {
     uint32 self = ARG(a, 0), info = ARG(a, 2), item = ARG(a, 3);
-    uint32 source = pmwpAwakeObject(pmwpLoad32(item + 4));
+    uint32 source = pmwpAwakeObject(pmwpLoad32(item + DRAGITEM_ID));
     uint8 bytes[2] = {0};
-    lx_execution_read(GProcessState.execution, info + 6, bytes, sizeof bytes);
+    lx_execution_read(GProcessState.execution, info + DRAGINFO_OPERATION, bytes, sizeof bytes);
     uint32 operation = lx_guest_load_u16(bytes), done = 0;
-    if (source && operation == DRAG_MOVE)
+    if (source && operation == DO_MOVE)
         done = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpMoveObject, source, self, 0, 0);
-    else if (source && operation == DRAG_LINK)
+    else if (source && operation == DO_LINK)
         done = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpCreateShadowObject, source, self, 0, 0);
     else if (source)
         done = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpCopyObject, source, self, 0, 0);
     end_conversation(item, done != 0);
-    return 1;
+    return RC_DROP_ITEMCOMPLETE;
 }
 
 /* A file dropped on a program starts it with that file. */
 static uint32 ref_wpDrop(uint8 *a)
 {
     uint32 self = ARG(a, 0), item = ARG(a, 3);
-    uint32 source = pmwpAwakeObject(pmwpLoad32(item + 4));
+    uint32 source = pmwpAwakeObject(pmwpLoad32(item + DRAGITEM_ID));
     char path[PATH_LIMIT];
     end_conversation(item, source && object_file_name(source, path, sizeof path, TRUE) &&
                                pmwpStoreStartProgram(handle_of(self), path));
-    return 1;
+    return RC_DROP_ITEMCOMPLETE;
 }
 
 /* A drive's views are its root folder's views. */
@@ -1390,7 +1452,7 @@ static uint32 wpSetLogicalDrive(uint8 *a)
 static uint32 wpQueryRootFolder(uint8 *a)
 {
     uint32 drive = pmwpInvoke(PMWP_WPDISK, PMWP_WPDisk_wpQueryLogicalDrive, ARG(a, 0), 0, 0, 0);
-    if (!drive || drive > 26)
+    if (!drive || drive > LAST_DRIVE_NUMBER)
         return 0;
     char root[] = "A:\\";
     root[0] = (char)('A' + drive - 1);
@@ -1405,10 +1467,12 @@ static uint32 wpQueryProgDetails(uint8 *a)
     PmwpRecord record = {0};
     if (!size_address || !handle || !pmwpStoreLoad(handle, &record))
         return FALSE;
-    static const char *const keys[] = {"EXENAME", "PARAMETERS", "STARTUPDIR", "ICONFILE"};
-    char values[4][PATH_LIMIT];
+    /* In the order of PROGDETAILS pszExecutable, pszParameters, pszStartupDir, pszIcon. */
+    static const char *const keys[PROGRAM_DETAIL_KEY_COUNT] = {"EXENAME", "PARAMETERS",
+                                                               "STARTUPDIR", "ICONFILE"};
+    char values[PROGRAM_DETAIL_KEY_COUNT][PATH_LIMIT];
     uint32 needed = PROGRAM_DETAIL_BYTES + (uint32)strlen(record.title) + 1;
-    for (size_t i = 0; i < 4; i++)
+    for (size_t i = 0; i < PROGRAM_DETAIL_KEY_COUNT; i++)
     {
         if (!pmwpSetupValue(record.setup, keys[i], values[i], PATH_LIMIT))
             values[i][0] = 0;
@@ -1425,14 +1489,14 @@ static uint32 wpQueryProgDetails(uint8 *a)
         if (wire)
         {
             size_t at = PROGRAM_DETAIL_BYTES;
-            lx_guest_store_u32(wire, PROGRAM_DETAIL_BYTES);
-            lx_guest_store_u32(wire + 12, output + (uint32)at);
+            lx_guest_store_u32(wire + PROGDETAILS_LENGTH, PROGRAM_DETAIL_BYTES);
+            lx_guest_store_u32(wire + PROGDETAILS_TITLE, output + (uint32)at);
             strcpy((char *)wire + at, record.title);
             at += strlen(record.title) + 1;
-            for (size_t i = 0; i < 4; i++)
+            for (size_t i = 0; i < PROGRAM_DETAIL_KEY_COUNT; i++)
                 if (values[i][0])
                 {
-                    lx_guest_store_u32(wire + 16 + i * 4, output + (uint32)at);
+                    lx_guest_store_u32(wire + PROGDETAILS_EXECUTABLE + i * 4, output + (uint32)at);
                     strcpy((char *)wire + at, values[i]);
                     at += strlen(values[i]) + 1;
                 }

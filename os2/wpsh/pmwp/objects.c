@@ -15,6 +15,47 @@
 #include <ctype.h>
 #include <strings.h>
 
+enum
+{
+    CLASS_NAME_MAX = 255,
+    TITLE_MAX = 4096,
+    SETUP_MAX = 32767,
+    OBJECT_ID_SIZE = 1024,
+    OBJECT_PATH_SIZE = 4096,
+    /* Largest output buffer WinQueryObjectPath accepts. */
+    OBJECT_PATH_CAPACITY_MAX = 65536,
+    /* Bounds class replacement chains and folder nesting, so a cycle in the store
+       cannot loop forever. */
+    REPLACEMENT_CHAIN_MAX = 256,
+    FOLDER_DEPTH_MAX = 64,
+    /* "SHADOWID=<object id>;" */
+    SHADOW_SETUP_SIZE = 1100
+};
+
+/* The profile record WinStoreWindowPos writes: frame position and state, the frame's
+   restore and minimize positions, and the screen metrics they were saved under. */
+enum
+{
+    WINDOW_POS_SIGNATURE = 0x7b6a,
+    WINDOW_POS_FLAGS = 2,
+    WINDOW_POS_X = 6,
+    WINDOW_POS_Y = 8,
+    WINDOW_POS_CX = 10,
+    WINDOW_POS_CY = 12,
+    WINDOW_POS_HAS_RESTORE = 14,
+    WINDOW_POS_RESTORE = 18,
+    WINDOW_POS_HAS_MINIMIZE = 26,
+    WINDOW_POS_X_MINIMIZE = 30,
+    WINDOW_POS_Y_MINIMIZE = 32,
+    WINDOW_POS_SCREEN_CX = 34,
+    WINDOW_POS_SCREEN_CY = 38,
+    WINDOW_POS_BORDER_CX = 42,
+    WINDOW_POS_BORDER_CY = 46,
+    WINDOW_POS_SIZE = 50,
+    /* QWS_XRESTORE, QWS_YRESTORE, QWS_CXRESTORE and QWS_CYRESTORE. */
+    WINDOW_POS_RESTORE_WORDS = 4
+};
+
 ULONG WinQueryObject(PSZ id)
 {
     TRACE_NATIVE("WinQueryObject('%s')", id);
@@ -31,25 +72,25 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
 {
     TRACE_NATIVE("WinCreateObject('%s', '%s', '%s', '%s', %u)", class_name, title, setup, location,
                  (unsigned)flags);
-    if (!class_name || !*class_name || strlen(class_name) > 255 || !title || !*title ||
-        strlen(title) > 4096 || !setup || strlen(setup) > 32767 || !location || !*location ||
-        flags > 2)
+    if (!class_name || !*class_name || strlen(class_name) > CLASS_NAME_MAX || !title || !*title ||
+        strlen(title) > TITLE_MAX || !setup || strlen(setup) > SETUP_MAX || !location ||
+        !*location || flags > CO_UPDATEIFEXISTS)
         return 0;
     LxHostFile *lock;
     HINI profile = store_begin(&lock);
     ULONG result = 0;
     if (!profile)
         goto done;
-    char resolved_class[256];
+    char resolved_class[CLASS_NAME_MAX + 1];
     snprintf(resolved_class, sizeof resolved_class, "%s", class_name);
-    for (unsigned i = 0; i < 256; i++)
+    for (unsigned i = 0; i < REPLACEMENT_CHAIN_MAX; i++)
     {
-        char next[256];
+        char next[CLASS_NAME_MAX + 1];
         if (!PrfQueryProfileString(profile, "replacements", resolved_class, NULL, next,
                                    sizeof next))
             break;
         snprintf(resolved_class, sizeof resolved_class, "%s", next);
-        if (i == 255)
+        if (i == REPLACEMENT_CHAIN_MAX - 1)
             goto done;
     }
     class_name = resolved_class;
@@ -58,13 +99,13 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
     {
         /* Any other class exists only as a guest SOM class in its registered module.
            Its methods run guest code, so the store is released first. */
-        char module[260];
+        char module[CCHMAXPATH];
         if (!PrfQueryProfileString(profile, "classes", class_name, NULL, module, sizeof module))
             goto done;
         store_end(profile, lock);
         return pmwpCreateRegistered(class_name, module, title, setup, location, flags);
     }
-    char shadow_title[4097], shadow_target[4097];
+    char shadow_title[TITLE_MAX + 1], shadow_target[TITLE_MAX + 1];
     if (!strcmp(class_name, "WPShadow"))
     {
         if (!store_property(setup, "SHADOWID", shadow_target, sizeof shadow_target))
@@ -79,7 +120,7 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
             goto done;
         ULONG source = store_find(profile, target, NULL, NULL);
         PmwpRecord original = {0};
-        if (source == 1)
+        if (source == DESKTOP_OBJECT)
             strcpy(shadow_title, "Desktop");
         else if (source && store_load(profile, source, &original))
         {
@@ -107,23 +148,23 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
     }
     ULONG parent = store_find(profile, location, NULL, NULL);
     PmwpRecord container = {0};
-    if (!parent || (parent != 1 && (!store_load(profile, parent, &container) ||
-                                    strcmp(container.class_name, "WPFolder"))))
+    if (!parent || (parent != DESKTOP_OBJECT && (!store_load(profile, parent, &container) ||
+                                                 strcmp(container.class_name, "WPFolder"))))
     {
         free(container.data);
         goto done;
     }
     free(container.data);
-    char identifier[1024];
+    char identifier[OBJECT_ID_SIZE];
     BOOL has_identifier = store_property(setup, "OBJECTID", identifier, sizeof identifier);
     ULONG existing = has_identifier ? store_find(profile, identifier, NULL, NULL) : 0;
     if (!existing && !has_identifier)
         existing = store_find(profile, NULL, location, title);
-    if (existing == 1 || (existing && flags == 0))
+    if (existing == DESKTOP_OBJECT || (existing && flags == CO_FAILIFEXISTS))
         goto done;
     PmwpRecord object = {NULL, class_name, title, location, setup}, previous = {0};
     char *merged = NULL;
-    if (existing && flags == 2)
+    if (existing && flags == CO_UPDATEIFEXISTS)
     {
         if (!store_load(profile, existing, &previous) || strcmp(previous.class_name, class_name))
         {
@@ -140,10 +181,10 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
         snprintf(merged, size, "%s;%s", previous.setup, setup);
         object.setup = merged;
     }
-    char configured_title[32768];
+    char configured_title[SETUP_MAX + 1];
     if (store_property(object.setup, "TITLE", configured_title, sizeof configured_title))
     {
-        if (!*configured_title || strlen(configured_title) > 4096)
+        if (!*configured_title || strlen(configured_title) > TITLE_MAX)
             goto free_previous;
         object.title = configured_title;
     }
@@ -172,7 +213,7 @@ done:
 BOOL WinSetObjectData(ULONG handle, PSZ setup)
 {
     TRACE_NATIVE("WinSetObjectData(%u, '%s')", (unsigned)handle, setup);
-    if (!setup || strlen(setup) > 32767 || handle < FIRST_OBJECT)
+    if (!setup || strlen(setup) > SETUP_MAX || handle < FIRST_OBJECT)
         return FALSE;
     LxHostFile *lock;
     HINI profile = store_begin(&lock);
@@ -180,7 +221,7 @@ BOOL WinSetObjectData(ULONG handle, PSZ setup)
     PmwpRecord object = {0};
     if (profile && store_load(profile, handle, &object))
     {
-        char id[1024];
+        char id[OBJECT_ID_SIZE];
         ULONG conflict = store_property(setup, "OBJECTID", id, sizeof id)
                              ? store_find(profile, id, NULL, NULL)
                              : 0;
@@ -190,9 +231,9 @@ BOOL WinSetObjectData(ULONG handle, PSZ setup)
         {
             snprintf(merged, size, "%s;%s", object.setup, setup);
             object.setup = merged;
-            char title[32768];
+            char title[SETUP_MAX + 1];
             BOOL titled = store_property(merged, "TITLE", title, sizeof title);
-            if (!titled || (*title && strlen(title) <= 4096))
+            if (!titled || (*title && strlen(title) <= TITLE_MAX))
             {
                 if (titled)
                     object.title = title;
@@ -220,7 +261,7 @@ BOOL WinDestroyObject(ULONG handle)
         /* A nonempty folder cannot be deleted without an explicit child operation. */
         ULONG size;
         char *list = store_keys(profile, &size);
-        char id[1024];
+        char id[OBJECT_ID_SIZE];
         BOOL empty = TRUE;
         if (store_property(object.setup, "OBJECTID", id, sizeof id))
             for (char *key = list; key && key < list + size && *key; key += strlen(key) + 1)
@@ -248,7 +289,7 @@ BOOL WinIsSomDDReady(void)
 
 APIRET WinRestartSomDD(BOOL state)
 {
-    return state ? 50 : 0; /* ERROR_NOT_SUPPORTED: no DSOM daemon provider. */
+    return state ? ERROR_NOT_SUPPORTED : 0; /* There is no DSOM daemon to start. */
 }
 
 BOOL WinStoreWindowPos(PSZ app, PSZ key, HWND window)
@@ -258,26 +299,29 @@ BOOL WinStoreWindowPos(PSZ app, PSZ key, HWND window)
     SWP p;
     if (!WinQueryWindowPos(window, &p))
         return FALSE;
-    uint8 data[50] = {0};
-    ULONG style = WinQueryWindowULong(window, -2);
+    uint8 data[WINDOW_POS_SIZE] = {0};
+    ULONG style = WinQueryWindowULong(window, QWL_STYLE);
     ULONG flags =
         (style & WS_MINIMIZED ? SWP_MINIMIZE : 0) | (style & WS_MAXIMIZED ? SWP_MAXIMIZE : 0);
-    lx_guest_store_u16(data, 0x7b6a);
-    lx_guest_store_u32(data + 2, flags);
-    lx_guest_store_u16(data + 6, p.x);
-    lx_guest_store_u16(data + 8, p.y);
-    lx_guest_store_u16(data + 10, p.cx);
-    lx_guest_store_u16(data + 12, p.cy);
-    lx_guest_store_u32(data + 14, 1);
-    for (unsigned i = 0; i < 4; i++)
-        lx_guest_store_u16(data + 18 + i * 2, WinQueryWindowUShort(window, 0x0c + i * 2));
-    lx_guest_store_u32(data + 26, 1);
-    lx_guest_store_u16(data + 30, WinQueryWindowUShort(window, 0x14));
-    lx_guest_store_u16(data + 32, WinQueryWindowUShort(window, 0x16));
-    lx_guest_store_u32(data + 34, WinQuerySysValue(HWND_DESKTOP, 20));
-    lx_guest_store_u32(data + 38, WinQuerySysValue(HWND_DESKTOP, 21));
-    lx_guest_store_u32(data + 42, WinQuerySysValue(HWND_DESKTOP, 4));
-    lx_guest_store_u32(data + 46, WinQuerySysValue(HWND_DESKTOP, 5));
+    lx_guest_store_u16(data, WINDOW_POS_SIGNATURE);
+    lx_guest_store_u32(data + WINDOW_POS_FLAGS, flags);
+    lx_guest_store_u16(data + WINDOW_POS_X, p.x);
+    lx_guest_store_u16(data + WINDOW_POS_Y, p.y);
+    lx_guest_store_u16(data + WINDOW_POS_CX, p.cx);
+    lx_guest_store_u16(data + WINDOW_POS_CY, p.cy);
+    lx_guest_store_u32(data + WINDOW_POS_HAS_RESTORE, 1);
+    for (unsigned i = 0; i < WINDOW_POS_RESTORE_WORDS; i++)
+        lx_guest_store_u16(data + WINDOW_POS_RESTORE + i * 2,
+                           WinQueryWindowUShort(window, QWS_XRESTORE + i * 2));
+    lx_guest_store_u32(data + WINDOW_POS_HAS_MINIMIZE, 1);
+    lx_guest_store_u16(data + WINDOW_POS_X_MINIMIZE, WinQueryWindowUShort(window, QWS_XMINIMIZE));
+    lx_guest_store_u16(data + WINDOW_POS_Y_MINIMIZE, WinQueryWindowUShort(window, QWS_YMINIMIZE));
+    lx_guest_store_u32(data + WINDOW_POS_SCREEN_CX, WinQuerySysValue(HWND_DESKTOP, SV_CXSCREEN));
+    lx_guest_store_u32(data + WINDOW_POS_SCREEN_CY, WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN));
+    lx_guest_store_u32(data + WINDOW_POS_BORDER_CX,
+                       WinQuerySysValue(HWND_DESKTOP, SV_CXSIZEBORDER));
+    lx_guest_store_u32(data + WINDOW_POS_BORDER_CY,
+                       WinQuerySysValue(HWND_DESKTOP, SV_CYSIZEBORDER));
     return PrfWriteProfileData(HINI_USERPROFILE, app, key, data, sizeof data);
 }
 
@@ -285,15 +329,19 @@ BOOL WinRestoreWindowPos(PSZ app, PSZ key, HWND window)
 {
     if (!app || !*app || !key || !*key)
         return FALSE;
-    uint8 data[50];
+    uint8 data[WINDOW_POS_SIZE];
     ULONG size = sizeof data;
     if (!PrfQueryProfileData(HINI_USERPROFILE, app, key, data, &size) || size != sizeof data ||
-        lx_guest_load_u16(data) != 0x7b6a)
+        lx_guest_load_u16(data) != WINDOW_POS_SIGNATURE)
         return FALSE;
-    LONG x = (SHORT)lx_guest_load_u16(data + 6), y = (SHORT)lx_guest_load_u16(data + 8),
-         cx = lx_guest_load_u16(data + 10), cy = lx_guest_load_u16(data + 12),
-         width = WinQuerySysValue(HWND_DESKTOP, 20), height = WinQuerySysValue(HWND_DESKTOP, 21);
-    ULONG old_width = lx_guest_load_u32(data + 34), old_height = lx_guest_load_u32(data + 38);
+    LONG x = (SHORT)lx_guest_load_u16(data + WINDOW_POS_X),
+         y = (SHORT)lx_guest_load_u16(data + WINDOW_POS_Y),
+         cx = lx_guest_load_u16(data + WINDOW_POS_CX), cy = lx_guest_load_u16(data + WINDOW_POS_CY),
+         width = WinQuerySysValue(HWND_DESKTOP, SV_CXSCREEN),
+         height = WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN);
+    /* Positions scale with the screen; sizes are kept. */
+    ULONG old_width = lx_guest_load_u32(data + WINDOW_POS_SCREEN_CX),
+          old_height = lx_guest_load_u32(data + WINDOW_POS_SCREEN_CY);
     if (old_width && old_width != (ULONG)width)
         x = (LONG)((int64_t)x * width / old_width);
     if (old_height && old_height != (ULONG)height)
@@ -304,16 +352,17 @@ BOOL WinRestoreWindowPos(PSZ app, PSZ key, HWND window)
         x = width - cx;
     if (y >= height)
         y = height - cy;
-    if (lx_guest_load_u32(data + 14))
-        for (unsigned i = 0; i < 4; i++)
-            WinSetWindowUShort(window, 0x0c + i * 2, lx_guest_load_u16(data + 18 + i * 2));
-    if (lx_guest_load_u32(data + 26))
+    if (lx_guest_load_u32(data + WINDOW_POS_HAS_RESTORE))
+        for (unsigned i = 0; i < WINDOW_POS_RESTORE_WORDS; i++)
+            WinSetWindowUShort(window, QWS_XRESTORE + i * 2,
+                               lx_guest_load_u16(data + WINDOW_POS_RESTORE + i * 2));
+    if (lx_guest_load_u32(data + WINDOW_POS_HAS_MINIMIZE))
     {
-        WinSetWindowUShort(window, 0x14, lx_guest_load_u16(data + 30));
-        WinSetWindowUShort(window, 0x16, lx_guest_load_u16(data + 32));
+        WinSetWindowUShort(window, QWS_XMINIMIZE, lx_guest_load_u16(data + WINDOW_POS_X_MINIMIZE));
+        WinSetWindowUShort(window, QWS_YMINIMIZE, lx_guest_load_u16(data + WINDOW_POS_Y_MINIMIZE));
     }
     ULONG flags = SWP_MOVE | SWP_SIZE | SWP_SHOW;
-    ULONG state = lx_guest_load_u32(data + 2) & (SWP_MINIMIZE | SWP_MAXIMIZE);
+    ULONG state = lx_guest_load_u32(data + WINDOW_POS_FLAGS) & (SWP_MINIMIZE | SWP_MAXIMIZE);
     if (state)
         flags |= state;
     else
@@ -323,11 +372,11 @@ BOOL WinRestoreWindowPos(PSZ app, PSZ key, HWND window)
 
 BOOL pmwp_object_path(HINI profile, ULONG handle, char *output, size_t capacity, unsigned depth)
 {
-    if (depth > 64 || !capacity)
+    if (depth > FOLDER_DEPTH_MAX || !capacity)
         return FALSE;
-    if (handle == 1)
+    if (handle == DESKTOP_OBJECT)
     {
-        char desktop[260];
+        char desktop[CCHMAXPATH];
         if (!PrfQueryProfileString(profile, "metadata", "desktopPath", NULL, desktop,
                                    sizeof desktop))
             return FALSE;
@@ -345,7 +394,7 @@ BOOL pmwp_object_path(HINI profile, ULONG handle, char *output, size_t capacity,
     else if (!strcmp(object.class_name, "WPFolder") || !strcmp(object.class_name, "WPDataFile") ||
              !strcmp(object.class_name, "WPFileSystem"))
     {
-        char parent[4096];
+        char parent[OBJECT_PATH_SIZE];
         ULONG container = store_find(profile, object.location, NULL, NULL);
         if (container && pmwp_object_path(profile, container, parent, sizeof parent, depth + 1))
         {
@@ -366,10 +415,10 @@ BOOL pmwp_object_path(HINI profile, ULONG handle, char *output, size_t capacity,
 
 BOOL WinQueryObjectPath(ULONG handle, PSZ output, ULONG capacity)
 {
-    if (!output || !capacity || capacity > 65536)
+    if (!output || !capacity || capacity > OBJECT_PATH_CAPACITY_MAX)
         return FALSE;
     output[0] = 0;
-    char path_buffer[4096];
+    char path_buffer[OBJECT_PATH_SIZE];
     LxHostFile *lock;
     HINI profile = store_begin(&lock);
     BOOL ok = profile && pmwp_object_path(profile, handle, path_buffer, sizeof path_buffer, 0);
@@ -387,7 +436,7 @@ BOOL WinQueryObjectPath(ULONG handle, PSZ output, ULONG capacity)
 
 BOOL WinQueryActiveDesktopPathname(PSZ output, ULONG capacity)
 {
-    return WinQueryObjectPath(1, output, capacity);
+    return WinQueryObjectPath(DESKTOP_OBJECT, output, capacity);
 }
 
 BOOL WinSaveObject(ULONG handle, BOOL async)
@@ -405,7 +454,7 @@ BOOL WinSaveObject(ULONG handle, BOOL async)
 
 static BOOL destination_folder(HINI profile, ULONG handle)
 {
-    if (handle == 1)
+    if (handle == DESKTOP_OBJECT)
         return TRUE;
     PmwpRecord d = {0};
     BOOL ok = store_load(profile, handle, &d) && !strcmp(d.class_name, "WPFolder");
@@ -415,20 +464,20 @@ static BOOL destination_folder(HINI profile, ULONG handle)
 
 ULONG WinMoveObject(ULONG handle, ULONG destination, ULONG reserved)
 {
-    if (reserved || handle == 1 || handle == destination)
+    if (reserved || handle == DESKTOP_OBJECT || handle == destination)
         return 0;
     LxHostFile *lock;
     HINI profile = store_begin(&lock);
     PmwpRecord object = {0};
     ULONG result = 0;
-    char id[1024];
+    char id[OBJECT_ID_SIZE];
     if (profile && destination_folder(profile, destination) &&
         store_load(profile, handle, &object) &&
         store_ensure_identifier(profile, destination, id, sizeof id))
     {
         BOOL cycle = FALSE;
         ULONG at = destination;
-        for (unsigned depth = 0; at && at != 1 && depth < 64; depth++)
+        for (unsigned depth = 0; at && at != DESKTOP_OBJECT && depth < FOLDER_DEPTH_MAX; depth++)
         {
             if (at == handle)
             {
@@ -440,7 +489,8 @@ ULONG WinMoveObject(ULONG handle, ULONG destination, ULONG reserved)
                 break;
             at = store_find(profile, parent.location, NULL, NULL);
             free(parent.data);
-            if (depth == 63)
+            /* A chain this deep is treated as a cycle. */
+            if (depth == FOLDER_DEPTH_MAX - 1)
                 cycle = TRUE;
         }
         if (!cycle)
@@ -457,10 +507,10 @@ ULONG WinMoveObject(ULONG handle, ULONG destination, ULONG reserved)
 
 static ULONG copy_object(HINI profile, ULONG handle, ULONG destination, unsigned depth)
 {
-    if (depth > 64)
+    if (depth > FOLDER_DEPTH_MAX)
         return 0;
     PmwpRecord source = {0};
-    char id[1024];
+    char id[OBJECT_ID_SIZE];
     if (!store_load(profile, handle, &source) ||
         !store_ensure_identifier(profile, destination, id, sizeof id))
     {
@@ -480,7 +530,7 @@ static ULONG copy_object(HINI profile, ULONG handle, ULONG destination, unsigned
     result = copy;
     if (!strcmp(source.class_name, "WPFolder"))
     {
-        char source_id[1024];
+        char source_id[OBJECT_ID_SIZE];
         if (store_property(source.setup, "OBJECTID", source_id, sizeof source_id))
         {
             ULONG size;
@@ -510,7 +560,7 @@ done:
 static BOOL contains_folder(HINI profile, ULONG object, ULONG destination)
 {
     ULONG at = destination;
-    for (unsigned i = 0; at && at != 1 && i < 64; i++)
+    for (unsigned i = 0; at && at != DESKTOP_OBJECT && i < FOLDER_DEPTH_MAX; i++)
     {
         if (at == object)
             return TRUE;
@@ -519,7 +569,7 @@ static BOOL contains_folder(HINI profile, ULONG object, ULONG destination)
             return TRUE;
         at = store_find(profile, folder.location, NULL, NULL);
         free(folder.data);
-        if (i == 63)
+        if (i == FOLDER_DEPTH_MAX - 1)
             return TRUE;
     }
     return FALSE;
@@ -527,7 +577,7 @@ static BOOL contains_folder(HINI profile, ULONG object, ULONG destination)
 
 ULONG WinCopyObject(ULONG handle, ULONG destination, ULONG reserved)
 {
-    if (reserved || handle == 1 || handle == destination)
+    if (reserved || handle == DESKTOP_OBJECT || handle == destination)
         return 0;
     LxHostFile *lock;
     HINI profile = store_begin(&lock);
@@ -547,15 +597,15 @@ ULONG WinCreateShadow(ULONG handle, ULONG destination, ULONG reserved)
     HINI profile = store_begin(&lock);
     ULONG result = 0;
     PmwpRecord source = {0};
-    char source_id[1024], destination_id[1024];
+    char source_id[OBJECT_ID_SIZE], destination_id[OBJECT_ID_SIZE];
     if (profile && destination_folder(profile, destination) &&
-        (handle == 1 || store_load(profile, handle, &source)) &&
+        (handle == DESKTOP_OBJECT || store_load(profile, handle, &source)) &&
         store_ensure_identifier(profile, handle, source_id, sizeof source_id) &&
         store_ensure_identifier(profile, destination, destination_id, sizeof destination_id))
     {
-        char setup[1100];
+        char setup[SHADOW_SETUP_SIZE];
         snprintf(setup, sizeof setup, "SHADOWID=%s;", source_id);
-        PmwpRecord shadow = {NULL, "WPShadow", handle == 1 ? "Desktop" : source.title,
+        PmwpRecord shadow = {NULL, "WPShadow", handle == DESKTOP_OBJECT ? "Desktop" : source.title,
                              destination_id, setup};
         ULONG copy = store_allocate_object(profile);
         if (copy && store_save(profile, copy, &shadow))

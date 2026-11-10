@@ -12,7 +12,7 @@ enum
 {
     ARENA_BYTES = 0x40000,
     CODE_BYTES = 0x10000,
-    SCI_BYTES = 164,
+    /* SOM_SCILEVEL: the somStaticClassInfo layout version this provider fills. */
     SCI_LAYOUT = 4,
     CCDS_BYTES = 16,
     SOM_REDISPATCH_DEFAULT = 0xffffffffu,
@@ -20,7 +20,105 @@ enum
     CONTROL_BYTES = 16,
     CONTROL_INIT_OFFSET = 0x1c,
     CONTROL_DESTRUCT_OFFSET = 0x2c,
-    STUB_PROCEDURE_FLAG = 0x8000
+    STUB_PROCEDURE_FLAG = 0x8000,
+    /* Guest bridges are placed at 16-byte boundaries. */
+    CODE_ALIGNMENT_MASK = 15,
+    /* The longest "::class::method" descriptor any class row produces. */
+    DESCRIPTOR_LIMIT = 160
+};
+
+/* somStaticClassInfo (somapi.h) field offsets, layout version 4. */
+enum
+{
+    SCI_LAYOUT_VERSION = 0,
+    SCI_NUM_STATIC_METHODS = 4,
+    SCI_NUM_STATIC_OVERRIDES = 8,
+    SCI_NUM_PROC_METHODS = 16,
+    SCI_MAJOR_VERSION = 24,
+    SCI_MINOR_VERSION = 28,
+    SCI_INSTANCE_DATA_SIZE = 32,
+    SCI_MAX_METHODS = 36,
+    SCI_NUM_PARENTS = 40,
+    SCI_CLASS_ID = 44,
+    SCI_EXPLICIT_META_ID = 48,
+    SCI_IMPLICIT_PARENT_META = 52,
+    SCI_PARENTS = 56,
+    SCI_CDS = 60,
+    SCI_CCDS = 64,
+    SCI_SMT = 68,
+    SCI_OMT = 72,
+    SCI_PMT = 84,
+    SCI_DATA_ALIGNMENT = 96,
+    SCI_NUM_DIRECT_INIT_CLASSES = 100,
+    SCI_NUM_CLASS_DATA_ENTRIES = 132,
+    SCI_BYTES = 164
+};
+
+/* somStaticMethod_t, somOverrideMethod_t and somProcMethods_t entries, and a
+   somApRdInfo immediately followed by the somMethodInfo it points to. */
+enum
+{
+    SMT_CLASS_DATA = 0,
+    SMT_METHOD_ID = 4,
+    SMT_METHOD_DESCRIPTOR = 8,
+    SMT_METHOD = 12,
+    SMT_REDISPATCH_STUB = 16,
+    SMT_APPLY_STUB = 20,
+    SMT_ENTRY_BYTES = 24,
+    OMT_METHOD_ID = 0,
+    OMT_METHOD = 4,
+    OMT_ENTRY_BYTES = 8,
+    PMT_CLASS_DATA = 0,
+    PMT_ENTRY = 4,
+    PMT_ENTRY_BYTES = 8,
+    APRD_RD_STUB = 0,
+    APRD_AP_STUB = 4,
+    APRD_STUB_INFO = 8,
+    APRD_CALL_TYPE = 12,
+    APRD_VA_LIST_SIZE = 16,
+    APRD_FLOAT_MAP = 20,
+    APRD_BYTES = 24
+};
+
+/* Versions PMWP.DLL passes to the SOM root class constructors (SOMObjectNewClass
+   and its peers) and to the Workplace parent and metaclass constructors. */
+enum
+{
+    SOM_ROOT_MAJOR_VERSION = 1,
+    SOM_ROOT_MINOR_VERSION = 4,
+    WPS_CLASS_MAJOR_VERSION = 1,
+    WPS_CLASS_MINOR_VERSION = 2
+};
+
+/* The unavailable-method stub: push imm32; call rel32; add esp, imm8; ret. */
+enum
+{
+    X86_PUSH_IMM32 = 0x68,
+    X86_CALL_REL32 = 0xe8,
+    X86_ADD_RM32_IMM8 = 0x83,
+    X86_MODRM_ESP = 0xc4,
+    X86_RET = 0xc3,
+    /* rel32 counts from the end of the call instruction. */
+    STUB_CALL_END = 10
+};
+
+/* somInitCtrl / somDestructCtrl words, and the parent procedure in each somInitInfo. */
+enum
+{
+    CTRL_MASK = 0,
+    CTRL_INFO = 4,
+    CTRL_INFO_SIZE = 8,
+    INIT_INFO_PARENT_PROC = 4,
+    CTRL_CALL_PARENT = 1
+};
+
+/* somCClassDataStructure: the parent method table pointer, then the instance data token. */
+enum
+{
+    CCDS_PARENT_MTAB = 0,
+    CCDS_INSTANCE_DATA_TOKEN = 4,
+    /* somParentNumResolve numbers parents from 1. */
+    FIRST_PARENT = 1
 };
 
 /* Ordinals of the original SOM.DLL. */
@@ -257,14 +355,14 @@ static uint32 emit_unavailable_stub(uint32 position)
         return 0;
     uint8 *stub = S.code + S.code_used;
     uint32 address = S.code_base + (uint32)S.code_used;
-    stub[0] = 0x68;
+    stub[0] = X86_PUSH_IMM32;
     lx_guest_store_u32(stub + 1, position);
-    stub[5] = 0xe8;
-    lx_guest_store_u32(stub + 6, S.unavailable_bridge - (address + 10));
-    stub[10] = 0x83;
-    stub[11] = 0xc4;
-    stub[12] = 0x04;
-    stub[13] = 0xc3;
+    stub[5] = X86_CALL_REL32;
+    lx_guest_store_u32(stub + 6, S.unavailable_bridge - (address + STUB_CALL_END));
+    stub[10] = X86_ADD_RM32_IMM8;
+    stub[11] = X86_MODRM_ESP;
+    stub[12] = 4;
+    stub[13] = X86_RET;
     S.code_used += STUB_BYTES;
     return address;
 }
@@ -317,7 +415,7 @@ static BOOL emit_bridges(void)
         return FALSE;
     memcpy(code + used, call_many_code, sizeof call_many_code);
     S.call_many = base + (uint32)used;
-    used += (sizeof call_many_code + 15) & ~(size_t)15;
+    used += (sizeof call_many_code + CODE_ALIGNMENT_MASK) & ~(size_t)CODE_ALIGNMENT_MASK;
     S.code = code;
     S.code_base = base;
     S.code_used = used;
@@ -343,9 +441,11 @@ static BOOL build_static_info(PmwpClassId id)
     uint32 ccds = arena_alloc(CCDS_BYTES), sci = arena_alloc(SCI_BYTES);
     uint32 class_id = arena_id(row->name), parent_id = arena_id(row->parent);
     uint32 parents = arena_alloc(4), meta_id = row->meta ? arena_id(row->meta) : 0;
-    uint32 smt = row->method_count ? arena_alloc((size_t)row->method_count * 24) : 0;
-    uint32 omt = row->override_count ? arena_alloc((size_t)row->override_count * 8) : 0;
-    uint32 pmt = row->procedure_count ? arena_alloc((size_t)row->procedure_count * 8) : 0;
+    uint32 smt = row->method_count ? arena_alloc((size_t)row->method_count * SMT_ENTRY_BYTES) : 0;
+    uint32 omt =
+        row->override_count ? arena_alloc((size_t)row->override_count * OMT_ENTRY_BYTES) : 0;
+    uint32 pmt =
+        row->procedure_count ? arena_alloc((size_t)row->procedure_count * PMT_ENTRY_BYTES) : 0;
     if (!cds || !ccds || !sci || !class_id || !parent_id || !parents || (row->meta && !meta_id) ||
         (row->method_count && !smt) || (row->override_count && !omt) ||
         (row->procedure_count && !pmt))
@@ -356,7 +456,7 @@ static BOOL build_static_info(PmwpClassId id)
     for (uint32 i = 0; i < row->method_count; i++)
     {
         const PmwpMethodRow *method = &row->methods[i];
-        char descriptor[160];
+        char descriptor[DESCRIPTOR_LIMIT];
         snprintf(descriptor, sizeof descriptor, "::%s::%s", row->name, method->name);
         uint32 name = arena_id_reference(method->name), full = arena_id_reference(descriptor);
         uint32 proc = body_proc(row->name, method->name), apply = 0;
@@ -367,23 +467,23 @@ static BOOL build_static_info(PmwpClassId id)
         if (method->list_size)
         {
             /* somApRdInfo followed by the somMethodInfo it refers to. */
-            apply = arena_alloc(24);
+            apply = arena_alloc(APRD_BYTES);
             if (!apply)
                 return FALSE;
-            arena_put(apply, 0);
-            arena_put(apply + 4, 0);
-            arena_put(apply + 8, apply + 12);
-            arena_put(apply + 12, method->call_type);
-            arena_put(apply + 16, method->list_size);
-            arena_put(apply + 20, 0);
+            arena_put(apply + APRD_RD_STUB, 0);
+            arena_put(apply + APRD_AP_STUB, 0);
+            arena_put(apply + APRD_STUB_INFO, apply + APRD_CALL_TYPE);
+            arena_put(apply + APRD_CALL_TYPE, method->call_type);
+            arena_put(apply + APRD_VA_LIST_SIZE, method->list_size);
+            arena_put(apply + APRD_FLOAT_MAP, 0);
         }
-        uint32 entry = smt + i * 24;
-        arena_put(entry, cds + method->offset);
-        arena_put(entry + 4, name);
-        arena_put(entry + 8, full);
-        arena_put(entry + 12, proc);
-        arena_put(entry + 16, SOM_REDISPATCH_DEFAULT);
-        arena_put(entry + 20, apply);
+        uint32 entry = smt + i * SMT_ENTRY_BYTES;
+        arena_put(entry + SMT_CLASS_DATA, cds + method->offset);
+        arena_put(entry + SMT_METHOD_ID, name);
+        arena_put(entry + SMT_METHOD_DESCRIPTOR, full);
+        arena_put(entry + SMT_METHOD, proc);
+        arena_put(entry + SMT_REDISPATCH_STUB, SOM_REDISPATCH_DEFAULT);
+        arena_put(entry + SMT_APPLY_STUB, apply);
     }
     uint32 overrides = 0;
     for (uint32 i = 0; i < row->override_count; i++)
@@ -395,8 +495,8 @@ static BOOL build_static_info(PmwpClassId id)
         uint32 id_reference = arena_id_reference(name);
         if (!id_reference)
             return FALSE;
-        arena_put(omt + overrides * 8, id_reference);
-        arena_put(omt + overrides * 8 + 4, proc);
+        arena_put(omt + overrides * OMT_ENTRY_BYTES + OMT_METHOD_ID, id_reference);
+        arena_put(omt + overrides * OMT_ENTRY_BYTES + OMT_METHOD, proc);
         overrides++;
     }
     for (uint32 i = 0; i < row->procedure_count; i++)
@@ -404,30 +504,31 @@ static BOOL build_static_info(PmwpClassId id)
         uint32 proc = emit_unavailable_stub((uint32)id << 16 | STUB_PROCEDURE_FLAG | i);
         if (!proc)
             return FALSE;
-        arena_put(pmt + i * 8, cds + row->procedures[i]);
-        arena_put(pmt + i * 8 + 4, proc);
+        arena_put(pmt + i * PMT_ENTRY_BYTES + PMT_CLASS_DATA, cds + row->procedures[i]);
+        arena_put(pmt + i * PMT_ENTRY_BYTES + PMT_ENTRY, proc);
     }
-    arena_put(sci + 0, SCI_LAYOUT);
-    arena_put(sci + 4, row->method_count);
-    arena_put(sci + 8, overrides);
-    arena_put(sci + 16, row->procedure_count);
-    arena_put(sci + 24, 1);
-    arena_put(sci + 28, 2);
-    arena_put(sci + 32, row->instance_size);
-    arena_put(sci + 36, row->max_methods);
-    arena_put(sci + 40, 1);
-    arena_put(sci + 44, class_id);
-    arena_put(sci + 48, meta_id);
-    arena_put(sci + 52, row->implicit_meta);
-    arena_put(sci + 56, parents);
-    arena_put(sci + 60, cds);
-    arena_put(sci + 64, ccds);
-    arena_put(sci + 68, smt);
-    arena_put(sci + 72, omt);
-    arena_put(sci + 84, pmt);
-    arena_put(sci + 96, row->alignment);
-    arena_put(sci + 100, 0xffffffffu);
-    arena_put(sci + 132, row->class_data_entries);
+    arena_put(sci + SCI_LAYOUT_VERSION, SCI_LAYOUT);
+    arena_put(sci + SCI_NUM_STATIC_METHODS, row->method_count);
+    arena_put(sci + SCI_NUM_STATIC_OVERRIDES, overrides);
+    arena_put(sci + SCI_NUM_PROC_METHODS, row->procedure_count);
+    arena_put(sci + SCI_MAJOR_VERSION, WPS_CLASS_MAJOR_VERSION);
+    arena_put(sci + SCI_MINOR_VERSION, WPS_CLASS_MINOR_VERSION);
+    arena_put(sci + SCI_INSTANCE_DATA_SIZE, row->instance_size);
+    arena_put(sci + SCI_MAX_METHODS, row->max_methods);
+    arena_put(sci + SCI_NUM_PARENTS, 1);
+    arena_put(sci + SCI_CLASS_ID, class_id);
+    arena_put(sci + SCI_EXPLICIT_META_ID, meta_id);
+    arena_put(sci + SCI_IMPLICIT_PARENT_META, row->implicit_meta);
+    arena_put(sci + SCI_PARENTS, parents);
+    arena_put(sci + SCI_CDS, cds);
+    arena_put(sci + SCI_CCDS, ccds);
+    arena_put(sci + SCI_SMT, smt);
+    arena_put(sci + SCI_OMT, omt);
+    arena_put(sci + SCI_PMT, pmt);
+    arena_put(sci + SCI_DATA_ALIGNMENT, row->alignment);
+    /* -1: no direct-init class list, so SOM derives one from the parents. */
+    arena_put(sci + SCI_NUM_DIRECT_INIT_CLASSES, 0xffffffffu);
+    arena_put(sci + SCI_NUM_CLASS_DATA_ENTRIES, row->class_data_entries);
     S.sci[id] = sci;
     S.cds[id] = cds;
     S.ccds[id] = ccds;
@@ -507,20 +608,22 @@ static uint32 build_class(PmwpClassId id, uint32 major, uint32 minor)
     switch (row->root)
     {
         case PMWP_ROOT_OBJECT:
-            pmwpGuestCall(S.object_new, 1, 4, 0, 0);
+            pmwpGuestCall(S.object_new, SOM_ROOT_MAJOR_VERSION, SOM_ROOT_MINOR_VERSION, 0, 0);
             break;
         case PMWP_ROOT_CLASS:
-            pmwpGuestCall(S.class_new, 1, 4, 0, 0);
+            pmwpGuestCall(S.class_new, SOM_ROOT_MAJOR_VERSION, SOM_ROOT_MINOR_VERSION, 0, 0);
             break;
         case PMWP_ROOT_CLASS_MANAGER:
-            pmwpGuestCall(S.class_mgr_new, 1, 4, 0, 0);
+            pmwpGuestCall(S.class_mgr_new, SOM_ROOT_MAJOR_VERSION, SOM_ROOT_MINOR_VERSION, 0, 0);
             break;
         default:
             break;
     }
-    if (row->parent_id != PMWP_NO_CLASS && !build_class(row->parent_id, 1, 2))
+    if (row->parent_id != PMWP_NO_CLASS &&
+        !build_class(row->parent_id, WPS_CLASS_MAJOR_VERSION, WPS_CLASS_MINOR_VERSION))
         return 0;
-    if (row->meta_id != PMWP_NO_CLASS && !build_class(row->meta_id, 1, 2))
+    if (row->meta_id != PMWP_NO_CLASS &&
+        !build_class(row->meta_id, WPS_CLASS_MAJOR_VERSION, WPS_CLASS_MINOR_VERSION))
         return 0;
     return pmwpGuestCall(S.build_class, 1, S.sci[id], major, minor);
 }
@@ -534,7 +637,7 @@ uint32 pmwpClassNew(PmwpClassId id, uint32 major, uint32 minor)
        WPProgram, which the shell itself has already built on OS/2. */
     if (result && !__atomic_exchange_n(&family_started, 1, __ATOMIC_ACQ_REL))
         for (int other = 0; other < PMWP_CLASS_COUNT; other++)
-            if (!build_class((PmwpClassId)other, 1, 2))
+            if (!build_class((PmwpClassId)other, WPS_CLASS_MAJOR_VERSION, WPS_CLASS_MINOR_VERSION))
                 TRACE_NATIVE("PMWP class %s could not be built", pmwpClassRows[other].name);
     return result;
 }
@@ -567,19 +670,20 @@ uint32 pmwpInvokeObject(uint32 offset, uint32 self, uint32 a, uint32 b, uint32 c
 /* The instance data token at somCClassDataStructure +4 is callable like a method token. */
 uint32 pmwpInstanceData(PmwpClassId id, uint32 self)
 {
-    return pmwpGuestCall(pmwpLoad32(S.ccds[id] + 4), self, 0, 0, 0);
+    return pmwpGuestCall(pmwpLoad32(S.ccds[id] + CCDS_INSTANCE_DATA_TOKEN), self, 0, 0, 0);
 }
 
 uint32 pmwpParentProc(PmwpClassId id, uint32 root_token_offset)
 {
-    return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id]), 1,
+    return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id] + CCDS_PARENT_MTAB), FIRST_PARENT,
                          pmwpLoad32(S.class_data + root_token_offset), 0);
 }
 
 /* The implementation of a method inherited from the first parent of `id`. */
 uint32 pmwpParentMethod(PmwpClassId id, uint32 token)
 {
-    return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id]), 1, token, 0);
+    return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id] + CCDS_PARENT_MTAB), FIRST_PARENT,
+                         token, 0);
 }
 
 /* Generated initializers and destructors share this step. A null control selects the
@@ -590,7 +694,7 @@ static uint32 control_step(PmwpClassId id, uint32 *control, uint32 *owned, uint3
     *owned = 0;
     if (!*control)
     {
-        uint32 table = pmwpLoad32(S.ccds[id]) + table_offset;
+        uint32 table = pmwpLoad32(S.ccds[id] + CCDS_PARENT_MTAB) + table_offset;
         *owned = pmwpMalloc(CONTROL_BYTES);
         if (!*owned)
             return 0;
@@ -598,13 +702,13 @@ static uint32 control_step(PmwpClassId id, uint32 *control, uint32 *owned, uint3
             pmwpStore32(*owned + i, pmwpLoad32(table + i));
         *control = *owned;
     }
-    uint32 mask = pmwpLoad32(*control), info = pmwpLoad32(*control + 4);
-    info += pmwpLoad32(*control + 8);
-    pmwpStore32(*control, mask + 1);
-    pmwpStore32(*control + 4, info);
+    uint32 mask = pmwpLoad32(*control + CTRL_MASK), info = pmwpLoad32(*control + CTRL_INFO);
+    info += pmwpLoad32(*control + CTRL_INFO_SIZE);
+    pmwpStore32(*control + CTRL_MASK, mask + 1);
+    pmwpStore32(*control + CTRL_INFO, info);
     uint8 flags = 0;
     lx_execution_read(GProcessState.execution, mask, &flags, 1);
-    return flags & 1 ? pmwpLoad32(info + 4) : 0;
+    return flags & CTRL_CALL_PARENT ? pmwpLoad32(info + INIT_INFO_PARENT_PROC) : 0;
 }
 
 void pmwpGeneratedInit(PmwpClassId id, uint32 self, uint32 control)
@@ -628,7 +732,8 @@ void pmwpGeneratedDestruct(PmwpClassId id, uint32 self, BOOL release, uint32 con
 /* The class manager parent's implementation of a SOMClassMgr method. */
 uint32 pmwpClassManagerParent(uint32 token_offset)
 {
-    return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[PMWP_WPCLASSMANAGER]), 1,
+    return pmwpGuestCall(S.parent_resolve,
+                         pmwpLoad32(S.ccds[PMWP_WPCLASSMANAGER] + CCDS_PARENT_MTAB), FIRST_PARENT,
                          pmwpLoad32(S.class_mgr_data + token_offset), 0);
 }
 

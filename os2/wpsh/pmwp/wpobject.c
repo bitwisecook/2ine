@@ -16,13 +16,61 @@ enum
     SETUP_LIMIT = 32768,
     CLASS_LIMIT = 256,
     VALUE_LIMIT = 65536,
-    ERROR_NOT_ENOUGH_MEMORY_CODE = 8,
-    OK_DELETE = 1,
-    NO_DELETE = 2,
-    STATE_STYLE_KEY = 1,
+    OBJECT_ID_LIMIT = 1024,
+    /* "OBJECTID=<object id>;" */
+    OBJECT_ID_SETUP_SIZE = 1040,
+    /* Help library, icon file and window keys as saved state. */
+    SAVED_STRING_SIZE = 1024,
     INIT_CONTROL_MASK = 0,
     INIT_CONTROL_INFO = 4,
     INIT_CONTROL_SIZE = 8
+};
+
+/* Toolkit wpobject.h values. */
+enum
+{
+    CLSSTYLE_NEVERTEMPLATE = 0x00000010,
+    CLSSTYLE_PRIVATE = 0x00001000,
+    OK_DELETE = 1,
+    NO_DELETE = 2,
+    MINWIN_VIEWER = 2,
+    DEFAULTBUTTON = 3
+};
+
+/* USEITEM is {type, next}; a memory item adds its size, and the caller's block follows. */
+enum
+{
+    USEITEM_NEXT = 4,
+    MEMORYITEM_SIZE = 8,
+    MEMORY_USE_HEADER = 12
+};
+
+/* ICONINFO as passed to wpSetIconData. */
+enum
+{
+    ICONINFO_SIZE = 28,
+    ICONINFO_FORMAT = 4,
+    ICONINFO_FILE_NAME = 8
+};
+
+/* Keys of the WPObject settings saved under the object's handle. */
+enum
+{
+    STATE_STYLE_KEY = 1,
+    STATE_DEFAULT_VIEW_KEY,
+    STATE_CONCURRENT_VIEW_KEY,
+    STATE_BUTTON_KEY,
+    STATE_MIN_WINDOW_KEY,
+    STATE_HELP_PANEL_KEY,
+    STATE_ICON_X_KEY,
+    STATE_ICON_Y_KEY,
+    STATE_OBJECT_STATE_KEY,
+    STATE_ICON_FORMAT_KEY,
+    STATE_ICON_MODULE_KEY,
+    STATE_ICON_RESOURCE_KEY,
+    STATE_HELP_LIBRARY_KEY,
+    STATE_ICON_FILE_KEY,
+    STATE_WINDOW_KEYS_KEY
 };
 
 typedef struct AwakeObject
@@ -144,6 +192,7 @@ static uint32 obj_somDestruct(uint8 *a)
     uint32 self = ARG(a, 0);
     uninitialize(self);
     advance_control(ARG(a, 2));
+    /* doFree is a one-byte boolean; the rest of its argument slot is undefined. */
     if (ARG(a, 1) & 0xff)
         pmwpInvokeClass(PMWP_SOMClass_somDeallocate, pmwpClassObject(PMWP_WPOBJECT), self, 0, 0);
     return 0;
@@ -155,10 +204,11 @@ static uint32 wpInitData(uint8 *a)
     uint32 style =
         pmwpInvoke(PMWP_M_WPOBJECT, PMWP_M_WPObject_wpclsQueryStyle, class_of(self), 0, 0, 0);
     /* Class styles NEVERTEMPLATE and PRIVATE share bits with no instance meaning. */
-    pmwpSetObjectField(self, PMWP_OBJ_STYLE, style & 0xffffefefu);
+    pmwpSetObjectField(self, PMWP_OBJ_STYLE,
+                       style & ~(uint32)(CLSSTYLE_NEVERTEMPLATE | CLSSTYLE_PRIVATE));
     pmwpSetObjectField(self, PMWP_OBJ_CONCURRENT_VIEW, 0);
-    pmwpSetObjectField(self, PMWP_OBJ_BUTTON, 3);
-    pmwpSetObjectField(self, PMWP_OBJ_MIN_WINDOW, 2);
+    pmwpSetObjectField(self, PMWP_OBJ_BUTTON, DEFAULTBUTTON);
+    pmwpSetObjectField(self, PMWP_OBJ_MIN_WINDOW, MINWIN_VIEWER);
     return 0;
 }
 
@@ -168,9 +218,10 @@ static uint32 wpUnInitData(uint8 *a)
     uint32 data = pmwpInstanceData(PMWP_WPOBJECT, self);
     for (uint32 item = pmwpLoad32(data + PMWP_OBJ_USE_LIST); item;)
     {
-        uint32 next = pmwpLoad32(item + 4);
+        uint32 next = pmwpLoad32(item + USEITEM_NEXT);
         if (pmwpLoad32(item) == PMWP_USAGE_MEMORY)
-            pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpFreeMem, self, item + 12, 0, 0);
+            pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpFreeMem, self, item + MEMORY_USE_HEADER, 0,
+                       0);
         item = next;
     }
     ULONG handle = pmwpLoad32(data + PMWP_OBJ_HANDLE);
@@ -205,7 +256,7 @@ BOOL pmwpObjectSetTitle(uint32 self, uint32 address)
         return FALSE;
     replace_string(self, PMWP_OBJ_TITLE, title);
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
-    if (handle > 1)
+    if (handle > DESKTOP_OBJECT)
         pmwpStoreSetTitle(handle, title);
     free(title);
     return pmwpObjectField(self, PMWP_OBJ_TITLE) != 0;
@@ -273,14 +324,15 @@ static BOOL assign_identifier(uint32 self, const char *identifier)
 
 static uint32 wpSetObjectID(uint8 *a)
 {
-    char *identifier = lx_execution_copy_string(GProcessState.execution, ARG(a, 1), 1024);
+    char *identifier =
+        lx_execution_copy_string(GProcessState.execution, ARG(a, 1), OBJECT_ID_LIMIT);
     BOOL result = identifier && assign_identifier(ARG(a, 0), identifier);
     if (result)
     {
         ULONG handle = pmwpObjectField(ARG(a, 0), PMWP_OBJ_HANDLE);
-        char setup[1040];
+        char setup[OBJECT_ID_SETUP_SIZE];
         snprintf(setup, sizeof setup, "OBJECTID=%s;", identifier);
-        if (handle > 1)
+        if (handle > DESKTOP_OBJECT)
             result = pmwpStoreAppendSetup(handle, setup);
     }
     free(identifier);
@@ -394,23 +446,24 @@ static const struct
 {
     uint32 key, field;
 } saved_words[] = {{STATE_STYLE_KEY, PMWP_OBJ_STYLE},
-                   {2, PMWP_OBJ_DEFAULT_VIEW},
-                   {3, PMWP_OBJ_CONCURRENT_VIEW},
-                   {4, PMWP_OBJ_BUTTON},
-                   {5, PMWP_OBJ_MIN_WINDOW},
-                   {6, PMWP_OBJ_HELP_PANEL},
-                   {7, PMWP_OBJ_ICON_X},
-                   {8, PMWP_OBJ_ICON_Y},
-                   {9, PMWP_OBJ_STATE},
-                   {10, PMWP_OBJ_ICON_FORMAT},
-                   {11, PMWP_OBJ_ICON_MODULE},
-                   {12, PMWP_OBJ_ICON_RESOURCE}};
+                   {STATE_DEFAULT_VIEW_KEY, PMWP_OBJ_DEFAULT_VIEW},
+                   {STATE_CONCURRENT_VIEW_KEY, PMWP_OBJ_CONCURRENT_VIEW},
+                   {STATE_BUTTON_KEY, PMWP_OBJ_BUTTON},
+                   {STATE_MIN_WINDOW_KEY, PMWP_OBJ_MIN_WINDOW},
+                   {STATE_HELP_PANEL_KEY, PMWP_OBJ_HELP_PANEL},
+                   {STATE_ICON_X_KEY, PMWP_OBJ_ICON_X},
+                   {STATE_ICON_Y_KEY, PMWP_OBJ_ICON_Y},
+                   {STATE_OBJECT_STATE_KEY, PMWP_OBJ_STATE},
+                   {STATE_ICON_FORMAT_KEY, PMWP_OBJ_ICON_FORMAT},
+                   {STATE_ICON_MODULE_KEY, PMWP_OBJ_ICON_MODULE},
+                   {STATE_ICON_RESOURCE_KEY, PMWP_OBJ_ICON_RESOURCE}};
 
 static const struct
 {
     uint32 key, field;
-} saved_strings[] = {
-    {13, PMWP_OBJ_HELP_LIBRARY}, {14, PMWP_OBJ_ICON_FILE}, {15, PMWP_OBJ_WINDOW_KEYS}};
+} saved_strings[] = {{STATE_HELP_LIBRARY_KEY, PMWP_OBJ_HELP_LIBRARY},
+                     {STATE_ICON_FILE_KEY, PMWP_OBJ_ICON_FILE},
+                     {STATE_WINDOW_KEYS_KEY, PMWP_OBJ_WINDOW_KEYS}};
 
 static uint32 wpSaveState(uint8 *a)
 {
@@ -442,13 +495,13 @@ static uint32 wpSaveState(uint8 *a)
 static void restore_icon(uint32 self)
 {
     uint32 format = pmwpObjectField(self, PMWP_OBJ_ICON_FORMAT), pointer = 0;
-    if (format == 2)
+    if (format == ICON_RESOURCE)
         pointer = WinLoadPointer(HWND_DESKTOP, pmwpObjectField(self, PMWP_OBJ_ICON_MODULE),
                                  pmwpObjectField(self, PMWP_OBJ_ICON_RESOURCE));
-    else if (format == 1)
+    else if (format == ICON_FILE)
     {
-        char *name = lx_execution_copy_string(GProcessState.execution,
-                                              pmwpObjectField(self, PMWP_OBJ_ICON_FILE), 1024);
+        char *name = lx_execution_copy_string(
+            GProcessState.execution, pmwpObjectField(self, PMWP_OBJ_ICON_FILE), SAVED_STRING_SIZE);
         pointer = name ? WinLoadFileIcon(name, FALSE) : 0;
         free(name);
     }
@@ -472,7 +525,7 @@ static uint32 wpRestoreState(uint8 *a)
     }
     for (size_t i = 0; i < sizeof saved_strings / sizeof *saved_strings; i++)
     {
-        char text[1024];
+        char text[SAVED_STRING_SIZE];
         ULONG size = sizeof text;
         if (pmwpStoreGetValue(handle, "WPObject", saved_strings[i].key, text, &size) && size &&
             memchr(text, 0, size) && *text)
@@ -481,7 +534,7 @@ static uint32 wpRestoreState(uint8 *a)
     PmwpRecord record = {0};
     if (pmwpStoreLoad(handle, &record))
     {
-        char identifier[1024];
+        char identifier[OBJECT_ID_LIMIT];
         replace_string(self, PMWP_OBJ_TITLE, record.title);
         if (pmwpSetupValue(record.setup, "OBJECTID", identifier, sizeof identifier))
             replace_string(self, PMWP_OBJ_IDENTIFIER, identifier);
@@ -503,21 +556,19 @@ static uint32 wpSaveDeferred(uint8 *a)
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSaveImmediate, ARG(a, 0), 0, 0, 0);
 }
 
-/* USEITEM is {type, next}; a memory item adds its size, and the caller's block follows
-   the 12-byte header. */
 static uint32 wpAddToObjUseList(uint8 *a)
 {
     uint32 self = ARG(a, 0), item = ARG(a, 1);
     if (!item || pmwpLoad32(item) > PMWP_USAGE_LAST)
         return FALSE;
     uint32 data = pmwpInstanceData(PMWP_WPOBJECT, self);
-    pmwpStore32(item + 4, 0);
+    pmwpStore32(item + USEITEM_NEXT, 0);
     uint32 link = data + PMWP_OBJ_USE_LIST;
     for (uint32 at = pmwpLoad32(link); at; at = pmwpLoad32(link))
     {
         if (at == item)
             return TRUE;
-        link = at + 4;
+        link = at + USEITEM_NEXT;
     }
     return pmwpStore32(link, item);
 }
@@ -529,8 +580,8 @@ static uint32 wpDeleteFromObjUseList(uint8 *a)
     for (uint32 at = pmwpLoad32(link); at; at = pmwpLoad32(link))
     {
         if (at == item)
-            return pmwpStore32(link, pmwpLoad32(item + 4));
-        link = at + 4;
+            return pmwpStore32(link, pmwpLoad32(item + USEITEM_NEXT));
+        link = at + USEITEM_NEXT;
     }
     return FALSE;
 }
@@ -542,12 +593,12 @@ static uint32 wpFindUseItem(uint8 *a)
     if (current)
     {
         while (at && at != current)
-            at = pmwpLoad32(at + 4);
+            at = pmwpLoad32(at + USEITEM_NEXT);
         if (!at)
             return 0;
-        at = pmwpLoad32(at + 4);
+        at = pmwpLoad32(at + USEITEM_NEXT);
     }
-    for (; at; at = pmwpLoad32(at + 4))
+    for (; at; at = pmwpLoad32(at + USEITEM_NEXT))
         if (pmwpLoad32(at) == type)
             return at;
     return 0;
@@ -558,26 +609,27 @@ static uint32 wpAllocMem(uint8 *a)
     uint32 self = ARG(a, 0), size = ARG(a, 1), status = ARG(a, 2);
     if (!size)
         return 0;
-    uint32 item = size <= UINT32_MAX - 12 ? pmwpMalloc(size + 12) : 0;
+    uint32 item = size <= UINT32_MAX - MEMORY_USE_HEADER ? pmwpMalloc(size + MEMORY_USE_HEADER) : 0;
     if (!item)
     {
         if (status)
-            pmwpStore32(status, ERROR_NOT_ENOUGH_MEMORY_CODE);
+            pmwpStore32(status, ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     pmwpStore32(item, PMWP_USAGE_MEMORY);
-    pmwpStore32(item + 8, size);
+    pmwpStore32(item + MEMORYITEM_SIZE, size);
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpAddToObjUseList, self, item, 0, 0);
-    return item + 12;
+    return item + MEMORY_USE_HEADER;
 }
 
 static uint32 wpFreeMem(uint8 *a)
 {
     uint32 block = ARG(a, 1);
-    if (block < 12 || !pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDeleteFromObjUseList, ARG(a, 0),
-                                  block - 12, 0, 0))
+    if (block < MEMORY_USE_HEADER ||
+        !pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDeleteFromObjUseList, ARG(a, 0),
+                    block - MEMORY_USE_HEADER, 0, 0))
         return FALSE;
-    pmwpFree(block - 12);
+    pmwpFree(block - MEMORY_USE_HEADER);
     return TRUE;
 }
 
@@ -622,13 +674,13 @@ static void apply_style_key(uint32 self, const char *setup, const char *key, uin
 /* ICONFILE goes through wpSetIconData so that an override sees the new icon. */
 static BOOL apply_icon_file(uint32 self, const char *file)
 {
-    uint32 info = pmwpCalloc(28), name = pmwpGuestString(file);
+    uint32 info = pmwpCalloc(ICONINFO_SIZE), name = pmwpGuestString(file);
     BOOL result = FALSE;
     if (info && name)
     {
-        pmwpStore32(info, 28);
-        pmwpStore32(info + 4, 1);
-        pmwpStore32(info + 8, name);
+        pmwpStore32(info, ICONINFO_SIZE);
+        pmwpStore32(info + ICONINFO_FORMAT, ICON_FILE);
+        pmwpStore32(info + ICONINFO_FILE_NAME, name);
         result = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetIconData, self, info, 0, 0);
     }
     pmwpFree(info);
@@ -676,7 +728,7 @@ static uint32 wpSetup(uint8 *a)
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetDefaultHelp, self,
                    (uint32)strtoul(value, NULL, 10), 0, 0);
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
-    if (result && handle > 1 && *setup)
+    if (result && handle > DESKTOP_OBJECT && *setup)
         result = pmwpStoreAppendSetup(handle, setup);
     if (result && pmwpSetupValue(setup, "DEFAULTVIEW", value, sizeof value))
     {
@@ -710,7 +762,7 @@ static uint32 wpFree(uint8 *a)
     uint32 self = ARG(a, 0);
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpClose, self, 0, 0, 0);
-    if (handle > 1)
+    if (handle > DESKTOP_OBJECT)
         pmwpStoreDelete(handle);
     /* SOMObject::somFree runs somDestruct, which releases the instance. */
     pmwpInvokeObject(PMWP_SOMObject_somFree, self, 0, 0, 0);
@@ -762,7 +814,7 @@ static void persist_new_object(uint32 object, uint32 class_object, uint32 folder
     char *class_name = lx_execution_copy_string(GProcessState.execution, name, CLASS_LIMIT);
     char *title = lx_execution_copy_string(GProcessState.execution,
                                            pmwpObjectField(object, PMWP_OBJ_TITLE), TITLE_LIMIT);
-    char location[1024] = "<WP_DESKTOP>";
+    char location[OBJECT_ID_LIMIT] = "<WP_DESKTOP>";
     ULONG parent = folder ? pmwpObjectField(folder, PMWP_OBJ_HANDLE) : 0;
     if (parent)
         pmwpStoreIdentifier(parent, location, sizeof location);
@@ -815,7 +867,7 @@ uint32 pmwpAwaken(ULONG handle)
         return object;
     PmwpRecord record = {0};
     char desktop_class[] = "WPDesktop", empty[] = "";
-    if (handle == 1)
+    if (handle == DESKTOP_OBJECT)
         record.class_name = desktop_class, record.location = empty;
     else if (!pmwpStoreLoad(handle, &record))
         return 0;
@@ -829,7 +881,7 @@ uint32 pmwpAwaken(ULONG handle)
         if (*record.location)
             pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetFolder, object,
                        pmwpFolderForLocation(record.location), 0, 0);
-        if (handle == 1)
+        if (handle == DESKTOP_OBJECT)
             replace_string(object, PMWP_OBJ_TITLE, "Desktop");
         else
             pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpRestoreState, object, 0, 0, 0);

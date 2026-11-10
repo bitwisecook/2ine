@@ -16,21 +16,27 @@
 enum
 {
     TITLE_LIMIT = 4097,
-    MENU_QUERY_ITEM = 0x182,
-    MENU_INSERT_ITEM = 0x180,
-    MENU_REMOVE_ITEM = 0x181,
-    MENU_ITEM_COUNT = 0x184,
-    MENU_ITEM_TEXT = 0x18b,
-    MENU_ITEM_ID = 0x190,
-    MENU_END = -1,
-    MENU_ID_PRIMARY = 0,
-    MENU_ID_DELETE = 109,
-    MENU_ID_PROPERTIES = 112,
-    MENU_ID_CLOSE = 120,
-    CONFIRM_DELETE_FLAG = 1,
-    OR_FROMCOPY = 0x10000008,
-    OR_SHADOW = 0x10000010,
+    PATH_LIMIT = 1024,
+    MENU_TEXT_LIMIT = 256,
+    CLASS_NAME_LIMIT = 256,
+    HELP_LIBRARY_LIMIT = 260,
+    /* A help query buffer: the panel ULONG, then the library name. */
+    HELP_QUERY_LIBRARY = 4,
+    /* wpQueryDetailsData: title, style and class title, one ULONG each. */
+    DETAILS_DATA_BYTES = 12,
+    /* Workplace Shell values (wpobject.h) */
+    WPMENUID_PRIMARY = 0,
+    WPMENUID_DELETE = 109,
+    WPMENUID_PROPERTIES = 112,
+    WPMENUID_CLOSE = 120,
+    CONFIRM_DELETE = 1,
+    OR_REFERENCE = 0x10000000,
+    OR_FROMCOPY = 0x00000008 | OR_REFERENCE,
+    OR_SHADOW = 0x00000010 | OR_REFERENCE,
+    /* PMWP.DLL's operation for a create-from-template drag; not a Toolkit DO_* value. */
+    DO_CREATE_OPERATION = 0xc002,
     /* USEITEM followed by VIEWITEM {view, handle, state, cnr, record}. */
+    USEITEM_NEXT = 4,
     VIEW_ITEM_BYTES = 28,
     VIEW_VIEW = 8,
     VIEW_HANDLE = 12,
@@ -46,20 +52,6 @@ enum
     INFO_OPERATION = 0x06,
     INFO_SOURCE = 0x08,
     INFO_ITEMS = 0x10,
-    DC_OPEN_FLAG = 1,
-    DO_COPYABLE_FLAG = 1,
-    DO_MOVEABLE_FLAG = 2,
-    DO_LINKABLE_FLAG = 4,
-    DO_DEFAULT_OPERATION = 0xbffe,
-    DO_CREATE_OPERATION = 0xc002,
-    DO_COPY_OPERATION = 0x10,
-    DO_LINK_OPERATION = 0x18,
-    DO_MOVE_OPERATION = 0x20,
-    DOR_DROP_REPLY = 1,
-    DOR_NODROPOP_REPLY = 2,
-    DOR_NEVERDROP_REPLY = 3,
-    SWITCH_VISIBLE = 4,
-    SWITCH_JUMPABLE = 2,
     /* PAGEINFO wire offsets. */
     PAGE_WINDOW = 0x04,
     PAGE_PROCEDURE = 0x08,
@@ -67,23 +59,28 @@ enum
     PAGE_PARAMETERS = 0x10,
     PAGE_DIALOG = 0x14,
     PAGE_NAME = 0x1c,
+    /* The settings book: a page list on the left of the selected page. */
     BOOK_LIST_ID = 1,
     BOOK_LIST_WIDTH = 140,
+    BOOK_X = 60,
+    BOOK_Y = 60,
     BOOK_WIDTH = 560,
     BOOK_HEIGHT = 380,
-    LIST_INSERT_ITEM = 0x161,
-    LIST_SELECT_ITEM = 0x164,
-    LIST_QUERY_SELECTION = 0x165,
-    LIST_SET_HANDLE = 0x169,
-    LIST_QUERY_HANDLE = 0x16a,
-    LIST_QUERY_COUNT = 0x160,
-    LIST_END = -1,
-    LIST_NOTIFY_SELECT = 1,
+    BOOK_FRAME_FLAGS = FCF_TITLEBAR | FCF_SYSMENU | FCF_SIZEBORDER | FCF_MINMAX,
+    /* The General page: a title label above the title entry field. */
     GENERAL_TITLE_ID = 2,
-    FRAME_FLAGS = 0x3b,
-    STYLE_BORDER_ENTRY = 0x20,
-    QSV_BOOT_DRIVE_INDEX = 5,
-    HELP_LIBRARY_LIMIT = 260
+    GENERAL_MARGIN = 16,
+    GENERAL_LABEL_Y = 300,
+    GENERAL_LABEL_WIDTH = 80,
+    GENERAL_LABEL_HEIGHT = 20,
+    GENERAL_ENTRY_Y = 272,
+    GENERAL_ENTRY_WIDTH = 360,
+    GENERAL_ENTRY_HEIGHT = 24,
+    /* The window word holding the page's object. */
+    GENERAL_OBJECT_WORD = 0,
+    GENERAL_WINDOW_BYTES = 4,
+    /* Drive C:, should DosQuerySysInfo fail. */
+    DEFAULT_BOOT_DRIVE = 3
 };
 
 static uint32 load16(uint32 address)
@@ -160,14 +157,14 @@ static uint32 wpQueryDetailsData(uint8 *a)
 {
     uint32 self = ARG(a, 0), cursor = ARG(a, 1);
     if (!cursor)
-        return pmwpStore32(ARG(a, 2), 12);
+        return pmwpStore32(ARG(a, 2), DETAILS_DATA_BYTES);
     uint32 output = pmwpLoad32(cursor);
     uint32 object_class = pmwpInvokeObject(PMWP_SOMObject_somGetClass, self, 0, 0, 0);
     pmwpStore32(output, pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryTitle, self, 0, 0, 0));
     pmwpStore32(output + 4, pmwpObjectField(self, PMWP_OBJ_STYLE));
     pmwpStore32(output + 8, pmwpInvoke(PMWP_M_WPOBJECT, PMWP_M_WPObject_wpclsQueryTitle,
                                        object_class, 0, 0, 0));
-    pmwpStore32(cursor, output + 12);
+    pmwpStore32(cursor, output + DETAILS_DATA_BYTES);
     return TRUE;
 }
 
@@ -180,33 +177,33 @@ uint32 pmwpFormatDragItem(uint32 self, uint32 item)
     uint32 existing = pmwpLoad32(item + ITEM_RMF);
     if (existing)
     {
-        DrgQueryStrName(existing, 260, rmf);
+        DrgQueryStrName(existing, CCHMAXPATH, rmf);
         DrgDeleteStrHandle(existing);
     }
     strcat(rmf, ",<DRM_SHAREDMEM,DRF_POINTERDATA>");
     pmwpStore32(item + ITEM_RMF, DrgAddStrHandle(rmf));
     uint32 operations = load16(item + ITEM_OPERATIONS);
     if (!operations)
-        operations = DO_COPYABLE_FLAG | DO_MOVEABLE_FLAG | DO_LINKABLE_FLAG;
+        operations = DO_COPYABLE | DO_MOVEABLE | DO_LINKABLE;
     uint32 style = query_style(self);
     if (style & PMWP_OBJSTYLE_NOMOVE)
-        operations &= ~(uint32)DO_MOVEABLE_FLAG;
+        operations &= ~(uint32)DO_MOVEABLE;
     if (style & PMWP_OBJSTYLE_NOCOPY)
-        operations &= ~(uint32)DO_COPYABLE_FLAG;
+        operations &= ~(uint32)DO_COPYABLE;
     if (style & PMWP_OBJSTYLE_NOLINK)
-        operations &= ~(uint32)DO_LINKABLE_FLAG;
+        operations &= ~(uint32)DO_LINKABLE;
     store16(item + ITEM_OPERATIONS, operations);
     if (!pmwpLoad32(item + ITEM_TYPE))
         pmwpStore32(item + ITEM_TYPE, DrgAddStrHandle("Unknown"));
     if (!load16(item + ITEM_CONTROL) &&
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpFindUseItem, self, PMWP_USAGE_OPENVIEW, 0, 0))
-        store16(item + ITEM_CONTROL, DC_OPEN_FLAG);
+        store16(item + ITEM_CONTROL, DC_OPEN);
     if (!pmwpLoad32(item + ITEM_ID))
         pmwpStore32(item + ITEM_ID,
                     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryHandle, self, 0, 0, 0));
     uint32 folder = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryFolder, self, 0, 0, 0);
     ULONG parent = folder ? pmwpObjectField(folder, PMWP_OBJ_HANDLE) : 0;
-    char path[1024];
+    char path[PATH_LIMIT];
     if (!pmwpLoad32(item + ITEM_CONTAINER) && parent && pmwpStorePath(parent, path, sizeof path))
         pmwpStore32(item + ITEM_CONTAINER, DrgAddStrHandle(path));
     char *title = lx_execution_copy_string(
@@ -233,11 +230,11 @@ static uint32 wpFormatDragItem(uint8 *a)
 static uint32 wpDragOver(uint8 *a)
 {
     uint32 self = ARG(a, 0), target = ARG(a, 1), info = ARG(a, 2);
-    const uint32 never = DOR_NEVERDROP_REPLY | (uint32)DO_DEFAULT_OPERATION << 16;
+    const uint32 never = DOR_NEVERDROP | (uint32)DO_DEFAULT << 16;
     if (!info || query_style(self) & (PMWP_OBJSTYLE_NODROP | PMWP_OBJSTYLE_TEMPLATE))
         return never;
     uint32 requested = load16(info + INFO_OPERATION), count = load16(info + INFO_ITEMS);
-    uint32 allowed = DO_COPYABLE_FLAG | DO_MOVEABLE_FLAG | DO_LINKABLE_FLAG;
+    uint32 allowed = DO_COPYABLE | DO_MOVEABLE | DO_LINKABLE;
     for (uint32 i = 0; i < count; i++)
     {
         uint32 item = DrgQueryDragitemPtr(info, i);
@@ -253,22 +250,22 @@ static uint32 wpDragOver(uint8 *a)
             return never;
         if (style & PMWP_OBJSTYLE_NOMOVE ||
             (style & PMWP_OBJSTYLE_LOCKEDINPLACE && pmwpLoad32(info + INFO_SOURCE) == target))
-            allowed &= ~(uint32)DO_MOVEABLE_FLAG;
+            allowed &= ~(uint32)DO_MOVEABLE;
         if (style & PMWP_OBJSTYLE_NOCOPY)
-            allowed &= ~(uint32)DO_COPYABLE_FLAG;
+            allowed &= ~(uint32)DO_COPYABLE;
         if (style & PMWP_OBJSTYLE_NOLINK)
-            allowed &= ~(uint32)DO_LINKABLE_FLAG;
+            allowed &= ~(uint32)DO_LINKABLE;
     }
     uint32 operation = requested;
-    if (requested == DO_DEFAULT_OPERATION)
-        operation = allowed & DO_MOVEABLE_FLAG   ? DO_MOVE_OPERATION
-                    : allowed & DO_COPYABLE_FLAG ? DO_COPY_OPERATION
-                    : allowed & DO_LINKABLE_FLAG ? DO_LINK_OPERATION
-                                                 : DO_DEFAULT_OPERATION;
-    BOOL permitted = (operation == DO_MOVE_OPERATION && allowed & DO_MOVEABLE_FLAG) ||
-                     (operation == DO_COPY_OPERATION && allowed & DO_COPYABLE_FLAG) ||
-                     (operation == DO_LINK_OPERATION && allowed & DO_LINKABLE_FLAG);
-    return (permitted ? DOR_DROP_REPLY : DOR_NODROPOP_REPLY) | operation << 16;
+    if (requested == DO_DEFAULT)
+        operation = allowed & DO_MOVEABLE   ? DO_MOVE
+                    : allowed & DO_COPYABLE ? DO_COPY
+                    : allowed & DO_LINKABLE ? DO_LINK
+                                            : DO_DEFAULT;
+    BOOL permitted = (operation == DO_MOVE && allowed & DO_MOVEABLE) ||
+                     (operation == DO_COPY && allowed & DO_COPYABLE) ||
+                     (operation == DO_LINK && allowed & DO_LINKABLE);
+    return (permitted ? DOR_DROP : DOR_NODROPOP) | operation << 16;
 }
 
 /* Moves the items of a resource menu into a live popup. Each item leaves the loaded
@@ -281,33 +278,35 @@ static uint32 wpInsertPopupMenuItems(uint8 *a)
     if (submenu)
     {
         MENUITEM parent;
-        if (!WinSendMsg(menu, MENU_QUERY_ITEM, (MPARAM)(uintptr_t)(submenu | 1u << 16), &parent) ||
+        /* MPFROM2SHORT(id, TRUE): the search includes submenus. */
+        if (!WinSendMsg(menu, MM_QUERYITEM, (MPARAM)(uintptr_t)(submenu | 1u << 16), &parent) ||
             !parent.hwndSubMenu)
             return FALSE;
         menu = parent.hwndSubMenu;
-        position = MENU_END;
+        position = MIT_END;
     }
     HWND loaded = WinLoadMenu(HWND_OBJECT, ARG(a, 3), ARG(a, 4));
     if (!loaded)
         return FALSE;
     BOOL result = TRUE;
-    while (result && (uintptr_t)WinSendMsg(loaded, MENU_ITEM_COUNT, 0, 0))
+    while (result && (uintptr_t)WinSendMsg(loaded, MM_QUERYITEMCOUNT, 0, 0))
     {
-        LONG id = (SHORT)(uintptr_t)WinSendMsg(loaded, MENU_ITEM_ID, 0, 0);
+        LONG id = (SHORT)(uintptr_t)WinSendMsg(loaded, MM_ITEMIDFROMPOSITION, 0, 0);
         MENUITEM item;
-        char text[256] = "";
-        if (id == -1 || !WinSendMsg(loaded, MENU_QUERY_ITEM, (MPARAM)(uintptr_t)(uint16)id, &item))
+        char text[MENU_TEXT_LIMIT] = "";
+        if (id == MIT_ERROR ||
+            !WinSendMsg(loaded, MM_QUERYITEM, (MPARAM)(uintptr_t)(uint16)id, &item))
         {
             result = FALSE;
             break;
         }
-        WinSendMsg(loaded, MENU_ITEM_TEXT, (MPARAM)(uintptr_t)((uint16)id | sizeof text << 16),
+        WinSendMsg(loaded, MM_QUERYITEMTEXT, (MPARAM)(uintptr_t)((uint16)id | sizeof text << 16),
                    text);
-        WinSendMsg(loaded, MENU_REMOVE_ITEM, (MPARAM)(uintptr_t)(uint16)id, 0);
+        WinSendMsg(loaded, MM_DELETEITEM, (MPARAM)(uintptr_t)(uint16)id, 0);
         item.iPosition = (SHORT)position;
-        if ((intptr_t)WinSendMsg(menu, MENU_INSERT_ITEM, &item, text) == -1)
+        if ((intptr_t)WinSendMsg(menu, MM_INSERTITEM, &item, text) == MIT_ERROR)
             result = FALSE;
-        if (position != MENU_END)
+        if (position != MIT_END)
             position++;
     }
     WinDestroyWindow(loaded);
@@ -319,17 +318,17 @@ static uint32 wpMenuItemSelected(uint8 *a)
     uint32 self = ARG(a, 0);
     switch (ARG(a, 2))
     {
-        case MENU_ID_PRIMARY:
+        case WPMENUID_PRIMARY:
             pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpViewObject, self, 0, PMWP_OPEN_DEFAULT, 0);
             return TRUE;
         case PMWP_OPEN_SETTINGS:
-        case MENU_ID_PROPERTIES:
+        case WPMENUID_PROPERTIES:
             pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpViewObject, self, 0, PMWP_OPEN_SETTINGS, 0);
             return TRUE;
-        case MENU_ID_DELETE:
-            pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDelete, self, CONFIRM_DELETE_FLAG, 0, 0);
+        case WPMENUID_DELETE:
+            pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDelete, self, CONFIRM_DELETE, 0, 0);
             return TRUE;
-        case MENU_ID_CLOSE:
+        case WPMENUID_CLOSE:
             return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpClose, self, 0, 0, 0);
         default:
             return FALSE;
@@ -339,14 +338,14 @@ static uint32 wpMenuItemSelected(uint8 *a)
 static void show_page(HWND client, HWND list)
 {
     LONG selected =
-        (SHORT)(uintptr_t)WinSendMsg(list, LIST_QUERY_SELECTION, (MPARAM)(intptr_t)-1, 0);
-    LONG count = (SHORT)(uintptr_t)WinSendMsg(list, LIST_QUERY_COUNT, 0, 0);
+        (SHORT)(uintptr_t)WinSendMsg(list, LM_QUERYSELECTION, (MPARAM)(intptr_t)LIT_FIRST, 0);
+    LONG count = (SHORT)(uintptr_t)WinSendMsg(list, LM_QUERYITEMCOUNT, 0, 0);
     SWP area;
     if (!WinQueryWindowPos(client, &area))
         return;
     for (LONG i = 0; i < count; i++)
     {
-        HWND page = (HWND)(uintptr_t)WinSendMsg(list, LIST_QUERY_HANDLE, (MPARAM)(intptr_t)i, 0);
+        HWND page = (HWND)(uintptr_t)WinSendMsg(list, LM_QUERYITEMHANDLE, (MPARAM)(intptr_t)i, 0);
         WinSetWindowPos(page, HWND_TOP, BOOK_LIST_WIDTH, 0, area.cx - BOOK_LIST_WIDTH, area.cy,
                         SWP_MOVE | SWP_SIZE | (i == selected ? SWP_SHOW : SWP_HIDE));
     }
@@ -365,14 +364,14 @@ static MRESULT OS2API book_procedure(HWND window, ULONG message, MPARAM first, M
         return 0;
     }
     if (message == WM_CONTROL && (USHORT)(uintptr_t)first == BOOK_LIST_ID &&
-        ((ULONG)(uintptr_t)first >> 16) == LIST_NOTIFY_SELECT)
+        ((ULONG)(uintptr_t)first >> 16) == LN_SELECT)
     {
         show_page(window, list);
         return 0;
     }
     if (message == WM_CLOSE)
     {
-        HWND frame = WinQueryWindow(window, 5);
+        HWND frame = WinQueryWindow(window, QW_PARENT);
         return (MRESULT)(uintptr_t)WinDestroyWindow(frame ? frame : window);
     }
     return WinDefWindowProc(window, message, first, second);
@@ -384,13 +383,13 @@ static uint32 add_page(HWND book, HWND page, const char *name)
     HWND list = WinWindowFromID(book, BOOK_LIST_ID);
     if (!list || !page)
         return 0;
-    LONG at = (LONG)(intptr_t)WinSendMsg(list, LIST_INSERT_ITEM, (MPARAM)(intptr_t)LIST_END,
-                                         (MPARAM)name);
+    LONG at =
+        (LONG)(intptr_t)WinSendMsg(list, LM_INSERTITEM, (MPARAM)(intptr_t)LIT_END, (MPARAM)name);
     if (at < 0)
         return 0;
-    WinSendMsg(list, LIST_SET_HANDLE, (MPARAM)(intptr_t)at, (MPARAM)(uintptr_t)page);
+    WinSendMsg(list, LM_SETITEMHANDLE, (MPARAM)(intptr_t)at, (MPARAM)(uintptr_t)page);
     if (!at)
-        WinSendMsg(list, LIST_SELECT_ITEM, 0, (MPARAM)(uintptr_t)TRUE);
+        WinSendMsg(list, LM_SELECTITEM, 0, (MPARAM)(uintptr_t)TRUE);
     show_page(book, list);
     return (uint32)at + 1;
 }
@@ -425,7 +424,7 @@ static MRESULT OS2API general_page_procedure(HWND window, ULONG message, MPARAM 
 {
     if (message == WM_DESTROY)
     {
-        uint32 self = WinQueryWindowULong(window, 0);
+        uint32 self = WinQueryWindowULong(window, GENERAL_OBJECT_WORD);
         HWND entry = WinWindowFromID(window, GENERAL_TITLE_ID);
         char title[TITLE_LIMIT] = "";
         if (self && entry && WinQueryWindowText(entry, sizeof title, title) > 0)
@@ -444,7 +443,7 @@ static uint32 wpAddObjectGeneralPage(uint8 *a)
     uint32 self = ARG(a, 0);
     HWND book = ARG(a, 1);
     WinRegisterClass(WinQueryAnchorBlock(HWND_DESKTOP), "2ine.GeneralPage", general_page_procedure,
-                     0, 4);
+                     0, GENERAL_WINDOW_BYTES);
     HWND page =
         WinCreateWindow(book, "2ine.GeneralPage", "", 0, 0, 0, 1, 1, book, HWND_TOP, 0, NULL, NULL);
     if (!page)
@@ -452,13 +451,14 @@ static uint32 wpAddObjectGeneralPage(uint8 *a)
     char *title = lx_execution_copy_string(
         GProcessState.execution,
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryTitle, self, 0, 0, 0), TITLE_LIMIT);
-    WinCreateWindow(page, (PSZ)(uintptr_t)WC_STATIC, "Title:", WS_VISIBLE, 16, 300, 80, 20, page,
-                    HWND_TOP, 0, NULL, NULL);
+    WinCreateWindow(page, (PSZ)(uintptr_t)WC_STATIC, "Title:", WS_VISIBLE, GENERAL_MARGIN,
+                    GENERAL_LABEL_Y, GENERAL_LABEL_WIDTH, GENERAL_LABEL_HEIGHT, page, HWND_TOP, 0,
+                    NULL, NULL);
     WinCreateWindow(page, (PSZ)(uintptr_t)WC_ENTRYFIELD, title ? title : "",
-                    WS_VISIBLE | STYLE_BORDER_ENTRY, 16, 272, 360, 24, page, HWND_TOP,
-                    GENERAL_TITLE_ID, NULL, NULL);
+                    WS_VISIBLE | ES_READONLY, GENERAL_MARGIN, GENERAL_ENTRY_Y, GENERAL_ENTRY_WIDTH,
+                    GENERAL_ENTRY_HEIGHT, page, HWND_TOP, GENERAL_TITLE_ID, NULL, NULL);
     free(title);
-    WinSetWindowULong(page, 0, self);
+    WinSetWindowULong(page, GENERAL_OBJECT_WORD, self);
     uint32 result = add_page(book, page, "General");
     if (!result)
         WinDestroyWindow(page);
@@ -489,7 +489,7 @@ uint32 pmwpOpenSettings(uint32 self)
     if (query_style(self) & PMWP_OBJSTYLE_NOSETTINGS)
         return 0;
     WinRegisterClass(WinQueryAnchorBlock(HWND_DESKTOP), "2ine.SettingsBook", book_procedure, 0, 0);
-    ULONG flags = FRAME_FLAGS;
+    ULONG flags = BOOK_FRAME_FLAGS;
     HWND client = 0;
     HWND frame = WinCreateStdWindow(HWND_DESKTOP, 0, &flags, "2ine.SettingsBook", "Settings", 0, 0,
                                     0, &client);
@@ -503,7 +503,7 @@ uint32 pmwpOpenSettings(uint32 self)
         return 0;
     }
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpRegisterView, self, frame, 0, 0);
-    WinSetWindowPos(frame, HWND_TOP, 60, 60, BOOK_WIDTH, BOOK_HEIGHT,
+    WinSetWindowPos(frame, HWND_TOP, BOOK_X, BOOK_Y, BOOK_WIDTH, BOOK_HEIGHT,
                     SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ACTIVATE);
     pmwpRememberView(self, PMWP_OPEN_SETTINGS, frame);
     return frame;
@@ -555,7 +555,8 @@ static uint32 wpClose(uint8 *a)
 {
     uint32 self = ARG(a, 0);
     HAB hab = WinQueryAnchorBlock(HWND_DESKTOP);
-    for (uint32 item = pmwpObjectField(self, PMWP_OBJ_USE_LIST); item; item = pmwpLoad32(item + 4))
+    for (uint32 item = pmwpObjectField(self, PMWP_OBJ_USE_LIST); item;
+         item = pmwpLoad32(item + USEITEM_NEXT))
         if (pmwpLoad32(item) == PMWP_USAGE_OPENVIEW)
         {
             HWND frame = pmwpLoad32(item + VIEW_HANDLE);
@@ -569,7 +570,8 @@ static uint32 wpSwitchTo(uint8 *a)
 {
     uint32 self = ARG(a, 0), view = ARG(a, 1);
     HAB hab = WinQueryAnchorBlock(HWND_DESKTOP);
-    for (uint32 item = pmwpObjectField(self, PMWP_OBJ_USE_LIST); item; item = pmwpLoad32(item + 4))
+    for (uint32 item = pmwpObjectField(self, PMWP_OBJ_USE_LIST); item;
+         item = pmwpLoad32(item + USEITEM_NEXT))
     {
         HWND frame = pmwpLoad32(item + VIEW_HANDLE);
         if (pmwpLoad32(item) == PMWP_USAGE_OPENVIEW && pmwpLoad32(item + VIEW_VIEW) == view &&
@@ -620,8 +622,8 @@ static uint32 wpRegisterView(uint8 *a)
     WinSetWindowText(frame, title);
     SWCNTRL entry = {0};
     entry.hwnd = frame;
-    entry.uchVisibility = SWITCH_VISIBLE;
-    entry.fbJump = SWITCH_JUMPABLE;
+    entry.uchVisibility = SWL_VISIBLE;
+    entry.fbJump = SWL_JUMPABLE;
     snprintf(entry.szSwtitle, sizeof entry.szSwtitle, "%s", title);
     WinAddSwitchEntry(&entry);
     free(title);
@@ -632,8 +634,8 @@ static uint32 wpRegisterView(uint8 *a)
    its first panel. The result reports whether the viewer session started. */
 static BOOL start_help_viewer(const char *library)
 {
-    ULONG boot = 3;
-    DosQuerySysInfo(QSV_BOOT_DRIVE_INDEX, QSV_BOOT_DRIVE_INDEX, &boot, sizeof boot);
+    ULONG boot = DEFAULT_BOOT_DRIVE;
+    DosQuerySysInfo(QSV_BOOT_DRIVE, QSV_BOOT_DRIVE, &boot, sizeof boot);
     char viewer[32], parameters[HELP_LIBRARY_LIMIT];
     snprintf(viewer, sizeof viewer, "%c:\\OS2\\VIEW.EXE", (char)('A' + boot - 1));
     snprintf(parameters, sizeof parameters, "%s", library);
@@ -642,7 +644,7 @@ static BOOL start_help_viewer(const char *library)
     start.PgmName = viewer;
     start.PgmTitle = "Help";
     start.PgmInputs = (PBYTE)parameters;
-    start.FgBg = 0;
+    start.FgBg = SSF_FGBG_FORE;
     ULONG session;
     PID process;
     return DosStartSession(&start, &session, &process) == NO_ERROR;
@@ -695,13 +697,13 @@ static uint32 wpQueryDefaultHelp(uint8 *a)
 static uint32 wpMenuItemHelpSelected(uint8 *a)
 {
     uint32 self = ARG(a, 0);
-    uint32 buffer = pmwpMalloc(HELP_LIBRARY_LIMIT + 4);
+    uint32 buffer = pmwpMalloc(HELP_QUERY_LIBRARY + HELP_LIBRARY_LIMIT);
     if (!buffer)
         return FALSE;
-    BOOL result =
-        pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryDefaultHelp, self, buffer, buffer + 4, 0) &&
-        pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDisplayHelp, self, pmwpLoad32(buffer), buffer + 4,
-                   0);
+    BOOL result = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryDefaultHelp, self, buffer,
+                             buffer + HELP_QUERY_LIBRARY, 0) &&
+                  pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpDisplayHelp, self, pmwpLoad32(buffer),
+                             buffer + HELP_QUERY_LIBRARY, 0);
     pmwpFree(buffer);
     return result;
 }
@@ -738,7 +740,7 @@ static uint32 shadow_with_class(uint32 self, uint32 folder, BOOL lock, uint32 sh
     {
         char *name = lx_execution_copy_string(
             GProcessState.execution,
-            pmwpInvokeClass(PMWP_SOMClass_somGetName, shadow_class, 0, 0, 0), 256);
+            pmwpInvokeClass(PMWP_SOMClass_somGetName, shadow_class, 0, 0, 0), CLASS_NAME_LIMIT);
         BOOL named = name && pmwpStoreSetClass(shadow, name);
         free(name);
         if (!named)

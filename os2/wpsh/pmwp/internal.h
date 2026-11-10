@@ -271,7 +271,9 @@ enum
     /* Upper bound, in bytes, on a store record, a class or module name and a key list. */
     OBJECT_LIMIT = 65536,
     /* The first object handle the store gives out. */
-    FIRST_OBJECT = 0x20000
+    FIRST_OBJECT = 0x20000,
+    /* The store's fixed handle for the desktop folder, which has no record. */
+    DESKTOP_OBJECT = 1
 };
 
 /* The object store's profile, shared by the API units (store.c). store_begin

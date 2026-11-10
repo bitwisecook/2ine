@@ -420,6 +420,19 @@ extern "C"
 
     OS2EXPORT BOOL OS2API DrgVerifyRMF(ULONG item_address, PSZ mechanism, PSZ format);
 
+    /* INCL_WINSTDCNR */
+    /* Container field attributes */
+    enum
+    {
+        CFA_RIGHT = 0x00000002,
+        CFA_CENTER = 0x00000004,
+        CFA_SEPARATOR = 0x00000200,
+        CFA_HORZSEPARATOR = 0x00000400,
+        CFA_STRING = 0x00000800,
+        CFA_FIREADONLY = 0x00008000,
+        CFA_FITITLEREADONLY = 0x00010000
+    };
+
 #ifdef __cplusplus
 }
 #endif

@@ -42,6 +42,13 @@ extern "C"
     OS2EXPORT ULONG OS2API WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location,
                                            ULONG flags);
 
+    enum
+    {
+        CO_FAILIFEXISTS = 0,
+        CO_REPLACEIFEXISTS = 1,
+        CO_UPDATEIFEXISTS = 2
+    };
+
     OS2EXPORT BOOL OS2API WinEnumObjectClasses(PVOID a0, PULONG a1);
 
     OS2EXPORT BOOL OS2API WinReplaceObjectClass(PSZ a0, PSZ a1, BOOL a2);

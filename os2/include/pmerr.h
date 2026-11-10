@@ -546,6 +546,13 @@ extern "C"
 
     };
 
+    /* INCL_WPERRORS */
+    enum
+    {
+        WPERR_BUFFER_OVERFLOW = 0x1713,
+        WPERR_OBJECT_NOT_FOUND = 0x1714
+    };
+
 #ifdef __cplusplus
 }
 #endif

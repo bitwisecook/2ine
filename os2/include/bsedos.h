@@ -446,6 +446,13 @@ extern "C"
         ENUMEA_REFTYPE_PATH = 1
     };
 
+    /* Extended attribute value types */
+    enum
+    {
+        EAT_ASCII = 0xFFFD,
+        EAT_MVMT = 0xFFDF
+    };
+
     OS2EXPORT APIRET OS2API DosDupHandle(HFILE hFile, PHFILE pHfile);
 
     OS2EXPORT APIRET OS2API DosWrite(HFILE hFile, PVOID pBuffer, ULONG cbWrite, PULONG pcbActual);

@@ -130,6 +130,15 @@ extern "C"
         FATTR_FONTUSE_NOMIX = 0x0002
     };
 
+    /* ICONINFO fFormat values */
+    enum
+    {
+        ICON_FILE = 1,
+        ICON_RESOURCE = 2,
+        ICON_DATA = 3,
+        ICON_CLEAR = 4
+    };
+
 /* Mutable guest data exports: classObject followed by SOM method token words. The
    generated module glue maps them; guest SOM fills them when a class is built.
    pmwp.def gives each export's ordinal; lxapigen.py reads the size here. */
