@@ -92,7 +92,7 @@ int main(void)
     int width, height;
     CHECK(lx_host_video_initialize(&width, &height) && width > 0 && height > 0);
     int identity = 42;
-    LxHostWindow *window = lx_host_window_create("2ine HAL test", 0, 0, 16, 16, &identity);
+    LxHostWindow *window = lx_host_window_create("2ine host test", 0, 0, 16, 16, &identity);
     CHECK(window);
     CHECK(lx_host_window_data(window) == &identity);
     LxHostRect clip = {0, 0, 16, 16}, rectangle = {1, 2, 8, 8};

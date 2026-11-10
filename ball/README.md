@@ -189,7 +189,7 @@ locks an attached image and its access mode: replacing, ejecting, unmapping and
 changing protection are rejected until the device is explicitly unlocked in ball
 settings. Descriptors retain the optional `readonly` and `locked` booleans.
 
-Internal member paths are opaque and must be passed to the engine/HAL rather
+Internal member paths are opaque and must be passed to the engine and its host services rather
 than opened as host paths. A stable per-ball device path reads the atomically
 replaced `devices/LETTER.media` descriptor on each operation, so a running guest
 sees media swaps. Ejected access returns OS/2 ERROR_NOT_READY. Handles retain a

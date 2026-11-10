@@ -2,7 +2,7 @@
 
 # How 2ine works
 
-**One OS/2 loader and API layer. A shared runtime over a hardware abstraction layer.**
+**One OS/2 loader and API layer, shared by native and emulated execution, over a core of host services.**
 
 ## Structure
 
@@ -26,48 +26,137 @@ flowchart TD
     Adapters -. incomplete port .-> Windows["Windows"]
 ```
 
-`os2/` contains the OS/2 API implementations shared by both execution paths, grouped
-like IBM's component build trees ([OS/2 DLLs](../os2/README.md)).
-`emulator/` owns the loader, the OS/2 process runtime (`lib2ine`), the guest ABI
-helpers and execution: dispatch and checked guest mappings in
-`emulator/execution/core/` ([emulator](emulator.md)). `host/include/host/` declares host-service contracts,
-and `host/` implements them as a platform-free core (`host/core/<function>/`)
-plus adapters that mirror it (`host/<adapter>/<function>/`): `host/posix/`
-shares host services between `host/linux/` and `host/macos/`, and `host/win/`
-contains partial Windows adapters. `emulator/execution/native_i386/` owns
-Linux i386 execution and ABI bridges and `emulator/execution/unicorn/` owns CPU
-emulation. [Host adapter selection](host.md) chooses the implementation and
-dependencies for each worker. Execution adapters
-know no `LxModule`, `LxMmaps` or `GProcessState`; they do not load files or implement
-DOSCALLS.
-`tests/architecture/check_boundaries.py` checks that source separation.
+## Top-level components
 
-The include roots are the project root, `host/include`, `storage/include` and
-`emulator/include`.
-Project headers are included by their path from the project root
-(`"os2/include/pmwin.h"`, `"storage/common/file_time.h"`), public host headers as
-`"host/<name>.h"`, public storage headers as `"storage/<name>.h"` and public
-emulator headers as `"emulator/<name>.h"`; same-directory
-names and `../` paths are rejected. Host-OS preprocessor branches (`_WIN32`,
-`__APPLE__`, `__linux__`) appear only in `host/linux/`, `host/macos/`, `host/win/`
-and `emulator/execution/native_i386/`, and in the storage host adapters `storage/common/host*` (file open/lock/sync,
-identity, local time and locks), apart from the named temporary allowances in the
-checker. `formats/` includes no other component, `storage/` only `formats/`.
-The ball store (`ball/`) keeps settings, files and references and includes no
-installation or launch code; the installation manager (`environment/`) and
-launch planning (`emulator/launch/`) reach it only through `ball/store.h`, and
-only the JSON facade (`ball/facade/`) composes them. Applications (`apps/`) use
-the engine's JSON ABI only; the loader program (`apps/lx_loader/`) enters the
-emulator through its public headers. Vendored libraries live in `third_party/`
-and include no project code. `emulator/` outside `emulator/launch/` does not
-include `ball/`, `environment/` or `os2/`, and its layers (execution, ABI,
-process, loader) include only downwards. Inside `os2/`, sources use only the known IBM groups; each DLL directory has
-one module definition, and its generated table is included only by its
-`module.c`. A DLL reaches another DLL's internals through
-`os2/include/private/`; the remaining direct includes of another DLL's
-headers are counted in the checker. Inline assembly appears only in `emulator/execution/native_i386/`. Outside `host/`, code includes only the public
-host contracts; `host/core/` and `host/include/` use no host APIs. Every top-level source directory is classified in
-the checker, so a new component is covered by these rules.
+`tests/architecture/check_boundaries.py` gives every top-level source directory a
+role, so a new directory fails the check until it is placed under these rules.
+
+| Role | Directories | Rule |
+|---|---|---|
+| Portable components | `formats/`, `storage/`, `emulator/`, `os2/` | Build for every host; use host services only through the public contracts in `host/include/host/`, except the named adapters below |
+| Host components | `host/`, `ball/`, `environment/`, `apps/` | May use host APIs; `host/` confines OS-specific code to its OS adapters |
+| Support | `tests/`, `tools/`, `cmake/`, `docs/`, `snap/` | Tests, developer tools, build helpers, documentation and packaging |
+| Foreign | `third_party/`, `ports/`, `research/` | Vendored libraries, source ports built by other toolchains, and reference material |
+
+## Dependency direction
+
+An arrow points from a component to one it builds on; each may also use the
+components below those, as the rules in the next section allow. Nothing points
+upwards.
+
+```mermaid
+flowchart BT
+    Formats["formats/"]
+    Storage["storage/"] --> Formats
+    Host["host/ (public contracts)"] --> Storage
+    Emulator["emulator/ (execution → abi → process → loader)"] --> Host
+    OS2["os2/"] --> Emulator
+    Config["os2/config/"]
+    Ball["ball/ (store.h)"] --> Storage
+    Ball --> Config
+    Environment["environment/"] --> Ball
+    Environment --> Config
+    Launch["emulator/launch/"] --> Environment
+    Facade["ball/facade/ (JSON tb_request)"] --> Environment
+    Facade --> Launch
+    Apps["apps/ (GNOME, macOS, CLI)"] --> Facade
+    Loader["apps/lx_loader/"] --> Emulator
+```
+
+## Boundary rules
+
+- **Self-contained bottom layers.** `formats/` includes no other component, and
+  `storage/` only `formats/`. Neither includes `host/`; `storage/common/host*`
+  is storage's only host adapter (file open, lock and sync, identity, local
+  time).
+- **The emulator knows no DLLs.** `emulator/` outside `emulator/launch/`
+  includes neither `os2/` nor `ball/` nor `environment/`. Its layers include
+  only downwards: the execution core and backends and the guest ABI helpers
+  know no process state; the process runtime (`lib2ine`) knows no loader
+  internals or module records; the loader uses the process runtime through its
+  public headers. Execution backends know no `LxModule`, `LxMmaps` or
+  `GProcessState`; they do not load files or implement DOSCALLS.
+- **Only public host contracts outside `host/`.** Code outside `host/` includes
+  `host/<name>.h`, never `host/core/` or an adapter directory. `host/core/` and
+  `host/include/` use no host APIs.
+- **Host-OS branches stay in adapters.** `_WIN32`, `__APPLE__` and `__linux__`
+  branches appear only in `host/linux/`, `host/macos/`, `host/win/`,
+  `emulator/execution/native_i386/` and `storage/common/host*`. Inline
+  assembly appears only in `emulator/execution/native_i386/`.
+- **The ball is storage and settings.** `ball/` keeps a ball's manifest,
+  settings, files and references and includes no installation, launch, host or
+  emulator code. The installation manager (`environment/`) and launch planning
+  (`emulator/launch/`, which also reads the installation manager's records) use
+  it only through `ball/store.h`; only the JSON facade (`ball/facade/`)
+  composes them. `os2/config/` (the INI, CONFIG.SYS and
+  Workplace Shell record codecs) is the one part of `os2/` they share.
+- **Applications use the JSON ABI.** `apps/` includes only `ball/include/`;
+  `apps/lx_loader/` enters the emulator and host services through their public
+  headers.
+- **Vendored code stays vendored.** `third_party/` includes no project code;
+  adapters live in the component that uses the library.
+- **Include style.** Includes name the path from the project root
+  (`"os2/include/pmwin.h"`, `"storage/common/file_time.h"`); public host,
+  storage and emulator headers are included as `"host/<name>.h"`,
+  `"storage/<name>.h"` and `"emulator/<name>.h"` from the include roots
+  `host/include`, `storage/include` and `emulator/include`. Same-directory
+  names and `../` paths are rejected.
+
+## Host services: a core and mirrored adapters
+
+`host/include/host/` declares the host-service contracts: VM, files, paths,
+libraries, clocks, threads, synchronization, child processes, windows, input,
+audio, printing, TLS and the rest. `host/core/<function>/` holds the
+platform-free half of each function, and every adapter mirrors that layout as
+`host/<adapter>/<function>/`, so the implementations of one function sit at the
+same relative path in each adapter. The functions are `system`, `process`,
+`thread`, `ipc`, `fs`, `net`, `fatal`, `window`, `input`, `desktop`, `audio`,
+`clipboard`, `print`, `terminal`, `font` and `opengl`.
+
+| Adapter | Supplies |
+|---|---|
+| `linux/`, `macos/` | OS services; both build on `posix/` |
+| `posix/` | POSIX services shared by Linux and macOS |
+| `win/` | Partial Windows services (no Windows application build) |
+| `sdl/`, `openssl/`, `freetype/`, `curses/`, `mesa/` | Library adapters: windows, input, audio and clipboard; TLS; font rasterising; terminals; GL contexts |
+| `none/` | Stand-ins where a host has no desktop session, window chrome, native clipboard or process supervisor |
+
+An adapter includes the public headers, `host/core/` and itself; Linux and
+macOS also include `posix/`. Only the OS adapters branch on the operating
+system. [Host adapter selection](host.md) chooses the adapters and dependencies
+for each worker.
+
+## OS/2 DLLs in IBM's layout
+
+`os2/` contains the OS/2 API implementations shared by both execution paths,
+grouped like IBM's component build trees ([OS/2 DLLs](../os2/README.md)):
+`baseos/`, `ps/`, `wpsh/`, `som/`, `registry/`, `mm/`, `mptn/`, `opengl/` and
+`thirdparty/`. `os2/include/` holds the Toolkit-shaped public headers and
+`os2/include/private/` the DDK-style private companions through which one DLL
+reaches another's internals; no DLL includes another DLL's directory.
+`os2/config/` is not an IBM tree: it holds the configuration-file codecs shared
+by the DLLs and the ball.
+
+Each DLL directory holds one module definition (`<dll>.def`), its `module.c`
+entry, its sources, its guest bindings (`bindings.h`) and the generated export
+table (`generated/<dll>-lx.h`), which only `module.c` includes. As in Warp 4.52,
+merged libraries implement the code and the historical DLL names forward to
+them: QUECALLS, SESMGR, NLS, MSG, VIOCALLS and KBDCALLS forward to DOSCALLS;
+PMWIN, PMGRE and PMSHAPI to PMMERGE; PMDRAG to PMCTLS; MDM and MMIO to MMPM; and
+PMWINX forwards its Reg* exports to REGISTRY. A forwarder directory holds only
+its definition, forwarder table and `module.c`. Static helpers shared inside one
+group live outside any DLL: `os2/ps/common/`, `os2/mm/midi/`,
+`os2/mm/video/decode/` and `os2/mptn/common/`.
+
+## The emulator
+
+`emulator/` owns the loader, the OS/2 process runtime (`lib2ine`), the guest ABI
+helpers, execution and launch planning ([emulator](emulator.md)). Dispatch and
+checked guest mappings live in `emulator/execution/core/`;
+`emulator/execution/native_i386/` owns Linux i386 execution and ABI bridges and
+`emulator/execution/unicorn/` owns CPU emulation.
+
+## Boundaries and ownership
 
 | Boundary | Owns |
 |---|---|
