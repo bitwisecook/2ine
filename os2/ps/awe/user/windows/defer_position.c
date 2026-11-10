@@ -6,6 +6,13 @@
 #include "os2/ps/awe/user/windows/windows.h"
 #include "emulator/handles.h"
 
+enum
+{
+    /* Most windows one batch may hold, and its size when the caller suggests none. */
+    BATCH_LIMIT = 65536,
+    BATCH_DEFAULT_CAPACITY = 8
+};
+
 typedef struct DeferredWindow
 {
     ULONG window, after, flags;
@@ -37,7 +44,7 @@ static void destroy_defer(void *resource)
 
 ULONG BeginDeferWindowPos(LONG count)
 {
-    if (count < 0 || count > 65536)
+    if (count < 0 || count > BATCH_LIMIT)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -45,7 +52,7 @@ ULONG BeginDeferWindowPos(LONG count)
     DeferredBatch *batch = calloc(1, sizeof *batch);
     if (batch)
     {
-        batch->capacity = count ? (size_t)count : 8;
+        batch->capacity = count ? (size_t)count : BATCH_DEFAULT_CAPACITY;
         batch->items = calloc(batch->capacity, sizeof *batch->items);
     }
     ULONG handle =
@@ -87,7 +94,7 @@ ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LO
     {
         size_t capacity = batch->capacity * 2;
         DeferredWindow *items =
-            capacity <= 65536 ? realloc(batch->items, capacity * sizeof *items) : NULL;
+            capacity <= BATCH_LIMIT ? realloc(batch->items, capacity * sizeof *items) : NULL;
         if (!items)
             valid = FALSE;
         else

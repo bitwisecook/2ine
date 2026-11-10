@@ -3,20 +3,33 @@
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/ps/awe/internal.h"
 
+enum
+{
+    /* Child IDs start here when CLIENTCREATESTRUCT is not supplied. */
+    DEFAULT_FIRST_CHILD_ID = 0xFF00,
+    /* Longest class name and title copied from MDICREATESTRUCT, including terminators. */
+    CLASS_NAME_LIMIT = 256,
+    TITLE_LIMIT = 65536,
+    /* GetKeyState sets the high bit while the key is down. */
+    KEY_DOWN = 0x8000
+};
+
 BOOL open32ShowMdiChild(Open32Window *window, LONG command)
 {
     Open32Window *parent = open32FindWindow(window->parent);
-    if (!(window->extended_style & 0x40) || !parent || parent->class->builtin != 1 ||
-        (command != 1 && command != 3 && command != 5 && command != 8 && command != 9))
+    if (!(window->extended_style & WIN32_WS_EX_MDICHILD) || !parent ||
+        parent->class->builtin != OPEN32_BUILTIN_MDI_CLIENT ||
+        (command != WIN32_SW_SHOWNORMAL && command != WIN32_SW_MAXIMIZE &&
+         command != WIN32_SW_SHOW && command != WIN32_SW_SHOWNA && command != WIN32_SW_RESTORE))
         return FALSE;
     ULONG handle = window->handle, owner = parent->handle, old_style = window->style;
     LONG x = window->x, y = window->y, width = window->width, height = window->height;
-    if (command == 3)
+    if (command == WIN32_SW_MAXIMIZE)
     {
         RECTL bounds;
         if (!WinQueryWindowRect(open32ClientWindow(owner), &bounds))
             return TRUE;
-        if (!(old_style & 0x01000000))
+        if (!(old_style & WIN32_WS_MAXIMIZE))
         {
             window->mdi_normal_x = x;
             window->mdi_normal_y = y;
@@ -27,22 +40,25 @@ BOOL open32ShowMdiChild(Open32Window *window, LONG command)
         x = y = 0;
         width = bounds.xRight - bounds.xLeft;
         height = bounds.yTop - bounds.yBottom;
-        window->style = (old_style & ~0x20000000u) | 0x01000000;
+        window->style = (old_style & ~(ULONG)WIN32_WS_MINIMIZE) | WIN32_WS_MAXIMIZE;
     }
-    else if (command == 1 || command == 9)
+    else if (command == WIN32_SW_SHOWNORMAL || command == WIN32_SW_RESTORE)
     {
-        if (window->mdi_normal_valid && (old_style & 0x21000000))
+        if (window->mdi_normal_valid &&
+            (old_style & ((ULONG)WIN32_WS_MINIMIZE | WIN32_WS_MAXIMIZE)))
         {
             x = window->mdi_normal_x;
             y = window->mdi_normal_y;
             width = window->mdi_normal_width;
             height = window->mdi_normal_height;
         }
-        window->style &= ~0x21000000u;
+        window->style &= ~((ULONG)WIN32_WS_MINIMIZE | WIN32_WS_MAXIMIZE);
     }
     /* Native PM maximisation accepts WC_FRAME only. An Open32 MDI child is
        positioned within its MDICLIENT instead, with Windows state retained. */
-    BOOL moved = SetWindowPos(handle, 0, x, y, width, height, 4 | 64 | (command == 8 ? 16 : 0));
+    BOOL moved = SetWindowPos(handle, WIN32_HWND_TOP, x, y, width, height,
+                              WIN32_SWP_NOZORDER | WIN32_SWP_SHOWWINDOW |
+                                  (command == WIN32_SW_SHOWNA ? WIN32_SWP_NOACTIVATE : 0));
     window = open32FindWindow(handle);
     if (!moved)
     {
@@ -50,26 +66,29 @@ BOOL open32ShowMdiChild(Open32Window *window, LONG command)
             window->style = old_style;
         return TRUE;
     }
-    if (window && command != 8)
-        SendMessage(owner, 0x222, handle, 0);
+    if (window && command != WIN32_SW_SHOWNA)
+        SendMessage(owner, WIN32_WM_MDIACTIVATE, handle, 0);
     return TRUE;
 }
 
 static ULONG mdi_create(Open32Window *client, ULONG definition)
 {
-    uint8 bytes[36];
+    uint8 bytes[WIN32_MDICREATESTRUCT_SIZE];
     if (!lx_execution_read(GProcessState.execution, definition, bytes, sizeof bytes))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    ULONG class_pointer = lx_guest_load_u32(bytes), title_pointer = lx_guest_load_u32(bytes + 4);
-    char *class_copy = class_pointer > UINT16_MAX
-                           ? lx_execution_copy_string(GProcessState.execution, class_pointer, 256)
-                           : NULL;
-    char *title = title_pointer
-                      ? lx_execution_copy_string(GProcessState.execution, title_pointer, 65536)
-                      : NULL;
+    ULONG class_pointer = lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_CLASS),
+          title_pointer = lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_TITLE);
+    /* A class "name" up to 0xFFFF is a class atom. */
+    char *class_copy =
+        class_pointer > UINT16_MAX
+            ? lx_execution_copy_string(GProcessState.execution, class_pointer, CLASS_NAME_LIMIT)
+            : NULL;
+    char *title = title_pointer ? lx_execution_copy_string(GProcessState.execution, title_pointer,
+                                                           TITLE_LIMIT)
+                                : NULL;
     if ((class_pointer > UINT16_MAX && !class_copy) || (title_pointer && !title))
     {
         free(class_copy);
@@ -77,20 +96,24 @@ static ULONG mdi_create(Open32Window *client, ULONG definition)
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    LONG x = (LONG)lx_guest_load_u32(bytes + 12), y = (LONG)lx_guest_load_u32(bytes + 16),
-         width = (LONG)lx_guest_load_u32(bytes + 20), height = (LONG)lx_guest_load_u32(bytes + 24);
-    if (x == INT32_MIN)
+    LONG x = (LONG)lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_X),
+         y = (LONG)lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_Y),
+         width = (LONG)lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_WIDTH),
+         height = (LONG)lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_HEIGHT);
+    if (x == (LONG)WIN32_CW_USEDEFAULT)
         x = 0;
-    if (y == INT32_MIN)
+    if (y == (LONG)WIN32_CW_USEDEFAULT)
         y = 0;
-    if (width == INT32_MIN)
+    if (width == (LONG)WIN32_CW_USEDEFAULT)
         width = client->width;
-    if (height == INT32_MIN)
+    if (height == (LONG)WIN32_CW_USEDEFAULT)
         height = client->height;
-    ULONG child = CreateWindowEx(0x40, class_copy ? class_copy : (PSZ)(uintptr_t)class_pointer,
-                                 title, lx_guest_load_u32(bytes + 28) | 0x50000000, x, y, width,
-                                 height, client->handle, client->mdi_next_id++,
-                                 lx_guest_load_u32(bytes + 8), lx_guest_load_u32(bytes + 32));
+    ULONG child = CreateWindowEx(
+        WIN32_WS_EX_MDICHILD, class_copy ? class_copy : (PSZ)(uintptr_t)class_pointer, title,
+        lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_STYLE) | WIN32_WS_CHILD | WIN32_WS_VISIBLE,
+        x, y, width, height, client->handle, client->mdi_next_id++,
+        lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_OWNER),
+        lx_guest_load_u32(bytes + WIN32_MDICREATESTRUCT_PARAMETER));
     free(class_copy);
     free(title);
     if (child)
@@ -99,9 +122,9 @@ static ULONG mdi_create(Open32Window *client, ULONG definition)
         client->mdi_active = child;
         Open32Window *old = open32FindWindow(previous), *next = open32FindWindow(child);
         if (old)
-            open32WindowCallback(old, 0x222, previous, child);
+            open32WindowCallback(old, WIN32_WM_MDIACTIVATE, previous, child);
         if (next)
-            open32WindowCallback(next, 0x222, previous, child);
+            open32WindowCallback(next, WIN32_WM_MDIACTIVATE, previous, child);
     }
     return child;
 }
@@ -109,29 +132,29 @@ static ULONG mdi_create(Open32Window *client, ULONG definition)
 ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
     Open32Window *window = open32FindWindow(handle);
-    if (window && window->class->builtin == 2)
+    if (window && window->class->builtin == OPEN32_BUILTIN_SCROLLBAR)
         return open32ScrollWindowProc(handle, message, first, second);
-    if (!window || window->class->builtin != 1)
+    if (!window || window->class->builtin != OPEN32_BUILTIN_MDI_CLIENT)
         return 0;
-    if (message == 0x81)
+    if (message == WIN32_WM_NCCREATE)
     {
-        uint8 creation[48], client[8];
+        uint8 creation[WIN32_CREATESTRUCT_SIZE], client[WIN32_CLIENTCREATESTRUCT_SIZE];
         if (!lx_execution_read(GProcessState.execution, second, creation, sizeof creation))
             return 0;
-        ULONG parameter = lx_guest_load_u32(creation);
-        window->mdi_next_id = 0xFF00;
+        ULONG parameter = lx_guest_load_u32(creation + WIN32_CREATESTRUCT_CREATE_PARAMS);
+        window->mdi_next_id = DEFAULT_FIRST_CHILD_ID;
         if (parameter)
         {
             if (!lx_execution_read(GProcessState.execution, parameter, client, sizeof client))
                 return 0;
-            window->mdi_menu = lx_guest_load_u32(client);
-            window->mdi_next_id = lx_guest_load_u32(client + 4);
+            window->mdi_menu = lx_guest_load_u32(client + WIN32_CLIENTCREATESTRUCT_WINDOW_MENU);
+            window->mdi_next_id = lx_guest_load_u32(client + WIN32_CLIENTCREATESTRUCT_FIRST_CHILD);
         }
         return 1;
     }
-    if (message == 0x220)
+    if (message == WIN32_WM_MDICREATE)
         return mdi_create(window, second);
-    if (message == 0x222)
+    if (message == WIN32_WM_MDIACTIVATE)
     {
         Open32Window *next = open32FindWindow(first);
         if (!next || next->parent != handle)
@@ -140,15 +163,15 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
         window->mdi_active = first;
         Open32Window *old = open32FindWindow(previous);
         if (old && previous != first)
-            open32WindowCallback(old, 0x222, previous, first);
+            open32WindowCallback(old, WIN32_WM_MDIACTIVATE, previous, first);
         next = open32FindWindow(first);
         if (next && previous != first)
-            open32WindowCallback(next, 0x222, previous, first);
+            open32WindowCallback(next, WIN32_WM_MDIACTIVATE, previous, first);
         if (open32FindWindow(first))
             SetFocus(first);
         return 0;
     }
-    if (message == 0x221)
+    if (message == WIN32_WM_MDIDESTROY)
     {
         Open32Window *child = open32FindWindow(first);
         if (!child || child->parent != handle)
@@ -158,7 +181,7 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
         DestroyWindow(first);
         return 0; /* WM_MDIDESTROY always returns zero. */
     }
-    if (message == 0x230) /* WM_MDISETMENU */
+    if (message == WIN32_WM_MDISETMENU)
     {
         ULONG previous = GetMenu(window->parent);
         if (first && !SetMenu(window->parent, first))
@@ -167,25 +190,27 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
             window->mdi_menu = second;
         return previous;
     }
-    if (message == 0x229)
+    if (message == WIN32_WM_MDIGETACTIVE)
     {
+        /* lParam, when set, receives whether the active child is maximized. */
         if (second)
         {
             Open32Window *child = open32FindWindow(window->mdi_active);
             uint8 result[4];
-            lx_guest_store_u32(result, child && (child->style & 0x01000000));
+            lx_guest_store_u32(result, child && (child->style & WIN32_WS_MAXIMIZE));
             if (!lx_execution_write(GProcessState.execution, second, result, 4))
                 open32SetError(ERROR_INVALID_PARAMETER);
         }
         return window->mdi_active;
     }
-    if (message == 5)
+    if (message == WIN32_WM_SIZE)
     {
         window->width = second & 0xFFFF;
         window->height = second >> 16;
         Open32Window *child = open32FindWindow(window->mdi_active);
-        if (child && (child->style & 0x01000000))
-            SetWindowPos(child->handle, 0, 0, 0, window->width, window->height, 4 | 16);
+        if (child && (child->style & WIN32_WS_MAXIMIZE))
+            SetWindowPos(child->handle, WIN32_HWND_TOP, 0, 0, window->width, window->height,
+                         WIN32_SWP_NOZORDER | WIN32_SWP_NOACTIVATE);
         return 0;
     }
     return (ULONG)DefWindowProc(handle, message, first, second);
@@ -194,30 +219,31 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
 LONG DefFrameProc(ULONG frame, ULONG client, ULONG message, ULONG first, ULONG second)
 {
     Open32Window *mdi = open32FindWindow(client);
-    if (message == 7 && mdi)
+    if (message == WIN32_WM_SETFOCUS && mdi)
     {
         SetFocus(mdi->mdi_active ? mdi->mdi_active : client);
         return 0;
     }
-    if (message == 5 && mdi)
+    if (message == WIN32_WM_SIZE && mdi)
     {
-        uint8 rectangle[16];
+        uint8 rectangle[WIN32_RECT_SIZE];
         if (GetClientRect(frame, rectangle))
-            MoveWindow(client, 0, 0, (LONG)lx_guest_load_u32(rectangle + 8),
-                       (LONG)lx_guest_load_u32(rectangle + 12), TRUE);
+            MoveWindow(client, 0, 0, (LONG)lx_guest_load_u32(rectangle + WIN32_RECT_RIGHT),
+                       (LONG)lx_guest_load_u32(rectangle + WIN32_RECT_BOTTOM), TRUE);
         return 0;
     }
-    if (message == 0x111 && mdi)
+    /* A window-menu command whose ID is a child's activates that child. */
+    if (message == WIN32_WM_COMMAND && mdi)
     {
         ULONG child_handle = WinWindowFromID(client, first & 0xFFFF);
         Open32Window *child = open32FindWindow(child_handle);
         if (child && child->parent == client)
         {
-            SendMessage(client, 0x222, child_handle, 0);
+            SendMessage(client, WIN32_WM_MDIACTIVATE, child_handle, 0);
             return 0;
         }
     }
-    if (message == 0x86 && mdi && mdi->mdi_active)
+    if (message == WIN32_WM_NCACTIVATE && mdi && mdi->mdi_active)
         SendMessage(mdi->mdi_active, message, first, second);
     return DefWindowProc(frame, message, first, second);
 }
@@ -234,17 +260,20 @@ BOOL TranslateMDISysAccel(ULONG client, PVOID message)
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    ULONG kind = lx_guest_load_u32((uint8 *)message + 4),
-          key = lx_guest_load_u32((uint8 *)message + 8);
-    if ((kind != 0x100 && kind != 0x104) || !(GetKeyState(17) & 0x8000))
+    ULONG kind = lx_guest_load_u32((uint8 *)message + WIN32_MSG_MESSAGE),
+          key = lx_guest_load_u32((uint8 *)message + WIN32_MSG_WPARAM);
+    if ((kind != WIN32_WM_KEYDOWN && kind != WIN32_WM_SYSKEYDOWN) ||
+        !(GetKeyState(WIN32_VK_CONTROL) & KEY_DOWN))
         return FALSE;
-    ULONG active = (ULONG)SendMessage(client, 0x229, 0, 0);
+    ULONG active = (ULONG)SendMessage(client, WIN32_WM_MDIGETACTIVE, 0, 0);
     if (!active)
         return FALSE;
-    if (key == 0x73)
-        SendMessage(client, 0x221, active, 0); /* Ctrl+F4 */
-    else if (key == 0x75 || key == 9)
-        SendMessage(client, 0x224, active, (GetKeyState(16) & 0x8000) != 0);
+    /* Ctrl+F4 closes the active child; Ctrl+F6 and Ctrl+Tab cycle, backwards with Shift. */
+    if (key == WIN32_VK_F4)
+        SendMessage(client, WIN32_WM_MDIDESTROY, active, 0);
+    else if (key == WIN32_VK_F6 || key == WIN32_VK_TAB)
+        SendMessage(client, WIN32_WM_MDINEXT, active,
+                    (GetKeyState(WIN32_VK_SHIFT) & KEY_DOWN) != 0);
     else
         return FALSE;
     return TRUE;

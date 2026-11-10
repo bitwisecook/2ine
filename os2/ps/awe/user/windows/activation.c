@@ -69,9 +69,9 @@ BOOL EnableWindow(ULONG handle, BOOL enable)
     if (window)
     {
         if (enable)
-            window->style &= ~0x08000000u;
+            window->style &= ~(ULONG)WIN32_WS_DISABLED;
         else
-            window->style |= 0x08000000u;
+            window->style |= (ULONG)WIN32_WS_DISABLED;
     }
     if (!WinEnableWindow(handle, enable))
     {
@@ -90,7 +90,7 @@ BOOL IsWindowVisible(ULONG window)
 {
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
         return FALSE;
-    for (ULONG cursor = window; cursor; cursor = WinQueryWindow(cursor, 5))
+    for (ULONG cursor = window; cursor; cursor = WinQueryWindow(cursor, QW_PARENT))
         if (!WinIsWindowVisible(cursor))
             return FALSE;
     return TRUE;
@@ -120,7 +120,7 @@ BOOL SetForegroundWindow(ULONG handle)
         return FALSE;
     }
     ULONG parent;
-    while ((parent = WinQueryWindow(handle, 5)) && parent != HWND_DESKTOP)
+    while ((parent = WinQueryWindow(handle, QW_PARENT)) && parent != HWND_DESKTOP)
         handle = parent;
     return BringWindowToTop(handle);
 }

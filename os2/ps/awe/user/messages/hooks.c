@@ -52,7 +52,8 @@ static void destroy_hook(void *data)
 ULONG SetWindowsHookEx(LONG type, ULONG procedure, ULONG module, ULONG thread)
 {
     TRACE_NATIVE("SetWindowsHookEx(%d, %X, %u, %u)", type, procedure, module, thread);
-    if (type != 2 || thread != GetCurrentThreadId())
+    /* Only thread-local keyboard hooks are supported. */
+    if (type != WIN32_WH_KEYBOARD || thread != GetCurrentThreadId())
     {
         open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
