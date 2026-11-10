@@ -4,6 +4,11 @@
 #include "emulator/launch/audio_config.h"
 #include "environment/audio.h"
 
+enum
+{
+    MIDI_CHANNELS = 16
+};
+
 int audio_config(TbBall *c, const char *build, cJSON *env)
 {
     cJSON *defaults = NULL;
@@ -22,7 +27,7 @@ int audio_config(TbBall *c, const char *build, cJSON *env)
                                        field(settings, "profile"))
                       : NULL;
     const cJSON *channels = get(settings, "channels");
-    for (int i = 0; text && i < 16; i++)
+    for (int i = 0; text && i < MIDI_CHANNELS; i++)
     {
         const cJSON *channel = cJSON_GetArrayItem(channels, i);
         const char *id = field(channel, "bank");

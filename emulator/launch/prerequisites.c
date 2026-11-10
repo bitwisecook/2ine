@@ -11,6 +11,12 @@
 #include "environment/media/support.h"
 #include "formats/executable/os2_executable.h"
 
+/* Bounds the walk over a damaged or hostile manifest. */
+enum
+{
+    MAX_VISITED_RECORDS = 10000
+};
+
 int installer_support_required(TbBall *c, const char *host)
 {
     char *folder = tb_ball_keep(c, strdup(host)), *slash = folder ? strrchr(folder, '/') : NULL;
@@ -210,7 +216,7 @@ cJSON *ball_navigation_state(TbBall *c)
     unsigned applications_visited = 0;
     cJSON_ArrayForEach(application, get(c->manifest, "applications"))
     {
-        if (++applications_visited > 10000)
+        if (++applications_visited > MAX_VISITED_RECORDS)
         {
             truncated = 1;
             break;
@@ -257,7 +263,7 @@ cJSON *ball_navigation_state(TbBall *c)
     {
         if (installed)
             break;
-        if (++visited > 10000)
+        if (++visited > MAX_VISITED_RECORDS)
         {
             truncated = 1;
             break;
@@ -271,7 +277,8 @@ cJSON *ball_navigation_state(TbBall *c)
             continue;
         }
         char *key = component_key(c, str(directory));
-        if (equal_case(key, "C:\\OS2\\DLL\\2INE") || !strncmp(key, "C:\\OS2\\DLL\\2INE\\", 16) ||
+        if (equal_case(key, "C:\\OS2\\DLL\\2INE") ||
+            !strncmp(key, "C:\\OS2\\DLL\\2INE\\", strlen("C:\\OS2\\DLL\\2INE\\")) ||
             strstr(key, "\\TEMP") || strstr(key, "\\CACHE"))
             continue;
         size_t count = 0;
@@ -279,7 +286,7 @@ cJSON *ball_navigation_state(TbBall *c)
         if (count != (size_t)-1)
             for (size_t i = 0; i < count; i++)
             {
-                if (++visited > 10000)
+                if (++visited > MAX_VISITED_RECORDS)
                 {
                     truncated = 1;
                     break;

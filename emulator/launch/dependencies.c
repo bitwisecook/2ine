@@ -4,6 +4,7 @@
 #include "ball/store.h"
 #include "environment/dependencies/database.h"
 #include "emulator/launch/dependencies.h"
+#include "emulator/launch/plan.h"
 #include "emulator/launch/prerequisites.h"
 #include "environment/components/store.h"
 #include "environment/dependencies/audit.h"
@@ -287,7 +288,7 @@ cJSON *launch_dependencies(TbBall *parent, const cJSON *request)
         int count = 0;
         cJSON_ArrayForEach(service, get(c->manifest, "startupPrograms"))
         {
-            if (++count > 16)
+            if (++count > LAUNCH_MAX_STARTUP_PROGRAMS)
             {
                 put(report, "unknown", cJSON_CreateTrue());
                 break;

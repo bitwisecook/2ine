@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Portable process entry and API dispatch over the CPU execution interface. */
 #include "emulator/execution/core/backend.h"
+#include "emulator/execution/core/x86/x86.h"
 #include "emulator/execution/unicorn/cpu.h"
 #include "emulator/abi.h"
 #include "host/fatal.h"
@@ -20,6 +21,34 @@
 #define API_VECTOR 0xf1
 #define RETURN_VECTOR 0xf0
 #define BINDING_BUCKETS 2048
+/* OS/2's fixed GDT selectors for flat code and data, used by mixed-mode thunks. */
+#define SYSTEM_FLAT_CODE 0x5b
+#define SYSTEM_FLAT_DATA 0x53
+/* A far pointer with this selector is near: an offset from the NE automatic data base. */
+#define NEAR_POINTER_SELECTOR 0xffff
+/* Linear range searched for free 64 KiB segment tiles. */
+#define SEGMENT_ARENA_START 0x08800000u
+#define SEGMENT_ARENA_END 0x1fff0000u
+#define GUEST_RWX (LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE)
+/* API bridge: INT API_VECTOR, then RETF imm16 (16-bit), RET imm16 or RET (32-bit). */
+#define TRAP_INSTRUCTION_BYTES 2
+#define BRIDGE_BYTES 5
+#define BRIDGE_NEAR_RET_BYTES 3
+#define RETURN_ADDRESS_BYTES 4
+#define GUEST_ADDRESS_LIMIT UINT64_C(0x100000000)
+/* Translated blocks run per cooperative slice. */
+#define SLICE_BLOCKS 4096
+#define PARKED_POLL_MS 10
+#define MAX_REPORTED_INVOCATIONS 32
+/* Callback stacks leave a small gap below the top of their segment. */
+#define CALLBACK_STACK_TOP_GAP 16
+
+enum
+{
+    TERMINATION_NONE,
+    TERMINATION_REQUESTED,
+    TERMINATION_PRIMARY_CLEANUP
+};
 
 typedef struct Binding
 {
@@ -60,7 +89,7 @@ typedef struct EmulatedState
     LxHostMutex *mutex, *segment_mutex;
     uint64_t primary_thread;
     uint32_t exit_stack;
-    unsigned termination; /* 0 running, 1 requested, 2 primary cleanup. Protected by mutex. */
+    unsigned termination; /* TERMINATION_*. Protected by mutex. */
     void (*exit_cleanup)(uint32_t);
     uint32_t exit_code;
 } EmulatedState;
@@ -99,12 +128,12 @@ static void pollTermination(LxExecution *e)
     unsigned state = s->termination;
     void (*cleanup)(uint32_t) = s->exit_cleanup;
     uint32_t code = s->exit_code;
-    if (primary && state == 1)
-        __atomic_store_n(&s->termination, 2, __ATOMIC_RELEASE);
+    if (primary && state == TERMINATION_REQUESTED)
+        __atomic_store_n(&s->termination, TERMINATION_PRIMARY_CLEANUP, __ATOMIC_RELEASE);
     lx_host_mutex_unlock(s->mutex);
     if (primary)
     {
-        if (state == 1)
+        if (state == TERMINATION_REQUESTED)
         {
             /* OS/2 discards the interrupted program stack and exception chain
                before dispatching its process exit list on thread one. */
@@ -126,7 +155,7 @@ static void pollTermination(LxExecution *e)
         return;
     }
     for (;;)
-        lx_host_sleep_ms(10);
+        lx_host_sleep_ms(PARKED_POLL_MS);
 }
 
 static void terminateProcess(LxExecution *e, void (*cleanup)(uint32_t), uint32_t code)
@@ -134,12 +163,13 @@ static void terminateProcess(LxExecution *e, void (*cleanup)(uint32_t), uint32_t
     EmulatedState *s = e->backend;
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
     lx_host_fatal_mark_exiting();
-    int recursive = s->termination == 2 && lx_host_thread_id() == s->primary_thread;
+    int recursive =
+        s->termination == TERMINATION_PRIMARY_CLEANUP && lx_host_thread_id() == s->primary_thread;
     if (!s->termination)
     {
         s->exit_cleanup = cleanup;
         s->exit_code = code;
-        __atomic_store_n(&s->termination, 1, __ATOMIC_RELEASE);
+        __atomic_store_n(&s->termination, TERMINATION_REQUESTED, __ATOMIC_RELEASE);
     }
     lx_host_mutex_unlock(s->mutex);
     if (recursive)
@@ -184,7 +214,8 @@ static int protect(LxExecution *e, uint32_t a, size_t n, unsigned p)
 static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, int code)
 {
     EmulatedState *s = Emulated;
-    if (address < 4096)
+    /* The null page never has a selector. */
+    if (address < X86_PAGE_SIZE)
         return 0;
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
     unsigned slot = 0;
@@ -223,7 +254,8 @@ static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, 
             s->execution->services.query_executable
                 ? s->execution->services.query_executable(s->execution->services.userdata, address)
                 : 0;
-    LxSegment segment = {(uint16_t)((slot << 3) | 7), base, 0xffff, 16, code > 0};
+    LxSegment segment = {(uint16_t)((slot << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3),
+                         base, X86_SEGMENT_LIMIT, 16, code > 0};
     int ok = lx_cpu_set_segment(s->cpu, &segment);
     if (ok)
     {
@@ -249,12 +281,12 @@ static void *farToHost(uint32_t pointer)
         return NULL;
     uint16_t selector = pointer >> 16;
     uint32_t base;
-    if (selector == 0xffff)
+    if (selector == NEAR_POINTER_SELECTOR)
         base = Emulated->near_base;
     else
     {
-        unsigned index = selector >> 3;
-        if (!(selector & 4) || !Emulated->selectors[index].selector)
+        unsigned index = selector >> X86_SELECTOR_INDEX_SHIFT;
+        if (!(selector & X86_SELECTOR_LDT) || !Emulated->selectors[index].selector)
             return NULL;
         base = Emulated->selectors[index].base;
     }
@@ -268,17 +300,19 @@ static uint32_t hostToFar(void *pointer)
     if (!pointer || !lx_execution_address(Emulated->execution, pointer, 1, 0, &address) ||
         !findSelector(address, &selector, &offset, -1))
         return 0;
-    return ((uint32_t)((selector << 3) | 7) << 16) | offset;
+    return ((uint32_t)((selector << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3) << 16) |
+           offset;
 }
 
 static void *allocSegment(uint16_t *selector, int executable)
 {
     EmulatedState *s = Emulated;
-    *selector = 0xffff;
+    *selector = NEAR_POINTER_SELECTOR;
     lx_host_mutex_lock(s->segment_mutex, UINT32_MAX);
-    for (uint32_t address = 0x08800000; address < 0x1fff0000; address += 0x10000)
+    for (uint32_t address = SEGMENT_ARENA_START; address < SEGMENT_ARENA_END;
+         address += X86_SEGMENT_SIZE)
     {
-        LxGuestMapping *m = lx_execution_map(s->execution, address, 0x10000, 7, 1);
+        LxGuestMapping *m = lx_execution_map(s->execution, address, X86_SEGMENT_SIZE, GUEST_RWX, 1);
         if (!m)
             continue;
         uint16_t offset;
@@ -318,19 +352,19 @@ static int codeAlias(uint16_t data, uint16_t *code)
         return 0;
     LxGuestMapping *m =
         lx_execution_mapping_at(Emulated->execution, Emulated->selectors[index].base);
-    if (!m || !lx_execution_protect(Emulated->execution, m, 7))
+    if (!m || !lx_execution_protect(Emulated->execution, m, GUEST_RWX))
     {
         freeSelector(slot);
         return 0;
     }
-    *code = (slot << 3) | 7;
+    *code = (slot << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3;
     return 1;
 }
 
 static void stackSegments(uint32_t address, uint32_t size, int release)
 {
     uint64_t end = (uint64_t)address + size;
-    for (uint64_t a = address & ~0xffffu; a < end; a += 0x10000)
+    for (uint64_t a = address & ~0xffffu; a < end; a += X86_SEGMENT_SIZE)
     {
         uint16_t slot, offset;
         if (findSelector((uint32_t)a, &slot, &offset, 0) && release)
@@ -363,12 +397,12 @@ static uint16_t attachTib(uint8_t *tib)
 {
     uint32_t address;
     uint16_t slot, offset;
-    if (!lx_execution_address(Emulated->execution, tib, Emulated->execution->services.tib_size, 3,
-                              &address) ||
+    if (!lx_execution_address(Emulated->execution, tib, Emulated->execution->services.tib_size,
+                              LX_GUEST_READ | LX_GUEST_WRITE, &address) ||
         !findSelector(address, &slot, &offset, 0) || offset)
         failure("TIB must be in guest memory at a segment boundary");
     ThreadTib = tib;
-    ThreadFs = (slot << 3) | 7;
+    ThreadFs = (slot << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3;
     if (!lx_execution_tls_window(Emulated->execution))
         failure("Could not allocate the thread-local TIB window");
     return slot;
@@ -391,10 +425,11 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *base, uint
 {
     (void)base;
     (void)selector;
-    if (capacity < 5)
+    if (capacity < BRIDGE_BYTES)
         return 0;
     Binding *b = calloc(1, sizeof *b);
-    if (!b || !lx_execution_address(Emulated->execution, output, 5, LX_GUEST_WRITE, &b->address))
+    if (!b || !lx_execution_address(Emulated->execution, output, BRIDGE_BYTES, LX_GUEST_WRITE,
+                                    &b->address))
     {
         free(b);
         return 0;
@@ -406,29 +441,29 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *base, uint
     unsigned bucket = bindingBucket(b->address);
     b->hash_next = Emulated->binding_buckets[bucket];
     Emulated->binding_buckets[bucket] = b;
-    output[0] = 0xcd;
+    output[0] = X86_OPCODE_INT;
     output[1] = API_VECTOR;
-    output[2] = 0xca;
+    output[2] = X86_OPCODE_RETF_IMM16;
     output[3] = bytes;
     output[4] = bytes >> 8;
-    return 5;
+    return BRIDGE_BYTES;
 }
 
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *api)
 {
-    if (capacity < 5 ||
+    if (capacity < BRIDGE_BYTES ||
         !emitBridge16(output, capacity, output, 0, api->callback, api->argument_bytes))
         return 0;
     Binding *b = Emulated->bindings;
     b->convention = api->convention;
     if (api->callee_pop)
     {
-        output[2] = 0xc2;
+        output[2] = X86_OPCODE_RET_IMM16;
         lx_guest_store_u16(output + 3, api->callee_pop);
-        return 5;
+        return BRIDGE_BYTES;
     }
-    output[2] = 0xc3;
-    return 3;
+    output[2] = X86_OPCODE_RET;
+    return BRIDGE_NEAR_RET_BYTES;
 }
 
 static void replaceContext(Invocation *frame)
@@ -457,11 +492,11 @@ static void bindThreadWindow(EmulatedState *s)
     const uint32_t base = s->execution->tls_address - s->execution->services.tls_offset;
     /* IBM mixed-width thunks load this fixed GDT selector. Point it at the
        same process-wide TIB alias that is rebound for each running thread. */
-    const LxSegment tib = {OS2_TIB_SELECTOR, base, 4095, 32, 0};
+    const LxSegment tib = {OS2_TIB_SELECTOR, base, X86_PAGE_SIZE - 1, 32, 0};
     if (!lx_cpu_set_segment(s->cpu, &tib))
         failure(lx_cpu_error(s->cpu));
-    if (!lx_cpu_unmap(s->cpu, base, 4096) ||
-        !lx_cpu_map_borrowed(s->cpu, base, 4096, LX_MEM_READ | LX_MEM_WRITE, ThreadTib))
+    if (!lx_cpu_unmap(s->cpu, base, X86_PAGE_SIZE) ||
+        !lx_cpu_map_borrowed(s->cpu, base, X86_PAGE_SIZE, LX_MEM_READ | LX_MEM_WRITE, ThreadTib))
         failure(lx_cpu_error(s->cpu));
     s->tls_backing = ThreadTib;
 }
@@ -503,7 +538,9 @@ static void appendAddress(EmulatedState *s, char *buffer, size_t size, const cha
 
 static uint32_t guestLinear(EmulatedState *s, uint16_t selector, uint32_t offset)
 {
-    return (selector & 4) ? s->selectors[selector >> 3].base + (offset & 0xffff) : offset;
+    return (selector & X86_SELECTOR_LDT)
+               ? s->selectors[selector >> X86_SELECTOR_INDEX_SHIFT].base + (offset & 0xffff)
+               : offset;
 }
 
 static void appendGuestState(EmulatedState *s, const LxCpuRegisters *r, char *buffer, size_t size)
@@ -518,7 +555,7 @@ static void appendGuestState(EmulatedState *s, const LxCpuRegisters *r, char *bu
     appendBytes(buffer, size, "guest instruction",
                 lx_cpu_translate_far(s->cpu, r->cs, r->eip, 16, LX_MEM_READ), 16);
     uint32_t stack_offset = r->esp;
-    if ((r->ss & 4) && s->selectors[r->ss >> 3].bits == 16)
+    if ((r->ss & X86_SELECTOR_LDT) && s->selectors[r->ss >> X86_SELECTOR_INDEX_SHIFT].bits == 16)
         stack_offset &= 0xffff;
     /* A shallow stack can end inside the window; the return address still matters. */
     unsigned stack_bytes = 64;
@@ -574,7 +611,8 @@ static void writeFatalContext(void)
     if (!s)
         return;
     unsigned depth = 0;
-    for (const Invocation *frame = Active; frame && depth < 32; frame = frame->outer, depth++)
+    for (const Invocation *frame = Active; frame && depth < MAX_REPORTED_INVOCATIONS;
+         frame = frame->outer, depth++)
     {
         const LxCpuRegisters *r = frame->api_registers;
         lx_host_fatal_write("invocation ");
@@ -632,7 +670,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         bindThreadWindow(s);
         /* Bound cooperative slices at translated-block boundaries. Counting
            every instruction adds a callback even inside hot rendering loops. */
-        LxCpuEvent event = lx_cpu_run_blocks(s->cpu, 4096);
+        LxCpuEvent event = lx_cpu_run_blocks(s->cpu, SLICE_BLOCKS);
         if (!lx_cpu_get_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
         replaceContext(frame);
@@ -646,9 +684,9 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         {
             stopGuest(s, &registers, &event);
         }
-        uint32_t linear = registers.eip - 2;
-        if (registers.cs & 4)
-            linear += s->selectors[registers.cs >> 3].base;
+        uint32_t linear = registers.eip - TRAP_INSTRUCTION_BYTES;
+        if (registers.cs & X86_SELECTOR_LDT)
+            linear += s->selectors[registers.cs >> X86_SELECTOR_INDEX_SHIFT].base;
         Binding *b;
         for (b = s->binding_buckets[bindingBucket(linear)]; b && b->address != linear;
              b = b->hash_next)
@@ -660,16 +698,18 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         {
             missingImport(s, &registers, b);
         }
-        const unsigned ss_index = registers.ss >> 3;
-        const uint32_t sp = (registers.ss & 4) ? (registers.esp & 0xffff) : registers.esp;
-        uint32_t stack_base = (registers.ss & 4) ? s->selectors[ss_index].base : 0;
+        const unsigned ss_index = registers.ss >> X86_SELECTOR_INDEX_SHIFT;
+        const uint32_t sp =
+            (registers.ss & X86_SELECTOR_LDT) ? (registers.esp & 0xffff) : registers.esp;
+        uint32_t stack_base = (registers.ss & X86_SELECTOR_LDT) ? s->selectors[ss_index].base : 0;
         const uint32_t stack_arguments = b->convention == LX_ABI_EAX32 ? 0 : b->argument_bytes;
-        if ((registers.ss & 4) &&
+        if ((registers.ss & X86_SELECTOR_LDT) &&
             (!s->selectors[ss_index].selector ||
-             (uint64_t)sp + 4 + stack_arguments > (uint64_t)s->selectors[ss_index].limit + 1))
+             (uint64_t)sp + RETURN_ADDRESS_BYTES + stack_arguments >
+                 (uint64_t)s->selectors[ss_index].limit + 1))
             failure("API frame exceeds its stack segment");
-        const uint64_t frame_address = (uint64_t)stack_base + sp + 4;
-        if (frame_address + stack_arguments > UINT64_C(0x100000000))
+        const uint64_t frame_address = (uint64_t)stack_base + sp + RETURN_ADDRESS_BYTES;
+        if (frame_address + stack_arguments > GUEST_ADDRESS_LIMIT)
             failure("API frame address overflows");
         uint8_t eax_frame[4];
         lx_guest_store_u32(eax_frame, registers.eax);
@@ -782,14 +822,14 @@ static void program(const LxExecutionEntry *e, unsigned bits)
         r.esp = e->stack & 0xffff;
         r.ds = e->data_selector ? e->data_selector : r.ss;
         r.es = 0;
-        r.eax = (slot << 3) | 7;
+        r.eax = (slot << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3;
         r.ebx = offset;
         r.ecx = e->data_bytes;
         uint16_t words[] = {
             r.ss,  (uint16_t)(r.esp - e->stack_bytes), r.ss, (uint16_t)r.esp, (uint16_t)r.eax,
             offset};
         r.esp -= sizeof words;
-        uint32_t a = Emulated->selectors[r.ss >> 3].base + r.esp;
+        uint32_t a = Emulated->selectors[r.ss >> X86_SELECTOR_INDEX_SHIFT].base + r.esp;
         void *p = lx_execution_memory(Emulated->execution, a, sizeof words, LX_GUEST_WRITE);
         if (!p)
             failure("Invalid guest program stack");
@@ -812,8 +852,8 @@ static void library(const LxExecutionEntry *e, int termination)
         lx_cpu_restore(Emulated->cpu, Active->context);
         lx_cpu_get_registers(Emulated->cpu, &r);
         lx_host_mutex_unlock(Emulated->mutex);
-        if (r.ss & 4)
-            r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+        if (r.ss & X86_SELECTOR_LDT)
+            r.esp = Emulated->selectors[r.ss >> X86_SELECTOR_INDEX_SHIFT].base + (r.esp & 0xffff);
         r.ss = r.ds = r.es = FLAT_DATA;
         r.eip = e->entry;
         r.cs = FLAT_CODE;
@@ -883,8 +923,8 @@ static void callback(uint32_t entry, uint32_t argument)
     lx_cpu_restore(Emulated->cpu, Active->context);
     lx_cpu_get_registers(Emulated->cpu, &r);
     lx_host_mutex_unlock(Emulated->mutex);
-    if (r.ss & 4)
-        r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+    if (r.ss & X86_SELECTOR_LDT)
+        r.esp = Emulated->selectors[r.ss >> X86_SELECTOR_INDEX_SHIFT].base + (r.esp & 0xffff);
     r.ss = r.ds = r.es = FLAT_DATA;
     r.cs = FLAT_CODE;
     r.eip = entry;
@@ -905,18 +945,19 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
         lx_cpu_restore(Emulated->cpu, Active->context);
         lx_cpu_get_registers(Emulated->cpu, &r);
         lx_host_mutex_unlock(Emulated->mutex);
-        if (r.ss & 4)
-            r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+        if (r.ss & X86_SELECTOR_LDT)
+            r.esp = Emulated->selectors[r.ss >> X86_SELECTOR_INDEX_SHIFT].base + (r.esp & 0xffff);
     }
     else
     {
         /* Asynchronous OS/2 services attach a TIB before delivering a callback.
            Their stack belongs to this invocation, independent of any other CPU. */
-        stack = lx_execution_map(Emulated->execution, 0, 0x10000, 3, 0);
+        stack = lx_execution_map(Emulated->execution, 0, X86_SEGMENT_SIZE,
+                                 LX_GUEST_READ | LX_GUEST_WRITE, 0);
         if (!stack)
             failure("Cannot allocate guest callback stack");
         r = initialRegisters();
-        r.esp = lx_execution_mapping_address(stack) + 0x10000 - 16;
+        r.esp = lx_execution_mapping_address(stack) + X86_SEGMENT_SIZE - CALLBACK_STACK_TOP_GAP;
     }
     r.ss = r.ds = r.es = FLAT_DATA;
     r.cs = FLAT_CODE;
@@ -998,10 +1039,10 @@ static void *missing(const char *module, const char *entry, unsigned bits, LxExe
     uint8_t *code = allocSegment(&selector, 1);
     if (!code)
         failure("Cannot allocate missing-import entry");
-    if (!emitBridge16(code, 0x10000, code, selector, NULL, 0))
+    if (!emitBridge16(code, X86_SEGMENT_SIZE, code, selector, NULL, 0))
         failure("Cannot bind missing-import entry");
     if (bits == 32)
-        code[2] = 0xc3;
+        code[2] = X86_OPCODE_RET;
     Binding *binding = Emulated->bindings;
     binding->missing_module = strdup(module);
     binding->missing_entry = strdup(entry);
@@ -1012,7 +1053,7 @@ static void *missing(const char *module, const char *entry, unsigned bits, LxExe
         b->host = code;
         b->address = binding->address;
         b->segment_base = binding->address;
-        b->size = 0x10000;
+        b->size = X86_SEGMENT_SIZE;
         b->selector_index = selector;
     }
     return code;
@@ -1059,21 +1100,21 @@ static int initialize(LxExecution *e)
     if (!lx_cpu_set_segment(s->cpu, &code) || !lx_cpu_set_segment(s->cpu, &data))
         failure(lx_cpu_error(s->cpu));
     /* OS/2 mixed-mode thunks also use the system's fixed flat selectors. */
-    code.selector = 0x5b;
-    data.selector = 0x53;
+    code.selector = SYSTEM_FLAT_CODE;
+    data.selector = SYSTEM_FLAT_DATA;
     if (!lx_cpu_set_segment(s->cpu, &code) || !lx_cpu_set_segment(s->cpu, &data))
         failure(lx_cpu_error(s->cpu));
-    s->return_page = lx_execution_map(e, 0, 0x10000, 7, 0);
+    s->return_page = lx_execution_map(e, 0, X86_SEGMENT_SIZE, GUEST_RWX, 0);
     if (!s->return_page)
         failure(lx_execution_error(e));
     s->return_address = lx_execution_mapping_address(s->return_page);
     uint8_t *p = lx_execution_mapping_host(s->return_page);
-    p[0] = 0xcd;
+    p[0] = X86_OPCODE_INT;
     p[1] = RETURN_VECTOR;
     uint16_t slot, offset;
     if (!findSelector(s->return_address, &slot, &offset, 1))
         failure("Cannot allocate guest return segment");
-    s->return_selector = (slot << 3) | 7;
+    s->return_selector = (slot << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3;
     s->initial = lx_cpu_save(s->cpu);
     if (!s->initial)
         failure(lx_cpu_error(s->cpu));
@@ -1189,9 +1230,9 @@ static uint32_t guestStack(void)
     if (!Active || !Active->api_registers)
         return 0;
     const LxCpuRegisters *r = Active->api_registers;
-    if (!(r->ss & 4))
+    if (!(r->ss & X86_SELECTOR_LDT))
         return r->esp;
-    return Emulated->selectors[r->ss >> 3].base + (r->esp & 0xffff);
+    return Emulated->selectors[r->ss >> X86_SELECTOR_INDEX_SHIFT].base + (r->esp & 0xffff);
 }
 
 static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *arguments, uint32_t bytes,
@@ -1208,7 +1249,7 @@ static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *argume
     uint8_t return_address[4];
     lx_guest_store_u16(return_address, 0);
     lx_guest_store_u16(return_address + 2, Emulated->return_selector);
-    const uint32_t linear = Emulated->selectors[ss >> 3].base + r.esp;
+    const uint32_t linear = Emulated->selectors[ss >> X86_SELECTOR_INDEX_SHIFT].base + r.esp;
     if (!lx_execution_write(Emulated->execution, linear, return_address, sizeof return_address) ||
         (bytes && !lx_execution_write(Emulated->execution, linear + 4, arguments, bytes)))
         return 0;

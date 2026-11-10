@@ -2,9 +2,16 @@
 #include "formats/encoding/base64.h"
 #include <stdlib.h>
 
+enum
+{
+    /* Larger inputs are refused rather than encoded into an unbounded JSON string. */
+    MAX_INPUT_BYTES = 64 * 1024 * 1024,
+    SEXTET_MASK = 63
+};
+
 char *tb_base64(const uint8_t *bytes, size_t size)
 {
-    if (size > 64 * 1024 * 1024)
+    if (size > MAX_INPUT_BYTES)
         return NULL;
     static const char alphabet[] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -20,9 +27,9 @@ char *tb_base64(const uint8_t *bytes, size_t size)
         if (i + 2 < size)
             v |= bytes[i + 2];
         out[j++] = alphabet[v >> 18];
-        out[j++] = alphabet[(v >> 12) & 63];
-        out[j++] = i + 1 < size ? alphabet[(v >> 6) & 63] : '=';
-        out[j++] = i + 2 < size ? alphabet[v & 63] : '=';
+        out[j++] = alphabet[(v >> 12) & SEXTET_MASK];
+        out[j++] = i + 1 < size ? alphabet[(v >> 6) & SEXTET_MASK] : '=';
+        out[j++] = i + 2 < size ? alphabet[v & SEXTET_MASK] : '=';
     }
     out[n] = 0;
     return out;

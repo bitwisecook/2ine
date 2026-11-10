@@ -27,10 +27,17 @@ typedef struct IndexedDirectory
     size_t count, capacity, bytes;
 } IndexedDirectory;
 
+enum
+{
+    DIRECTORY_BUCKETS = 256,
+    /* Larger directories are not indexed; lookups fall back to a scan. */
+    MAX_DIRECTORY_ENTRIES = 100000
+};
+
 typedef struct DirectoryIndex
 {
     VolumeDisk disk;
-    IndexedDirectory *directories[256];
+    IndexedDirectory *directories[DIRECTORY_BUCKETS];
     size_t bytes;
     uint64_t builds, hits;
 } DirectoryIndex;
@@ -46,7 +53,7 @@ static void indexed_directory_free(IndexedDirectory *directory)
 static void directory_index_free(void *opaque)
 {
     DirectoryIndex *index = opaque;
-    for (size_t i = 0; i < 256; i++)
+    for (size_t i = 0; i < DIRECTORY_BUCKETS; i++)
     {
         IndexedDirectory *directory = index->directories[i];
         while (directory)
@@ -74,7 +81,7 @@ static int indexed_entry(void *opaque, const char *name, const VolumeNode *node)
     size_t capacity = directory->capacity;
     if (directory->count == capacity)
         capacity = capacity ? capacity * 2 : 16;
-    if (directory->count == 100000 ||
+    if (directory->count == MAX_DIRECTORY_ENTRIES ||
         !tb_stream_index_resize(build->index->disk.stream,
                                 build->index->bytes + directory->bytes + length +
                                     (capacity - directory->capacity) * sizeof(IndexedEntry)))
@@ -100,7 +107,8 @@ int volume_entries(VolumeDisk *disk, VolumeNode node, VolumeEntryCallback callba
     DirectoryIndex *index = disk->index;
     if (!index)
         return volume_read_entries(disk, node, callback, context);
-    size_t bucket = (size_t)((node.offset / ISO_SECTOR_BYTES) ^ node.cluster ^ node.size) % 256;
+    size_t bucket =
+        (size_t)((node.offset / ISO_SECTOR_BYTES) ^ node.cluster ^ node.size) % DIRECTORY_BUCKETS;
     IndexedDirectory *directory = index->directories[bucket];
     while (directory &&
            (directory->node.offset != node.offset || directory->node.cluster != node.cluster ||

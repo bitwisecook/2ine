@@ -7,13 +7,26 @@
  */
 #include "emulator/loader/internal.h"
 
+/* Loads LX modules: object mapping, page decompression, fixups, entry and name tables. */
+
 enum
 {
-    LX_NO_INTERNAL_FIXUPS = 0x10, /* E32NOINTFIX */
-    LX_LIBRARY_MODULE = 0x8000,   /* E32NOTP */
-    LX_OBJECT_RESOURCE = 0x8,
-    LX_OBJECT_ALIAS16 = 0x1000,
-    LX_OBJECT_BIG = 0x2000
+    /* A 16:16 alias selector covers at most one 64 KiB tile. */
+    ALIAS16_TILE_SIZE = 0x10000,
+    /* Deeper import chains than this are treated as circular. */
+    MAX_DEPENDENCY_DEPTH = 32,
+    /* Import-module names are length-prefixed with a byte below 128. */
+    MAX_MODULE_NAME_LENGTH = 127,
+    /* Fixup tracing is limited to this page-offset window to keep the log readable. */
+    TRACE_FIXUP_FIRST_OFFSET = 0x700,
+    TRACE_FIXUP_END_OFFSET = 0x800,
+    /* EMX.DLL object 2 holds its guest signal installer at this offset; NOPs disable it. */
+    EMX_SIGNAL_INSTALLER_OBJECT = 1,
+    EMX_SIGNAL_INSTALLER_OFFSET = 28596,
+    EMX_SIGNAL_INSTALLER_LENGTH = 37,
+    X86_NOP = 0x90,
+    /* HPI.DLL (Java) object 5 holds code but is not marked executable. */
+    HPI_CODE_OBJECT = 4
 };
 
 int sanityCheckLxModule(const uint8 *exe, const uint32 exelen)
@@ -25,37 +38,37 @@ int sanityCheckLxModule(const uint8 *exe, const uint32 exelen)
     }
 
     const LxHeader *lx = (const LxHeader *)exe;
-    if ((lx->byte_order != 0) || (lx->word_order != 0))
+    if ((lx->byte_order != E32LEBO) || (lx->word_order != E32LEWO))
     {
         fprintf(stderr, "Module is not little-endian!\n");
         return 0;
     }
 
-    if (lx->lx_version != 0)
+    if (lx->lx_version != E32LEVEL)
     {
         fprintf(stderr, "Module is unknown LX version (%u)\n", (uint)lx->lx_version);
         return 0;
     }
 
-    if (lx->cpu_type > 3)
-    { // 1==286, 2==386, 3==486
+    if (lx->cpu_type > E32CPU486)
+    {
         fprintf(stderr, "Module needs unknown CPU type (%u)\n", (uint)lx->cpu_type);
         return 0;
     }
 
-    if (lx->os_type != 1)
-    { // 1==OS/2, others: dos4, windows, win386, unknown.
+    if (lx->os_type != LX_OS_OS2)
+    {
         fprintf(stderr, "Module needs unknown OS type (%u)\n", (uint)lx->os_type);
         return 0;
     }
 
-    if (lx->page_size != 4096)
+    if (lx->page_size != LX_PAGE_SIZE)
     {
         fprintf(stderr, "Module page size isn't 4096 (%u)\n", (uint)lx->page_size);
         return 0;
     }
 
-    if (lx->module_flags & 0x2000)
+    if (lx->module_flags & E32NOLOAD)
     {
         fprintf(stderr, "Module is flagged as not-loadable\n");
         return 0;
@@ -112,36 +125,36 @@ void doFixup(uint8 *page, const sint16 offset, const uint32 finalval, const uint
 
 static void fixupInternalChain(uint8 *page, sint16 offset, uint32 target)
 {
-    uint8 occupied[4096] = {0};
+    uint8 occupied[LX_PAGE_SIZE] = {0};
     uint32 current = (uint32)offset;
     uint32 base = 0;
 
     /* Validate the complete page-local chain before replacing its link words. */
     do
     {
-        if (current > 4092 || occupied[current] || occupied[current + 1] || occupied[current + 2] ||
-            occupied[current + 3])
+        if (current > LX_PAGE_SIZE - sizeof(uint32) || occupied[current] || occupied[current + 1] ||
+            occupied[current + 2] || occupied[current + 3])
         {
             fprintf(stderr, "Invalid LX internal fixup chain at page offset 0x%X\n", current);
             lx_host_fatal(LX_FATAL_LOAD_FAILURE, "A module contains invalid LX fixup data", NULL);
         }
-        memset(occupied + current, 1, 4);
+        memset(occupied + current, 1, sizeof(uint32));
         uint32 link;
         memcpy(&link, page + current, sizeof(link));
         if (current == (uint32)offset)
-            base = target - (link & 0xFFFFF);
-        current = link >> 20;
-    } while (current != 0xFFF);
+            base = target - (link & LX_ICHAIN_TARGET_MASK);
+        current = link >> LX_ICHAIN_NEXT_SHIFT;
+    } while (current != LX_ICHAIN_END);
 
     current = (uint32)offset;
     do
     {
         uint32 link;
         memcpy(&link, page + current, sizeof(link));
-        const uint32 value = base + (link & 0xFFFFF);
+        const uint32 value = base + (link & LX_ICHAIN_TARGET_MASK);
         memcpy(page + current, &value, sizeof(value));
-        current = link >> 20;
-    } while (current != 0xFFF);
+        current = link >> LX_ICHAIN_NEXT_SHIFT;
+    } while (current != LX_ICHAIN_END);
 }
 
 void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
@@ -166,9 +179,10 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
 
         const uint8 srctype = *(fixup++);
         const uint8 fixupflags = *(fixup++);
-        const int internal_chain = (fixupflags & 0x08) != 0;
+        const int internal_chain = (fixupflags & NRICHAIN) != 0;
         if (internal_chain &&
-            (((srctype & 0x1F) != 0x07) || ((fixupflags & 3) != 0 && (fixupflags & 3) != 3)))
+            (((srctype & (NRALIAS | NRSTYP)) != NROFF32) ||
+             ((fixupflags & NRRTYP) != NRRINT && (fixupflags & NRRTYP) != NRRENT)))
         {
             fprintf(stderr, "Invalid LX internal fixup chain type\n");
             lx_host_fatal(LX_FATAL_LOAD_FAILURE, "A module contains invalid LX fixup data", NULL);
@@ -181,43 +195,43 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
         uint32 finalsize = 0;
         int allow_fixup_to_alias = 0;
 
-        switch (srctype & 0xF)
+        switch (srctype & NRSTYP)
         {
-            case 0x0: // byte fixup
+            case NRSBYT:
                 finalsize = 1;
                 break;
-            case 0x2: // 16-bit selector fixup
+            case NRSSEG:
                 finalsize = 2;
                 allow_fixup_to_alias = 1;
                 break;
-            case 0x5: // 16-bit offset fixup
+            case NRSOFF:
                 finalsize = 2;
                 break;
-            case 0x3: // 16:16 pointer fixup
+            case NRSPTR:
                 finalsize = 4;
                 allow_fixup_to_alias = 1;
                 break;
-            case 0x7: // 32-bit offset fixup
-            case 0x8: // 32-bit self-relative offset fixup
+            case NROFF32:
+            case NRSOFF32:
                 finalsize = 4;
                 break;
-            case 0x6: // 16:32 pointer fixup
+            case NRPTR48:
                 finalval2 = lx_execution_flat_code_selector(GProcessState.execution);
                 finalsize = 6;
                 allow_fixup_to_alias = 1;
                 break;
         }
 
-        const int fixup_to_alias = ((srctype & 0x10) != 0);
+        const int fixup_to_alias = ((srctype & NRALIAS) != 0);
         if (fixup_to_alias)
-        { // fixup to alias flag.
+        {
             if (!allow_fixup_to_alias)
                 fprintf(stderr, "WARNING: Bogus fixup srctype (%u) with fixup-to-alias flag!\n",
-                        (uint)(srctype & 0xF));
+                        (uint)(srctype & NRSTYP));
         }
 
-        if (srctype & 0x20)
-        { // contains a source list
+        if (srctype & NRCHAIN)
+        {
             srclist_count = *(fixup++);
         }
         else
@@ -226,12 +240,12 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
             fixup += 2;
         }
 
-        switch (fixupflags & 0x3)
+        switch (fixupflags & NRRTYP)
         {
-            case 0x0:
-            { // Internal fixup record
+            case NRRINT:
+            {
                 uint16 objectid = 0;
-                if (fixupflags & 0x40)
+                if (fixupflags & NR16OBJMOD)
                 {
                     objectid = *((uint16 *)fixup);
                     fixup += 2;
@@ -243,15 +257,16 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
 
                 uint32 targetoffset = 0;
 
-                if ((srctype & 0xF) != 2)
-                { // not used for 16-bit selector fixups.
-                    if (fixupflags & 0x10)
-                    { // 32-bit target offset
+                /* Selector fixups name only the object, never an offset. */
+                if ((srctype & NRSTYP) != NRSSEG)
+                {
+                    if (fixupflags & NR32BITOFF)
+                    {
                         targetoffset = *((uint32 *)fixup);
                         fixup += 4;
                     }
                     else
-                    { // 16-bit target offset
+                    {
                         targetoffset = (uint32)(*((uint16 *)fixup));
                         fixup += 2;
                     }
@@ -270,28 +285,27 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 /* NOINTFIX images retain preferred linear offsets. A selector-only
                    reference to an unaliased USE32 object must preserve that base. */
                 const int prebound_flat_selector =
-                    (lx->module_flags & LX_NO_INTERNAL_FIXUPS) &&
-                    !(lx->module_flags & LX_LIBRARY_MODULE) && (srctype & 0xF) == 2 &&
-                    (target_flags & LX_OBJECT_BIG) &&
-                    !(target_flags & (LX_OBJECT_ALIAS16 | LX_OBJECT_RESOURCE));
+                    (lx->module_flags & E32NOINTFIX) && !(lx->module_flags & E32NOTP) &&
+                    (srctype & NRSTYP) == NRSSEG && (target_flags & OBJBIGDEF) &&
+                    !(target_flags & (OBJALIAS16 | OBJRSRC));
                 if (!fixup_to_alias || prebound_flat_selector)
                 {
                     const uint32 base = lxmod->mmaps[objectid - 1].guest_base;
                     finalval = base + targetoffset;
                     const uint16 flat_selector =
-                        (target_flags & 0x4)
+                        (target_flags & OBJEXEC)
                             ? lx_execution_flat_code_selector(GProcessState.execution)
                             : lx_execution_flat_data_selector(GProcessState.execution);
-                    if ((srctype & 0xF) == 2)
-                        finalval = (target_flags & 0x2000)
+                    if ((srctype & NRSTYP) == NRSSEG)
+                        finalval = (target_flags & OBJBIGDEF)
                                        ? flat_selector
                                        : lxSelectorToSegment(lxmod->mmaps[objectid - 1].alias);
-                    else if ((srctype & 0xF) == 6)
+                    else if ((srctype & NRSTYP) == NRPTR48)
                         finalval2 = flat_selector;
                 }
                 else
                 {
-                    if (lxmod->mmaps[objectid - 1].alias == 0xFFFF)
+                    if (lxmod->mmaps[objectid - 1].alias == LX_NO_ALIAS)
                     {
                         fprintf(
                             stderr,
@@ -310,18 +324,18 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     {
                         const uint16 segment =
                             lxSelectorToSegment(lxmod->mmaps[objectid - 1].alias);
-                        switch (srctype & 0xF)
+                        switch (srctype & NRSTYP)
                         {
-                            case 0x2:
+                            case NRSSEG:
                                 finalval = segment;
-                                break; // 16-bit selector fixup?
-                            case 0x3:
+                                break;
+                            case NRSPTR:
                                 finalval = (((uint32)segment) << 16) | targetoffset;
-                                break; // 16:16 pointer fixup
-                            case 0x6:
+                                break;
+                            case NRPTR48:
                                 finalval = targetoffset;
                                 finalval2 = segment;
-                                break; // 16:32 pointer fixup
+                                break;
                             default:
                                 assert(!"shouldn't hit this code");
                                 break;
@@ -331,10 +345,10 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 break;
             }
 
-            case 0x1:
-            {                        // Import by ordinal fixup record
-                uint16 moduleid = 0; // module ordinal
-                if (fixupflags & 0x40)
+            case NRRORD:
+            {
+                uint16 moduleid = 0;
+                if (fixupflags & NR16OBJMOD)
                 {
                     moduleid = *((uint16 *)fixup);
                     fixup += 2;
@@ -344,12 +358,12 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     moduleid = (uint16) * (fixup++);
                 }
 
-                uint32 importid = 0; // import ordinal
-                if (fixupflags & 0x80)
+                uint32 importid = 0;
+                if (fixupflags & NR8BITORD)
                 {
                     importid = (uint32) * (fixup++);
                 }
-                else if (fixupflags & 0x10)
+                else if (fixupflags & NR32BITOFF)
                 {
                     importid = *((uint32 *)fixup);
                     fixup += 4;
@@ -385,7 +399,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
 
                 if (fixup_to_alias)
                 {
-                    if (!lxexp || !lxexp->object || (lxexp->object->alias == 0xFFFF))
+                    if (!lxexp || !lxexp->object || (lxexp->object->alias == LX_NO_ALIAS))
                     {
                         fprintf(stderr,
                                 "uhoh, couldn't find a selector for a fixup-to-alias address!\n");
@@ -393,19 +407,19 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     else
                     {
                         const uint16 segment = lxSelectorToSegment(lxexp->object->alias);
-                        switch (srctype & 0xF)
+                        switch (srctype & NRSTYP)
                         {
-                            case 0x2:
+                            case NRSSEG:
                                 finalval = segment;
                                 break;
-                            case 0x3:
+                            case NRSPTR:
                                 finalval = (((uint32)segment) << 16) |
                                            (finalval - lxexp->object->guest_base);
-                                break; // 16:16 pointer fixup
-                            case 0x6:
+                                break;
+                            case NRPTR48:
                                 finalval -= lxexp->object->guest_base;
                                 finalval2 = segment;
-                                break; // 16:32 pointer fixup
+                                break;
                             default:
                                 assert(!"shouldn't hit this code");
                                 break;
@@ -415,10 +429,10 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 break;
             }
 
-            case 0x2:
-            {                        // Import by name fixup record
-                uint16 moduleid = 0; // module ordinal
-                if (fixupflags & 0x40)
+            case NRRNAM:
+            {
+                uint16 moduleid = 0;
+                if (fixupflags & NR16OBJMOD)
                 {
                     moduleid = *((uint16 *)fixup);
                     fixup += 2;
@@ -429,7 +443,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 }
 
                 uint32 name_offset = 0;
-                if (fixupflags & 0x10)
+                if (fixupflags & NR32BITOFF)
                 {
                     name_offset = *((uint32 *)fixup);
                     fixup += 4;
@@ -454,7 +468,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 {
                     const uint8 *import_name = (exe + lx->import_proc_table_offset) + name_offset;
                     char name[128];
-                    const uint8 namelen = *(import_name++) & 0x7F; // the top bit is reserved.
+                    const uint8 namelen = *(import_name++) & LX_NAME_LENGTH_MASK;
                     memcpy(name, import_name, namelen);
                     name[namelen] = '\0';
 
@@ -467,7 +481,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
 
                 if (fixup_to_alias)
                 {
-                    if (!lxexp || !lxexp->object || (lxexp->object->alias == 0xFFFF))
+                    if (!lxexp || !lxexp->object || (lxexp->object->alias == LX_NO_ALIAS))
                     {
                         fprintf(stderr,
                                 "uhoh, couldn't find a selector for a fixup-to-alias address!\n");
@@ -475,19 +489,19 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     else
                     {
                         const uint16 segment = lxSelectorToSegment(lxexp->object->alias);
-                        switch (srctype & 0xF)
+                        switch (srctype & NRSTYP)
                         {
-                            case 0x2:
+                            case NRSSEG:
                                 finalval = segment;
                                 break;
-                            case 0x3:
+                            case NRSPTR:
                                 finalval = (((uint32)segment) << 16) |
                                            (finalval - lxexp->object->guest_base);
-                                break; // 16:16 pointer fixup
-                            case 0x6:
+                                break;
+                            case NRPTR48:
                                 finalval -= lxexp->object->guest_base;
                                 finalval2 = segment;
-                                break; // 16:32 pointer fixup
+                                break;
                             default:
                                 assert(!"shouldn't hit this code");
                                 break;
@@ -497,8 +511,8 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 break;
             }
 
-            case 0x3:
-            { // Internal entry table fixup record
+            case NRRENT:
+            {
                 FIXME("FIXUP 0x3 WRITE ME");
                 assert(!"write me");
                 lx_host_fatal(LX_FATAL_LOAD_FAILURE, "A module contains invalid LX fixup data",
@@ -507,16 +521,17 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
             }
         }
 
-        if (getenv("TWOINE_TRACE_FIXUPS") && (srcoffset >= 0x700) && (srcoffset < 0x800))
+        if (getenv("TWOINE_TRACE_FIXUPS") && (srcoffset >= TRACE_FIXUP_FIRST_OFFSET) &&
+            (srcoffset < TRACE_FIXUP_END_OFFSET))
             fprintf(stderr,
                     "2INE FIXREC: page=%p srctype=%X flags=%X srcoffset=%X final=%X size=%u\n",
                     page, (uint)srctype, (uint)fixupflags, (uint)(uint16)srcoffset, (uint)finalval,
                     (uint)finalsize);
 
-        if (fixupflags & 0x4)
-        { // Has additive.
+        if (fixupflags & NRADD)
+        {
             uint32 additive = 0;
-            if (fixupflags & 0x20)
+            if (fixupflags & NR32BITADD)
             {
                 additive = *((uint32 *)fixup);
                 fixup += 4;
@@ -529,8 +544,8 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
             finalval += additive;
         }
 
-        if (srctype & 0x20)
-        { // source list
+        if (srctype & NRCHAIN)
+        {
             for (uint8 i = 0; i < srclist_count; i++)
             {
                 const sint16 offset = *((sint16 *)fixup);
@@ -539,10 +554,11 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 {
                     fixupInternalChain(page, offset, finalval);
                 }
-                else if ((srctype & 0xF) == 0x08)
-                { // self-relative fixup?
+                else if ((srctype & NRSTYP) == NRSOFF32)
+                { /* Self-relative targets are measured from the end of the 4-byte field. */
                     assert(finalval2 == 0);
-                    doFixup(page, offset, finalval - (guest_page + offset + 4), 0, finalsize);
+                    doFixup(page, offset, finalval - (guest_page + offset + sizeof(uint32)), 0,
+                            finalsize);
                 }
                 else
                 {
@@ -556,10 +572,11 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
             {
                 fixupInternalChain(page, srcoffset, finalval);
             }
-            else if ((srctype & 0xF) == 0x08)
-            { // self-relative fixup?
+            else if ((srctype & NRSTYP) == NRSOFF32)
+            {
                 assert(finalval2 == 0);
-                doFixup(page, srcoffset, finalval - (guest_page + srcoffset + 4), 0, finalsize);
+                doFixup(page, srcoffset, finalval - (guest_page + srcoffset + sizeof(uint32)), 0,
+                        finalsize);
             }
             else
             {
@@ -622,17 +639,20 @@ static int loadLxExports(LxModule *module, const uint8 *exe, uint32 length)
             break;
         if (p == end)
             goto corrupt;
-        unsigned type = *p++ & 0x7f;
-        if (!type)
+        unsigned type = *p++ & ~LX_BUNDLE_TYPEINFO;
+        if (type == LX_BUNDLE_EMPTY)
             continue;
-        if (type == 2)
+        if (type == LX_BUNDLE_GATE16)
         {
             fprintf(stderr, "LX 286 call-gate exports are unsupported\n");
             return 0;
         }
-        if (type != 1 && type != 3 && type != 4)
+        if (type != LX_BUNDLE_ENTRY16 && type != LX_BUNDLE_ENTRY32 && type != LX_BUNDLE_ENTRYFWD)
             goto corrupt;
-        size_t bytes = 2 + entries * (type == 1 ? 3 : type == 3 ? 5 : 7);
+        /* A non-empty bundle starts with a 16-bit object number. */
+        size_t bytes = sizeof(uint16) + entries * (type == LX_BUNDLE_ENTRY16   ? FIXENT16
+                                                   : type == LX_BUNDLE_ENTRY32 ? FIXENT32
+                                                                               : FWDENT);
         if ((size_t)(end - p) < bytes)
             goto corrupt;
         p += bytes;
@@ -649,27 +669,27 @@ static int loadLxExports(LxModule *module, const uint8 *exe, uint32 length)
     while (*p)
     {
         unsigned entries = *p++;
-        unsigned type = *p++ & 0x7f;
-        if (!type)
+        unsigned type = *p++ & ~LX_BUNDLE_TYPEINFO;
+        if (type == LX_BUNDLE_EMPTY)
         {
             ordinal += entries;
             continue;
         }
         unsigned object = lx_guest_load_u16(p);
         p += 2;
-        if (type != 4 && (!object || object > module->num_mmaps))
+        if (type != LX_BUNDLE_ENTRYFWD && (!object || object > module->num_mmaps))
             goto corrupt;
         for (unsigned i = 0; i < entries; i++)
         {
             LxExport *entry = &exports[module->num_exports++];
             entry->ordinal = ordinal++;
             unsigned flags = *p++;
-            if (type == 4)
+            if (type == LX_BUNDLE_ENTRYFWD)
             {
                 unsigned dependency = lx_guest_load_u16(p);
                 uint32 target = lx_guest_load_u32(p + 2);
                 p += 6;
-                if (object || (flags & ~1u) || !dependency ||
+                if (object || (flags & ~(unsigned)FWD_ORDINAL) || !dependency ||
                     dependency > module->num_dependencies ||
                     lx->import_module_table_offset >= length)
                     goto corrupt;
@@ -691,7 +711,7 @@ static int loadLxExports(LxModule *module, const uint8 *exe, uint32 length)
                     (size_t)(end - name - 1) < *name)
                     goto corrupt;
                 memcpy(forward->module_name, name + 1, *name);
-                if (flags & 1)
+                if (flags & FWD_ORDINAL)
                 {
                     if (!target)
                         goto corrupt;
@@ -710,8 +730,9 @@ static int loadLxExports(LxModule *module, const uint8 *exe, uint32 length)
             }
             else
             {
-                uint32 offset = type == 1 ? lx_guest_load_u16(p) : lx_guest_load_u32(p);
-                p += type == 1 ? 2 : 4;
+                uint32 offset =
+                    type == LX_BUNDLE_ENTRY16 ? lx_guest_load_u16(p) : lx_guest_load_u32(p);
+                p += type == LX_BUNDLE_ENTRY16 ? sizeof(uint16) : sizeof(uint32);
                 if (offset >= module->mmaps[object - 1].size)
                     goto corrupt;
                 entry->addr = (uint8 *)module->mmaps[object - 1].addr + offset;
@@ -731,20 +752,20 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 {
     LxModule *retval = NULL;
     const LxHeader *lx = (const LxHeader *)exe;
-    const uint32 module_type = lx->module_flags & 0x00038000;
+    const uint32 module_type = lx->module_flags & E32MODMASK;
 
-    if ((module_type != 0x0000) && (module_type != 0x8000))
+    if ((module_type != E32MODEXE) && (module_type != E32MODDLL))
     {
         fprintf(stderr, "This is not a standard .exe or .dll (maybe device driver?)\n");
         goto loadlx_failed;
     }
-    else if (lx->module_flags & 0x2000)
+    else if (lx->module_flags & E32NOLOAD)
     {
         fprintf(stderr, "This module is marked as not loadable.\n");
         goto loadlx_failed;
     }
 
-    const int isDLL = (module_type == 0x8000);
+    const int isDLL = (module_type == E32MODDLL);
 
     if (lx->eip_object > lx->module_num_objects || lx->esp_object > lx->module_num_objects ||
         lx->auto_ds_object_num > lx->module_num_objects ||
@@ -792,7 +813,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     retval->num_dependencies = lx->num_import_mod_entries;
     retval->num_mmaps = lx->module_num_objects;
     for (int i = 0; i < retval->num_mmaps; i++)
-        retval->mmaps[i].alias = 0xFFFF;
+        retval->mmaps[i].alias = LX_NO_ALIAS;
 
     memcpy(&retval->header.lx, lx, sizeof(*lx));
 
@@ -822,7 +843,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
     const char *modname = retval->name;
 
-    if (++dependency_tree_depth > 32)
+    if (++dependency_tree_depth > MAX_DEPENDENCY_DEPTH)
     {
         fprintf(stderr, "Likely circular dependency in module '%s'\n", modname);
         goto loadlx_failed;
@@ -832,18 +853,17 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     const LxObjectTableEntry *obj = ((const LxObjectTableEntry *)(exe + lx->object_table_offset));
     for (uint32 i = 0; i < lx->module_num_objects; i++, obj++)
     {
-        retval->mmaps[i].bits = (obj->object_flags & 0x2000) ? 32 : 16;
-        const int relocatable = isDLL || (obj->object_flags & 0x8);
+        retval->mmaps[i].bits = (obj->object_flags & OBJBIGDEF) ? 32 : 16;
+        const int relocatable = isDLL || (obj->object_flags & OBJRSRC);
 
         uint32 vsize = obj->virtual_size;
         if ((vsize % lx->page_size) != 0)
             vsize += lx->page_size - (vsize % lx->page_size);
 
-        const int needs_1616_alias =
-            ((obj->object_flags & 0x1000) != 0); // Object needs a 16:16 alias.
+        const int needs_1616_alias = ((obj->object_flags & OBJALIAS16) != 0);
         if (needs_1616_alias)
         {
-            if (vsize > 0x10000)
+            if (vsize > ALIAS16_TILE_SIZE)
             {
                 fprintf(stderr, "Module '%s' object #%u needs a 16:16 alias, but is > 64k\n",
                         modname, (uint)(i + 1));
@@ -852,11 +872,12 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             uses_aliases = 1;
 
             /* USE16 writable objects retain a full tile for DosReallocSeg growth. */
-            if (!(obj->object_flags & 0x2000) && (obj->object_flags & 2))
-                vsize = 0x10000;
+            if (!(obj->object_flags & OBJBIGDEF) && (obj->object_flags & OBJWRITE))
+                vsize = ALIAS16_TILE_SIZE;
 
+            /* Over-allocate so the object can be slid to a tile boundary below. */
             if (relocatable)
-                vsize += 0x10000;
+                vsize += ALIAS16_TILE_SIZE;
         }
 
         void *base = relocatable ? NULL : (void *)((size_t)obj->reloc_base_addr);
@@ -877,10 +898,10 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         retval->mmaps[i].size = vsize;
 
         const uint32 guest_mapping_base = lx_execution_mapping_address(mapping);
-        if (needs_1616_alias && (guest_mapping_base % 0x10000) != 0)
+        if (needs_1616_alias && (guest_mapping_base % ALIAS16_TILE_SIZE) != 0)
         {
             assert(relocatable);
-            const uint32 diff = 0x10000 - (guest_mapping_base % 0x10000);
+            const uint32 diff = ALIAS16_TILE_SIZE - (guest_mapping_base % ALIAS16_TILE_SIZE);
             vsize -= diff;
             mmapaddr = (uint8 *)mmapaddr + diff;
         }
@@ -902,7 +923,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             const uint8 *src;
             switch (objpage->flags)
             {
-                case 0x00:
+                case LX_PAGE_VALID:
                     src = origexe + lx->data_pages_offset +
                           (objpage->page_data_offset << lx->page_offset_shift);
                     memcpy(dst, src, objpage->data_size);
@@ -912,7 +933,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                     }
                     break;
 
-                case 0x01: /* OS/2 iterated LX pages use data_pages_offset as their data origin. */
+                case LX_PAGE_ITERDATA: /* OS/2 iterated LX pages use data_pages_offset as their data origin. */
                     src = origexe + lx->data_pages_offset +
                           (objpage->page_data_offset << lx->page_offset_shift);
                     if (!lx_exepack_iterated_decompress(dst, lx->page_size, src,
@@ -925,12 +946,12 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                     }
                     break;
 
-                case 0x02: // INVALID, just zero it out.
-                case 0x03: // ZEROFILL, just zero it out.
+                case LX_PAGE_INVALID:
+                case LX_PAGE_ZEROED:
                     memset(dst, '\0', lx->page_size);
                     break;
 
-                case 0x05:
+                case LX_PAGE_ITERDATA2:
                     src = origexe + lx->data_pages_offset +
                           (objpage->page_data_offset << lx->page_offset_shift);
                     if (!lx_exepack2_decompress(dst, lx->page_size, src, objpage->data_size))
@@ -941,7 +962,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                     }
                     break;
 
-                case 0x08:
+                case LX_PAGE_ITERDATA3:
                 default:
                     fprintf(stderr, "Don't know how to load an object page of type %u!\n",
                             (uint)objpage->flags);
@@ -963,7 +984,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         retval->eip += base;
         const LxObjectTableEntry *entry =
             (const LxObjectTableEntry *)(exe + lx->object_table_offset) + lx->eip_object - 1;
-        retval->entry16 = !(entry->object_flags & 0x2000);
+        retval->entry16 = !(entry->object_flags & OBJBIGDEF);
         if (lx->eip >= retval->mmaps[lx->eip_object - 1].size || (retval->entry16 && isDLL))
         {
             fprintf(stderr, "Invalid LX entry offset or unsupported USE16 library entry\n");
@@ -997,10 +1018,10 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         obj = ((const LxObjectTableEntry *)(exe + lx->object_table_offset));
         for (uint32 i = 0; i < lx->module_num_objects; i++, obj++)
         {
-            if ((obj->object_flags & 0x1000) == 0)
+            if ((obj->object_flags & OBJALIAS16) == 0)
                 continue;
             uint16 offset = 0;
-            const int iscode = (obj->object_flags & 0x4) ? 1 : 0;
+            const int iscode = (obj->object_flags & OBJEXEC) ? 1 : 0;
             if (!lx_execution_find_selector(GProcessState.execution, retval->mmaps[i].guest_base,
                                             &retval->mmaps[i].alias, &offset, iscode))
             {
@@ -1011,8 +1032,8 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             }
             assert(offset == 0);
 
-            if (obj->object_flags & 0x4)
-            { // 16:16 segment with code.
+            if (obj->object_flags & OBJEXEC)
+            {
                 lx_execution_prepare_code(GProcessState.execution,
                                           (uint8 *)(size_t)retval->mmaps[i].mapped,
                                           retval->mmaps[i].size);
@@ -1073,13 +1094,13 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     for (uint32 i = 0; i < lx->num_import_mod_entries; i++)
     {
         const uint8 namelen = *(import_modules_table++);
-        if (namelen > 127)
+        if (namelen > MAX_MODULE_NAME_LENGTH)
         {
             fprintf(stderr, "Import module %u name is > 127 chars (%u). Corrupt file or bug!\n",
                     (uint)(i + 1), (uint)namelen);
             goto loadlx_failed;
         }
-        char name[128];
+        char name[MAX_MODULE_NAME_LENGTH + 1];
         memcpy(name, import_modules_table, namelen);
         import_modules_table += namelen;
         name[namelen] = '\0';
@@ -1105,25 +1126,26 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             dst += lx->page_size;
         }
 
-        if ((i == 1) && (strcasecmp(modname, "EMX") == 0))
+        if ((i == EMX_SIGNAL_INSTALLER_OBJECT) && (strcasecmp(modname, "EMX") == 0))
         {
             /* Suppress the guest signal installer; signal delivery belongs to the host worker. */
-            uint8 *ptr = ((uint8 *)retval->mmaps[1].addr) + 28596;
-            for (uint32 j = 0; j < 37; j++)
-                *(ptr++) = 0x90;
+            uint8 *ptr = ((uint8 *)retval->mmaps[EMX_SIGNAL_INSTALLER_OBJECT].addr) +
+                         EMX_SIGNAL_INSTALLER_OFFSET;
+            for (uint32 j = 0; j < EMX_SIGNAL_INSTALLER_LENGTH; j++)
+                *(ptr++) = X86_NOP;
         }
 
         uint32 object_flags = obj->object_flags;
-        if ((i == 4) && (strcasecmp(modname, "HPI") == 0))
+        if ((i == HPI_CODE_OBJECT) && (strcasecmp(modname, "HPI") == 0))
         {
             fprintf(stderr, "fixed page permissions to workaround bug in Java DLL\n");
-            object_flags |= 0x4;
+            object_flags |= OBJEXEC;
         }
 
         /* 386 readable pages are executable; some LX runtimes put callable code in READ-only objects. */
-        int prot = ((object_flags & 0x1) ? LX_GUEST_READ : 0) |
-                   ((object_flags & 0x2) ? LX_GUEST_WRITE : 0) |
-                   ((object_flags & 0x4) ? LX_GUEST_EXECUTE : 0);
+        int prot = ((object_flags & OBJREAD) ? LX_GUEST_READ : 0) |
+                   ((object_flags & OBJWRITE) ? LX_GUEST_WRITE : 0) |
+                   ((object_flags & OBJEXEC) ? LX_GUEST_EXECUTE : 0);
         if (prot & LX_GUEST_READ)
             prot |= LX_GUEST_EXECUTE;
 

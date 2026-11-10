@@ -7,6 +7,12 @@
  */
 #include "emulator/loader/internal.h"
 
+enum
+{
+    /* Longer forwarder chains are treated as cycles. */
+    MAX_FORWARDER_CHAIN = 1024
+};
+
 void *generateMissingTrampoline(const char *m, const char *n)
 {
     return lx_execution_missing_entry(GProcessState.execution, m, n, 32, NULL);
@@ -33,7 +39,7 @@ static void *resolveModuleOrdinal(const LxModule *module, uint32 ordinal, const 
 
 static const LxExport *resolveExport(const LxExport *entry)
 {
-    const LxExport *visited[1024];
+    const LxExport *visited[MAX_FORWARDER_CHAIN];
     unsigned count = 0;
     while (entry && entry->indirect == LX_EXPORT_FORWARDER)
     {
@@ -105,6 +111,8 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
                                   const int missing)
 {
 
+    /* DOSCALLS ordinal 295 (Thk32R3DS) exports the flat data selector as an absolute value.
+       tools/binary/lotus_imports.py recognises this test by its literal form. */
     if (module->nativelib && !strcasecmp(module->name, "DOSCALLS") && ordinal == 295)
     {
         static LxExport exported;

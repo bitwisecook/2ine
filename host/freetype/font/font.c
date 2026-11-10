@@ -37,7 +37,17 @@ typedef struct LoadedFont
 
 enum
 {
-    BUNDLED_FONTS = sizeof files / sizeof files[0]
+    BUNDLED_FONTS = sizeof files / sizeof files[0],
+    /* FreeType metrics are 26.6 fixed point; transforms are 16.16. */
+    F26DOT6_ONE = 64,
+    F16DOT16_ONE = 65536,
+    MAX_FONT_PIXELS = 512,
+    PROBE_FONT_PIXELS = 16,
+    MAX_GLYPH_BITMAP = 4096,
+    MAX_UNICODE = 0x10ffff,
+    /* TrueType OS/2 table version 2 adds sxHeight; 0xffff marks a missing table. */
+    OS2_TABLE_X_HEIGHT_VERSION = 2,
+    OS2_TABLE_ABSENT = 0xffff
 };
 
 static LxHostOnce loaded_once = LX_HOST_ONCE_INIT;
@@ -127,7 +137,7 @@ static LxHostFont *open_loaded(unsigned slot, unsigned pixels)
 
 LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
 {
-    if (!pixels || pixels > 512)
+    if (!pixels || pixels > MAX_FONT_PIXELS)
         return NULL;
     if (index >= BUNDLED_FONTS)
         return open_loaded(index - BUNDLED_FONTS, pixels);
@@ -153,7 +163,7 @@ LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
 
 int lx_host_font_add_file(const char *path)
 {
-    LxHostFont *probe = path ? open_path(path, 16) : NULL;
+    LxHostFont *probe = path ? open_path(path, PROBE_FONT_PIXELS) : NULL;
     if (!probe)
         return 0;
     lx_host_font_close(probe);
@@ -215,7 +225,7 @@ void lx_host_font_close(LxHostFont *font)
 
 static int scaled(LxHostFont *font, FT_Pos value)
 {
-    return (int)FT_MulFix(value, font->face->size->metrics.y_scale) / 64;
+    return (int)FT_MulFix(value, font->face->size->metrics.y_scale) / F26DOT6_ONE;
 }
 
 int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
@@ -234,9 +244,9 @@ int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
     metrics->fixed = FT_IS_FIXED_WIDTH(face) != 0;
     metrics->sfnt = FT_IS_SFNT(face) != 0;
     metrics->em = (int)font->pixels;
-    metrics->ascent = (int)(m->ascender + 63) / 64;
-    metrics->descent = (int)(-m->descender + 63) / 64;
-    metrics->leading = (int)(m->height / 64) - metrics->ascent - metrics->descent;
+    metrics->ascent = (int)(m->ascender + F26DOT6_ONE - 1) / F26DOT6_ONE;
+    metrics->descent = (int)(-m->descender + F26DOT6_ONE - 1) / F26DOT6_ONE;
+    metrics->leading = (int)(m->height / F26DOT6_ONE) - metrics->ascent - metrics->descent;
     if (metrics->leading < 0)
         metrics->leading = 0;
     for (unsigned point = 'a'; point <= 'z'; point++)
@@ -244,14 +254,14 @@ int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
         if (FT_Load_Char(face, point, FT_LOAD_DEFAULT))
             return 0;
         FT_Glyph_Metrics *glyph = &face->glyph->metrics;
-        int ascent = (int)(glyph->horiBearingY + 63) / 64;
-        int descent = (int)(glyph->height - glyph->horiBearingY + 63) / 64;
+        int ascent = (int)(glyph->horiBearingY + F26DOT6_ONE - 1) / F26DOT6_ONE;
+        int descent = (int)(glyph->height - glyph->horiBearingY + F26DOT6_ONE - 1) / F26DOT6_ONE;
         if (ascent > metrics->lowercase_ascent)
             metrics->lowercase_ascent = ascent;
         if (descent > metrics->lowercase_descent)
             metrics->lowercase_descent = descent;
     }
-    metrics->maximum_width = (int)(m->max_advance + 63) / 64;
+    metrics->maximum_width = (int)(m->max_advance + F26DOT6_ONE - 1) / F26DOT6_ONE;
     metrics->underline_size = scaled(font, face->underline_thickness);
     if (metrics->underline_size < 1)
         metrics->underline_size = 1;
@@ -271,31 +281,31 @@ int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
         metrics->superscript_x_offset = scaled(font, os2->ySuperscriptXOffset);
         metrics->superscript_y_offset = scaled(font, os2->ySuperscriptYOffset);
         memcpy(metrics->panose, os2->panose, sizeof metrics->panose);
-        if (os2->version >= 2 && os2->version != 0xffff)
+        if (os2->version >= OS2_TABLE_X_HEIGHT_VERSION && os2->version != OS2_TABLE_ABSENT)
             metrics->x_height = scaled(font, os2->sxHeight);
     }
     if (!metrics->average_width)
         metrics->average_width = lx_host_font_advance(font, 'n');
     if (!metrics->x_height && !FT_Load_Char(face, 'x', FT_LOAD_DEFAULT))
-        metrics->x_height = (int)(face->glyph->metrics.height + 63) / 64;
+        metrics->x_height = (int)(face->glyph->metrics.height + F26DOT6_ONE - 1) / F26DOT6_ONE;
     return 1;
 }
 
 int lx_host_font_advance(LxHostFont *font, uint32_t codepoint)
 {
-    if (!font || codepoint > 0x10ffff || FT_Load_Char(font->face, codepoint, FT_LOAD_DEFAULT))
+    if (!font || codepoint > MAX_UNICODE || FT_Load_Char(font->face, codepoint, FT_LOAD_DEFAULT))
         return -1;
-    return (int)(font->face->glyph->advance.x + 32) / 64;
+    return (int)(font->face->glyph->advance.x + F26DOT6_ONE / 2) / F26DOT6_ONE;
 }
 
 int lx_host_font_kerning(LxHostFont *font, uint32_t left, uint32_t right)
 {
-    if (!font || left > 0x10ffff || right > 0x10ffff)
+    if (!font || left > MAX_UNICODE || right > MAX_UNICODE)
         return 0;
     FT_Vector delta = {0};
     FT_Get_Kerning(font->face, FT_Get_Char_Index(font->face, left),
                    FT_Get_Char_Index(font->face, right), FT_KERNING_DEFAULT, &delta);
-    return (int)(delta.x / 64);
+    return (int)(delta.x / F26DOT6_ONE);
 }
 
 int lx_host_font_glyph(LxHostFont *font, uint32_t codepoint, LxHostGlyph *glyph)
@@ -303,17 +313,18 @@ int lx_host_font_glyph(LxHostFont *font, uint32_t codepoint, LxHostGlyph *glyph)
     if (!glyph)
         return 0;
     memset(glyph, 0, sizeof *glyph);
-    if (!font || codepoint > 0x10ffff || FT_Load_Char(font->face, codepoint, FT_LOAD_RENDER))
+    if (!font || codepoint > MAX_UNICODE || FT_Load_Char(font->face, codepoint, FT_LOAD_RENDER))
         return 0;
     FT_GlyphSlot slot = font->face->glyph;
     const FT_Bitmap *bitmap = &slot->bitmap;
-    if (bitmap->width > 4096 || bitmap->rows > 4096 || bitmap->pixel_mode != FT_PIXEL_MODE_GRAY)
+    if (bitmap->width > MAX_GLYPH_BITMAP || bitmap->rows > MAX_GLYPH_BITMAP ||
+        bitmap->pixel_mode != FT_PIXEL_MODE_GRAY)
         return 0;
     glyph->width = (int)bitmap->width;
     glyph->height = (int)bitmap->rows;
     glyph->left = slot->bitmap_left;
     glyph->top = slot->bitmap_top;
-    glyph->advance = (int)(slot->advance.x + 32) / 64;
+    glyph->advance = (int)(slot->advance.x + F26DOT6_ONE / 2) / F26DOT6_ONE;
     size_t size = (size_t)glyph->width * glyph->height;
     if (size)
     {
@@ -332,8 +343,9 @@ int lx_host_font_glyph_matrix(LxHostFont *font, uint32_t codepoint, const double
 {
     if (!font || !matrix)
         return 0;
-    FT_Matrix transform = {(FT_Fixed)(matrix[0] * 65536), (FT_Fixed)(matrix[1] * 65536),
-                           (FT_Fixed)(matrix[2] * 65536), (FT_Fixed)(matrix[3] * 65536)};
+    FT_Matrix transform = {
+        (FT_Fixed)(matrix[0] * F16DOT16_ONE), (FT_Fixed)(matrix[1] * F16DOT16_ONE),
+        (FT_Fixed)(matrix[2] * F16DOT16_ONE), (FT_Fixed)(matrix[3] * F16DOT16_ONE)};
     FT_Set_Transform(font->face, &transform, NULL);
     int result = lx_host_font_glyph(font, codepoint, glyph);
     FT_Set_Transform(font->face, NULL, NULL);

@@ -28,6 +28,11 @@
    bundle instead of copying the loader every time. */
 #define LX_BUNDLE_NAME_LIMIT 180
 #define LX_BUNDLE_PROGRAM_LIMIT (64u * 1024u * 1024u)
+/* Stale session bundles are removed after these ages, in seconds. */
+#define LX_BUNDLE_TEMPORARY_AGE 3600
+#define LX_BUNDLE_SESSION_AGE (14 * 86400)
+/* The shell's exit status when a command cannot be executed. */
+#define LX_EXEC_FAILED_STATUS 127
 #define LX_BUNDLE_LOADER_LIMIT (256u * 1024u * 1024u)
 #define LX_BUNDLE_KEY_LENGTH 16
 
@@ -337,7 +342,8 @@ static void prune_sessions(const char *sessions)
         struct stat info;
         int temporary = strlen(entry->d_name) > LX_BUNDLE_KEY_LENGTH + 9;
         if (!stat(path, &info) && S_ISDIR(info.st_mode) &&
-            difftime(now, info.st_mtimespec.tv_sec) > (temporary ? 3600 : 14 * 86400))
+            difftime(now, info.st_mtimespec.tv_sec) >
+                (temporary ? LX_BUNDLE_TEMPORARY_AGE : LX_BUNDLE_SESSION_AGE))
             remove_tree(path, 0);
         free(path);
     }
@@ -357,7 +363,7 @@ static void sign_bundle(const char *path)
             "codesign", "--force", "--sign", "-", "--preserve-metadata=entitlements",
             "--",       path,      NULL};
         execvp(argv[0], (char *const *)argv);
-        _exit(127);
+        _exit(LX_EXEC_FAILED_STATUS);
     }
     int status = 0;
     while (waitpid(child, &status, 0) < 0 && errno == EINTR)

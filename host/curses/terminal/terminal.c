@@ -41,12 +41,33 @@ enum
     TEXT_FORE_WHITE = 0x07,
 
     TEXT_INTENSITY = 0x08,
-    TEXT_BLINK = 0x80
+    TEXT_BLINK = 0x80,
+    TEXT_BACK_MASK = 0x70,
+    TEXT_FORE_MASK = 0x07
+};
+
+/* The VIO screen captured when output is redirected. */
+enum
+{
+    LOG_ROWS = 25,
+    LOG_COLUMNS = 80
+};
+
+/* Code page 437 box-drawing characters drawn with curses line graphics. */
+enum
+{
+    CP437_HORIZONTAL = 0xC4,
+    CP437_VERTICAL = 0xB3,
+    CP437_DOWN_RIGHT = 0xDA,
+    CP437_DOWN_LEFT = 0xBF,
+    CP437_UP_RIGHT = 0xC0,
+    CP437_UP_LEFT = 0xD9,
+    ASCII_DELETE = 0x7f
 };
 
 static int redirected;
-static unsigned char log_cells[25][80];
-static unsigned char log_dirty[25];
+static unsigned char log_cells[LOG_ROWS][LOG_COLUMNS];
+static unsigned char log_dirty[LOG_ROWS];
 
 int lx_host_terminal_read_input(int wait)
 {
@@ -144,12 +165,12 @@ void lx_host_terminal_refresh(void)
 {
     if (redirected)
     {
-        for (int y = 0; y < 25; y++)
+        for (int y = 0; y < LOG_ROWS; y++)
         {
             if (!log_dirty[y])
                 continue;
             log_dirty[y] = 0;
-            int length = 80;
+            int length = LOG_COLUMNS;
             while (length && log_cells[y][length - 1] == ' ')
                 length--;
             if (length)
@@ -179,11 +200,11 @@ void lx_host_terminal_cells(int x, int y, const uint16_t *cells, int count, int 
     {
         for (int i = 0; i < count; i++)
         {
-            int row = y + (x + i) / 80, column = (x + i) % 80;
-            if (row < 0 || row >= 25 || column < 0)
+            int row = y + (x + i) / LOG_COLUMNS, column = (x + i) % LOG_COLUMNS;
+            if (row < 0 || row >= LOG_ROWS || column < 0)
                 continue;
             unsigned char ch = (unsigned char)(cells[i] & 0xff);
-            if (ch < ' ' || ch == 0x7f)
+            if (ch < ' ' || ch == ASCII_DELETE)
                 ch = ' ';
             if (log_cells[row][column] != ch)
             {
@@ -206,22 +227,22 @@ void lx_host_terminal_cells(int x, int y, const uint16_t *cells, int count, int 
         chtype ch;
         switch (viochar)
         {
-            case 0xC4:
+            case CP437_HORIZONTAL:
                 ch = ACS_HLINE;
                 break;
-            case 0xB3:
+            case CP437_VERTICAL:
                 ch = ACS_VLINE;
                 break;
-            case 0xDA:
+            case CP437_DOWN_RIGHT:
                 ch = ACS_ULCORNER;
                 break;
-            case 0xBF:
+            case CP437_DOWN_LEFT:
                 ch = ACS_URCORNER;
                 break;
-            case 0xC0:
+            case CP437_UP_RIGHT:
                 ch = ACS_LLCORNER;
                 break;
-            case 0xD9:
+            case CP437_UP_LEFT:
                 ch = ACS_LRCORNER;
                 break;
             default:
@@ -233,12 +254,12 @@ void lx_host_terminal_cells(int x, int y, const uint16_t *cells, int count, int 
 
         if (COLORS >= 64)
         { // foreground and background
-            const int color = ((vioattr & 0x70) >> 1) | (vioattr & 0x7);
+            const int color = ((vioattr & TEXT_BACK_MASK) >> 1) | (vioattr & TEXT_FORE_MASK);
             attr |= COLOR_PAIR(color);
         }
         else if (COLORS >= 8)
         { // just foregrounds
-            const int color = (vioattr & 0x7);
+            const int color = (vioattr & TEXT_FORE_MASK);
             attr |= COLOR_PAIR(color);
         }
 

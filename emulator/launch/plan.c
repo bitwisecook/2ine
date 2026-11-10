@@ -264,7 +264,7 @@ cJSON *launch_prepare(TbBall *c, const cJSON *request)
     cJSON *services = get(c->manifest, "startupPrograms");
     if (!cJSON_IsFalse(get(request, "includeStartup")) && services)
     {
-        if (!cJSON_IsArray(services) || cJSON_GetArraySize(services) > 16)
+        if (!cJSON_IsArray(services) || cJSON_GetArraySize(services) > LAUNCH_MAX_STARTUP_PROGRAMS)
         {
             tb_ball_fail(c, "startupPrograms must contain at most 16 application records");
             cJSON_Delete(result);

@@ -15,6 +15,18 @@
         }                                                                                          \
     } while (0)
 
+/* Boot sector fields the probe reads. */
+enum
+{
+    BOOT_JMP_SHORT = 0xeb,
+    BPB_BYTES_PER_SECTOR = 11,
+    BPB_ROOT_ENTRIES = 17,
+    BPB_FAT_SECTORS = 22,
+    EXFAT_NAME = 3,
+    EXFAT_BYTES_PER_SECTOR_SHIFT = 108,
+    BOOT_SIGNATURE = 0xaa55
+};
+
 enum
 {
     HPFS_SUPER_AT = 16 * 512,
@@ -65,39 +77,39 @@ static void boot_sectors(void)
     CHECK(!p.boot_bytes && !p.boot_error && !p.boot_signature && !p.mbr && !p.iso_bytes);
 
     /* A FAT12 floppy boot sector: short jump, BPB with a fixed root directory. */
-    medium[0] = 0xeb;
-    put16(11, 512);
-    put16(17, 224);
-    put16(22, 9);
-    put16(510, 0xaa55);
+    medium[0] = BOOT_JMP_SHORT;
+    put16(BPB_BYTES_PER_SECTOR, 512);
+    put16(BPB_ROOT_ENTRIES, 224);
+    put16(BPB_FAT_SECTORS, 9);
+    put16(MBR_SIGNATURE_OFFSET, BOOT_SIGNATURE);
     probe(300, &p);
     CHECK(p.boot_bytes == 300 && !p.boot_signature && !p.x86_jump && !p.sector_bytes);
-    CHECK(p.boot[0] == 0xeb && p.boot[299] == 0 && p.boot[510] == 0);
+    CHECK(p.boot[0] == BOOT_JMP_SHORT && p.boot[299] == 0 && p.boot[MBR_SIGNATURE_OFFSET] == 0);
     probe(1440 * 1024 < MEDIUM_BYTES ? 1440 * 1024 : MEDIUM_BYTES, &p);
     CHECK(p.boot_bytes == 512 && p.boot_signature && p.x86_jump && !p.fat32 && !p.exfat);
     CHECK(p.sector_bytes == 512 && p.mbr && !p.hpfs);
 
     /* FAT32 layout: no fixed root directory and no 16-bit FAT size. */
-    put16(17, 0);
-    put16(22, 0);
-    put16(11, 4096);
+    put16(BPB_ROOT_ENTRIES, 0);
+    put16(BPB_FAT_SECTORS, 0);
+    put16(BPB_BYTES_PER_SECTOR, 4096);
     probe(MEDIUM_BYTES, &p);
     CHECK(p.fat32 && p.sector_bytes == 4096);
-    put16(11, 256);
+    put16(BPB_BYTES_PER_SECTOR, 256);
     probe(MEDIUM_BYTES, &p);
     CHECK(!p.fat32 && !p.sector_bytes);
-    put16(11, 512);
-    put16(510, 0);
+    put16(BPB_BYTES_PER_SECTOR, 512);
+    put16(MBR_SIGNATURE_OFFSET, 0);
     probe(MEDIUM_BYTES, &p);
     CHECK(!p.fat32 && !p.boot_signature && !p.mbr);
 
     /* exFAT names itself and gives the sector size as a power of two. */
-    memcpy(medium + 3, "EXFAT   ", 8);
-    put16(11, 0);
-    medium[108] = 12;
+    memcpy(medium + EXFAT_NAME, "EXFAT   ", 8);
+    put16(BPB_BYTES_PER_SECTOR, 0);
+    medium[EXFAT_BYTES_PER_SECTOR_SHIFT] = 12;
     probe(MEDIUM_BYTES, &p);
     CHECK(p.exfat && p.sector_bytes == 4096 && !p.boot_signature);
-    medium[108] = 13;
+    medium[EXFAT_BYTES_PER_SECTOR_SHIFT] = 13;
     probe(MEDIUM_BYTES, &p);
     CHECK(p.exfat && !p.sector_bytes);
 
@@ -111,23 +123,25 @@ static void partitions(void)
 {
     TbVolumeProbe p;
     memset(medium, 0, sizeof medium);
-    put16(510, 0xaa55);
-    medium[446 + 4] = 0x07;
-    put32(446 + 8, 63);
-    put32(446 + 12, 40000);
-    medium[446 + 3 * 16 + 4] = 0x0c;
-    put32(446 + 3 * 16 + 8, 0x01020304);
-    put32(446 + 3 * 16 + 12, 0x05060708);
+    const unsigned first = MBR_PARTITION_TABLE, last = MBR_PARTITION_TABLE + 3 * MBR_ENTRY_BYTES;
+    put16(MBR_SIGNATURE_OFFSET, BOOT_SIGNATURE);
+    medium[first + MBR_ENTRY_TYPE] = MBR_TYPE_IFS;
+    put32(first + MBR_ENTRY_FIRST_SECTOR, 63);
+    put32(first + MBR_ENTRY_SECTORS, 40000);
+    medium[last + MBR_ENTRY_TYPE] = MBR_TYPE_FAT32_LBA;
+    put32(last + MBR_ENTRY_FIRST_SECTOR, 0x01020304);
+    put32(last + MBR_ENTRY_SECTORS, 0x05060708);
     probe(MEDIUM_BYTES, &p);
     CHECK(p.mbr && !p.x86_jump);
-    CHECK(p.partitions[0].type == 0x07 && p.partitions[0].first_sector == 63 &&
+    CHECK(p.partitions[0].type == MBR_TYPE_IFS && p.partitions[0].first_sector == 63 &&
           p.partitions[0].sectors == 40000);
     CHECK(!p.partitions[1].type && !p.partitions[2].type);
-    CHECK(p.partitions[3].type == 0x0c && p.partitions[3].first_sector == 0x01020304 &&
-          p.partitions[3].sectors == 0x05060708);
+    CHECK(p.partitions[3].type == MBR_TYPE_FAT32_LBA &&
+          p.partitions[3].first_sector == 0x01020304 && p.partitions[3].sectors == 0x05060708);
 
     TbMbrPartition table[MBR_PARTITIONS] = {{0x55, 1, 2}};
-    put16(510, 0x55aa);
+    /* A byte-swapped signature is not an MBR. */
+    put16(MBR_SIGNATURE_OFFSET, 0x55aa);
     CHECK(!tb_mbr_partitions(medium, table) && table[0].type == 0x55);
 }
 

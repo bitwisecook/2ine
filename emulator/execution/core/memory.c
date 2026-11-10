@@ -22,6 +22,10 @@ struct LxGuestMapping
 #define GUEST_PAGE 4096u
 #define GUEST_MAP_END UINT32_C(0xfffe0000)
 #define GUEST_ALLOC_START UINT32_C(0x20000000)
+/* The per-thread TLS window exposes the guest TLS slot array: 32 four-byte slots. */
+#define TLS_WINDOW_BYTES 128u
+#define GUEST_ADDRESS_LIMIT UINT64_C(0x100000000)
+#define GUEST_PERMISSION_MASK (LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE)
 
 static int available(LxExecution *e, uint32_t a, size_t n)
 {
@@ -179,7 +183,8 @@ static int unmap_unlocked(LxExecution *e, LxGuestMapping *m)
 
 static void *memory_unlocked(LxExecution *e, uint32_t address, size_t size, unsigned permissions)
 {
-    if ((permissions & ~7u) || (uint64_t)size > UINT64_C(0x100000000) - address)
+    if ((permissions & ~(unsigned)GUEST_PERMISSION_MASK) ||
+        (uint64_t)size > GUEST_ADDRESS_LIMIT - address)
     {
         lx_execution_fail(e, "Guest pointer range overflows");
         return NULL;
@@ -193,7 +198,7 @@ static void *memory_unlocked(LxExecution *e, uint32_t address, size_t size, unsi
             {
                 void *tib = e->ops->current_tib();
                 if (!tib || offset < e->services.tls_offset ||
-                    offset + size > (uint64_t)e->services.tls_offset + 128)
+                    offset + size > (uint64_t)e->services.tls_offset + TLS_WINDOW_BYTES)
                     break;
                 return (uint8_t *)tib + offset;
             }
@@ -334,7 +339,7 @@ int lx_execution_borrow(LxExecution *e, uint32_t address, size_t size, unsigned 
     {
         uint32_t backing_address = address;
         if (e->tls_window && address >= e->tls_address &&
-            (uint64_t)address + size <= (uint64_t)e->tls_address + 128)
+            (uint64_t)address + size <= (uint64_t)e->tls_address + TLS_WINDOW_BYTES)
             if (!address_unlocked(e, host, size, permissions, &backing_address))
                 host = NULL;
         for (LxGuestMapping *m = e->memory; host && m; m = m->next)
@@ -370,9 +375,9 @@ static size_t readable_extent(LxExecution *e, LxGuestMapping *m, uint32_t addres
     if (m == e->tls_window)
     {
         uint32_t start = m->address + e->services.tls_offset;
-        if (address < start || address >= start + 128u)
+        if (address < start || address >= start + TLS_WINDOW_BYTES)
             return 0;
-        end = (uint64_t)start + 128;
+        end = (uint64_t)start + TLS_WINDOW_BYTES;
     }
     size_t extent = (size_t)(end - address);
     return extent < maximum ? extent : maximum;
@@ -419,7 +424,7 @@ uint32_t lx_execution_tls_window(LxExecution *e)
 {
     if (lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
         return 0;
-    if (!e->tls_window && e->services.tls_offset + 128 <= GUEST_PAGE)
+    if (!e->tls_window && e->services.tls_offset + TLS_WINDOW_BYTES <= GUEST_PAGE)
     {
         LxGuestMapping *mapping =
             map_unlocked(e, 0, GUEST_PAGE, LX_GUEST_READ | LX_GUEST_WRITE, 0, GUEST_PAGE, NULL);

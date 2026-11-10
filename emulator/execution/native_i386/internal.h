@@ -4,6 +4,7 @@
 #ifndef TWOINE_EMULATOR_EXECUTION_NATIVE_I386_INTERNAL_H
 #define TWOINE_EMULATOR_EXECUTION_NATIVE_I386_INTERNAL_H
 #include "emulator/execution/core/backend.h"
+#include "emulator/execution/core/x86/x86.h"
 #include "host/memory.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,13 @@ typedef uint32_t uint32;
 typedef uint64_t uint64;
 typedef unsigned int uint;
 #define LX_MAX_LDT_SLOTS 8192
+/* Host-side stack used while a guest thread is inside an API bridge, and the minimum
+   signal stack. */
+#define NATIVE_HOST_STACK_SIZE 65536
+/* Space left below the interrupted host stack pointer before reusing the stack. */
+#define NATIVE_STACK_RED_ZONE 128
+/* The i386 System V ABI keeps the stack 16-byte aligned at calls. */
+#define NATIVE_STACK_ALIGN_MASK ((uintptr_t)15)
 #define FIXME(x) ((void)0)
 
 typedef struct NativeState
@@ -53,7 +61,7 @@ extern __thread stack_t NativePreviousSignalStack;
 
 static inline uint16 lxSelectorToSegment(const uint16 selector)
 {
-    return (selector << 3) | 7;
+    return (selector << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3;
 }
 
 /* selectors.c: LDT descriptors, selectors, segments and the TIB. */

@@ -7,11 +7,13 @@
 /* A grouped desktop session is polled at least this often while waiting. */
 #define DESKTOP_POLL_MS 100
 
+/* Returns the PC/AT set 1 scan code OS/2 reports for a physical key, or 0. The case values
+   below are those scan codes. */
 static unsigned physical_key(SDL_Scancode key)
 {
-    static const uint8_t letters[26] = {0x1e, 0x30, 0x2e, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17,
-                                        0x24, 0x25, 0x26, 0x32, 0x31, 0x18, 0x19, 0x10, 0x13,
-                                        0x1f, 0x14, 0x16, 0x2f, 0x11, 0x2d, 0x15, 0x2c};
+    static const uint8_t letters['Z' - 'A' + 1] = {
+        0x1e, 0x30, 0x2e, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17, 0x24, 0x25, 0x26, 0x32,
+        0x31, 0x18, 0x19, 0x10, 0x13, 0x1f, 0x14, 0x16, 0x2f, 0x11, 0x2d, 0x15, 0x2c};
     if (key >= SDL_SCANCODE_A && key <= SDL_SCANCODE_Z)
         return letters[key - SDL_SCANCODE_A];
     if (key >= SDL_SCANCODE_1 && key <= SDL_SCANCODE_0)
@@ -162,6 +164,7 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
                                (input->key.mod & SDL_KMOD_ALT ? LX_HOST_MOD_ALT : 0);
             event->repeat = input->key.repeat;
             event->scancode = physical_key(input->key.scancode);
+            /* Only ASCII keycodes pass through as characters. */
             event->key = input->key.key < 128 ? input->key.key : 0;
             if (input->key.key >= SDLK_F1 && input->key.key <= SDLK_F12)
                 event->key = LX_HOST_KEY_F1 + (input->key.key - SDLK_F1);

@@ -7,6 +7,12 @@
  */
 #include "emulator/loader/internal.h"
 
+/* Host process exit statuses carry only the low 8 bits of the OS/2 result code. */
+enum
+{
+    HOST_EXIT_STATUS_MASK = 0xFF
+};
+
 uint32 guestEntryAddress(void *host)
 {
     uint32 address;
@@ -42,8 +48,8 @@ LxExecutionEntry executionEntry(const LxModule *module)
         const LxHeader *header = &module->header.lx;
         const LxMmaps *code = &module->mmaps[header->eip_object - 1];
         const LxMmaps *stack = &module->mmaps[header->esp_object - 1];
-        if (code->alias == 0xffff || stack->alias == 0xffff || header->eip > 0xffff ||
-            header->esp > 0xffff)
+        if (code->alias == LX_NO_ALIAS || stack->alias == LX_NO_ALIAS || header->eip > UINT16_MAX ||
+            header->esp > UINT16_MAX)
         {
             fprintf(stderr, "Invalid USE16 LX entry or stack\n");
             abort();
@@ -78,7 +84,7 @@ __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
 {
     /* Guest threads may still execute these mappings; process exit releases them. */
     if (__atomic_load_n(&GProcessState.ne_threads_started, __ATOMIC_ACQUIRE))
-        lx_host_process_exit((int)(exitcode & 0xff));
+        lx_host_process_exit((int)(exitcode & HOST_EXIT_STATUS_MASK));
 
     /* Dynamic DLLs can outlive the main module's ordinary reference graph.
        Terminate the entire graph while the main invocation stack is mapped. */
@@ -90,10 +96,10 @@ __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
         lx_execution_destroy(GProcessState.execution);
     GProcessState.execution = NULL;
 
-    if (exitcode > 255)
+    if (exitcode > HOST_EXIT_STATUS_MASK)
         FIXME("deal with process exit codes > 255. We clamped this one!");
 
-    lx_host_process_exit((int)(exitcode & 0xFF));
+    lx_host_process_exit((int)(exitcode & HOST_EXIT_STATUS_MASK));
 }
 
 void runLxLibraryInit(LxModule *lxmod)

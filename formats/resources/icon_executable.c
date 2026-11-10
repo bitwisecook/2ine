@@ -17,18 +17,14 @@
 #define FIELD32(record, type, field) tb_le32((record) + offsetof(type, field))
 /* OS/2 pointer and icon resources (RT_POINTER). */
 #define RESOURCE_POINTER 1u
-/* LX object page flags. */
-#define PAGE_VALID 0u
-#define PAGE_ITERATED 1u
-#define PAGE_INVALID 2u
-#define PAGE_ZEROED 3u
-#define PAGE_EXEPACK2 5u
-/* NE segment flag: the segment data is iterated (EXEPACK:1). */
-#define SEGMENT_ITERATED 8u
 /* OS/2 NE resource table entries are a type and an id; the resources are
    the last segments of the segment table. */
 #define NE_RESOURCE_ENTRY_SIZE 4u
 #define NE_SEGMENT_LIMIT 65536u
+/* Header sanity bounds: larger pages, shifts or tables mark a corrupt file. */
+#define MAX_PAGE_SIZE 65536u
+#define MAX_PAGE_SHIFT 31u
+#define MAX_RESOURCE_COUNT 65536u
 #define RESOURCE_LIMIT (16u * 1024u * 1024u)
 
 static int extent(size_t size, uint64_t offset, uint64_t count)
@@ -83,17 +79,17 @@ static uint8_t *lx_resource(const uint8_t *bytes, size_t size, size_t h, const u
             (uint64_t)data +
             ((uint64_t)FIELD32(pg, LxObjectPageTableEntry, page_data_offset) << shift);
         memset(page, 0, page_size);
-        if (flags == PAGE_VALID || flags == PAGE_ITERATED || flags == PAGE_EXEPACK2)
+        if (flags == LX_PAGE_VALID || flags == LX_PAGE_ITERDATA || flags == LX_PAGE_ITERDATA2)
         {
-            if (!extent(size, origin, stored) || (flags == PAGE_VALID && stored > page_size))
+            if (!extent(size, origin, stored) || (flags == LX_PAGE_VALID && stored > page_size))
             {
                 valid = 0;
                 break;
             }
             const uint8_t *src = bytes + (size_t)origin;
-            if (flags == PAGE_VALID)
+            if (flags == LX_PAGE_VALID)
                 memcpy(page, src, stored);
-            else if (!(flags == PAGE_ITERATED
+            else if (!(flags == LX_PAGE_ITERDATA
                            ? lx_exepack_iterated_decompress(page, page_size, src, stored)
                            : lx_exepack2_decompress(page, page_size, src, stored)))
             {
@@ -101,7 +97,7 @@ static uint8_t *lx_resource(const uint8_t *bytes, size_t size, size_t h, const u
                 break;
             }
         }
-        else if (flags != PAGE_INVALID && flags != PAGE_ZEROED)
+        else if (flags != LX_PAGE_INVALID && flags != LX_PAGE_ZEROED)
         {
             valid = 0;
             break;
@@ -130,7 +126,8 @@ static TbIconImage *lx_icon(const uint8_t *bytes, size_t size, size_t h, int res
              objects = LX32(header, object_table_offset),
              object_count = LX32(header, module_num_objects), page_size = LX32(header, page_size),
              shift = LX32(header, page_offset_shift);
-    if (!page_size || page_size > 65536 || shift > 31 || count > 65536 ||
+    if (!page_size || page_size > MAX_PAGE_SIZE || shift > MAX_PAGE_SHIFT ||
+        count > MAX_RESOURCE_COUNT ||
         !extent(size, (uint64_t)h + table, (uint64_t)count * sizeof(LxResourceTableEntry)) ||
         !extent(size, (uint64_t)h + objects, (uint64_t)object_count * sizeof(LxObjectTableEntry)))
         return NULL;
@@ -162,7 +159,8 @@ static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h, int res
     uint64_t table = (uint64_t)h + NE16(header, resource_table_offset),
              segtab = (uint64_t)h + NE16(header, segment_table_offset);
     if (header[offsetof(NeHeader, exe_type)] != TB_NE_TARGET_OS2 || resources > segments ||
-        shift > 31 || !extent(size, table, (uint64_t)resources * NE_RESOURCE_ENTRY_SIZE) ||
+        shift > MAX_PAGE_SHIFT ||
+        !extent(size, table, (uint64_t)resources * NE_RESOURCE_ENTRY_SIZE) ||
         !extent(size, segtab, (uint64_t)segments * sizeof(NeSegmentTableEntry)))
         return NULL;
     for (unsigned i = 0; i < resources; i++)
@@ -181,7 +179,7 @@ static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h, int res
         if (!extent(size, origin, stored))
             continue;
         TbIconImage *image = NULL;
-        if (FIELD16(segment, NeSegmentTableEntry, segment_flags) & SEGMENT_ITERATED)
+        if (FIELD16(segment, NeSegmentTableEntry, segment_flags) & NSITER)
         {
             uint8_t *decoded = calloc(1, NE_SEGMENT_LIMIT);
             if (decoded && lx_exepack_iterated_decompress(decoded, NE_SEGMENT_LIMIT,
@@ -225,7 +223,8 @@ uint8_t *tb_executable_resource(const uint8_t *bytes, size_t size, unsigned type
              objects = LX32(header, object_table_offset),
              object_count = LX32(header, module_num_objects), page_size = LX32(header, page_size),
              shift = LX32(header, page_offset_shift);
-    if (!page_size || page_size > 65536 || shift > 31 || count > 65536 ||
+    if (!page_size || page_size > MAX_PAGE_SIZE || shift > MAX_PAGE_SHIFT ||
+        count > MAX_RESOURCE_COUNT ||
         !extent(size, (uint64_t)h + table, (uint64_t)count * sizeof(LxResourceTableEntry)) ||
         !extent(size, (uint64_t)h + objects, (uint64_t)object_count * sizeof(LxObjectTableEntry)))
         return NULL;
@@ -251,7 +250,7 @@ TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size)
 
 TbIconImage *tb_icon_executable_resource(const uint8_t *bytes, size_t size, unsigned id)
 {
-    return id <= 65535 ? executable_icon(bytes, size, (int)id) : NULL;
+    return id <= UINT16_MAX ? executable_icon(bytes, size, (int)id) : NULL;
 }
 
 char *tb_executable_description(const uint8_t *bytes, size_t size)
@@ -281,7 +280,7 @@ char *tb_executable_description(const uint8_t *bytes, size_t size)
     /* Module descriptions have no declared code page. Retain printable ASCII
        exactly; ambiguous encodings use the caller's filename fallback. */
     for (size_t i = 0; i < n; i++)
-        if (name[i] < 32 || name[i] > 126)
+        if (name[i] < ' ' || name[i] > '~')
             return NULL;
     while (n && *name == ' ')
     {

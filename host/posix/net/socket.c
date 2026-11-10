@@ -17,6 +17,18 @@
 #include <string.h>
 #include <limits.h>
 
+enum
+{
+    /* An OS/2 select() descriptor array holds at most this many sockets per set. */
+    MAX_SELECT_SOCKETS = 1024,
+    SELECT_SETS = 3, /* read, write and exception */
+    MICROSECONDS_PER_SECOND = 1000000,
+    MILLISECONDS_PER_SECOND = 1000,
+    MICROSECONDS_PER_MILLISECOND = 1000,
+    /* BSD error returned for host errors with no BSD equivalent. */
+    BSD_UNKNOWN_ERROR = 100
+};
+
 static struct sockaddr_in address_in(const LxHostSocketAddress *address)
 {
     struct sockaddr_in result;
@@ -305,7 +317,7 @@ static int bsd_error(int number)
             ERROR(EHOSTUNREACH, 65);
 #undef ERROR
         default:
-            return 100;
+            return BSD_UNKNOWN_ERROR;
     }
 }
 
@@ -341,18 +353,18 @@ int lx_host_socket_select(int limit, LxHostSocketSet *r, LxHostSocketSet *w, LxH
 {
     (void)limit; /* OS/2 descriptor arrays do not use the BSD bit-set upper bound. */
     LxHostSocketSet *sets[] = {r, w, e};
-    int counts[3] = {0}, sockets[3072], offset = 0;
-    if (timed && (seconds < 0 || micros < 0 || micros >= 1000000))
+    int counts[SELECT_SETS] = {0}, sockets[SELECT_SETS * MAX_SELECT_SOCKETS], offset = 0;
+    if (timed && (seconds < 0 || micros < 0 || micros >= MICROSECONDS_PER_SECOND))
     {
         errno = EINVAL;
         return -1;
     }
-    for (unsigned i = 0; i < 3; i++)
+    for (unsigned i = 0; i < SELECT_SETS; i++)
     {
         if (!sets[i])
             continue;
         counts[i] = sets[i]->count;
-        if (counts[i] < 0 || counts[i] > 1024 || (counts[i] && !sets[i]->sockets))
+        if (counts[i] < 0 || counts[i] > MAX_SELECT_SOCKETS || (counts[i] && !sets[i]->sockets))
         {
             errno = EINVAL;
             return -1;
@@ -368,14 +380,18 @@ int lx_host_socket_select(int limit, LxHostSocketSet *r, LxHostSocketSet *w, LxH
             sockets[offset++] = fd;
         }
     }
-    int timeout = !timed                              ? -1
-                  : seconds > (INT_MAX - 1000) / 1000 ? INT_MAX
-                                                      : (int)seconds * 1000 + (micros + 999) / 1000;
+    /* Round the timeout up so a short wait is never turned into a poll. */
+    int timeout =
+        !timed ? -1
+        : seconds > (INT_MAX - MILLISECONDS_PER_SECOND) / MILLISECONDS_PER_SECOND
+            ? INT_MAX
+            : (int)seconds * MILLISECONDS_PER_SECOND +
+                  (micros + MICROSECONDS_PER_MILLISECOND - 1) / MICROSECONDS_PER_MILLISECOND;
     int result = lx_host_socket_poll_update(sockets, counts[0], counts[1], counts[2], timeout);
     if (result < 0)
         return result;
     offset = 0;
-    for (unsigned i = 0; i < 3; i++)
+    for (unsigned i = 0; i < SELECT_SETS; i++)
     {
         if (!sets[i])
             continue;
@@ -406,7 +422,8 @@ int lx_host_socket_poll(const int *sockets, int reads, int writes, int errors, i
 
 int lx_host_socket_poll_update(int *sockets, int reads, int writes, int errors, int timeout)
 {
-    if (reads < 0 || writes < 0 || errors < 0 || reads > 1024 || writes > 1024 || errors > 1024)
+    if (reads < 0 || writes < 0 || errors < 0 || reads > MAX_SELECT_SOCKETS ||
+        writes > MAX_SELECT_SOCKETS || errors > MAX_SELECT_SOCKETS)
     {
         errno = EINVAL;
         return -1;
@@ -607,7 +624,7 @@ int lx_host_socket_option(int fd, LxHostSocketOption option, const void *value, 
         }
         int32_t words[2];
         memcpy(words, value, 8);
-        if (words[0] < 0 || words[1] < 0 || words[1] >= 1000000)
+        if (words[0] < 0 || words[1] < 0 || words[1] >= MICROSECONDS_PER_SECOND)
         {
             errno = EINVAL;
             return -1;

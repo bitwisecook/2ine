@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Selection and dispatch for the process execution boundary. */
 #include "emulator/execution/core/backend.h"
+#include "emulator/execution/core/x86/x86.h"
 #include "host/thread.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -342,6 +343,7 @@ int lx_execution_quiesce(LxExecution *e)
 /* Tiled selectors reach only the first 512 MiB of the guest address space. */
 #define CALL16_TILED_LIMIT 0x20000000u
 #define CALL16_MAXIMUM_ARGUMENTS 0x400u
+#define CALL16_STACK_TOP_GAP 16
 
 typedef struct Call16
 {
@@ -359,20 +361,22 @@ static uint32_t call16Operation(void *argument)
     LxExecution *e = call->execution;
     uint32_t stack = e->ops->guest_stack();
     uint16_t selector = 0, offset = 0;
-    if (!stack || stack >= CALL16_TILED_LIMIT || (stack & 0xffff) <= CALL16_MINIMUM_STACK ||
+    if (!stack || stack >= CALL16_TILED_LIMIT ||
+        (stack & X86_SEGMENT_LIMIT) <= CALL16_MINIMUM_STACK ||
         !lx_execution_find_selector(e, stack, &selector, &offset, 0))
     {
         call->stack = lx_execution_map_aligned(e, 0, CALL16_TILE, LX_GUEST_READ | LX_GUEST_WRITE,
                                                CALL16_TILE);
         if (!call->stack)
             return 0;
-        stack = lx_execution_mapping_address(call->stack) + CALL16_TILE - 16;
+        stack = lx_execution_mapping_address(call->stack) + CALL16_TILE - CALL16_STACK_TOP_GAP;
         if (!lx_execution_find_selector(e, stack, &selector, &offset, 0))
             return 0;
         call->selector = selector;
     }
-    return (uint32_t)e->ops->call16(call->target, (uint16_t)((selector << 3) | 7), offset,
-                                    call->arguments, call->bytes, call->result);
+    return (uint32_t)e->ops->call16(
+        call->target, (uint16_t)((selector << X86_SELECTOR_INDEX_SHIFT) | X86_SELECTOR_LDT_RING3),
+        offset, call->arguments, call->bytes, call->result);
 }
 
 static void call16Cleanup(void *argument)

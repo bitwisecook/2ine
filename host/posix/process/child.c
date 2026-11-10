@@ -18,6 +18,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+/* The shell's exit status when a command cannot be executed. */
+#define EXEC_FAILED_STATUS 127
+
 struct LxHostChild
 {
     pid_t id;
@@ -108,10 +111,10 @@ LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, 
     {
         for (unsigned i = 0; scoped > 0 && i < 2; i++)
             if (dup2(copies[i], inherited[i]) < 0)
-                _exit(127);
+                _exit(EXEC_FAILED_STATUS);
         raise(SIGSTOP);
         execve(path, argv, env);
-        _exit(127);
+        _exit(EXEC_FAILED_STATUS);
     }
     for (unsigned i = 0; i < 2; i++)
         if (copies[i] >= 0)

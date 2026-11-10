@@ -7,6 +7,27 @@
 #include <string.h>
 #include <unistd.h>
 
+/* IPv4 header (RFC 791) and ICMP echo (RFC 792) layout. A datagram ICMP socket returns only
+   the ICMP message, so the receive path rebuilds the IPv4 header a raw socket would return. */
+enum
+{
+    IPV4_HEADER_BYTES = 20,
+    IPV4_VERSION_IHL = 0x45, /* version 4, five-word header */
+    IPV4_IHL_MASK = 15u,
+    IPV4_TOTAL_LENGTH = 2,
+    IPV4_FRAGMENT = 6,
+    IPV4_TTL = 8,
+    IPV4_PROTOCOL = 9,
+    IPV4_SOURCE = 12,
+    IPV4_DESTINATION = 16,
+    IPV4_DEFAULT_TTL = 64,
+    ECHO_HEADER_BYTES = 8,
+    ECHO_REPLY_TYPE = 0,
+    ECHO_CHECKSUM = 2,
+    ECHO_IDENTIFIER = 4,
+    CONTROL_BYTES = 128
+};
+
 int lx_diagnostic_icmp_open(int *kind)
 {
     int fd;
@@ -31,6 +52,11 @@ static uint16_t network16(const unsigned char *p)
     return (uint16_t)((p[0] << 8) | p[1]);
 }
 
+static unsigned ip_header_bytes(const unsigned char *packet)
+{
+    return (packet[0] & IPV4_IHL_MASK) * 4;
+}
+
 int64_t lx_diagnostic_icmp_recv(int fd, int kind, unsigned char *packet, size_t capacity, int flags,
                                 uint16_t echo_id, LxHostSocketAddress *address)
 {
@@ -39,8 +65,8 @@ int64_t lx_diagnostic_icmp_recv(int fd, int kind, unsigned char *packet, size_t 
     ssize_t n;
     if (kind == ICMP_PAYLOAD)
     {
-        struct iovec iov = {packet + 20, capacity - 20};
-        unsigned char control[128];
+        struct iovec iov = {packet + IPV4_HEADER_BYTES, capacity - IPV4_HEADER_BYTES};
+        unsigned char control[CONTROL_BYTES];
         struct msghdr msg = {0};
         msg.msg_name = &peer;
         msg.msg_namelen = sizeof peer;
@@ -51,53 +77,58 @@ int64_t lx_diagnostic_icmp_recv(int fd, int kind, unsigned char *packet, size_t 
         n = recvmsg(fd, &msg, flags);
         if (n < 0)
             return -1;
-        memset(packet, 0, 20);
-        packet[0] = 0x45;
-        packet[8] = 64;
-        packet[9] = IPPROTO_ICMP;
+        memset(packet, 0, IPV4_HEADER_BYTES);
+        packet[0] = IPV4_VERSION_IHL;
+        packet[IPV4_TTL] = IPV4_DEFAULT_TTL;
+        packet[IPV4_PROTOCOL] = IPPROTO_ICMP;
         uint16_t length = (uint16_t)n;
-        memcpy(packet + 2, &length, 2);
-        memcpy(packet + 12, &peer.sin_addr.s_addr, 4);
+        memcpy(packet + IPV4_TOTAL_LENGTH, &length, sizeof length);
+        memcpy(packet + IPV4_SOURCE, &peer.sin_addr.s_addr, sizeof peer.sin_addr.s_addr);
         for (struct cmsghdr *c = CMSG_FIRSTHDR(&msg); c; c = CMSG_NXTHDR(&msg, c))
         {
             if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_TTL)
             {
                 int ttl;
                 memcpy(&ttl, CMSG_DATA(c), sizeof ttl);
-                packet[8] = (unsigned char)ttl;
+                packet[IPV4_TTL] = (unsigned char)ttl;
             }
             if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_PKTINFO)
             {
                 struct in_pktinfo info;
                 memcpy(&info, CMSG_DATA(c), sizeof info);
-                memcpy(packet + 16, &info.ipi_addr, 4);
+                memcpy(packet + IPV4_DESTINATION, &info.ipi_addr, sizeof info.ipi_addr);
             }
         }
-        if (n >= 8 && packet[20] == 0)
+        /* The kernel rewrites the echo identifier; restore the caller's and re-checksum. */
+        unsigned char *icmp = packet + IPV4_HEADER_BYTES;
+        if (n >= ECHO_HEADER_BYTES && icmp[0] == ECHO_REPLY_TYPE)
         {
-            memcpy(packet + 24, &echo_id, 2);
-            packet[22] = packet[23] = 0;
+            memcpy(icmp + ECHO_IDENTIFIER, &echo_id, sizeof echo_id);
+            icmp[ECHO_CHECKSUM] = icmp[ECHO_CHECKSUM + 1] = 0;
             uint32_t sum = 0;
-            for (ssize_t i = 20; i < n + 20; i += 2)
-                sum += (uint32_t)packet[i] << 8 | (i + 1 < n + 20 ? packet[i + 1] : 0);
+            for (ssize_t i = IPV4_HEADER_BYTES; i < n + IPV4_HEADER_BYTES; i += 2)
+                sum +=
+                    (uint32_t)packet[i] << 8 | (i + 1 < n + IPV4_HEADER_BYTES ? packet[i + 1] : 0);
             while (sum >> 16)
                 sum = (sum & 65535) + (sum >> 16);
             sum = ~sum;
-            packet[22] = (unsigned char)(sum >> 8);
-            packet[23] = (unsigned char)sum;
+            icmp[ECHO_CHECKSUM] = (unsigned char)(sum >> 8);
+            icmp[ECHO_CHECKSUM + 1] = (unsigned char)sum;
         }
-        n += 20;
+        n += IPV4_HEADER_BYTES;
     }
     else
     {
         n = recvfrom(fd, packet, capacity, flags, (struct sockaddr *)&peer, &peer_size);
-        if (n >= 20 && (packet[0] & 15u) * 4 <= (unsigned)n &&
-            network16(packet + 2) >= (packet[0] & 15u) * 4)
+        /* BSD raw sockets, which OS/2 programs expect, report the IP length fields in host
+           order and the total length without the header. */
+        if (n >= IPV4_HEADER_BYTES && ip_header_bytes(packet) <= (unsigned)n &&
+            network16(packet + IPV4_TOTAL_LENGTH) >= ip_header_bytes(packet))
         {
-            uint16_t length = network16(packet + 2) - (packet[0] & 15u) * 4;
-            memcpy(packet + 2, &length, 2);
-            uint16_t fragment = network16(packet + 6);
-            memcpy(packet + 6, &fragment, 2);
+            uint16_t length = network16(packet + IPV4_TOTAL_LENGTH) - ip_header_bytes(packet);
+            memcpy(packet + IPV4_TOTAL_LENGTH, &length, sizeof length);
+            uint16_t fragment = network16(packet + IPV4_FRAGMENT);
+            memcpy(packet + IPV4_FRAGMENT, &fragment, sizeof fragment);
         }
     }
     if (n >= 0 && address)

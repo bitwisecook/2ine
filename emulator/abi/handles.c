@@ -27,6 +27,8 @@ typedef struct Slot
 #define SLOT_COUNT 65535u
 /* The high bit is reserved for process-independent shared semaphore handles. */
 #define LAST_GENERATION 0x7fffu
+/* A handle is its slot index in the low 16 bits and the slot generation above. */
+#define GENERATION_SHIFT 16
 static Slot Slots[SLOT_COUNT];
 static uint32_t NextSlot = 1;
 static Resource *Resources;
@@ -98,7 +100,7 @@ uint32_t lx_handle_create(LxHandleKind kind, void *value, void (*destroy)(void *
     NextSlot = index + 1;
     if (NextSlot == SLOT_COUNT)
         NextSlot = 1;
-    uint32_t handle = ((uint32_t)slot->generation << 16) | index;
+    uint32_t handle = ((uint32_t)slot->generation << GENERATION_SHIFT) | index;
     lx_host_mutex_unlock(Mutex);
     return handle;
 }
@@ -106,7 +108,7 @@ uint32_t lx_handle_create(LxHandleKind kind, void *value, void (*destroy)(void *
 static Resource *resolve(uint32_t handle, LxHandleKind kind)
 {
     uint32_t index = handle & UINT16_MAX;
-    if (!index || index >= SLOT_COUNT || Slots[index].generation != (handle >> 16))
+    if (!index || index >= SLOT_COUNT || Slots[index].generation != (handle >> GENERATION_SHIFT))
         return NULL;
     Resource *r = Slots[index].resource;
     return r && r->kind == kind ? r : NULL;

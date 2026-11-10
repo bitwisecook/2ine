@@ -115,7 +115,7 @@ static TbExecutableStatus linear_imports(const TbExecutable *exe, TbExecutableIm
     uint32_t count = tb_le32(LX_FIELD(exe, num_import_mod_entries));
     uint32_t procedures = tb_le32(LX_FIELD(exe, import_proc_table_offset));
     uint64_t end = procedures ? start + procedures : length;
-    if (count > 65535 || at < start || at > length || (count && (end < at || end > length)))
+    if (count > UINT16_MAX || at < start || at > length || (count && (end < at || end > length)))
         return TB_EXECUTABLE_IMPORTS_OUTSIDE;
     for (uint32_t i = 0; i < count; i++)
     {

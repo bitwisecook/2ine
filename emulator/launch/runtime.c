@@ -50,17 +50,17 @@ char *runtime_id(TbBall *c, const char *build)
     int ok = 1;
     for (size_t i = 0; i < n; i++)
     {
-        unsigned char hash[32];
+        unsigned char hash[SHA256_BLOCK_SIZE];
         if (!tb_ball_digest_file(c, tb_ball_join(c, build, names[i]), hash))
         {
             ok = 0;
             break;
         }
         sha256_update(&state, (const BYTE *)names[i], strlen(names[i]));
-        sha256_update(&state, hash, 32);
+        sha256_update(&state, hash, sizeof hash);
     }
     tb_names_free(names, n);
-    unsigned char out[32];
+    unsigned char out[SHA256_BLOCK_SIZE];
     sha256_final(&state, out);
     return ok ? tb_ball_hex(c, out) : NULL;
 }
@@ -75,7 +75,7 @@ int runtime_sync(TbBall *c, const char *build, const char *directory)
     for (size_t i = 0; i < n; i++)
     {
         char *src = tb_ball_join(c, build, names[i]), *dst = tb_ball_join(c, directory, names[i]);
-        unsigned char a[32], b[32];
+        unsigned char a[SHA256_BLOCK_SIZE], b[SHA256_BLOCK_SIZE];
         if (!tb_ball_digest_file(c, src, a))
         {
             ok = 0;
@@ -88,7 +88,7 @@ int runtime_sync(TbBall *c, const char *build, const char *directory)
                 ok = 0;
                 break;
             }
-            if (!memcmp(a, b, 32))
+            if (!memcmp(a, b, sizeof a))
                 continue;
         }
         if (!tb_copy(src, dst))

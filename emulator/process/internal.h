@@ -22,6 +22,16 @@
 extern LX_PRIVATE LX_HOST_THREAD_LOCAL LxGuestTib *DefaultTib;
 extern LX_PRIVATE LX_HOST_THREAD_LOCAL LxHostThreadState host_thread_state;
 LxHostThreadState *lxHostThreadState(void);
+
+/* Accepted display settings, from configuration or the environment. */
+enum
+{
+    LX_DEFAULT_DISPLAY_DPI = 96,
+    LX_MIN_DISPLAY_DPI = 72,
+    LX_MAX_DISPLAY_DPI = 384,
+    LX_DEFAULT_DISPLAY_DEPTH = 24
+};
+
 LX_PRIVATE void initPib(void);
 LX_PRIVATE void dosExit_lib2ine(uint32 action, uint32 result);
 LX_PRIVATE void lxInitOs2Tib(uint8 *tibspace, void *_topOfStack, const size_t stacklen,

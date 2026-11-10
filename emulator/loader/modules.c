@@ -110,7 +110,7 @@ int sanityCheckModule(uint8 **_exe, uint32 *_exelen, int *_is_lx)
         fprintf(stderr, "not an OS/2 module\n");
         return 0;
     }
-    const uint32 header_offset = *((uint32 *)(*_exe + 0x3C));
+    const uint32 header_offset = *((uint32 *)(*_exe + ENEWHDR));
 
     *_exe += header_offset;
     *_exelen -= header_offset;
@@ -132,9 +132,16 @@ int sanityCheckModule(uint8 **_exe, uint32 *_exelen, int *_is_lx)
     return 0;
 }
 
+/* An OS/2 application selector: LDT index above the table-indicator bit and ring-3 RPL. */
 uint16 lxSelectorToSegment(uint16 index)
 {
-    return (index << 3) | 7;
+    enum
+    {
+        SELECTOR_INDEX_SHIFT = 3,
+        SELECTOR_LDT_RING3 = 7
+    };
+
+    return (index << SELECTOR_INDEX_SHIFT) | SELECTOR_LDT_RING3;
 }
 
 static void terminateModule(LxModule *lxmod)
@@ -340,7 +347,7 @@ void destroyLxModule(void *resource)
 
     for (uint32 i = 0; i < lxmod->num_mmaps; i++)
     {
-        if (lxmod->mmaps[i].alias != 0xFFFF)
+        if (lxmod->mmaps[i].alias != LX_NO_ALIAS)
             lx_execution_free_selector(GProcessState.execution, lxmod->mmaps[i].alias);
         if (lxmod->mmaps[i].mapped)
         {

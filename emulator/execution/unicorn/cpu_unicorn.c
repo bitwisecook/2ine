@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Unicorn adapter. Public runtime interfaces contain no Unicorn types. */
 #include "emulator/execution/unicorn/cpu_internal.h"
+#include "emulator/execution/core/x86/x86.h"
 #include <unicorn/unicorn.h>
 #include <unicorn/x86.h>
 #include <stdlib.h>
@@ -14,6 +15,35 @@
 
 #define LX_TABLE_SIZE UINT32_C(0x10000)
 #define LX_LDT_SELECTOR UINT16_C(0xfff8)
+
+/* Ring-0 GDT selectors used only while entering user mode. */
+#define BOOT_CODE_SELECTOR 8
+#define BOOT_DATA_SELECTOR 16
+/* Ring-3 flat selectors, matching the execution layer's FLAT_CODE and FLAT_DATA. */
+#define USER_FLAT_CODE_SELECTOR 0x1b
+#define USER_FLAT_DATA_SELECTOR 0x23
+#define X86_OPCODE_IRETD 0xcf
+#define X86_OPCODE_INT3 0xcc
+#define X86_VECTOR_BREAKPOINT 3
+/* EFLAGS with only the always-one reserved bit set. */
+#define X86_EFLAGS_RESERVED 2
+#define X86_CR0_PE 1
+/* Instruction budget for the user-mode entry sequence. */
+#define USER_ENTRY_INSTRUCTIONS 8
+#define USER_ENTRY_TIMEOUT_US 100000
+/* LDTR hidden attributes: present system descriptor of type LDT. */
+#define LDTR_ATTRIBUTES 0x8200
+
+/* Segment descriptor fields. */
+#define DESCRIPTOR_BYTE_LIMIT 0xfffff /* largest byte-granular limit */
+#define DESCRIPTOR_PAGE_MASK 0xfff    /* page-granular limits end on a page */
+#define DESCRIPTOR_PAGE_SHIFT 12
+#define DESCRIPTOR_FLAG_DB 4u           /* 32-bit default operand size */
+#define DESCRIPTOR_FLAG_G 8u            /* page granularity */
+#define DESCRIPTOR_ACCESS_DATA_RW 0x92u /* present, code/data, writable data */
+#define DESCRIPTOR_ACCESS_CODE 8u       /* executable instead of data */
+#define DESCRIPTOR_DPL_SHIFT 5
+#define DESCRIPTOR_TABLE_OFFSET_MASK (~7u) /* selector bits that index the table */
 
 typedef struct UnicornCpu
 {
@@ -83,22 +113,25 @@ static int set_segment(LxCpu *cpu, const LxSegment *s);
 static int enter_user_mode(LxCpu *cpu)
 {
     UnicornCpu *u = cpu->backend;
-    const LxSegment segments[] = {{8, 0, UINT32_MAX, 32, 1},
-                                  {16, 0, UINT32_MAX, 32, 0},
-                                  {0x1b, 0, UINT32_MAX, 32, 1},
-                                  {0x23, 0, UINT32_MAX, 32, 0}};
+    const LxSegment segments[] = {{BOOT_CODE_SELECTOR, 0, UINT32_MAX, 32, 1},
+                                  {BOOT_DATA_SELECTOR, 0, UINT32_MAX, 32, 0},
+                                  {USER_FLAT_CODE_SELECTOR, 0, UINT32_MAX, 32, 1},
+                                  {USER_FLAT_DATA_SELECTOR, 0, UINT32_MAX, 32, 0}};
     for (unsigned i = 0; i < sizeof segments / sizeof segments[0]; i++)
         if (!set_segment(cpu, &segments[i]))
             return 0;
+    /* Scratch code and stack in the unused part of the GDT page. */
     const uint32_t code = LX_DESCRIPTOR_BASE + 0x100;
     const uint32_t stack = LX_DESCRIPTOR_BASE + 0x200;
-    const uint8_t instructions[] = {0xcf, 0xcc}; /* IRETD; INT3. */
-    const uint32_t words[] = {code + 1, 0x1b, 2, stack + 0x100, 0x23};
-    uint8_t frame[20];
-    for (unsigned i = 0; i < 5; i++)
-        for (unsigned byte = 0; byte < 4; byte++)
-            frame[i * 4 + byte] = (uint8_t)(words[i] >> (byte * 8));
-    uint16_t cs = 8, ss = 16;
+    const uint8_t instructions[] = {X86_OPCODE_IRETD, X86_OPCODE_INT3};
+    /* IRETD frame: EIP, CS, EFLAGS, ESP, SS. Execution resumes at the INT3. */
+    const uint32_t words[] = {code + 1, USER_FLAT_CODE_SELECTOR, X86_EFLAGS_RESERVED, stack + 0x100,
+                              USER_FLAT_DATA_SELECTOR};
+    uint8_t frame[sizeof words];
+    for (unsigned i = 0; i < sizeof words / sizeof words[0]; i++)
+        for (unsigned byte = 0; byte < sizeof words[0]; byte++)
+            frame[i * sizeof words[0] + byte] = (uint8_t)(words[i] >> (byte * 8));
+    uint16_t cs = BOOT_CODE_SELECTOR, ss = BOOT_DATA_SELECTOR;
     if (!checked(cpu,
                  uc_mem_protect(u->engine, LX_DESCRIPTOR_BASE, LX_DESCRIPTOR_SIZE, UC_PROT_ALL)) ||
         !checked(cpu, uc_mem_write(u->engine, code, instructions, sizeof instructions)) ||
@@ -106,9 +139,10 @@ static int enter_user_mode(LxCpu *cpu)
         !checked(cpu, uc_reg_write(u->engine, UC_X86_REG_CS, &cs)) ||
         !checked(cpu, uc_reg_write(u->engine, UC_X86_REG_SS, &ss)) ||
         !checked(cpu, uc_reg_write(u->engine, UC_X86_REG_ESP, &stack)) ||
-        !checked(cpu, uc_emu_start(u->engine, code, UINT64_MAX, 100000, 8)))
+        !checked(cpu, uc_emu_start(u->engine, code, UINT64_MAX, USER_ENTRY_TIMEOUT_US,
+                                   USER_ENTRY_INSTRUCTIONS)))
         return 0;
-    if (!u->stopped || u->event.reason != LX_CPU_TRAP || u->event.vector != 3)
+    if (!u->stopped || u->event.reason != LX_CPU_TRAP || u->event.vector != X86_VECTOR_BREAKPOINT)
         return lx_cpu_fail(cpu, "Protected-mode user entry did not complete");
     return checked(cpu, uc_mem_protect(u->engine, LX_DESCRIPTOR_BASE, LX_DESCRIPTOR_SIZE,
                                        UC_PROT_READ | UC_PROT_WRITE));
@@ -129,8 +163,8 @@ static int open_cpu(LxCpu *cpu)
         goto fail;
     uc_x86_mmr gdt = {0, LX_DESCRIPTOR_BASE, LX_TABLE_SIZE - 1, 0};
     uc_x86_mmr ldt = {LX_LDT_SELECTOR, LX_DESCRIPTOR_BASE + LX_TABLE_SIZE, LX_TABLE_SIZE - 1,
-                      0x8200};
-    uint32_t cr0 = 1; /* Protected mode; paging disabled. */
+                      LDTR_ATTRIBUTES};
+    uint32_t cr0 = X86_CR0_PE; /* Paging stays disabled. */
     if (!checked(cpu, uc_reg_write(u->engine, UC_X86_REG_GDTR, &gdt)) ||
         !checked(cpu, uc_reg_write(u->engine, UC_X86_REG_LDTR, &ldt)) ||
         !checked(cpu, uc_reg_write(u->engine, UC_X86_REG_CR0, &cr0)) ||
@@ -177,15 +211,16 @@ static int set_segment(LxCpu *cpu, const LxSegment *s)
 {
     UnicornCpu *u = cpu->backend;
     uint32_t limit = s->limit;
-    unsigned flags = s->bits == 32 ? 4u : 0u;
-    if (limit > 0xfffff)
+    unsigned flags = s->bits == 32 ? DESCRIPTOR_FLAG_DB : 0u;
+    if (limit > DESCRIPTOR_BYTE_LIMIT)
     {
-        if ((limit & 0xfff) != 0xfff)
+        if ((limit & DESCRIPTOR_PAGE_MASK) != DESCRIPTOR_PAGE_MASK)
             return lx_cpu_fail(cpu, "Large x86 segment limit is not page granular");
-        limit >>= 12;
-        flags |= 8;
+        limit >>= DESCRIPTOR_PAGE_SHIFT;
+        flags |= DESCRIPTOR_FLAG_G;
     }
-    if (!(s->selector & 4) && (s->selector & ~7u) == LX_LDT_SELECTOR)
+    if (!(s->selector & X86_SELECTOR_LDT) &&
+        (s->selector & DESCRIPTOR_TABLE_OFFSET_MASK) == LX_LDT_SELECTOR)
         return lx_cpu_fail(cpu, "Reserved LDT descriptor selector");
     unsigned char d[8] = {
         (unsigned char)limit,
@@ -193,11 +228,14 @@ static int set_segment(LxCpu *cpu, const LxSegment *s)
         (unsigned char)s->base,
         (unsigned char)(s->base >> 8),
         (unsigned char)(s->base >> 16),
-        (unsigned char)(0x92u | ((s->selector & 3u) << 5) | (s->executable ? 8u : 0u)),
+        (unsigned char)(DESCRIPTOR_ACCESS_DATA_RW |
+                        ((s->selector & X86_SELECTOR_RPL_MASK) << DESCRIPTOR_DPL_SHIFT) |
+                        (s->executable ? DESCRIPTOR_ACCESS_CODE : 0u)),
         (unsigned char)(((limit >> 16) & 15u) | (flags << 4)),
         (unsigned char)(s->base >> 24)};
-    unsigned table = !!(s->selector & 4);
-    uint32_t at = LX_DESCRIPTOR_BASE + table * LX_TABLE_SIZE + (s->selector & ~7u);
+    unsigned table = !!(s->selector & X86_SELECTOR_LDT);
+    uint32_t at =
+        LX_DESCRIPTOR_BASE + table * LX_TABLE_SIZE + (s->selector & DESCRIPTOR_TABLE_OFFSET_MASK);
     if (!checked(cpu, uc_mem_write(u->engine, at, d, sizeof d)))
         return 0;
     return 1;
