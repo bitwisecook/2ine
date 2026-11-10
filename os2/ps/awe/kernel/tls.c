@@ -44,7 +44,8 @@ ULONG TlsAlloc(void)
         return UINT32_MAX;
     for (unsigned n = 0; n < OPEN32_TLS_SLOTS; n++)
     {
-        unsigned index = (n >> 1) + ((n & 1) ? 32 : 0);
+        /* Interleave the two halves of the table: 0, 32, 1, 33, ... */
+        unsigned index = (n >> 1) + ((n & 1) ? OPEN32_TLS_SLOTS / 2 : 0);
         if (!allocated[index])
         {
             allocated[index] = 1;

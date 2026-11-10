@@ -3,6 +3,13 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 
+/* lx_execution_atomic_u32 operations. */
+enum
+{
+    ATOMIC_EXCHANGE = 1,
+    ATOMIC_ADD = 2
+};
+
 static int interlocked_word(PLONG value, int operation, uint32 delta, uint32 *previous)
 {
     uint32 address;
@@ -20,7 +27,7 @@ static int interlocked_word(PLONG value, int operation, uint32 delta, uint32 *pr
 static LONG interlocked_add(PLONG value, uint32 delta)
 {
     uint32 previous;
-    if (!interlocked_word(value, 2, delta, &previous))
+    if (!interlocked_word(value, ATOMIC_ADD, delta, &previous))
         return 0;
     uint32 result = previous + delta;
     return !result ? 0 : (result & UINT32_C(0x80000000)) ? -1 : 1;
@@ -42,7 +49,7 @@ LONG InterlockedExchange(PLONG value, LONG replacement)
 {
     TRACE_NATIVE("InterlockedExchange(%p, %d)", value, replacement);
     uint32 previous;
-    if (!interlocked_word(value, 1, (uint32)replacement, &previous))
+    if (!interlocked_word(value, ATOMIC_EXCHANGE, (uint32)replacement, &previous))
         return 0;
     LONG result;
     memcpy(&result, &previous, sizeof result);

@@ -4,6 +4,15 @@
 #include "emulator/abi.h"
 #include "host/sync.h"
 #include <stdio.h>
+
+enum
+{
+    /* Win32's limit on a variable's name or value, in characters. */
+    ENVIRONMENT_STRING_LIMIT = 32767,
+    /* Largest environment block SetEnvironmentVariable builds. */
+    ENVIRONMENT_BLOCK_LIMIT = 65536
+};
+
 static LxHostOnce env_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *env_monitor;
 
@@ -57,8 +66,8 @@ ULONG GetEnvironmentVariable(PSZ name, PSZ output, ULONG capacity)
 
 BOOL SetEnvironmentVariable(PSZ name, PSZ value)
 {
-    if (!name || !*name || strchr(name, '=') || strlen(name) > 32767 ||
-        (value && strlen(value) > 32767))
+    if (!name || !*name || strchr(name, '=') || strlen(name) > ENVIRONMENT_STRING_LIMIT ||
+        (value && strlen(value) > ENVIRONMENT_STRING_LIMIT))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
@@ -70,13 +79,18 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     for (const char *p = old; p && *p; p += strlen(p) + 1)
         if (strncasecmp(p, name, name_size) || p[name_size] != '=')
             size += strlen(p) + 1;
+    /* "=" and the terminator. */
     if (value)
         size += name_size + strlen(value) + 2;
+    /* An empty block is still two NULs. */
     if (size == 1)
         size = 2;
-    LxGuestMapping *mapping = size <= 65536 ? lx_execution_map(GProcessState.execution, 0,
-                                                               (size + 4095) & ~(size_t)4095, 3, 0)
-                                            : NULL;
+    LxGuestMapping *mapping =
+        size <= ENVIRONMENT_BLOCK_LIMIT
+            ? lx_execution_map(GProcessState.execution, 0,
+                               (size + OPEN32_PAGE_SIZE - 1) & ~(size_t)(OPEN32_PAGE_SIZE - 1),
+                               LX_GUEST_READ | LX_GUEST_WRITE, 0)
+            : NULL;
     if (!mapping)
     {
         lx_host_monitor_unlock(env_monitor);

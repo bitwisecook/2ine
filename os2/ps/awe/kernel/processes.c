@@ -21,34 +21,32 @@
 #include <stdio.h>
 #include <strings.h>
 
+/* DosSearchPath flags (the Toolkit's bsedos.h values). */
 enum
 {
-    STILL_ACTIVE_CODE = 0x103,
-    WAIT_TIMEOUT_RESULT = 0x102,
+    SEARCH_CUR_DIRECTORY = 0x0001,
+    SEARCH_ENVIRONMENT = 0x0002,
+    SEARCH_IGNORENETERRS = 0x0004
+};
+
+enum
+{
+    /* Longest program name taken from the command line, before ".EXE" is added. */
     NAME_LIMIT = 0x103,
     PRIMARY_THREAD_ID = 1,
-    DEBUG_PROCESS_FLAG = 0x001,
-    CREATE_SUSPENDED_FLAG = 0x004,
-    DETACHED_PROCESS_FLAG = 0x008,
-    NORMAL_PRIORITY_FLAG = 0x020,
-    IDLE_PRIORITY_FLAG = 0x040,
-    HIGH_PRIORITY_FLAG = 0x080,
-    PRIORITY_CLASS_MASK = 0x1e0,
-    NEW_SESSION_FLAG = 0x200,
-    STARTF_SHOW_FLAG = 1,
-    STARTF_SIZE_FLAG = 2,
-    STARTF_POSITION_FLAG = 4,
-    DUPLICATE_CLOSE_SOURCE_FLAG = 1,
-    DUPLICATE_SAME_ACCESS_FLAG = 2,
-    FAPPTYP_DOS_FLAG = 0x0020,
-    FAPPTYP_WINDOWS_FLAG = 0x1000,
-    SEARCH_ALL_FLAGS = 7,
-    MESSAGE_BOX_STYLE = 0x1040,
-    MESSAGE_BOX_ERROR = 0xffff,
-    BROADCAST_SEND_FRAMES = 0x0009,
+    PRIORITY_CLASS_MASK = WIN32_NORMAL_PRIORITY_CLASS | WIN32_IDLE_PRIORITY_CLASS |
+                          WIN32_HIGH_PRIORITY_CLASS | WIN32_REALTIME_PRIORITY_CLASS,
+    /* A host child killed by a signal reports 128 plus the signal, as a shell does. */
+    SIGNAL_EXIT_BASE = 128,
+    LAUNCH_RECORD_NAME_SIZE = 40,
+    TITLE_LIMIT = 65536,
+    US_PER_MS = 1000,
+    /* WaitForInputIdle polls the launch record this often. */
     IDLE_POLL_MS = 10,
-    ERROR_NOT_SUPPORTED_ID = 50,
-    ERROR_INVALID_THREAD = 309
+    /* WinExec returns a value above 31 on success. */
+    WINEXEC_SUCCESS = 0x20,
+    /* Bits 24-31 of an access mask (generic and special rights) are refused. */
+    ACCESS_SPECIFIC_STANDARD_BITS = 24
 };
 
 #define PSEUDO_PROCESS UINT32_MAX
@@ -88,7 +86,7 @@ static void initialize(void)
     if (!registry || !current.monitor)
         abort();
     current.id = GetCurrentProcessId();
-    current.exit_code = STILL_ACTIVE_CODE;
+    current.exit_code = WIN32_STILL_ACTIVE;
 }
 
 static void retain_process(Open32Process *process)
@@ -157,7 +155,7 @@ static ULONG finished_code(const Open32Process *process, const LxHostChildStatus
         return __atomic_load_n(&process->record->exit_code, __ATOMIC_RELAXED);
     if (process->terminated)
         return process->requested_exit;
-    return status->signal ? 128 + status->signal : status->result;
+    return status->signal ? SIGNAL_EXIT_BASE + status->signal : status->result;
 }
 
 static void *watch_process(void *argument)
@@ -183,24 +181,24 @@ static ULONG launch_process(PSZ program, PSZ arguments, PSZ environment, PSZ dir
     typedef APIRET(OS2API * LaunchFn)(const LxDosLaunch *, LxHostChild **);
     LaunchFn launch = (LaunchFn)open32DosService("lx_doscalls_launch");
     if (!launch)
-        return 120;
+        return ERROR_CALL_NOT_IMPLEMENTED;
     Open32Process *process = calloc(1, sizeof *process);
     if (process)
     {
         process->references = 1;
-        process->exit_code = STILL_ACTIVE_CODE;
+        process->exit_code = WIN32_STILL_ACTIVE;
         process->suspended = suspended ? 1 : 0;
         process->priority_class = priority_class;
         process->monitor = lx_host_monitor_create();
     }
-    char name[40];
+    char name[LAUNCH_RECORD_NAME_SIZE];
     if (process && process->monitor)
         process->record = lx_launch_record_create('o', &process->shared, name, sizeof name);
     if (!process || !process->record)
     {
         if (process)
             release_process(process);
-        return 8;
+        return ERROR_NOT_ENOUGH_MEMORY;
     }
     lx_launch_record_present(process->record, presentation);
     /* A requested priority is set while the child is held, so it never runs without it. */
@@ -214,9 +212,9 @@ static ULONG launch_process(PSZ program, PSZ arguments, PSZ environment, PSZ dir
     ULONG error = launch(&request, &process->child);
     if (!error && priority >= 0 &&
         lx_host_child_set_priority(process->child, (LxHostProcessPriority)priority))
-        error = errno == EPERM || errno == EACCES ? 5 : ERROR_NOT_SUPPORTED_ID;
+        error = errno == EPERM || errno == EACCES ? ERROR_ACCESS_DENIED : ERROR_NOT_SUPPORTED;
     if (!error && held && !suspended && lx_host_child_resume(process->child))
-        error = 1;
+        error = ERROR_INVALID_FUNCTION;
     if (error)
     {
         if (process->child)
@@ -248,13 +246,14 @@ static ULONG launch_process(PSZ program, PSZ arguments, PSZ environment, PSZ dir
     if (result->process)
         lx_handle_close(result->process, LX_HANDLE_OPEN32_PROCESS);
     release_process(process);
-    return 8;
+    return ERROR_NOT_ENOUGH_MEMORY;
 }
 
 /* The profile value holds ';'-separated settings for a Win-OS/2 session. */
 static char *windows_environment(void)
 {
     ULONG size = 0;
+    /* The block gets two terminators, ending the list of strings made from it. */
     if (!PrfQueryProfileSize(HINI_USERPROFILE, "WINOS2", "PM_GlobalWindows31Settings", &size))
         return NULL;
     char *block = calloc(1, (size_t)size + 2);
@@ -275,6 +274,7 @@ static char *windows_environment(void)
 static char *argument_block(const char *program, const char *arguments)
 {
     size_t name = strlen(program) + 1, tail = arguments ? strlen(arguments) : 0;
+    /* Program name, NUL, arguments and a double NUL, as DosExecPgm takes them. */
     char *block = calloc(1, name + tail + 2);
     if (block)
     {
@@ -291,12 +291,12 @@ static int requested_priority(ULONG flags)
     ULONG selected = flags & PRIORITY_CLASS_MASK;
     if (!selected)
         return -1;
-    if (selected & NORMAL_PRIORITY_FLAG)
+    if (selected & WIN32_NORMAL_PRIORITY_CLASS)
         return LX_HOST_PROCESS_PRIORITY_NORMAL;
-    if (selected & IDLE_PRIORITY_FLAG)
+    if (selected & WIN32_IDLE_PRIORITY_CLASS)
         return LX_HOST_PROCESS_PRIORITY_IDLE;
-    return selected & HIGH_PRIORITY_FLAG ? LX_HOST_PROCESS_PRIORITY_NORMAL
-                                         : LX_HOST_PROCESS_PRIORITY_REALTIME;
+    return selected & WIN32_HIGH_PRIORITY_CLASS ? LX_HOST_PROCESS_PRIORITY_NORMAL
+                                                : LX_HOST_PROCESS_PRIORITY_REALTIME;
 }
 
 /* Without a request a child reports idle only when its creator is idle. */
@@ -305,8 +305,9 @@ static ULONG reported_priority_class(ULONG flags)
     ULONG selected = flags & PRIORITY_CLASS_MASK;
     if (selected)
         return selected;
-    return GetPriorityClass(PSEUDO_PROCESS) == IDLE_PRIORITY_FLAG ? IDLE_PRIORITY_FLAG
-                                                                  : NORMAL_PRIORITY_FLAG;
+    return GetPriorityClass(PSEUDO_PROCESS) == WIN32_IDLE_PRIORITY_CLASS
+               ? WIN32_IDLE_PRIORITY_CLASS
+               : WIN32_NORMAL_PRIORITY_CLASS;
 }
 
 static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ environment,
@@ -322,7 +323,7 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
     int priority = requested_priority(flags);
     if (priority == LX_HOST_PROCESS_PRIORITY_REALTIME)
     {
-        open32SetError(ERROR_NOT_SUPPORTED_ID);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     /* The first space ends the program name; the command has no quoting rules. */
@@ -342,8 +343,10 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
             strcat(name, ".EXE");
         typedef APIRET(OS2API * SearchFn)(ULONG, PSZ, PSZ, PBYTE, ULONG);
         SearchFn search = (SearchFn)open32DosService("DosSearchPath");
-        ULONG error =
-            search ? search(SEARCH_ALL_FLAGS, "PATH", name, (PBYTE)found, sizeof found) : 120;
+        ULONG error = search
+                          ? search(SEARCH_CUR_DIRECTORY | SEARCH_ENVIRONMENT | SEARCH_IGNORENETERRS,
+                                   "PATH", name, (PBYTE)found, sizeof found)
+                          : ERROR_CALL_NOT_IMPLEMENTED;
         if (error)
         {
             open32SetError(error);
@@ -353,22 +356,23 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
     }
     char *settings = NULL, *windows_inputs = NULL;
     const char *inputs = tail;
-    if (flags & NEW_SESSION_FLAG)
+    if (flags & WIN32_CREATE_NEW_PROCESS_GROUP)
     {
         typedef APIRET(OS2API * TypeFn)(PSZ, PULONG);
         TypeFn query = (TypeFn)open32DosService("DosQueryAppType");
-        ULONG type = 0, error = query ? query(program, &type) : 120;
+        ULONG type = 0, error = query ? query(program, &type) : ERROR_CALL_NOT_IMPLEMENTED;
         if (error)
         {
             open32SetError(error);
             return FALSE;
         }
-        if (type & FAPPTYP_WINDOWS_FLAG)
+        if (type & FAPPTYP_WINDOWSPROT31)
         {
             environment = settings = windows_environment();
             inputs = program;
             if (settings)
             {
+                /* "/s ", a space and the terminator. */
                 size_t size = strlen(program) + (tail ? strlen(tail) : 0) + 6;
                 if (!(windows_inputs = malloc(size)))
                 {
@@ -382,11 +386,11 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
             }
             program = "WINOS2.COM";
         }
-        else if (type & FAPPTYP_DOS_FLAG)
+        else if (type & FAPPTYP_DOS)
             environment = NULL;
     }
-    else if ((flags & DEBUG_PROCESS_FLAG) &&
-             !(flags & (DETACHED_PROCESS_FLAG | CREATE_SUSPENDED_FLAG)))
+    else if ((flags & WIN32_DEBUG_PROCESS) &&
+             !(flags & (WIN32_DETACHED_PROCESS | WIN32_CREATE_SUSPENDED)))
     {
         /* The DOS layer refuses debug execution with this same error. */
         open32SetError(ERROR_ACCESS_DENIED);
@@ -394,9 +398,9 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
     }
     char *block = argument_block(program, inputs);
     ULONG error = block ? launch_process(program, block, environment, directory,
-                                         (flags & CREATE_SUSPENDED_FLAG) != 0, priority,
+                                         (flags & WIN32_CREATE_SUSPENDED) != 0, priority,
                                          reported_priority_class(flags), presentation, result)
-                        : 8;
+                        : ERROR_NOT_ENOUGH_MEMORY;
     free(block);
     free(windows_inputs);
     free(settings);
@@ -409,39 +413,40 @@ static uint32 show_control(ULONG show)
 {
     switch (show)
     {
-        case 0:
+        case WIN32_SW_HIDE:
             return LX_LAUNCH_INVISIBLE;
-        case 2:
+        case WIN32_SW_SHOWMINIMIZED:
             return LX_LAUNCH_MINIMIZE;
-        case 3:
+        case WIN32_SW_SHOWMAXIMIZED:
             return LX_LAUNCH_MAXIMIZE;
         default:
             return 0;
     }
 }
 
-/* STARTUPINFO guest offsets: 12 title, 16-28 placement, 44 flags, 48 show. */
 static void startup_presentation(const uint8 *startup, LxLaunchPresentation *presentation)
 {
     if (!startup)
         return;
-    ULONG flags = lx_guest_load_u32(startup + 44);
-    if (flags & STARTF_SHOW_FLAG)
-        presentation->control |= show_control(lx_guest_load_u16(startup + 48));
-    if (flags & STARTF_POSITION_FLAG)
+    ULONG flags = lx_guest_load_u32(startup + WIN32_STARTUPINFO_FLAGS);
+    if (flags & WIN32_STARTF_USESHOWWINDOW)
+        presentation->control |=
+            show_control(lx_guest_load_u16(startup + WIN32_STARTUPINFO_SHOW_WINDOW));
+    if (flags & WIN32_STARTF_USEPOSITION)
     {
         presentation->control |= LX_LAUNCH_SET_POSITION;
-        presentation->x = (int32_t)lx_guest_load_u32(startup + 16);
-        presentation->y = (int32_t)lx_guest_load_u32(startup + 20);
+        presentation->x = (int32_t)lx_guest_load_u32(startup + WIN32_STARTUPINFO_X);
+        presentation->y = (int32_t)lx_guest_load_u32(startup + WIN32_STARTUPINFO_Y);
     }
-    if (flags & STARTF_SIZE_FLAG)
+    if (flags & WIN32_STARTF_USESIZE)
     {
         presentation->control |= LX_LAUNCH_SET_SIZE;
-        presentation->cx = (int32_t)lx_guest_load_u32(startup + 24);
-        presentation->cy = (int32_t)lx_guest_load_u32(startup + 28);
+        presentation->cx = (int32_t)lx_guest_load_u32(startup + WIN32_STARTUPINFO_X_SIZE);
+        presentation->cy = (int32_t)lx_guest_load_u32(startup + WIN32_STARTUPINFO_Y_SIZE);
     }
-    ULONG title = lx_guest_load_u32(startup + 12);
-    char *text = title ? lx_execution_copy_string(GProcessState.execution, title, 65536) : NULL;
+    ULONG title = lx_guest_load_u32(startup + WIN32_STARTUPINFO_TITLE);
+    char *text =
+        title ? lx_execution_copy_string(GProcessState.execution, title, TITLE_LIMIT) : NULL;
     if (text)
         snprintf(presentation->title, sizeof presentation->title, "%s", text);
     free(text);
@@ -463,10 +468,11 @@ BOOL CreateProcess(PSZ application, PSZ command, PVOID process_security, PVOID t
     if (!create_process(application, command, flags, environment, directory, &presentation,
                         &result))
         return FALSE;
-    lx_guest_store_u32(information, result.process);
-    lx_guest_store_u32((uint8 *)information + 4, result.thread);
-    lx_guest_store_u32((uint8 *)information + 8, result.id);
-    lx_guest_store_u32((uint8 *)information + 12, PRIMARY_THREAD_ID);
+    lx_guest_store_u32((uint8 *)information + WIN32_PROCESS_INFORMATION_PROCESS, result.process);
+    lx_guest_store_u32((uint8 *)information + WIN32_PROCESS_INFORMATION_THREAD, result.thread);
+    lx_guest_store_u32((uint8 *)information + WIN32_PROCESS_INFORMATION_PROCESS_ID, result.id);
+    lx_guest_store_u32((uint8 *)information + WIN32_PROCESS_INFORMATION_THREAD_ID,
+                       PRIMARY_THREAD_ID);
     return TRUE;
 }
 
@@ -494,24 +500,25 @@ static uint32 wait_process(void *argument)
 {
     ProcessWait *wait = argument;
     Open32Process *process = wait->process;
-    uint64 deadline = lx_host_monotonic_us() + (uint64)wait->timeout * 1000;
-    uint32 result = WAIT_TIMEOUT_RESULT;
+    uint64 deadline = lx_host_monotonic_us() + (uint64)wait->timeout * US_PER_MS;
+    uint32 result = WIN32_WAIT_TIMEOUT;
     lx_host_monitor_lock(process->monitor);
     for (;;)
     {
         if (wait->input_idle ? __atomic_load_n(&process->record->input_idle, __ATOMIC_ACQUIRE) != 0
                              : process->finished)
         {
-            result = 0;
+            result = WIN32_WAIT_OBJECT_0;
             break;
         }
         if (wait->input_idle && process->finished)
             break;
         uint64 now = lx_host_monotonic_us();
-        if (wait->timeout != UINT32_MAX && now >= deadline)
+        if (wait->timeout != WIN32_INFINITE && now >= deadline)
             break;
-        ULONG remaining =
-            wait->timeout == UINT32_MAX ? UINT32_MAX : (ULONG)((deadline - now + 999) / 1000);
+        ULONG remaining = wait->timeout == WIN32_INFINITE
+                              ? UINT32_MAX
+                              : (ULONG)((deadline - now + US_PER_MS - 1) / US_PER_MS);
         if (wait->input_idle && remaining > IDLE_POLL_MS)
             remaining = IDLE_POLL_MS;
         lx_host_monitor_wait(process->monitor, remaining);
@@ -539,14 +546,14 @@ ULONG WaitForInputIdle(ULONG handle, ULONG timeout)
     if (!wait.process)
     {
         open32SetError(ERROR_INVALID_HANDLE);
-        return UINT32_MAX;
+        return WIN32_WAIT_FAILED;
     }
     if (!wait.process->record)
     {
         /* Only a launched child has a record; this process's own queue reports nowhere. */
         lx_handle_release(&wait.borrow);
-        open32SetError(ERROR_NOT_SUPPORTED_ID);
-        return UINT32_MAX;
+        open32SetError(ERROR_NOT_SUPPORTED);
+        return WIN32_WAIT_FAILED;
     }
     return lx_host_guarded_call(wait_process, &wait, release_wait, &wait);
 }
@@ -591,7 +598,7 @@ int open32ChildThreadResume(ULONG handle, PULONG previous)
     int resumed = count == 1 ? lx_host_child_resume(process->child) : 0;
     if (resumed < 0)
     {
-        open32SetError(ERROR_INVALID_THREAD);
+        open32SetError(ERROR_INVALID_THREADID);
         *previous = UINT32_MAX;
     }
     else
@@ -615,7 +622,7 @@ int open32ChildThreadSuspend(ULONG handle, PULONG previous)
     ULONG count = process->suspended;
     if (!count && lx_host_child_suspend(process->child))
     {
-        open32SetError(ERROR_INVALID_THREAD);
+        open32SetError(ERROR_INVALID_THREADID);
         *previous = UINT32_MAX;
     }
     else
@@ -641,7 +648,7 @@ int open32ChildThreadTerminate(ULONG handle, ULONG code, BOOL *result)
     lx_host_monitor_unlock(process->monitor);
     *result = lx_host_child_terminate(process->child) == 0;
     if (!*result)
-        open32SetError(ERROR_INVALID_THREAD);
+        open32SetError(ERROR_INVALID_THREADID);
     lx_handle_release(&borrow);
     return 1;
 }
@@ -742,7 +749,7 @@ static ULONG duplicate_object(ULONG source, const uint32_t *access)
 BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, PULONG output,
                      ULONG access, BOOL inherit, ULONG options)
 {
-    if (access >> 24)
+    if (access >> ACCESS_SPECIFIC_STANDARD_BITS)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
@@ -750,7 +757,7 @@ BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, P
     /* Handle tables are private to each worker, so no child could receive this one. */
     if (inherit)
     {
-        open32SetError(ERROR_NOT_SUPPORTED_ID);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     BOOL source_known, target_known;
@@ -764,19 +771,19 @@ BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, P
     if (!local)
     {
         /* Handle tables are private to each worker process. */
-        open32SetError(ERROR_NOT_SUPPORTED_ID);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     /* Only event and semaphore operations consult these rights, as in the original. */
     uint32_t rights = access;
-    ULONG copy = duplicate_object(source, options & DUPLICATE_SAME_ACCESS_FLAG ? NULL : &rights);
+    ULONG copy = duplicate_object(source, options & WIN32_DUPLICATE_SAME_ACCESS ? NULL : &rights);
     if (!copy)
     {
         open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     *output = copy;
-    if (options & DUPLICATE_CLOSE_SOURCE_FLAG)
+    if (options & WIN32_DUPLICATE_CLOSE_SOURCE)
         CloseHandle(source);
     return TRUE;
 }
@@ -787,24 +794,24 @@ VOID ExitProcess(ULONG code)
     lx_host_monitor_lock(current.monitor);
     current.exit_code = code;
     lx_host_monitor_unlock(current.monitor);
-    GProcessState.dosExit(1, code);
+    GProcessState.dosExit(EXIT_PROCESS, code);
 }
 
 VOID FatalExit(ULONG code)
 {
-    GProcessState.dosExit(1, code);
+    GProcessState.dosExit(EXIT_PROCESS, code);
 }
 
 VOID FatalAppExit(ULONG action, PSZ message)
 {
     if (WinQueryCapture(HWND_DESKTOP))
         WinSetCapture(HWND_DESKTOP, 0);
-    ULONG answer =
-        WinMessageBox(HWND_DESKTOP, HWND_DESKTOP, message, "FATAL EXIT", 0, MESSAGE_BOX_STYLE);
+    ULONG answer = WinMessageBox(HWND_DESKTOP, HWND_DESKTOP, message, "FATAL EXIT", 0,
+                                 MB_SYSTEMMODAL | MB_ICONHAND);
     /* A thread without a message queue cannot display the box. */
-    if (!answer || answer == MESSAGE_BOX_ERROR)
+    if (!answer || answer == MBID_ERROR)
         fprintf(stderr, "FATAL EXIT: %s\n", message ? message : "");
-    GProcessState.dosExit(1, action);
+    GProcessState.dosExit(EXIT_PROCESS, action);
 }
 
 /* The session is the ball: this worker, the children it started, and every other
@@ -818,7 +825,7 @@ BOOL ExitWindows(ULONG reserved, ULONG code)
     BOOL delivered = lx_pm_end_session();
     if (!delivered)
         open32SetError(ERROR_GEN_FAILURE);
-    WinBroadcastMsg(HWND_DESKTOP, WM_SAVEAPPLICATION, 0, 0, BROADCAST_SEND_FRAMES);
+    WinBroadcastMsg(HWND_DESKTOP, WM_SAVEAPPLICATION, 0, 0, BMSG_SEND | BMSG_FRAMEONLY);
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(registry);
     for (Open32Process *process = processes; process; process = process->next)
@@ -833,14 +840,19 @@ ULONG WinExec(PSZ command, ULONG show)
         return 0;
     LxLaunchPresentation presentation = {.control = show_control(show)};
     ProcessResult result = {0};
-    if (!create_process(NULL, command, NEW_SESSION_FLAG, NULL, NULL, &presentation, &result))
+    if (!create_process(NULL, command, WIN32_CREATE_NEW_PROCESS_GROUP, NULL, NULL, &presentation,
+                        &result))
     {
         ULONG error = GetLastError();
-        return error == 2 || error == 3 || error == 11 ? error : 0;
+        /* WinExec returns only these errors; anything else reports 0, out of memory. */
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND ||
+                       error == ERROR_BAD_FORMAT
+                   ? error
+                   : 0;
     }
     open32CloseProcess(result.process);
     open32CloseProcess(result.thread);
-    return 0x20;
+    return WINEXEC_SUCCESS;
 }
 
 ULONG GetCurrentProcessId(void)
@@ -850,5 +862,5 @@ ULONG GetCurrentProcessId(void)
 
 ULONG GetCurrentProcess(void)
 {
-    return UINT32_MAX;
+    return PSEUDO_PROCESS;
 }

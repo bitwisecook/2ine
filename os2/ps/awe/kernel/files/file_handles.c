@@ -5,6 +5,25 @@
 #include "host/fs.h"
 #include "host/sync.h"
 #include "host/thread.h"
+#include "os2/include/bsedos.h"
+#include <stdio.h>
+
+/* Seconds from 1601-01-01 (FILETIME) to 1970-01-01 (host time). */
+static const int64_t FILETIME_UNIX_EPOCH_SECONDS = 11644473600LL;
+
+enum
+{
+    TICKS_PER_SECOND = 10000000,
+    /* FILESTATUS3 opens with three FDATE/FTIME pairs: creation, access, write. */
+    FILE_STAMP_COUNT = 3,
+    FILE_STAMP_BYTES = 4,
+    FILE_STAMP_TIME = 2,
+    CREATE_FILE_ATTRIBUTES = WIN32_FILE_ATTRIBUTE_NORMAL | WIN32_FILE_ATTRIBUTE_READONLY |
+                             WIN32_FILE_ATTRIBUTE_HIDDEN | WIN32_FILE_ATTRIBUTE_SYSTEM |
+                             WIN32_FILE_ATTRIBUTE_ARCHIVE | WIN32_FILE_ATTRIBUTE_TEMPORARY,
+    CREATE_FILE_SHARE_MODES =
+        WIN32_FILE_SHARE_READ | WIN32_FILE_SHARE_WRITE | WIN32_FILE_SHARE_DELETE
+};
 
 typedef struct FileRange
 {
@@ -34,8 +53,23 @@ static void initialize(void)
 
 static ULONG file_error(LxHostFsError error)
 {
-    static const ULONG errors[] = {0, 2, 3, 80, 5, 8, 4, 112, 5, 206, 32, 19, 17, 87, 1117, 145};
-    return (unsigned)error < sizeof errors / sizeof *errors ? errors[error] : 1117;
+    static const ULONG errors[] = {[LX_HOST_FS_OK] = NO_ERROR,
+                                   [LX_HOST_FS_MISSING] = ERROR_FILE_NOT_FOUND,
+                                   [LX_HOST_FS_NOT_DIRECTORY] = ERROR_PATH_NOT_FOUND,
+                                   [LX_HOST_FS_EXISTS] = ERROR_FILE_EXISTS,
+                                   [LX_HOST_FS_DENIED] = ERROR_ACCESS_DENIED,
+                                   [LX_HOST_FS_NO_MEMORY] = ERROR_NOT_ENOUGH_MEMORY,
+                                   [LX_HOST_FS_TOO_MANY_FILES] = ERROR_TOO_MANY_OPEN_FILES,
+                                   [LX_HOST_FS_FULL] = ERROR_DISK_FULL,
+                                   [LX_HOST_FS_IS_DIRECTORY] = ERROR_ACCESS_DENIED,
+                                   [LX_HOST_FS_NAME_LONG] = ERROR_FILENAME_EXCED_RANGE,
+                                   [LX_HOST_FS_BUSY] = ERROR_SHARING_VIOLATION,
+                                   [LX_HOST_FS_READ_ONLY] = ERROR_WRITE_PROTECT,
+                                   [LX_HOST_FS_CROSS_DEVICE] = ERROR_NOT_SAME_DEVICE,
+                                   [LX_HOST_FS_INVALID] = ERROR_INVALID_PARAMETER,
+                                   [LX_HOST_FS_IO] = ERROR_IO_DEVICE,
+                                   [LX_HOST_FS_NOT_EMPTY] = ERROR_DIR_NOT_EMPTY};
+    return (unsigned)error < sizeof errors / sizeof *errors ? errors[error] : ERROR_IO_DEVICE;
 }
 
 static BOOL result_error(LxHostFsError error)
@@ -103,21 +137,26 @@ static uint32 create_file(void *data)
         }
     LxHostFsError error;
     BOOL created = FALSE;
-    if (call->disposition == 1 || call->disposition == 2 || call->disposition == 4)
+    if (call->disposition == WIN32_CREATE_NEW || call->disposition == WIN32_CREATE_ALWAYS ||
+        call->disposition == WIN32_OPEN_ALWAYS)
     {
         file->file = lx_host_file_open(file->path,
                                        call->flags | LX_HOST_FILE_CREATE | LX_HOST_FILE_EXCLUSIVE,
-                                       call->attributes & 1, &error);
+                                       call->attributes & WIN32_FILE_ATTRIBUTE_READONLY, &error);
         created = file->file != NULL;
-        if (!file->file && error == LX_HOST_FS_EXISTS && call->disposition != 1)
+        if (!file->file && error == LX_HOST_FS_EXISTS && call->disposition != WIN32_CREATE_NEW)
             file->file = lx_host_file_open(
-                file->path, call->flags | (call->disposition == 2 ? LX_HOST_FILE_TRUNCATE : 0), 0,
-                &error);
+                file->path,
+                call->flags |
+                    (call->disposition == WIN32_CREATE_ALWAYS ? LX_HOST_FILE_TRUNCATE : 0),
+                0, &error);
     }
     else
         file->file = lx_host_file_open(
-            file->path, call->flags | (call->disposition == 5 ? LX_HOST_FILE_TRUNCATE : 0), 0,
-            &error);
+            file->path,
+            call->flags |
+                (call->disposition == WIN32_TRUNCATE_EXISTING ? LX_HOST_FILE_TRUNCATE : 0),
+            0, &error);
     if (!file->file)
     {
         open32SetError(file_error(error));
@@ -140,7 +179,8 @@ static uint32 create_file(void *data)
     file->next = files;
     files = file;
     call->file = NULL;
-    open32SetError(!created && (call->disposition == 2 || call->disposition == 4)
+    open32SetError(!created && (call->disposition == WIN32_CREATE_ALWAYS ||
+                                call->disposition == WIN32_OPEN_ALWAYS)
                        ? ERROR_ALREADY_EXISTS
                        : ERROR_SUCCESS);
     return handle;
@@ -151,9 +191,11 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
 {
     TRACE_NATIVE("CreateFile('%s', %x, %x, %p, %u, %x, %u)", name ? name : "", (uint)access,
                  (uint)share, security, (uint)disposition, (uint)attributes, (uint)template);
-    const ULONG supported = 0x80 | 0x27 | 0x100 | 0x80000000u | 0x10000000 | 0x08000000;
-    if (!name || !*name || disposition < 1 || disposition > 5 || (share & ~7u) ||
-        (access & ~0xc0000000u))
+    const ULONG supported = CREATE_FILE_ATTRIBUTES | WIN32_FILE_FLAG_WRITE_THROUGH |
+                            WIN32_FILE_FLAG_RANDOM_ACCESS | WIN32_FILE_FLAG_SEQUENTIAL_SCAN;
+    if (!name || !*name || disposition < WIN32_CREATE_NEW ||
+        disposition > WIN32_TRUNCATE_EXISTING || (share & ~(unsigned)CREATE_FILE_SHARE_MODES) ||
+        (access & ~(WIN32_GENERIC_READ | WIN32_GENERIC_WRITE)))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
@@ -163,12 +205,15 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
         open32SetError(ERROR_NOT_SUPPORTED);
         return UINT32_MAX;
     }
-    if (security && (lx_guest_load_u32(security) != 12 || lx_guest_load_u32((uint8 *)security + 4)))
+    if (security &&
+        (lx_guest_load_u32((uint8 *)security + WIN32_SECURITY_ATTRIBUTES_LENGTH) !=
+             WIN32_SECURITY_ATTRIBUTES_SIZE ||
+         lx_guest_load_u32((uint8 *)security + WIN32_SECURITY_ATTRIBUTES_SECURITY_DESCRIPTOR)))
     {
         open32SetError(ERROR_NOT_SUPPORTED);
         return UINT32_MAX;
     }
-    if (disposition == 5 && !(access & 0x40000000u))
+    if (disposition == WIN32_TRUNCATE_EXISTING && !(access & WIN32_GENERIC_WRITE))
     {
         open32SetError(ERROR_ACCESS_DENIED);
         return UINT32_MAX;
@@ -195,11 +240,15 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
     }
     file->path = path;
     file->share = share;
-    file->access = (access & 0x80000000u ? 1 : 0) | (access & 0x40000000u ? 2 : 0);
+    /* Access is kept as FILE_SHARE_* bits, which compare directly with the share modes
+       of other handles and are also the host's read and write open flags. */
+    file->access = (access & WIN32_GENERIC_READ ? WIN32_FILE_SHARE_READ : 0) |
+                   (access & WIN32_GENERIC_WRITE ? WIN32_FILE_SHARE_WRITE : 0);
     unsigned flags = file->access ? file->access : LX_HOST_FILE_READ;
-    if (attributes & 0x80000000u)
+    if (attributes & WIN32_FILE_FLAG_WRITE_THROUGH)
         flags |= LX_HOST_FILE_SYNC;
-    if (!security || !lx_guest_load_u32((uint8 *)security + 8))
+    if (!security ||
+        !lx_guest_load_u32((uint8 *)security + WIN32_SECURITY_ATTRIBUTES_INHERIT_HANDLE))
         flags |= LX_HOST_FILE_NOINHERIT;
     lx_host_once(&once, initialize);
     CreateFileCall call = {
@@ -263,7 +312,7 @@ static uint32 file_operation(void *data)
     if (call->operation == FILE_READ || call->operation == FILE_WRITE)
     {
         BOOL writing = call->operation == FILE_WRITE;
-        if (!(file->access & (writing ? 2 : 1)))
+        if (!(file->access & (writing ? WIN32_FILE_SHARE_WRITE : WIN32_FILE_SHARE_READ)))
         {
             open32SetError(ERROR_ACCESS_DENIED);
             return FALSE;
@@ -292,12 +341,12 @@ static uint32 file_operation(void *data)
         error = lx_host_file_seek(file->file, call->distance, call->origin, &call->position);
     else if (call->operation == FILE_SIZE)
     {
-        if (!(file->access & 2))
+        if (!(file->access & WIN32_FILE_SHARE_WRITE))
         {
             open32SetError(ERROR_ACCESS_DENIED);
             return FALSE;
         }
-        error = lx_host_file_seek(file->file, 0, 1, &call->position);
+        error = lx_host_file_seek(file->file, 0, SEEK_CUR, &call->position);
         if (!error)
             error = lx_host_file_resize(file->file, call->position);
     }
@@ -307,7 +356,7 @@ static uint32 file_operation(void *data)
         error = lx_host_file_info(file->file, &call->info);
     else if (call->operation == FILE_LOCK || call->operation == FILE_UNLOCK)
     {
-        if (!(file->access & 2))
+        if (!(file->access & WIN32_FILE_SHARE_WRITE))
         {
             open32SetError(file->access ? ERROR_NOT_SUPPORTED : ERROR_ACCESS_DENIED);
             return FALSE;
@@ -407,7 +456,7 @@ BOOL open32CloseFile(ULONG handle)
 
 ULONG SetFilePointer(ULONG handle, LONG distance, PLONG high, ULONG origin)
 {
-    if (origin > 2)
+    if (origin > WIN32_FILE_END)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
@@ -452,7 +501,9 @@ ULONG GetFileType(ULONG handle)
     FileCall call = {.operation = FILE_INFO};
     if (!invoke(handle, &call))
         return 0;
-    return call.info.kind == LX_HOST_FILE_PIPE ? 3 : call.info.kind == LX_HOST_FILE_DEVICE ? 2 : 1;
+    return call.info.kind == LX_HOST_FILE_PIPE     ? WIN32_FILE_TYPE_PIPE
+           : call.info.kind == LX_HOST_FILE_DEVICE ? WIN32_FILE_TYPE_CHAR
+                                                   : WIN32_FILE_TYPE_DISK;
 }
 
 static BOOL lock_range(ULONG handle, ULONG offset_low, ULONG offset_high, ULONG length_low,
@@ -507,9 +558,11 @@ static void filetime_store(PVOID output, int64_t seconds)
     if (!output)
         return;
     uint64_t ticks =
-        seconds < -11644473600LL ? 0 : ((uint64_t)(seconds + 11644473600LL) * 10000000ULL);
-    lx_guest_store_u32(output, (ULONG)ticks);
-    lx_guest_store_u32((uint8 *)output + 4, (ULONG)(ticks >> 32));
+        seconds < -FILETIME_UNIX_EPOCH_SECONDS
+            ? 0
+            : ((uint64_t)(seconds + FILETIME_UNIX_EPOCH_SECONDS) * (uint64_t)TICKS_PER_SECOND);
+    lx_guest_store_u32((uint8 *)output + WIN32_FILETIME_LOW, (ULONG)ticks);
+    lx_guest_store_u32((uint8 *)output + WIN32_FILETIME_HIGH, (ULONG)(ticks >> 32));
 }
 
 static BOOL filetime_seconds(PVOID input, int64_t *seconds)
@@ -519,8 +572,8 @@ static BOOL filetime_seconds(PVOID input, int64_t *seconds)
         *seconds = INT64_MIN;
         return TRUE;
     }
-    uint64_t ticks = lx_guest_load_u32(input) | (uint64_t)lx_guest_load_u32((uint8 *)input + 4)
-                                                    << 32;
+    uint64_t ticks = lx_guest_load_u32((uint8 *)input + WIN32_FILETIME_LOW) |
+                     (uint64_t)lx_guest_load_u32((uint8 *)input + WIN32_FILETIME_HIGH) << 32;
     if (ticks == UINT64_MAX)
     {
         *seconds = INT64_MIN;
@@ -528,7 +581,7 @@ static BOOL filetime_seconds(PVOID input, int64_t *seconds)
     }
     if (ticks > INT64_MAX)
         return FALSE;
-    *seconds = (int64_t)(ticks / 10000000ULL) - 11644473600LL;
+    *seconds = (int64_t)(ticks / (uint64_t)TICKS_PER_SECOND) - FILETIME_UNIX_EPOCH_SECONDS;
     return TRUE;
 }
 
@@ -539,19 +592,23 @@ BOOL GetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
     {
         typedef APIRET(OS2API * Query)(ULONG, ULONG, PVOID, ULONG);
         Query query = (Query)open32DosService("DosQueryFileInfo");
-        uint8 status[24];
-        ULONG error = query ? query(handle, 1, status, sizeof status) : 120;
+        /* A plain DOS handle from the _l calls: its stamps are local DOS times. */
+        uint8 status[sizeof(FILESTATUS3)];
+        ULONG error =
+            query ? query(handle, FIL_STANDARD, status, sizeof status) : ERROR_CALL_NOT_IMPLEMENTED;
         if (!error)
         {
             PVOID outputs[] = {creation, access, write};
-            for (unsigned i = 0; i < 3; i++)
+            for (unsigned i = 0; i < FILE_STAMP_COUNT; i++)
                 if (outputs[i])
                 {
-                    uint8 local[8];
-                    if (!DosDateTimeToFileTime(lx_guest_load_u16(status + i * 4),
-                                               lx_guest_load_u16(status + i * 4 + 2), local) ||
+                    uint8 local[WIN32_FILETIME_SIZE];
+                    if (!DosDateTimeToFileTime(
+                            lx_guest_load_u16(status + i * FILE_STAMP_BYTES),
+                            lx_guest_load_u16(status + i * FILE_STAMP_BYTES + FILE_STAMP_TIME),
+                            local) ||
                         !LocalFileTimeToFileTime(local, outputs[i]))
-                        error = 87;
+                        error = ERROR_INVALID_PARAMETER;
                 }
         }
         if (error)
@@ -567,7 +624,7 @@ BOOL GetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
         if (creation && info.created)
             filetime_store(creation, info.created);
         else if (creation)
-            memset(creation, 0, 8);
+            memset(creation, 0, WIN32_FILETIME_SIZE);
         filetime_store(access, info.accessed);
         filetime_store(write, info.modified);
     }
@@ -591,29 +648,31 @@ BOOL SetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
         typedef APIRET(OS2API * Set)(ULONG, ULONG, PVOID, ULONG);
         Query query = (Query)open32DosService("DosQueryFileInfo");
         Set set = (Set)open32DosService("DosSetFileInfo");
-        uint8 status[24];
-        ULONG error = !query || !set ? 120 : query(handle, 1, status, sizeof status);
+        uint8 status[sizeof(FILESTATUS3)];
+        ULONG error = !query || !set ? ERROR_CALL_NOT_IMPLEMENTED
+                                     : query(handle, FIL_STANDARD, status, sizeof status);
         PVOID inputs[] = {creation, access, write};
-        for (unsigned i = 0; !error && i < 3; i++)
+        for (unsigned i = 0; !error && i < FILE_STAMP_COUNT; i++)
             if (inputs[i])
             {
-                uint8 local[8];
+                uint8 local[WIN32_FILETIME_SIZE];
                 if (!FileTimeToLocalFileTime(inputs[i], local) ||
-                    !FileTimeToDosDateTime(local, status + i * 4, status + i * 4 + 2))
-                    error = 87;
+                    !FileTimeToDosDateTime(local, status + i * FILE_STAMP_BYTES,
+                                           status + i * FILE_STAMP_BYTES + FILE_STAMP_TIME))
+                    error = ERROR_INVALID_PARAMETER;
             }
         if (!error)
-            error = set(handle, 1, status, sizeof status);
+            error = set(handle, FIL_STANDARD, status, sizeof status);
         if (error)
             open32SetError(error);
         return !error;
     }
     Open32File *file = borrow.resource;
-    ULONG error = !(file->access & 2u) ? 5 : 0;
+    ULONG error = !(file->access & (unsigned)WIN32_FILE_SHARE_WRITE) ? ERROR_ACCESS_DENIED : 0;
     if (!error)
     {
         LxHostFsError result = lx_host_file_stamps(file->file, btime, atime, mtime);
-        error = result == LX_HOST_FS_INVALID ? 50 : file_error(result);
+        error = result == LX_HOST_FS_INVALID ? ERROR_NOT_SUPPORTED : file_error(result);
     }
     lx_handle_release(&borrow);
     if (error)

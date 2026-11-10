@@ -9,11 +9,17 @@
 
 enum
 {
-    SEMAPHORE_MODIFY_STATE = 2,
-    SEMAPHORE_SYNCHRONIZE = 0x100000,
-    SEMAPHORE_ALL_ACCESS = 0x1F0003,
-    SEMAPHORE_NAME_CAPACITY = 260
+    SEMAPHORE_NAME_CAPACITY = 260,
+    /* Separates the scope from the name in the digest; never a byte of a name. */
+    HASH_SEPARATOR = 0xFF,
+    /* Retries when a last close races another process's create or open. */
+    SHARED_OPEN_ATTEMPTS = 8,
+    /* How long an opener waits for the creator to publish a named semaphore. */
+    CREATOR_PUBLISH_WAIT_US = 1000000,
+    US_PER_MS = 1000
 };
+
+static const uint64 FNV_OFFSET_BASIS = 1469598103934665603ULL, FNV_PRIME = 1099511628211ULL;
 
 typedef struct SemaphoreState
 {
@@ -64,12 +70,12 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
     }
     sem->access = access;
     BOOL existing = FALSE;
-    ULONG error = 8;
+    ULONG error = ERROR_NOT_ENOUGH_MEMORY;
     if (!name)
     {
         if (!valid_counts(initial, maximum))
         {
-            error = 87;
+            error = ERROR_INVALID_PARAMETER;
             goto failed;
         }
         sem->monitor = lx_host_monitor_create();
@@ -83,19 +89,19 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
     {
         /* FNV-1a combines the ball scope and case-sensitive Windows object name.
            The original name is also retained to reject a digest collision. */
-        uint64 hash = 1469598103934665603ULL;
+        uint64 hash = FNV_OFFSET_BASIS;
         const char *scope = getenv("TWOINE_BALL");
         if (!scope)
             scope = getenv("TWOINE_IPC_DIR");
         for (const char *p = scope; p && *p; p++)
-            hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
-        hash = (hash ^ 0xFF) * 1099511628211ULL;
+            hash = (hash ^ (unsigned char)*p) * FNV_PRIME;
+        hash = (hash ^ HASH_SEPARATOR) * FNV_PRIME;
         for (const char *p = name; *p; p++)
-            hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
+            hash = (hash ^ (unsigned char)*p) * FNV_PRIME;
         char identifier[32];
         snprintf(identifier, sizeof identifier, "/2ine-wsem1-%016llx", (unsigned long long)hash);
         /* A last close may race create/open. Retry acquisition without resetting a live count. */
-        for (unsigned attempt = 0; attempt < 8; attempt++)
+        for (unsigned attempt = 0; attempt < SHARED_OPEN_ATTEMPTS; attempt++)
         {
             LxHostSharedResult opened = lx_host_shared_open(identifier, 0, &sem->shared);
             if (opened == LX_HOST_SHARED_OK)
@@ -107,7 +113,7 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
             {
                 if (!valid_counts(initial, maximum))
                 {
-                    error = 87;
+                    error = ERROR_INVALID_PARAMETER;
                     goto failed;
                 }
                 opened = lx_host_shared_open(identifier, sizeof(SemaphoreState), &sem->shared);
@@ -116,7 +122,9 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
                 if (opened == LX_HOST_SHARED_EXISTS)
                     continue;
             }
-            error = opened == LX_HOST_SHARED_MISSING ? 2 : opened == LX_HOST_SHARED_NOMEM ? 8 : 5;
+            error = opened == LX_HOST_SHARED_MISSING ? ERROR_FILE_NOT_FOUND
+                    : opened == LX_HOST_SHARED_NOMEM ? ERROR_NOT_ENOUGH_MEMORY
+                                                     : ERROR_ACCESS_DENIED;
             goto failed;
         }
         if (!sem->shared || lx_host_shared_size(sem->shared) != sizeof(SemaphoreState) ||
@@ -131,7 +139,7 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
         }
         else
         {
-            uint64 deadline = lx_host_monotonic_us() + 1000000;
+            uint64 deadline = lx_host_monotonic_us() + CREATOR_PUBLISH_WAIT_US;
             while (!__atomic_load_n(&sem->state->ready, __ATOMIC_ACQUIRE))
             {
                 if (lx_host_monotonic_us() >= deadline)
@@ -140,7 +148,7 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
             }
             if (strncmp(sem->state->name, name, sizeof sem->state->name))
             {
-                error = 123;
+                error = ERROR_INVALID_NAME;
                 goto failed;
             }
         }
@@ -164,25 +172,27 @@ ULONG CreateSemaphore(PVOID security, LONG initial, LONG maximum, PSZ name)
     if (security)
     {
         const uint8 *record = security;
-        if (lx_guest_load_u32(record) != 12)
+        if (lx_guest_load_u32(record + WIN32_SECURITY_ATTRIBUTES_LENGTH) !=
+            WIN32_SECURITY_ATTRIBUTES_SIZE)
         {
             open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         /* The host provider does not expose Windows ACLs or inherited kernel handles. */
-        if (lx_guest_load_u32(record + 4) || lx_guest_load_u32(record + 8))
+        if (lx_guest_load_u32(record + WIN32_SECURITY_ATTRIBUTES_SECURITY_DESCRIPTOR) ||
+            lx_guest_load_u32(record + WIN32_SECURITY_ATTRIBUTES_INHERIT_HANDLE))
         {
             open32SetError(ERROR_NOT_SUPPORTED);
             return 0;
         }
     }
-    return semaphore_handle(name, TRUE, initial, maximum, SEMAPHORE_ALL_ACCESS);
+    return semaphore_handle(name, TRUE, initial, maximum, WIN32_SEMAPHORE_ALL_ACCESS);
 }
 
 ULONG OpenSemaphore(ULONG access, BOOL inherit, PSZ name)
 {
     TRACE_NATIVE("OpenSemaphore(%X, %u, '%s')", access, inherit, name);
-    if (inherit || (access & ~SEMAPHORE_ALL_ACCESS))
+    if (inherit || (access & ~WIN32_SEMAPHORE_ALL_ACCESS))
     {
         open32SetError(inherit ? ERROR_NOT_SUPPORTED : ERROR_INVALID_PARAMETER);
         return 0;
@@ -203,10 +213,10 @@ BOOL ReleaseSemaphore(ULONG handle, LONG count, PLONG previous)
     }
     Open32Semaphore *sem = borrow.resource;
     ULONG error = 0;
-    if (!(sem->access & rights & SEMAPHORE_MODIFY_STATE))
-        error = 5;
+    if (!(sem->access & rights & WIN32_SEMAPHORE_MODIFY_STATE))
+        error = ERROR_ACCESS_DENIED;
     else if (count <= 0)
-        error = 87;
+        error = ERROR_INVALID_PARAMETER;
     else
     {
         if (sem->monitor)
@@ -216,7 +226,8 @@ BOOL ReleaseSemaphore(ULONG handle, LONG count, PLONG previous)
         {
             if ((uint32)count > sem->state->maximum - old)
             {
-                error = 298; /* ERROR_TOO_MANY_POSTS leaves the count unchanged. */
+                /* The count is left unchanged. */
+                error = ERROR_TOO_MANY_POSTS;
                 break;
             }
         } while (!__atomic_compare_exchange_n(&sem->state->count, &old, old + (uint32)count, 0,
@@ -246,13 +257,13 @@ static uint32 wait_semaphore(void *argument)
 {
     SemaphoreWait *call = argument;
     Open32Semaphore *sem = call->borrow.resource;
-    ULONG result = UINT32_MAX;
+    ULONG result = WIN32_WAIT_FAILED;
     ULONG timeout = call->timeout;
-    if (!(sem->access & SEMAPHORE_SYNCHRONIZE))
+    if (!(sem->access & WIN32_SYNCHRONIZE))
         open32SetError(ERROR_ACCESS_DENIED);
     else
     {
-        uint64 deadline = lx_host_monotonic_us() + (uint64)timeout * 1000;
+        uint64 deadline = lx_host_monotonic_us() + (uint64)timeout * US_PER_MS;
         if (sem->monitor)
             lx_host_monitor_lock(sem->monitor);
         for (;;)
@@ -261,19 +272,20 @@ static uint32 wait_semaphore(void *argument)
             if (count && __atomic_compare_exchange_n(&sem->state->count, &count, count - 1, 0,
                                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
             {
-                result = 0;
+                result = WIN32_WAIT_OBJECT_0;
                 break;
             }
             if (count)
                 continue;
             uint64 now = lx_host_monotonic_us();
-            if (timeout != UINT32_MAX && now >= deadline)
+            if (timeout != WIN32_INFINITE && now >= deadline)
             {
-                result = 258;
+                result = WIN32_WAIT_TIMEOUT;
                 break;
             }
-            ULONG remaining =
-                timeout == UINT32_MAX ? UINT32_MAX : (ULONG)((deadline - now + 999) / 1000);
+            ULONG remaining = timeout == WIN32_INFINITE
+                                  ? UINT32_MAX
+                                  : (ULONG)((deadline - now + US_PER_MS - 1) / US_PER_MS);
             if (sem->monitor)
                 lx_host_monitor_wait(sem->monitor, remaining);
             else

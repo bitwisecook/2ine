@@ -5,16 +5,19 @@
 #include "os2/include/pmshl.h"
 #include "os2/ps/awe/user/strings/case_tables.h"
 
+/* Prefix of the OS/2 user-profile application that holds a WIN.INI section. */
+#define WINI_PREFIX "WINI_"
+
 static char *profile_section(const char *section)
 {
     if (!section)
         return NULL;
     size_t length = strlen(section);
-    char *app = malloc(length + 6);
+    char *app = malloc(length + sizeof WINI_PREFIX);
     if (app)
     {
-        memcpy(app, "WINI_", 5);
-        memcpy(app + 5, section, length + 1);
+        memcpy(app, WINI_PREFIX, sizeof WINI_PREFIX - 1);
+        memcpy(app + sizeof WINI_PREFIX - 1, section, length + 1);
     }
     return app;
 }
@@ -137,14 +140,14 @@ BOOL WriteProfileString(PSZ section, PSZ key, PSZ value)
 {
     if (!section)
         return !key && !value;
-    size_t size = strlen(section) + 6;
+    size_t size = strlen(section) + sizeof WINI_PREFIX;
     char *app = malloc(size);
     if (!app)
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
-    snprintf(app, size, "WINI_%s", section);
+    snprintf(app, size, WINI_PREFIX "%s", section);
     BOOL result = PrfWriteProfileString(HINI_USERPROFILE, app, key, value);
     free(app);
     return result;

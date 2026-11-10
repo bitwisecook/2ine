@@ -7,6 +7,11 @@
 #include "host/window.h"
 #include <stdio.h>
 
+enum
+{
+    OPEN32_REPORTED_VERSION = 0x00003303
+};
+
 static _Thread_local ULONG last_error;
 /* GetCommandLine's guest copy, made once per process. */
 static ULONG command_line;
@@ -20,9 +25,11 @@ BOOL Beep(ULONG frequency, ULONG duration)
 {
     typedef APIRET(OS2API * Fn)(ULONG, ULONG);
     Fn call = (Fn)open32DosService("DosBeep");
-    ULONG error = frequency == UINT32_MAX ? 50 : call ? call(frequency, duration) : 120;
-    if (error == 395) /* ERROR_INVALID_FREQUENCY */
-        error = 87;
+    ULONG error = frequency == UINT32_MAX ? ERROR_NOT_SUPPORTED
+                  : call                  ? call(frequency, duration)
+                                          : ERROR_CALL_NOT_IMPLEMENTED;
+    if (error == ERROR_INVALID_FREQUENCY)
+        error = ERROR_INVALID_PARAMETER;
     if (error)
         open32SetError(error);
     return !error;
@@ -90,8 +97,8 @@ VOID SetLastError(ULONG error)
 
 ULONG GetVersion(void)
 {
-    /* Open32 reports Windows NT 3.51, with the major version in the low byte. */
-    return 0x00003303;
+    /* Open32 reports Windows NT 3.51: major version 3 in the low byte, minor 51 (0x33) above it. */
+    return OPEN32_REPORTED_VERSION;
 }
 
 ULONG GetCommandLine(void)
@@ -103,6 +110,7 @@ ULONG GetCommandLine(void)
     const char *tail = program ? program + strlen(program) + 1 : "";
     if (!program)
         program = "";
+    /* Two quotes, a separating space and the terminator. */
     size_t length = strlen(program) + strlen(tail) + 4;
     if (length > UINT32_MAX)
         return 0;
