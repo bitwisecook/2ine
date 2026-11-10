@@ -31,6 +31,13 @@ if not __package__:
 from tools.binary.os2binary import inspect_file, module_name  # noqa: E402
 from tools.binary.os2binary import parse_image as parse_image  # noqa: E402
 
+LX_DUMP_TIMEOUT_SECONDS = 30
+# DOSCALLS ordinal 295, Thk32R3DS, is not a function: the loader resolves it
+# to the flat data selector. Look for that special case in the loader.
+THK32R3DS_ORDINAL = 295
+# How far after the special case the loader's handling must appear.
+SPECIAL_CASE_WINDOW = 500
+
 APPS = {
     "approach": r"C:\LOTUSW4\APPROACH\APPROACH.EXE",
     "freelance": r"C:\LOTUSW4\FLG\FLG.EXE",
@@ -81,7 +88,9 @@ def verify_dump(path: Path, executable: Path, parsed: dict) -> dict:
             "reason": "existing lx_dump forwarder bundle decoder does not advance its cursor",
         }
     try:
-        process = subprocess.run([str(executable), str(path)], capture_output=True, timeout=30)
+        process = subprocess.run(
+            [str(executable), str(path)], capture_output=True, timeout=LX_DUMP_TIMEOUT_SECONDS
+        )
     except (OSError, subprocess.TimeoutExpired) as error:
         return {"status": "failed", "error": str(error)}
     text = process.stdout.decode("latin1")
@@ -260,16 +269,16 @@ def export_inventory(root: Path) -> dict:
     runtime_path = root / "emulator/loader/imports.c"
     runtime_text = runtime_path.read_text()
     special = re.search(
-        r'if \(module->nativelib && !strcasecmp\(module->name, "DOSCALLS"\) && ordinal == 295\)',
+        rf'if \(module->nativelib && !strcasecmp\(module->name, "DOSCALLS"\) && ordinal == {THK32R3DS_ORDINAL}\)',
         runtime_text,
     )
     if (
         special
         and "lx_execution_flat_data_selector"
-        in runtime_text[special.start() : special.start() + 500]
+        in runtime_text[special.start() : special.start() + SPECIAL_CASE_WINDOW]
     ):
-        inventories.setdefault("DOSCALLS", {})[295] = {
-            "ordinal": 295,
+        inventories.setdefault("DOSCALLS", {})[THK32R3DS_ORDINAL] = {
+            "ordinal": THK32R3DS_ORDINAL,
             "symbol": "Thk32R3DS",
             "name": "Thk32R3DS",
             "runtimeSpecial": "absolute-flat-data-selector",

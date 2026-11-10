@@ -12,6 +12,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
+# Imports are packed as module index in the high 16 bits, ordinal in the low.
+MODULE_SHIFT = 16
+ORDINAL_MASK = 0xFFFF
+
 Catalogue = dict[str, dict[int, str]]
 
 
@@ -45,7 +49,7 @@ def resolve(lines: Iterable[str], catalogue: Catalogue) -> tuple[list[str], list
         match = re.fullmatch(r"\s*Fixup type: IMPORTORDINAL \(module (\d+), ordinal (\d+)\)", line)
         if match:
             module, ordinal = map(int, match.groups())
-            imports.add((module << 16) | ordinal)
+            imports.add((module << MODULE_SHIFT) | ordinal)
         elif re.match(r"\s*Fixup type: IMPORTNAME \(module (\d+), ordinal (\d+)\)", line):
             output.append("WARNING: Saw IMPORTNAME, currently unsupported\n")
         elif line == "Import by ordinal fixup record:":
@@ -54,7 +58,7 @@ def resolve(lines: Iterable[str], catalogue: Catalogue) -> tuple[list[str], list
             module_match = re.fullmatch(r"Module ordinal:\s*(\d+)", module_line)
             ordinal_match = re.fullmatch(r"Import ordinal:\s*(\d+)", ordinal_line)
             if module_match and ordinal_match:
-                imports.add((int(module_match[1]) << 16) | int(ordinal_match[1]))
+                imports.add((int(module_match[1]) << MODULE_SHIFT) | int(ordinal_match[1]))
         elif re.match(r"(?:Module reference table|Import modules) \(", line):
             for entry in stream:
                 reference = re.fullmatch(r"\s*(\d+):\s*(.*?)", entry.rstrip("\n"))
@@ -64,7 +68,7 @@ def resolve(lines: Iterable[str], catalogue: Catalogue) -> tuple[list[str], list
     unknown: set[int] = set()
     # Lexical decimal ordering keeps import reports deterministic.
     for packed in sorted(imports, key=str):
-        module = (packed >> 16) & 0xFFFF
+        module = (packed >> MODULE_SHIFT) & ORDINAL_MASK
         if module in unknown:
             continue
         name = modules.get(module)
@@ -75,7 +79,7 @@ def resolve(lines: Iterable[str], catalogue: Catalogue) -> tuple[list[str], list
             errors.append(f"*** UNKNOWN MODULE {name}!\n")
             unknown.add(module)
     for packed in sorted(imports, key=str):
-        module, ordinal = (packed >> 16) & 0xFFFF, packed & 0xFFFF
+        module, ordinal = (packed >> MODULE_SHIFT) & ORDINAL_MASK, packed & ORDINAL_MASK
         if module in unknown:
             continue
         name = modules[module]

@@ -17,6 +17,10 @@ try:
 except ImportError as error:
     raise SystemExit("GTK 4 and libadwaita are required: " + str(error)) from error
 
+# Batches rapid checkbox changes into one desired-state update.
+SELECTION_DRAIN_MS = 100
+JOB_POLL_MS = 300
+
 
 class OS2ComponentsPane(Gtk.Box):
     def __init__(self, window):
@@ -410,7 +414,7 @@ class OS2ComponentsPane(Gtk.Box):
 
     def schedule_drain(self):
         if self.state_ready and self.drain_timer is None:
-            self.drain_timer = GLib.timeout_add(100, self.drain_changes)
+            self.drain_timer = GLib.timeout_add(SELECTION_DRAIN_MS, self.drain_changes)
         self.window.set_busy(False)
 
     def drain_changes(self):
@@ -491,7 +495,7 @@ class OS2ComponentsPane(Gtk.Box):
         self.progress.set_spinning(True)
         self.update_count()
         self.update_row_activity()
-        GLib.timeout_add(300, self.poll_job)
+        GLib.timeout_add(JOB_POLL_MS, self.poll_job)
 
         def completed(result):
             self.failed_batch = self.job["batch"]

@@ -22,6 +22,25 @@ from .files import FileList, display_path
 from .lazy_folders import FolderChildren
 from .program_choice import ProgramChoice, installer_candidates
 
+# Drive source choices, in the order the mapping dialog lists them.
+DRIVE_SOURCES = ("folder", "cdrom", "floppy", "disk")
+SOURCE_FOLDER = DRIVE_SOURCES.index("folder")
+# The engine's image-creation bounds (see ball/commands.c).
+FLOPPY_CAPACITIES_KIB = [360, 720, 1200, 1440, 2880]
+DEFAULT_FLOPPY_KIB = 1440
+DISK_FILESYSTEMS = ("hpfs", "fat32", "exfat")
+FILESYSTEM_FAT32 = DISK_FILESYSTEMS.index("fat32")
+DISK_MIN_MIB = 8
+# The dialog stays within HPFS's 64 GiB limit for every filesystem.
+DISK_MAX_MIB = 64 * 1024
+DISK_DEFAULT_MIB = 64
+# HPFS sizes are whole 8 MiB bands.
+DISK_STEP_MIB = 8
+DISK_PAGE_MIB = 64
+FAT32_MIN_MIB = 64
+# Coalesces keystrokes before rebuilding the launcher icon preview.
+PREVIEW_DELAY_MS = 250
+
 
 def action_button(label, callback, icon=None):
     widget = Gtk.Button(icon_name=icon, tooltip_text=label) if icon else Gtk.Button(label=label)
@@ -525,7 +544,7 @@ class MediaDialog(FormDialog):
             if isinstance(self.mapping, dict) and self.mapping
             else "folder"
         )
-        self.kind.set_selected({"folder": 0, "cdrom": 1, "floppy": 2, "disk": 3}[kind])
+        self.kind.set_selected(DRIVE_SOURCES.index(kind))
         group.add(self.kind)
         initial = source or (
             self.mapping if isinstance(self.mapping, str) else self.mapping.get("image", "")
@@ -545,16 +564,18 @@ class MediaDialog(FormDialog):
         self.kind.connect(
             "notify::selected",
             lambda *_: self.source.set_title(
-                "Host Folder" if self.kind.get_selected() == 0 else "Image File (optional)"
+                "Host Folder"
+                if self.kind.get_selected() == SOURCE_FOLDER
+                else "Image File (optional)"
             ),
         )
         self.accept.set_sensitive(bool(letters))
 
     def choose_source(self):
         self.window.choose(
-            "Choose Folder" if self.kind.get_selected() == 0 else "Choose Image",
+            "Choose Folder" if self.kind.get_selected() == SOURCE_FOLDER else "Choose Image",
             lambda path: self.source.set_text(str(path)),
-            folder=self.kind.get_selected() == 0,
+            folder=self.kind.get_selected() == SOURCE_FOLDER,
         )
 
     def submit(self):
@@ -562,7 +583,7 @@ class MediaDialog(FormDialog):
             return
         letter = self.letters[self.letter.get_selected()]
         source = self.source.get_text().strip()
-        kind = ("folder", "cdrom", "floppy", "disk")[self.kind.get_selected()]
+        kind = DRIVE_SOURCES[self.kind.get_selected()]
         if kind == "folder" and not source:
             self.error_message("Choose a host folder.")
             return
@@ -634,12 +655,12 @@ class CreateImageDialog(FormDialog):
         )
         group.add(self.path)
         if floppy:
-            self.capacities = [360, 720, 1200, 1440, 2880]
+            self.capacities = FLOPPY_CAPACITIES_KIB
             self.capacity = Adw.ComboRow(
                 title="Capacity",
                 model=Gtk.StringList.new([str(n) + " KiB" for n in self.capacities]),
             )
-            self.capacity.set_selected(3)
+            self.capacity.set_selected(self.capacities.index(DEFAULT_FLOPPY_KIB))
             group.add(self.capacity)
         else:
             self.filesystem = Adw.ComboRow(
@@ -649,14 +670,20 @@ class CreateImageDialog(FormDialog):
             self.capacity = Adw.SpinRow(
                 title="Capacity (MiB)",
                 adjustment=Gtk.Adjustment(
-                    lower=8, upper=65536, value=64, step_increment=8, page_increment=64
+                    lower=DISK_MIN_MIB,
+                    upper=DISK_MAX_MIB,
+                    value=DISK_DEFAULT_MIB,
+                    step_increment=DISK_STEP_MIB,
+                    page_increment=DISK_PAGE_MIB,
                 ),
                 digits=0,
             )
             self.filesystem.connect(
                 "notify::selected",
                 lambda *_: self.capacity.get_adjustment().set_lower(
-                    64 if self.filesystem.get_selected() == 1 else 8
+                    FAT32_MIN_MIB
+                    if self.filesystem.get_selected() == FILESYSTEM_FAT32
+                    else DISK_MIN_MIB
                 ),
             )
             group.add(self.capacity)
@@ -679,7 +706,7 @@ class CreateImageDialog(FormDialog):
                 "create-disk",
                 letter,
                 self.path.get_text(),
-                ("hpfs", "fat32", "exfat")[self.filesystem.get_selected()],
+                DISK_FILESYSTEMS[self.filesystem.get_selected()],
                 str(int(self.capacity.get_value())),
             ]
         )
@@ -1079,7 +1106,7 @@ class ProgramDialog(FormDialog):
         self.preview_serial += 1
         serial = self.preview_serial
         GLib.timeout_add(
-            250,
+            PREVIEW_DELAY_MS,
             lambda: self.refresh_preview() if serial == self.preview_serial else GLib.SOURCE_REMOVE,
         )
 

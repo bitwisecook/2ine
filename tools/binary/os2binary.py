@@ -24,6 +24,183 @@ from typing import Any
 
 LIMIT = 2_000_000
 
+# DOS stub: e_lfanew, the offset of the new-format header.
+DOS_NEW_HEADER_OFFSET = 0x3C
+# Counts stored in 16-bit fields; larger values are corrupt headers.
+COUNT16_MAX = 0xFFFF
+
+# LX/LE header field offsets, by OS/2 Toolkit exe386.h field name.
+E32_BORDER = 2
+E32_OS = 10
+E32_MFLAGS = 16
+E32_MPAGES = 20
+E32_PAGESIZE = 40
+E32_OBJTAB = 64
+E32_OBJCNT = 68
+E32_RESTAB = 88
+E32_ENTTAB = 92
+E32_FPAGETAB = 104
+E32_FRECTAB = 108
+E32_IMPMOD = 112
+E32_IMPMODCNT = 116
+E32_IMPPROC = 120
+E32_NRESTAB = 136
+E32_CBNRESTAB = 140
+E32_HEADER_SIZE = 196
+# LX object table entries (o32_obj).
+O32_SIZE = 24
+O32_BASE = 4
+O32_PAGEMAP = 12
+O32_MAPSIZE = 16
+# Fixup source types and flags (exe386.h/newexe.h).
+NRSTYP = 0x0F
+NRSSEG = 0x02
+NRALIAS = 0x10
+NRCHAIN = 0x20
+NRRTYP = 0x03
+NRRINT = 0x00
+NRRORD = 0x01
+NRRNAM = 0x02
+NRRENT = 0x03
+NRADD = 0x04
+NRICHAIN = 0x08
+NR32BITOFF = 0x10
+NR32BITADD = 0x20
+NR16OBJMOD = 0x40
+NR8BITORD = 0x80
+# LX entry table bundle types.
+EMPTY = 0x00
+ENTRY16 = 0x01
+GATE16 = 0x02
+ENTRY32 = 0x03
+ENTRYFWD = 0x04
+TYPEINFO = 0x80
+FWD_ORDINAL = 0x01
+# Import names in LX keep their length in the low seven bits.
+NAME_LENGTH_MASK = 0x7F
+# Walk bounds for corrupt entry and name tables.
+ENTRY_BUNDLE_LIMIT = 65536
+NAME_TABLE_LIMIT = 65536
+
+# NE header field offsets, by OS/2 Toolkit newexe.h field name.
+NE_ENTTAB = 4
+NE_CBENTTAB = 6
+NE_FLAGS = 12
+NE_CSEG = 28
+NE_CMOD = 30
+NE_CBNRESTAB = 32
+NE_SEGTAB = 34
+NE_RESTAB = 38
+NE_MODTAB = 40
+NE_IMPTAB = 42
+NE_NRESTAB = 44
+NE_ALIGN = 50
+NE_EXETYP = 54
+NE_HEADER_SIZE = 64
+NE_ALIGN_SHIFT_MAX = 31
+# Target operating systems (ne_exetyp; LX e32_os uses the same codes).
+NE_OS2 = 0x1
+NE_WINDOWS = 0x2
+NE_DOS4 = 0x3
+NE_DEV386 = 0x4
+NE_SEGMENT_ENTRY_SIZE = 8
+NSITER = 0x0008
+NSRELOC = 0x0100
+NE_RELOCATION_SIZE = 8
+# A relocation chain ends at an offset of 0xFFFF.
+NE_CHAIN_END = 0xFFFF
+# NE entry bundles of this type describe movable-segment entries.
+NE_MOVABLE_BUNDLE = 0xFF
+
+# PE/COFF (Microsoft PE format specification names). Offsets are from the
+# "PE\0\0" signature, the optional header or the record named.
+PE_MACHINE = 4
+PE_NUMBER_OF_SECTIONS = 6
+PE_SIZE_OF_OPTIONAL_HEADER = 20
+PE_OPTIONAL_HEADER = 24
+IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10B
+IMAGE_NT_OPTIONAL_HDR64_MAGIC = 0x20B
+PE32_IMAGE_BASE = 28
+PE32PLUS_IMAGE_BASE = 24
+PE_SIZE_OF_HEADERS = 60
+PE32_NUMBER_OF_RVA_AND_SIZES = 92
+PE32PLUS_NUMBER_OF_RVA_AND_SIZES = 108
+PE32_DATA_DIRECTORIES = 96
+PE32PLUS_DATA_DIRECTORIES = 112
+PE_DATA_DIRECTORY_SIZE = 8
+IMAGE_DIRECTORY_ENTRY_EXPORT = 0
+IMAGE_DIRECTORY_ENTRY_IMPORT = 1
+IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT = 13
+IMAGE_SIZEOF_SECTION_HEADER = 40
+SECTION_VIRTUAL_ADDRESS = 12
+SECTION_SIZE_OF_RAW_DATA = 16
+SECTION_POINTER_TO_RAW_DATA = 20
+PE_IMPORT_DESCRIPTOR_SIZE = 20
+PE_DELAY_DESCRIPTOR_SIZE = 32
+DELAY_ATTRIBUTE_RVA = 0x1
+PE_EXPORT_DIRECTORY_SIZE = 40
+EXPORT_NAME = 12
+EXPORT_BASE = 16
+EXPORT_NUMBER_OF_FUNCTIONS = 20
+EXPORT_NUMBER_OF_NAMES = 24
+EXPORT_ADDRESS_OF_FUNCTIONS = 28
+EXPORT_ADDRESS_OF_NAMES = 32
+EXPORT_ADDRESS_OF_NAME_ORDINALS = 36
+# Import-by-name entries start with a two-byte hint.
+HINT_SIZE = 2
+ORDINAL_MASK = 0xFFFF
+# Walk bounds for corrupt headers and tables.
+PE_SECTION_LIMIT = 4096
+PE_DIRECTORY_LIMIT = 64
+PE_DESCRIPTOR_LIMIT = 65536
+PE_THUNK_LIMIT = 65536
+PE_STRING_LIMIT = 65536
+
+# COFF objects: the machines whose objects are recognised.
+COFF_FILE_HEADER_SIZE = 20
+IMAGE_FILE_MACHINE_I386 = 0x14C
+IMAGE_FILE_MACHINE_AMD64 = 0x8664
+IMAGE_FILE_MACHINE_ARM = 0x1C0
+IMAGE_FILE_MACHINE_ARMNT = 0x1C4
+IMAGE_FILE_MACHINE_ARM64 = 0xAA64
+IMAGE_FILE_MACHINE_IA64 = 0x200
+COFF_MACHINES = (
+    IMAGE_FILE_MACHINE_I386,
+    IMAGE_FILE_MACHINE_AMD64,
+    IMAGE_FILE_MACHINE_ARM,
+    IMAGE_FILE_MACHINE_ARMNT,
+    IMAGE_FILE_MACHINE_ARM64,
+    IMAGE_FILE_MACHINE_IA64,
+)
+# OMF record types (Intel/TIS OMF-86 names); odd types are 32-bit variants.
+THEADR = 0x80
+LHEADR = 0x82
+COMENT = 0x88
+MODEND = 0x8A
+MODEND32 = 0x8B
+EXTDEF = 0x8C
+PUBDEF = 0x90
+PUBDEF32 = 0x91
+LEXTDEF = 0xB4
+LPUBDEF = 0xB6
+LPUBDEF32 = 0xB7
+LIBHDR = 0xF0
+LIBEND = 0xF1
+OMF_32BIT = 0x01
+# Library pages are a power of two between these sizes.
+OMF_PAGE_MIN = 16
+OMF_PAGE_MAX = 32768
+# Index fields take two bytes when the first has its high bit set.
+OMF_INDEX_WIDE = 0x80
+# COMENT class A0: OMF extensions, with IMPDEF and EXPDEF subtypes.
+COMENT_OMF_EXTENSION = 0xA0
+IMPDEF = 1
+EXPDEF = 2
+EXPDEF_ORDINAL = 0x80
+EXPDEF_RESIDENT_NAME = 0x40
+EXPDEF_NO_DATA = 0x20
+EXPDEF_PARAMETER_WORDS = 0x1F
+
 
 class InvalidImage(ValueError):
     pass
@@ -90,7 +267,7 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
     try:
         initial = reader.take(0, 2)
         if initial == b"MZ":
-            h = reader.number(60, 4)
+            h = reader.number(DOS_NEW_HEADER_OFFSET, 4)
         elif initial in (b"LX", b"LE", b"NE"):
             h = 0
         else:
@@ -105,17 +282,10 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                 if reader.number(4, 2) == 0:
                     return parse_coff_import(data)
                 result["format"] = "COFF-bigobj-unsupported"
-            elif len(data) >= 20 and reader.number(0, 2) in (
-                0x14C,
-                0x8664,
-                0x1C0,
-                0x1C4,
-                0xAA64,
-                0x200,
-            ):
+            elif len(data) >= COFF_FILE_HEADER_SIZE and reader.number(0, 2) in COFF_MACHINES:
                 return parse_coff_object(data)
             elif (
-                initial[0] in (0x80, 0x82, 0x88, 0xF0)
+                initial[0] in (THEADR, LHEADR, COMENT, LIBHDR)
                 and len(data) >= 3
                 and 0 < reader.number(1, 2) <= len(data) - 3
             ):
@@ -126,34 +296,36 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
         if magic == b"PE":
             return parse_pe(data, h, exports_only)
         if magic in (b"LX", b"LE"):
-            reader.take(h, 196)
-            result["targetOSCode"] = reader.number(h + 10, 2)
+            reader.take(h, E32_HEADER_SIZE)
+            result["targetOSCode"] = reader.number(h + E32_OS, 2)
             result["domain"] = (
-                "os2" if result["targetOSCode"] == 1 else f"linear-target-{result['targetOSCode']}"
+                "os2"
+                if result["targetOSCode"] == NE_OS2
+                else f"linear-target-{result['targetOSCode']}"
             )
-            if reader.take(h + 2, 2) != bytes(2):
+            if reader.take(h + E32_BORDER, 2) != bytes(2):
                 raise InvalidImage("non-little-endian linear executable unsupported")
-            if result["targetOSCode"] != 1 and not (exports_only or allow_foreign):
+            if result["targetOSCode"] != NE_OS2 and not (exports_only or allow_foreign):
                 result["format"] += "-other"
                 return result
-            result["moduleFlags"] = reader.number(h + 16, 4)
-            resident = reader.number(h + 88, 4)
+            result["moduleFlags"] = reader.number(h + E32_MFLAGS, 4)
+            resident = reader.number(h + E32_RESTAB, 4)
             if resident:
                 result["moduleName"] = reader.text(h + resident)
-            modules = reader.number(h + 116, 4)
-            if modules > 65535:
+            modules = reader.number(h + E32_IMPMODCNT, 4)
+            if modules > COUNT16_MAX:
                 raise InvalidImage("module count exceeds 65535")
-            at = h + reader.number(h + 112, 4)
+            at = h + reader.number(h + E32_IMPMOD, 4)
             for _ in range(modules):
                 name = reader.text(at)
                 if not name:
                     raise InvalidImage("empty module name")
                 result["modules"].append(module_name(name))
                 at += 1 + reader.number(at, 1)
-            names = h + reader.number(h + 120, 4)
-            pages = reader.number(h + 20, 4)
-            table = h + reader.number(h + 104, 4)
-            records = h + reader.number(h + 108, 4)
+            names = h + reader.number(h + E32_IMPPROC, 4)
+            pages = reader.number(h + E32_MPAGES, 4)
+            table = h + reader.number(h + E32_FPAGETAB, 4)
+            records = h + reader.number(h + E32_FRECTAB, 4)
             if pages > LIMIT:
                 raise InvalidImage("page count exceeds bound")
             offsets = (
@@ -161,16 +333,19 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                 if not exports_only
                 else []
             )
-            object_count = reader.number(h + 68, 4)
-            if object_count > 65535:
+            object_count = reader.number(h + E32_OBJCNT, 4)
+            if object_count > COUNT16_MAX:
                 raise InvalidImage("object count exceeds bound")
-            object_table = h + reader.number(h + 64, 4)
+            object_table = h + reader.number(h + E32_OBJTAB, 4)
             owners = defaultdict(list)
-            page_size = reader.number(h + 40, 4)
+            page_size = reader.number(h + E32_PAGESIZE, 4)
             for obj in range(object_count):
-                object_at = object_table + obj * 24
-                base = reader.number(object_at + 4, 4)
-                first, length = reader.number(object_at + 12, 4), reader.number(object_at + 16, 4)
+                object_at = object_table + obj * O32_SIZE
+                base = reader.number(object_at + O32_BASE, 4)
+                first, length = (
+                    reader.number(object_at + O32_PAGEMAP, 4),
+                    reader.number(object_at + O32_MAPSIZE, 4),
+                )
                 if length > pages or length and (first == 0 or first + length - 1 > pages):
                     raise InvalidImage("object page range exceeds module pages")
                 for local in range(length):
@@ -190,56 +365,64 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                     start = at
                     source, flags = reader.number(at, 1), reader.number(at + 1, 1)
                     at += 2
-                    count = reader.number(at, 1) if source & 0x20 else 0
+                    count = reader.number(at, 1) if source & NRCHAIN else 0
                     source_offsets = (
                         []
-                        if source & 0x20
+                        if source & NRCHAIN
                         else [int.from_bytes(reader.take(at, 2), "little", signed=True)]
                     )
                     reference = {
                         "recordOffset": start,
                         "recordOffsetInFixupTable": start - records,
                         "pageIndex": page,
-                        "sourceType": source & 15,
+                        "sourceType": source & NRSTYP,
                         "sourceFlags": source,
                         "targetFlags": flags,
-                        "sourceList": bool(source & 0x20),
-                        "internalChain": bool(flags & 8),
-                        "alias16": bool(source & 0x10),
+                        "sourceList": bool(source & NRCHAIN),
+                        "internalChain": bool(flags & NRICHAIN),
+                        "alias16": bool(source & NRALIAS),
                         "sourceOffsets": source_offsets,
                         "preferredSources": [],
                         "sourceAddressesAreRuntimeAddresses": False,
                     }
-                    at += 1 if source & 0x20 else 2
-                    kind = flags & 3
-                    module_size = 2 if flags & 0x40 else 1
+                    at += 1 if source & NRCHAIN else 2
+                    kind = flags & NRRTYP
+                    module_size = 2 if flags & NR16OBJMOD else 1
                     module = reader.number(at, module_size)
                     at += module_size
-                    if kind == 3:
+                    if kind == NRRENT:
                         reference.update(
                             form="internal-entry",
                             entryOrdinal=module,
                             targetFieldOffset=at - module_size,
                         )
                         result["internalReferences"].append(reference)
-                    elif kind == 0:
-                        if source & 15 != 2:
-                            at += 4 if flags & 0x10 else 2
+                    elif kind == NRRINT:
+                        if source & NRSTYP != NRSSEG:
+                            at += 4 if flags & NR32BITOFF else 2
                     else:
-                        size = 1 if kind == 1 and flags & 0x80 else 4 if flags & 0x10 else 2
+                        size = (
+                            1
+                            if kind == NRRORD and flags & NR8BITORD
+                            else 4
+                            if flags & NR32BITOFF
+                            else 2
+                        )
                         value = reader.number(at, size)
                         at += size
                         reference["targetFieldOffset"] = at - size
-                        if kind == 2:
+                        if kind == NRRNAM:
                             reference["targetNameOffset"] = names + value
                         imported(
                             module,
-                            reader.text(names + value, 127) if kind == 2 else value,
-                            kind == 2,
+                            reader.text(names + value, NAME_LENGTH_MASK)
+                            if kind == NRRNAM
+                            else value,
+                            kind == NRRNAM,
                             reference=reference,
                         )
-                    if flags & 4:
-                        at += 4 if flags & 0x20 else 2
+                    if flags & NRADD:
+                        at += 4 if flags & NR32BITADD else 2
                     if count:
                         source_offsets.extend(
                             int.from_bytes(reader.take(at + i * 2, 2), "little", signed=True)
@@ -256,39 +439,39 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                         for obj in owners[page]
                     ]
                     reference["recordSize"] = at + count * 2 - start
-                    reference["additionalChainSourcesDecoded"] = not bool(flags & 8)
+                    reference["additionalChainSourcesDecoded"] = not bool(flags & NRICHAIN)
                     at += count * 2
                     if at <= start or at > end:
                         raise InvalidImage("fixup record exceeds its page boundary")
             result["importsComplete"] = None if exports_only else True
             # Forwarded export references are static imports too, even when no
             # ordinary relocation uses that target. Keep their provenance.
-            at = h + reader.number(h + 92, 4)
-            if reader.number(h + 92, 4):
+            at = h + reader.number(h + E32_ENTTAB, 4)
+            if reader.number(h + E32_ENTTAB, 4):
                 export_ordinal = 1
-                for _ in range(65536):
+                for _ in range(ENTRY_BUNDLE_LIMIT):
                     count = reader.number(at, 1)
                     if not count:
                         break
                     kind = reader.number(at + 1, 1)
                     at += 2
-                    typed = bool(kind & 0x80)
+                    typed = bool(kind & TYPEINFO)
                     if typed:
                         result["warnings"].append(
                             "LX entry bundle has opaque parameter type metadata; fixed entry layout follows the existing loader"
                         )
-                    kind &= 0x7F
-                    if kind == 0:
+                    kind &= ~TYPEINFO
+                    if kind == EMPTY:
                         export_ordinal += count
                         continue
                     obj = reader.number(at, 2)
                     at += 2
-                    if kind in (1, 2, 3):
+                    if kind in (ENTRY16, GATE16, ENTRY32):
                         for _entry in range(count):
                             flags = reader.number(at, 1)
-                            value = reader.number(at + 1, 2 if kind in (1, 2) else 4)
+                            value = reader.number(at + 1, 2 if kind in (ENTRY16, GATE16) else 4)
                             base = (
-                                reader.number(object_table + (obj - 1) * 24 + 4, 4)
+                                reader.number(object_table + (obj - 1) * O32_SIZE + O32_BASE, 4)
                                 if 1 <= obj <= object_count
                                 else None
                             )
@@ -299,18 +482,18 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                                     "offset": value,
                                     "preferredAddress": base + value if base is not None else None,
                                     "recordOffset": at,
-                                    "recordSize": 3 if kind == 1 else 5,
+                                    "recordSize": 3 if kind == ENTRY16 else 5,
                                     "flags": flags,
-                                    "kind": "call-gate" if kind == 2 else "entry",
+                                    "kind": "call-gate" if kind == GATE16 else "entry",
                                     "callGateSelector": reader.number(at + 3, 2)
-                                    if kind == 2
+                                    if kind == GATE16
                                     else None,
                                     "parameterTypesDecoded": not typed,
                                 }
                             )
-                            at += 3 if kind == 1 else 5
+                            at += 3 if kind == ENTRY16 else 5
                             export_ordinal += 1
-                    elif kind == 4:
+                    elif kind == ENTRYFWD:
                         for _entry in range(count):
                             record_at = at
                             flags = reader.number(at, 1)
@@ -319,8 +502,10 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                             at += 7
                             imported(
                                 mod,
-                                target if flags & 1 else reader.text(names + target, 127),
-                                not flags & 1,
+                                target
+                                if flags & FWD_ORDINAL
+                                else reader.text(names + target, NAME_LENGTH_MASK),
+                                not flags & FWD_ORDINAL,
                                 "forwarder",
                                 {
                                     "recordOffset": record_at,
@@ -328,7 +513,9 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                                     "exportOrdinal": export_ordinal,
                                     "targetFlags": flags,
                                     "targetFieldOffset": record_at + 3,
-                                    "targetNameOffset": None if flags & 1 else names + target,
+                                    "targetNameOffset": None
+                                    if flags & FWD_ORDINAL
+                                    else names + target,
                                 },
                             )
                             result["exports"].append(
@@ -340,10 +527,10 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                                     "kind": "forwarder",
                                     "forwarder": {
                                         "module": result["modules"][mod - 1],
-                                        "kind": "ordinal" if flags & 1 else "name",
-                                        "ordinal" if flags & 1 else "name": target
-                                        if flags & 1
-                                        else reader.text(names + target, 127),
+                                        "kind": "ordinal" if flags & FWD_ORDINAL else "name",
+                                        "ordinal" if flags & FWD_ORDINAL else "name": target
+                                        if flags & FWD_ORDINAL
+                                        else reader.text(names + target, NAME_LENGTH_MASK),
                                     },
                                     "parameterTypesDecoded": not typed,
                                 }
@@ -354,32 +541,35 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                 else:
                     raise InvalidImage("entry bundle bound reached")
         elif magic == b"NE":
-            reader.take(h, 64)
-            result["targetOSCode"] = reader.number(h + 54, 1)
-            result["domain"] = {1: "os2", 2: "win16", 3: "dos4", 4: "win386"}.get(
-                result["targetOSCode"], "unknown"
-            )
-            if result["targetOSCode"] > 1 and not (exports_only or allow_foreign):
+            reader.take(h, NE_HEADER_SIZE)
+            result["targetOSCode"] = reader.number(h + NE_EXETYP, 1)
+            result["domain"] = {
+                NE_OS2: "os2",
+                NE_WINDOWS: "win16",
+                NE_DOS4: "dos4",
+                NE_DEV386: "win386",
+            }.get(result["targetOSCode"], "unknown")
+            if result["targetOSCode"] > NE_OS2 and not (exports_only or allow_foreign):
                 result["format"] = "NE-other"
                 return result
-            result["moduleFlags"] = reader.number(h + 12, 2)
-            resident = reader.number(h + 38, 2)
+            result["moduleFlags"] = reader.number(h + NE_FLAGS, 2)
+            resident = reader.number(h + NE_RESTAB, 2)
             if resident:
                 result["moduleName"] = reader.text(h + resident)
-            names = h + reader.number(h + 42, 2)
-            refs = h + reader.number(h + 40, 2)
-            for i in range(reader.number(h + 30, 2)):
+            names = h + reader.number(h + NE_IMPTAB, 2)
+            refs = h + reader.number(h + NE_MODTAB, 2)
+            for i in range(reader.number(h + NE_CMOD, 2)):
                 result["modules"].append(
                     module_name(reader.text(names + reader.number(refs + i * 2, 2)))
                 )
-            segments = h + reader.number(h + 34, 2)
-            shift = reader.number(h + 50, 2)
-            if shift > 31:
+            segments = h + reader.number(h + NE_SEGTAB, 2)
+            shift = reader.number(h + NE_ALIGN, 2)
+            if shift > NE_ALIGN_SHIFT_MAX:
                 raise InvalidImage("invalid NE sector shift")
-            for i in range(0 if exports_only else reader.number(h + 28, 2)):
-                at = segments + i * 8
+            for i in range(0 if exports_only else reader.number(h + NE_CSEG, 2)):
+                at = segments + i * NE_SEGMENT_ENTRY_SIZE
                 sector, size, flags = (reader.number(at + n, 2) for n in (0, 2, 4))
-                if not flags & 0x100 or not sector:
+                if not flags & NSRELOC or not sector:
                     continue
                 if not size:
                     raise InvalidImage(
@@ -389,22 +579,22 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                 at = segment_file + size
                 count = reader.number(at, 2)
                 at += 2
-                reader.take(at, count * 8)
+                reader.take(at, count * NE_RELOCATION_SIZE)
                 for fixup in range(count):
-                    record = at + fixup * 8
-                    kind = reader.number(record + 1, 1) & 3
-                    if kind in (1, 2):
+                    record = at + fixup * NE_RELOCATION_SIZE
+                    kind = reader.number(record + 1, 1) & NRRTYP
+                    if kind in (NRRORD, NRRNAM):
                         module, value = reader.number(record + 4, 2), reader.number(record + 6, 2)
                         source_offset = reader.number(record + 2, 2)
                         source_offsets = [source_offset]
-                        chained = not bool(reader.number(record + 1, 1) & 4)
+                        chained = not bool(reader.number(record + 1, 1) & NRADD)
                         expanded = not chained
-                        if chained and not flags & 8:
+                        if chained and not flags & NSITER:
                             visited = {source_offset}
                             current = source_offset
                             while current + 2 <= size:
                                 following = reader.number(segment_file + current, 2)
-                                if following in (0, 65535):
+                                if following in (0, NE_CHAIN_END):
                                     expanded = True
                                     break
                                 if following in visited:
@@ -414,11 +604,11 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                                 current = following
                         imported(
                             module,
-                            reader.text(names + value) if kind == 2 else value,
-                            kind == 2,
+                            reader.text(names + value) if kind == NRRNAM else value,
+                            kind == NRRNAM,
                             reference={
                                 "recordOffset": record,
-                                "recordSize": 8,
+                                "recordSize": NE_RELOCATION_SIZE,
                                 "segment": i + 1,
                                 "segmentDataOffset": segment_file,
                                 "sourceType": reader.number(record, 1),
@@ -427,23 +617,23 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                                 "sourceFileOffsets": [
                                     segment_file + offset for offset in source_offsets
                                 ]
-                                if not flags & 8
+                                if not flags & NSITER
                                 else [],
                                 "sourceSegmentOffsets": [
                                     f"{i + 1}:{offset}" for offset in source_offsets
                                 ],
-                                "iteratedSegment": bool(flags & 8),
+                                "iteratedSegment": bool(flags & NSITER),
                                 "additionalChainSourcesDecoded": expanded,
                                 "targetFieldOffset": record + 6,
-                                "targetNameOffset": names + value if kind == 2 else None,
+                                "targetNameOffset": names + value if kind == NRRNAM else None,
                             },
                         )
         else:
             return result
         if magic == b"NE":
             result["importsComplete"] = None if exports_only else True
-            at = h + reader.number(h + 4, 2)
-            end = at + reader.number(h + 6, 2)
+            at = h + reader.number(h + NE_ENTTAB, 2)
+            end = at + reader.number(h + NE_CBENTTAB, 2)
             ordinal = 1
             while at < end:
                 count = reader.number(at, 1)
@@ -451,15 +641,15 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                     break
                 kind = reader.number(at + 1, 1)
                 at += 2
-                if kind == 0:
+                if kind == EMPTY:
                     ordinal += count
                     continue
                 for _entry in range(count):
                     record = at
                     flags = reader.number(at, 1)
-                    segment = reader.number(at + 3, 1) if kind == 255 else kind
-                    value = reader.number(at + 4 if kind == 255 else at + 1, 2)
-                    at += 6 if kind == 255 else 3
+                    segment = reader.number(at + 3, 1) if kind == NE_MOVABLE_BUNDLE else kind
+                    value = reader.number(at + 4 if kind == NE_MOVABLE_BUNDLE else at + 1, 2)
+                    at += 6 if kind == NE_MOVABLE_BUNDLE else 3
                     if at > end:
                         raise InvalidImage("NE export bundle exceeds entry table")
                     result["exports"].append(
@@ -470,17 +660,17 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                             "recordOffset": record,
                             "recordSize": at - record,
                             "flags": flags,
-                            "kind": "movable" if kind == 255 else "fixed",
+                            "kind": "movable" if kind == NE_MOVABLE_BUNDLE else "fixed",
                         }
                     )
                     ordinal += 1
         if magic in (b"LX", b"LE", b"NE"):
             resident_at = reader.number(
-                h + (38 if magic == b"NE" else 88), 2 if magic == b"NE" else 4
+                h + (NE_RESTAB if magic == b"NE" else E32_RESTAB), 2 if magic == b"NE" else 4
             )
-            nonresident_at = reader.number(h + (44 if magic == b"NE" else 136), 4)
+            nonresident_at = reader.number(h + (NE_NRESTAB if magic == b"NE" else E32_NRESTAB), 4)
             nonresident_size = reader.number(
-                h + (32 if magic == b"NE" else 140), 2 if magic == b"NE" else 4
+                h + (NE_CBNRESTAB if magic == b"NE" else E32_CBNRESTAB), 2 if magic == b"NE" else 4
             )
             named = defaultdict(list)
             for name_at, name_end, scope in (
@@ -494,7 +684,7 @@ def parse_image(data: bytes, *, exports_only=False, allow_foreign=False, _depth=
                     and not nonresident_at
                 ):
                     continue
-                for _name in range(65536):
+                for _name in range(NAME_TABLE_LIMIT):
                     size = reader.number(name_at, 1)
                     if not size:
                         break
@@ -594,32 +784,41 @@ def parse_pe(data: bytes, h: int, exports_only=False) -> dict:
     try:
         if reader.take(h, 4) != b"PE\0\0":
             raise InvalidImage("invalid PE signature")
-        section_count = reader.number(h + 6, 2)
-        optional_size = reader.number(h + 20, 2)
-        optional = h + 24
+        section_count = reader.number(h + PE_NUMBER_OF_SECTIONS, 2)
+        optional_size = reader.number(h + PE_SIZE_OF_OPTIONAL_HEADER, 2)
+        optional = h + PE_OPTIONAL_HEADER
         reader.take(optional, optional_size)
         magic = reader.number(optional, 2)
-        if magic not in (0x10B, 0x20B):
+        if magic not in (IMAGE_NT_OPTIONAL_HDR32_MAGIC, IMAGE_NT_OPTIONAL_HDR64_MAGIC):
             raise InvalidImage("unsupported PE optional-header magic")
-        wide = magic == 0x20B
+        wide = magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC
         word = 8 if wide else 4
-        base = reader.number(optional + (24 if wide else 28), word)
-        result.update(bits=64 if wide else 32, imageBase=base, machine=reader.number(h + 4, 2))
-        directory_at = optional + (112 if wide else 96)
-        directory_count = reader.number(optional + (108 if wide else 92), 4)
+        base = reader.number(optional + (PE32PLUS_IMAGE_BASE if wide else PE32_IMAGE_BASE), word)
+        result.update(
+            bits=64 if wide else 32, imageBase=base, machine=reader.number(h + PE_MACHINE, 2)
+        )
+        directory_at = optional + (PE32PLUS_DATA_DIRECTORIES if wide else PE32_DATA_DIRECTORIES)
+        directory_count = reader.number(
+            optional + (PE32PLUS_NUMBER_OF_RVA_AND_SIZES if wide else PE32_NUMBER_OF_RVA_AND_SIZES),
+            4,
+        )
         if (
-            section_count > 4096
-            or directory_count > 64
-            or directory_at + directory_count * 8 > optional + optional_size
+            section_count > PE_SECTION_LIMIT
+            or directory_count > PE_DIRECTORY_LIMIT
+            or directory_at + directory_count * PE_DATA_DIRECTORY_SIZE > optional + optional_size
         ):
             raise InvalidImage("PE header table exceeds bounds")
-        headers_size = reader.number(optional + 60, 4)
+        headers_size = reader.number(optional + PE_SIZE_OF_HEADERS, 4)
         sections = []
         for i in range(section_count):
-            at = optional + optional_size + i * 40
-            reader.take(at, 40)
+            at = optional + optional_size + i * IMAGE_SIZEOF_SECTION_HEADER
+            reader.take(at, IMAGE_SIZEOF_SECTION_HEADER)
             sections.append(
-                (reader.number(at + 12, 4), reader.number(at + 16, 4), reader.number(at + 20, 4))
+                (
+                    reader.number(at + SECTION_VIRTUAL_ADDRESS, 4),
+                    reader.number(at + SECTION_SIZE_OF_RAW_DATA, 4),
+                    reader.number(at + SECTION_POINTER_TO_RAW_DATA, 4),
+                )
             )
 
         def offset(rva, size=1):
@@ -636,7 +835,7 @@ def parse_pe(data: bytes, h: int, exports_only=False) -> dict:
 
         def string(rva):
             at = offset(rva)
-            end = data.find(b"\0", at, min(len(data), at + 65536))
+            end = data.find(b"\0", at, min(len(data), at + PE_STRING_LIMIT))
             if end < 0:
                 raise InvalidImage("unterminated PE string")
             offset(rva, end - at + 1)
@@ -645,16 +844,16 @@ def parse_pe(data: bytes, h: int, exports_only=False) -> dict:
         def directory(number):
             if number >= directory_count:
                 return 0, 0
-            return reader.number(directory_at + number * 8, 4), reader.number(
-                directory_at + number * 8 + 4, 4
+            return reader.number(directory_at + number * PE_DATA_DIRECTORY_SIZE, 4), reader.number(
+                directory_at + number * PE_DATA_DIRECTORY_SIZE + 4, 4
             )
 
         def imports(number, delay=False):
             address, length = directory(number)
             if not address:
                 return
-            stride = 32 if delay else 20
-            maximum = min(65536, length // stride if length else 65536)
+            stride = PE_DELAY_DESCRIPTOR_SIZE if delay else PE_IMPORT_DESCRIPTOR_SIZE
+            maximum = min(PE_DESCRIPTOR_LIMIT, length // stride if length else PE_DESCRIPTOR_LIMIT)
             for index in range(maximum):
                 descriptor = offset(address + index * stride, stride)
                 values = [reader.number(descriptor + i * 4, 4) for i in range(stride // 4)]
@@ -664,7 +863,10 @@ def parse_pe(data: bytes, h: int, exports_only=False) -> dict:
                     attributes = values[0]
 
                     def convert(value, attributes=attributes):
-                        return value if attributes & 1 or not value else value - base
+                        # Version-1 delay descriptors hold RVAs; older ones hold addresses.
+                        return (
+                            value if attributes & DELAY_ATTRIBUTE_RVA or not value else value - base
+                        )
 
                     name, iat, lookup = convert(values[1]), convert(values[3]), convert(values[4])
                     lookup = lookup or iat
@@ -674,14 +876,14 @@ def parse_pe(data: bytes, h: int, exports_only=False) -> dict:
                 module = string(name)
                 if not lookup:
                     raise InvalidImage("PE import descriptor has no lookup/IAT")
-                for item in range(65536):
+                for item in range(PE_THUNK_LIMIT):
                     thunk_rva = lookup + item * word
                     thunk = offset(thunk_rva, word)
                     value = reader.number(thunk, word)
                     if not value:
                         break
                     ordinal = bool(value & (1 << (word * 8 - 1)))
-                    target = value & 65535 if ordinal else string(value + 2)
+                    target = value & ORDINAL_MASK if ordinal else string(value + HINT_SIZE)
                     reference = {
                         "recordOffset": thunk,
                         "recordSize": word,
@@ -691,7 +893,7 @@ def parse_pe(data: bytes, h: int, exports_only=False) -> dict:
                         "iatRva": iat + item * word,
                         "preferredIatAddress": base + iat + item * word,
                         "sourceAddressesAreRuntimeAddresses": False,
-                        "targetNameOffset": None if ordinal else offset(value + 2),
+                        "targetNameOffset": None if ordinal else offset(value + HINT_SIZE),
                         "hint": None if ordinal else reader.number(offset(value, 2), 2),
                         "delayAttributes": attributes if delay else None,
                     }
@@ -712,20 +914,34 @@ def parse_pe(data: bytes, h: int, exports_only=False) -> dict:
             else:
                 raise InvalidImage("PE descriptor count exceeds bound")
 
-        for number, delay in () if exports_only else ((1, False), (13, True)):
+        for number, delay in (
+            ()
+            if exports_only
+            else ((IMAGE_DIRECTORY_ENTRY_IMPORT, False), (IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT, True))
+        ):
             try:
                 imports(number, delay)
             except InvalidImage as error:
                 result["errors"].append(str(error))
         try:
-            export_rva, export_size = directory(0)
+            export_rva, export_size = directory(IMAGE_DIRECTORY_ENTRY_EXPORT)
             if export_rva:
-                at = offset(export_rva, 40)
-                dll_name = reader.number(at + 12, 4)
+                at = offset(export_rva, PE_EXPORT_DIRECTORY_SIZE)
+                dll_name = reader.number(at + EXPORT_NAME, 4)
                 result["moduleName"] = string(dll_name) if dll_name else ""
-                ordinal_base = reader.number(at + 16, 4)
-                count, names = reader.number(at + 20, 4), reader.number(at + 24, 4)
-                table, name_table, ord_table = (reader.number(at + n, 4) for n in (28, 32, 36))
+                ordinal_base = reader.number(at + EXPORT_BASE, 4)
+                count, names = (
+                    reader.number(at + EXPORT_NUMBER_OF_FUNCTIONS, 4),
+                    reader.number(at + EXPORT_NUMBER_OF_NAMES, 4),
+                )
+                table, name_table, ord_table = (
+                    reader.number(at + n, 4)
+                    for n in (
+                        EXPORT_ADDRESS_OF_FUNCTIONS,
+                        EXPORT_ADDRESS_OF_NAMES,
+                        EXPORT_ADDRESS_OF_NAME_ORDINALS,
+                    )
+                )
                 if count > LIMIT or names > LIMIT:
                     raise InvalidImage("PE export count exceeds bound")
                 named = defaultdict(list)
@@ -805,27 +1021,35 @@ def parse_omf(data: bytes) -> dict:
             reader.take(at, length + 3)
             end = at + length + 3
             payload = at + 3
-            if kind == 0xF0:
+            if kind == LIBHDR:
                 page_size = length + 3
-                if page_size < 16 or page_size > 32768 or page_size & (page_size - 1):
+                if (
+                    page_size < OMF_PAGE_MIN
+                    or page_size > OMF_PAGE_MAX
+                    or page_size & (page_size - 1)
+                ):
                     raise InvalidImage("invalid OMF library page size")
                 dictionary = reader.number(payload, 4)
                 result.update(pageSize=page_size, dictionaryOffset=dictionary)
-            elif kind == 0xF1:
+            elif kind == LIBEND:
                 break
             else:
                 if length < 1:
                     raise InvalidImage("OMF record has no checksum byte")
                 if data[end - 1] and sum(data[at:end]) & 255:
                     result["warnings"].append(f"OMF checksum does not verify at{at}")
-                if kind in (0x80, 0x82):
+                if kind in (THEADR, LHEADR):
                     member = reader.text(payload)
                     if payload + 1 + reader.number(payload, 1) > end - 1:
                         raise InvalidImage("OMF module name exceeds record")
                     result["members"].append({"name": member, "offset": record})
                     if not page_size:
                         result["moduleName"] = member
-                elif kind == 0x88 and length >= 4 and reader.number(payload + 1, 1) == 0xA0:
+                elif (
+                    kind == COMENT
+                    and length >= 4
+                    and reader.number(payload + 1, 1) == COMENT_OMF_EXTENSION
+                ):
                     subtype = reader.number(payload + 2, 1)
                     cursor = payload + 3
 
@@ -838,10 +1062,10 @@ def parse_omf(data: bytes) -> dict:
                         cursor += 1 + size
                         return value
 
-                    if subtype in (1, 2):
+                    if subtype in (IMPDEF, EXPDEF):
                         flags = reader.number(cursor, 1)
                         cursor += 1
-                        if subtype == 1:
+                        if subtype == IMPDEF:
                             internal = counted()
                             module = counted()
                             target_at = cursor
@@ -860,16 +1084,16 @@ def parse_omf(data: bytes) -> dict:
                                     "targetFieldOffset": target_at,
                                     "member": member,
                                     "internalName": internal,
-                                    "commentClass": 0xA0,
-                                    "commentSubtype": 1,
+                                    "commentClass": COMENT_OMF_EXTENSION,
+                                    "commentSubtype": IMPDEF,
                                 },
                                 "omf-import-definition",
                             )
                         else:
                             exported = counted()
                             internal = counted() or exported
-                            ordinal = reader.number(cursor, 2) if flags & 0x80 else None
-                            if flags & 0x80:
+                            ordinal = reader.number(cursor, 2) if flags & EXPDEF_ORDINAL else None
+                            if flags & EXPDEF_ORDINAL:
                                 cursor += 2
                             if cursor > end - 1:
                                 raise InvalidImage("OMF export ordinal exceeds record")
@@ -880,26 +1104,26 @@ def parse_omf(data: bytes) -> dict:
                                     "internalName": internal,
                                     "member": member,
                                     "flags": flags,
-                                    "residentName": bool(flags & 0x40),
-                                    "noData": bool(flags & 0x20),
-                                    "parameterWords": flags & 31,
+                                    "residentName": bool(flags & EXPDEF_RESIDENT_NAME),
+                                    "noData": bool(flags & EXPDEF_NO_DATA),
+                                    "parameterWords": flags & EXPDEF_PARAMETER_WORDS,
                                     "recordOffset": record,
                                     "recordSize": end - record,
                                     "kind": "omf-export-definition",
                                 }
                             )
-                elif kind in (0x90, 0x91, 0xB6, 0xB7):
+                elif kind in (PUBDEF, PUBDEF32, LPUBDEF, LPUBDEF32):
                     cursor = payload
 
                     def index(end=end):
                         nonlocal cursor
                         first = reader.number(cursor, 1)
                         value = (
-                            ((first & 127) << 8) | reader.number(cursor + 1, 1)
-                            if first & 128
+                            ((first & ~OMF_INDEX_WIDE) << 8) | reader.number(cursor + 1, 1)
+                            if first & OMF_INDEX_WIDE
                             else first
                         )
-                        cursor += 2 if first & 128 else 1
+                        cursor += 2 if first & OMF_INDEX_WIDE else 1
                         if cursor > end - 1:
                             raise InvalidImage("OMF public index exceeds record")
                         return value
@@ -913,8 +1137,8 @@ def parse_omf(data: bytes) -> dict:
                         symbol_at = cursor
                         name = reader.text(cursor)
                         cursor += 1 + reader.number(cursor, 1)
-                        value = reader.number(cursor, 4 if kind & 1 else 2)
-                        cursor += 4 if kind & 1 else 2
+                        value = reader.number(cursor, 4 if kind & OMF_32BIT else 2)
+                        cursor += 4 if kind & OMF_32BIT else 2
                         type_index = index()
                         if cursor > end - 1:
                             raise InvalidImage("OMF public symbol exceeds record")
@@ -930,22 +1154,22 @@ def parse_omf(data: bytes) -> dict:
                                 "recordOffset": record,
                                 "symbolOffset": symbol_at,
                                 "recordSize": end - record,
-                                "local": kind in (0xB6, 0xB7),
+                                "local": kind in (LPUBDEF, LPUBDEF32),
                                 "moduleUnknown": True,
                             }
                         )
-                elif kind in (0x8C, 0xB4):
+                elif kind in (EXTDEF, LEXTDEF):
                     cursor = payload
                     while cursor < end - 1:
                         name = reader.text(cursor)
                         cursor += 1 + reader.number(cursor, 1)
                         first = reader.number(cursor, 1)
                         type_index = (
-                            ((first & 127) << 8) | reader.number(cursor + 1, 1)
-                            if first & 128
+                            ((first & ~OMF_INDEX_WIDE) << 8) | reader.number(cursor + 1, 1)
+                            if first & OMF_INDEX_WIDE
                             else first
                         )
-                        cursor += 2 if first & 128 else 1
+                        cursor += 2 if first & OMF_INDEX_WIDE else 1
                         if cursor > end - 1:
                             raise InvalidImage("OMF EXTDEF exceeds record")
                         result["externals"].append(
@@ -957,7 +1181,7 @@ def parse_omf(data: bytes) -> dict:
                                 "moduleUnknown": True,
                             }
                         )
-                if kind in (0x8A, 0x8B) and page_size:
+                if kind in (MODEND, MODEND32) and page_size:
                     end = (end + page_size - 1) // page_size * page_size
             at = end
         else:

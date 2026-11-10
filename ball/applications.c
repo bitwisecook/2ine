@@ -63,7 +63,7 @@ int tb_ball_save_application(TbBall *c, const cJSON *request)
                 tb_ball_fail(c, "Choose an accessible icon image");
                 goto failed;
             }
-            unsigned char hash[32];
+            unsigned char hash[TB_BALL_DIGEST_SIZE];
             if (!tb_ball_digest_file(c, source, hash))
                 goto failed;
             const char *relative = tb_ball_format(c, "icons/%s.image", tb_ball_hex(c, hash));

@@ -5,6 +5,14 @@ import re
 
 STEMS = ("install", "setup", "inst", "os2inst", "autorun")
 EXTENSIONS = ("exe", "cmd", "bat", "com")
+# Ranks after every named stem; only root-level files may have other stems.
+UNNAMED_STEM_RANK = 99
+# The installer search browses at most this many folders, this deep, and
+# offers this many candidates: enough for real install media, quick on a
+# large hard disk.
+SEARCH_FOLDER_LIMIT = 96
+SEARCH_DEPTH_LIMIT = 2
+CANDIDATE_LIMIT = 32
 
 
 def candidate_rank(path, depth):
@@ -16,7 +24,7 @@ def candidate_rank(path, depth):
         return None
     return (
         depth,
-        STEMS.index(stem) if stem in STEMS else 99,
+        STEMS.index(stem) if stem in STEMS else UNNAMED_STEM_RANK,
         EXTENSIONS.index(extension),
         "\\ENGLISH\\" not in path.upper(),
         tuple(
@@ -49,7 +57,7 @@ class ProgramChoice:
 
 def installer_candidates(api, letter):
     pending, found, scanned = [(letter + ":\\", 0)], [], 0
-    while pending and scanned < 96:
+    while pending and scanned < SEARCH_FOLDER_LIMIT:
         path, depth = pending.pop(0)
         scanned += 1
         try:
@@ -58,11 +66,11 @@ def installer_candidates(api, letter):
             continue
         for entry in entries:
             name = entry["name"].casefold()
-            if entry["directory"] and depth < 2:
+            if entry["directory"] and depth < SEARCH_DEPTH_LIMIT:
                 if depth == 0 or name in ("english", "os2") or "install" in name or "setup" in name:
                     pending.append((entry["path"], depth + 1))
             elif not entry["directory"]:
                 rank = candidate_rank(entry["path"], depth)
                 if rank is not None:
                     found.append((rank, entry["path"]))
-    return [path for _rank, path in sorted(found)[:32]]
+    return [path for _rank, path in sorted(found)[:CANDIDATE_LIMIT]]

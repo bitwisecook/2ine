@@ -14,6 +14,10 @@
 #define DART_BUFFERS 2
 #define PCM_CHANNELS 2
 #define PCM_BITS 16
+/* A -sndspeed rate outside 8-48 kHz falls back to Quake's usual 22050 Hz. */
+#define DEFAULT_RATE 22050
+#define MIN_RATE 8000
+#define MAX_RATE 48000
 
 static MCI_MIXSETUP_PARMS mixer;
 static MCI_BUFFER_PARMS allocation;
@@ -57,12 +61,12 @@ qboolean SNDDMA_Init(void)
 {
     MCI_AMP_OPEN_PARMS open;
     ULONG rc;
-    int i, rate = 22050;
+    int i, rate = DEFAULT_RATE;
     i = COM_CheckParm("-sndspeed");
     if (i && i + 1 < com_argc)
         rate = atoi(com_argv[i + 1]);
-    if (rate < 8000 || rate > 48000)
-        rate = 22050;
+    if (rate < MIN_RATE || rate > MAX_RATE)
+        rate = DEFAULT_RATE;
     memset(&open, 0, sizeof open);
     open.pszDeviceType = (PSZ)MCI_DEVTYPE_AUDIO_AMPMIX;
     rc = mciSendCommand(0, MCI_OPEN, MCI_WAIT | MCI_OPEN_TYPE_ID | MCI_OPEN_SHAREABLE, &open, 0);

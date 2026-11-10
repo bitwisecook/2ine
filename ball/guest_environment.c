@@ -38,7 +38,7 @@ static int reserved_env(const char *key)
                               "TWOINE_LIBPATH",
                               "TWOINE_BACKEND",
                               NULL};
-    if (!strncmp(key, "LD_", 3) || !strncmp(key, "DYLD_", 5))
+    if (has_prefix(key, "LD_") || has_prefix(key, "DYLD_"))
         return 1;
     for (int i = 0; reserved[i]; i++)
         if (!strcmp(key, reserved[i]))
@@ -46,13 +46,23 @@ static int reserved_env(const char *key)
     return 0;
 }
 
+/* Per-drive working directories are runtime state, not user settings. */
+#define DRIVE_CWD_PREFIX "TWOINE_DRIVE_CWD_"
+
+/* Bounds runaway self-referential overrides. */
+enum
+{
+    ENV_EXPANSION_DEPTH_LIMIT = 64,
+    ENV_VALUE_LIMIT = 1024 * 1024,
+};
+
 /* Overlay expressions resolve against the complete inherited layer. A
    self-reference appends to the inherited value; other overrides resolve
    recursively so JSON key ordering cannot affect results. */
 static char *expand_env(TbBall *c, const cJSON *base, const cJSON *overlay, const char *key,
                         const char **stack, unsigned depth)
 {
-    if (depth >= 64)
+    if (depth >= ENV_EXPANSION_DEPTH_LIMIT)
     {
         tb_ball_fail(c, "Environment expansion is too deep");
         return NULL;
@@ -94,7 +104,7 @@ static char *expand_env(TbBall *c, const cJSON *base, const cJSON *overlay, cons
         if (!value)
             return NULL;
         out = tb_ball_format(c, "%s%.*s%s", out, (int)(begin - at), at, value);
-        if (out && strlen(out) > 1024 * 1024)
+        if (out && strlen(out) > ENV_VALUE_LIMIT)
         {
             tb_ball_fail(c, "Expanded environment value is too large");
             return NULL;
@@ -125,7 +135,7 @@ static int overlay_environment(TbBall *c, cJSON *env, const cJSON *settings)
             *p = (char)toupper((unsigned char)*p);
         if (!strcmp(key, "PATH"))
             key = "OS2PATH";
-        if (reserved_env(key) || !strncmp(key, "TWOINE_DRIVE_CWD_", 17) ||
+        if (reserved_env(key) || has_prefix(key, DRIVE_CWD_PREFIX) ||
             !strcmp(key, "TWOINE_CURRENT_DRIVE"))
         {
             tb_ball_fail(c, "Reserved host environment variable: %s", key);
@@ -142,7 +152,7 @@ static int overlay_environment(TbBall *c, cJSON *env, const cJSON *settings)
     if (!c->error)
         cJSON_ArrayForEach(entry, normalized)
         {
-            const char *stack[64];
+            const char *stack[ENV_EXPANSION_DEPTH_LIMIT];
             char *value = expand_env(c, inherited, normalized, entry->string, stack, 0);
             if (!value)
                 break;

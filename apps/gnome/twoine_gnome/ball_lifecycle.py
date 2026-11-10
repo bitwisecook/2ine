@@ -4,13 +4,16 @@
 import stat
 from pathlib import Path
 
+BALL_SUFFIX = ".2ineball"
+ASCII_DELETE = 0x7F
+
 
 def package(path, expected=None):
     path = Path(path).expanduser().absolute()
     if path.is_symlink() or not stat.S_ISDIR(path.lstat().st_mode):
         raise ValueError("Choose a ball package directory, not a symbolic link.")
     path = path.resolve(strict=True)
-    if path == Path.home().resolve() or path.parent == path or path.suffix.lower() != ".2ineball":
+    if path == Path.home().resolve() or path.parent == path or path.suffix.lower() != BALL_SUFFIX:
         raise ValueError("Choose a .2ineball package.")
     manifest = path / "ball.json"
     if not stat.S_ISREG(manifest.lstat().st_mode):
@@ -28,15 +31,15 @@ def identity(path):
 def rename_destination(path, name):
     source = package(path)
     name = name.strip()
-    if name.lower().endswith(".2ineball"):
-        name = name[:-9]
+    if name.lower().endswith(BALL_SUFFIX):
+        name = name[: -len(BALL_SUFFIX)]
     if (
         not name
         or name in (".", "..")
-        or any(c in "/\\" or ord(c) < 32 or ord(c) == 127 for c in name)
+        or any(c in "/\\" or ord(c) < ord(" ") or ord(c) == ASCII_DELETE for c in name)
     ):
         raise ValueError("Choose a ball name without slashes or control characters.")
-    destination = source.with_name(name + ".2ineball")
+    destination = source.with_name(name + BALL_SUFFIX)
     if destination != source and (destination.exists() or destination.is_symlink()):
         raise ValueError("A file or ball with that name already exists.")
     return destination

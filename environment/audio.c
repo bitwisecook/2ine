@@ -7,6 +7,30 @@
 #include "third_party/sha256/sha256.h"
 #include <math.h>
 
+enum
+{
+    MIDI_CHANNEL_COUNT = 16,
+    MIDI_PROGRAM_MAX = 127,
+    /* Bank select is a 14-bit MSB/LSB pair. */
+    MIDI_BANK_MAX = 16383,
+    /* The MT-32 plays parts 1-8 on MIDI channels 2-9 and rhythm on channel 10
+       (zero-based 1-8 and 9); the other channels are silent on it. */
+    MT32_FIRST_PART_CHANNEL = 1,
+    MT32_LAST_PART_CHANNEL = 8,
+    MT32_RHYTHM_CHANNEL = 9,
+};
+
+/* Bounds on an imported sound-bank folder or archive. */
+#define SOUND_BANK_DEPTH_LIMIT 64u
+#define SOUND_BANK_ENTRY_LIMIT 10000u
+#define SOUND_BANK_BYTE_LIMIT UINT64_C(2147483648) /* 2 GiB */
+#define SOUND_BANK_DIRECTORY "soundfonts/"
+
+enum
+{
+    SOUND_BANK_COPY_BUFFER_SIZE = 8192
+};
+
 static const char *audio_profiles[][2] = {{"gm", "General MIDI"},
                                           {"gm2", "General MIDI 2"},
                                           {"gs", "Roland GS"},
@@ -20,7 +44,7 @@ cJSON *audio_defaults(void)
     cJSON_AddStringToObject(settings, "profile", "gm");
     cJSON_AddStringToObject(settings, "bank", "default");
     cJSON *channels = cJSON_AddArrayToObject(settings, "channels");
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < MIDI_CHANNEL_COUNT; i++)
     {
         cJSON *channel = cJSON_CreateObject();
         cJSON_AddNumberToObject(channel, "target", i + 1);
@@ -67,7 +91,7 @@ char *audio_bank_path(TbBall *c, const char *id, const char *build)
         return tb_ball_join(c, build, "soundfonts/FluidR3_GM.sf2");
     const cJSON *bank = audio_bank(c, id);
     const char *relative = bank ? field(bank, "file") : NULL;
-    if (!relative || strncmp(relative, "soundfonts/", 11) || strpbrk(relative, "\\:\r\n"))
+    if (!relative || !has_prefix(relative, SOUND_BANK_DIRECTORY) || strpbrk(relative, "\\:\r\n"))
     {
         tb_ball_fail(c, "Installed sound bank is unavailable: %s", id);
         return NULL;
@@ -123,12 +147,14 @@ cJSON *audio_snapshot(TbBall *c)
         cJSON_Delete(defaults);
         if (!strcmp(audio_profiles[i][0], "mt32"))
         {
-            for (int channel = 0; channel < 16; channel++)
+            for (int channel = 0; channel < MIDI_CHANNEL_COUNT; channel++)
             {
                 cJSON *mapping = cJSON_GetArrayItem(channels, channel);
-                if (channel >= 1 && channel <= 8)
+                if (channel >= MT32_FIRST_PART_CHANNEL && channel <= MT32_LAST_PART_CHANNEL)
                     put(mapping, "target", cJSON_CreateNumber(channel));
-                put(mapping, "muted", cJSON_CreateBool(channel == 0 || channel > 9));
+                put(mapping, "muted",
+                    cJSON_CreateBool(channel < MT32_FIRST_PART_CHANNEL ||
+                                     channel > MT32_RHYTHM_CHANNEL));
             }
         }
         cJSON_AddItemToObject(profile, "channels", channels);
@@ -156,7 +182,7 @@ int audio_validate(TbBall *c, const cJSON *settings)
     if (!known || !bank || (strcmp(bank, "default") && !audio_bank(c, bank)))
         return tb_ball_fail(c, "Choose a MIDI mapping and an installed sound bank");
     const cJSON *channels = get(settings, "channels");
-    if (!cJSON_IsArray(channels) || cJSON_GetArraySize(channels) != 16)
+    if (!cJSON_IsArray(channels) || cJSON_GetArraySize(channels) != MIDI_CHANNEL_COUNT)
         return tb_ball_fail(c, "A MIDI mapping must contain all 16 channels");
     cJSON *channel;
     cJSON_ArrayForEach(channel, channels)
@@ -165,9 +191,9 @@ int audio_validate(TbBall *c, const cJSON *settings)
         if (!id || (*id && strcmp(id, "default") && !audio_bank(c, id)) ||
             !cJSON_IsBool(get(channel, "muted")))
             return tb_ball_fail(c, "Invalid sound bank or mute setting in MIDI channel");
-        if (!audio_number(c, channel, "target", 1, 16) ||
-            !audio_number(c, channel, "program", -1, 127) ||
-            !audio_number(c, channel, "bankNumber", -1, 16383) ||
+        if (!audio_number(c, channel, "target", 1, MIDI_CHANNEL_COUNT) ||
+            !audio_number(c, channel, "program", -1, MIDI_PROGRAM_MAX) ||
+            !audio_number(c, channel, "bankNumber", -1, MIDI_BANK_MAX) ||
             !audio_number(c, channel, "percussion", -1, 1))
             return 0;
     }
@@ -188,7 +214,7 @@ cJSON *audio_save(TbBall *c, const cJSON *request)
             put(merged, entry->string, cJSON_Duplicate(entry, 1));
     }
     cJSON *channels = cJSON_CreateArray();
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < MIDI_CHANNEL_COUNT; i++)
     {
         const cJSON *previous = old ? cJSON_GetArrayItem(get(old, "channels"), i) : NULL;
         cJSON *channel = previous ? cJSON_Duplicate(previous, 1) : cJSON_CreateObject();
@@ -204,7 +230,7 @@ cJSON *audio_save(TbBall *c, const cJSON *request)
 static int audio_tree_hash(TbBall *c, const char *path, const char *relative, SHA256_CTX *state,
                            unsigned depth, unsigned *count, uint64_t *bytes)
 {
-    if (depth > 64 || ++*count > 10000 || tb_is_link(path))
+    if (depth > SOUND_BANK_DEPTH_LIMIT || ++*count > SOUND_BANK_ENTRY_LIMIT || tb_is_link(path))
         return tb_ball_fail(
             c, "Sound-bank folders must contain at most 10000 regular files/folders and no links");
     sha256_update(state, (const BYTE *)relative, strlen(relative) + 1);
@@ -232,10 +258,10 @@ static int audio_tree_hash(TbBall *c, const char *path, const char *relative, SH
     int ok = file && tb_file_info(file, &size, &mode) && size >= 0;
     if (file)
         fclose(file);
-    if (!ok || (*bytes += (uint64_t)size) > UINT64_C(2147483648))
+    if (!ok || (*bytes += (uint64_t)size) > SOUND_BANK_BYTE_LIMIT)
         return tb_ball_fail(c,
                             "Sound-bank folder exceeds the 2 GiB limit or contains a special file");
-    unsigned char hash[32];
+    unsigned char hash[TB_BALL_DIGEST_SIZE];
     if (!tb_ball_digest_file(c, path, hash))
         return 0;
     sha256_update(state, hash, sizeof hash);
@@ -258,7 +284,7 @@ static cJSON *audio_import(TbBall *c, const cJSON *request)
             tb_ball_fail(c, "Choose an SF2, SF3, SFZ or DLS bank");
         return NULL;
     }
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     if (!tb_ball_digest_file(c, source, digest))
         return NULL;
     char *file_hash = tb_ball_hex(c, digest);
@@ -340,7 +366,7 @@ static cJSON *audio_import(TbBall *c, const cJSON *request)
                 fclose(file);
             if (ok)
                 total += (uint64_t)size;
-            ok = ok && total <= UINT64_C(2147483648);
+            ok = ok && total <= SOUND_BANK_BYTE_LIMIT;
         }
         if (ok)
             ok =
@@ -383,7 +409,7 @@ static cJSON *audio_import(TbBall *c, const cJSON *request)
 static int audio_extract(TbBall *c, const char *source, const char *destination, cJSON *banks,
                          unsigned depth, unsigned *files, uint64_t *bytes)
 {
-    if (depth > 64 || !tb_mkdirs(destination))
+    if (depth > SOUND_BANK_DEPTH_LIMIT || !tb_mkdirs(destination))
         return tb_ball_fail(c, "Cannot create sound-bank extraction folder");
     size_t count = 0;
     TbMediaEntry *entries = tb_media_entries(source, &count);
@@ -393,8 +419,8 @@ static int audio_extract(TbBall *c, const char *source, const char *destination,
     for (size_t i = 0; i < count && ok; i++)
     {
         const char *name = entries[i].name;
-        if (++*files > 10000 || !*name || !strcmp(name, ".") || !strcmp(name, "..") ||
-            strpbrk(name, "/\\:\r\n"))
+        if (++*files > SOUND_BANK_ENTRY_LIMIT || !*name || !strcmp(name, ".") ||
+            !strcmp(name, "..") || strpbrk(name, "/\\:\r\n"))
         {
             ok = tb_ball_fail(c, "Invalid or oversized sound-bank archive");
             break;
@@ -412,13 +438,13 @@ static int audio_extract(TbBall *c, const char *source, const char *destination,
         {
             FILE *input = tb_media_fopen(member);
             FILE *output = !tb_is_file(path) ? tb_fopen(path, "wb") : NULL;
-            unsigned char buffer[8192];
+            unsigned char buffer[SOUND_BANK_COPY_BUFFER_SIZE];
             size_t n;
             ok = input && output;
             while (ok && (n = fread(buffer, 1, sizeof buffer, input)))
             {
                 *bytes += n;
-                ok = *bytes <= UINT64_C(2147483648) && fwrite(buffer, 1, n, output) == n;
+                ok = *bytes <= SOUND_BANK_BYTE_LIMIT && fwrite(buffer, 1, n, output) == n;
             }
             if (input)
             {

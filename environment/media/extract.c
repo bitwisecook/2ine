@@ -12,6 +12,32 @@
 #include "environment/components/system_modules.h"
 #include "third_party/sha256/sha256.h"
 
+/* Media paths longer than this are not OS/2 install-media paths. */
+enum
+{
+    EXTRACT_PATH_SIZE = 1024
+};
+
+/* Bounds a media search the user pointed at too large a source. */
+enum
+{
+    EXTRACT_SEARCH_ENTRY_LIMIT = 100000
+};
+
+/* How often, in visited entries, a long walk checks for cancellation. */
+enum
+{
+    EXTRACT_CANCEL_POLL_INTERVAL = 64
+};
+
+#define EXTRACT_MEMBER_SIZE_LIMIT (256 * 1024 * 1024)
+#define EXTRACT_TOTAL_SIZE_LIMIT (UINT64_C(2) * 1024 * 1024 * 1024)
+
+enum
+{
+    EXTRACT_COMPARE_BUFFER_SIZE = 65536
+};
+
 int extract_extension(const char *name, const char *extension)
 {
     const char *dot = strrchr(name, '.');
@@ -32,28 +58,29 @@ int extract_video(const char *name)
    load path. Printer resources and code-page/country data remain selectable. */
 static int extract_host_driver(const char *path)
 {
-    if (strlen(path) >= 1024)
+    char normalized[EXTRACT_PATH_SIZE];
+    if (strlen(path) >= sizeof normalized)
         return 0;
-    char normalized[1024];
     for (size_t i = 0; i <= strlen(path); i++)
         normalized[i] = path[i] == '/' ? '\\' : (char)toupper((unsigned char)path[i]);
-    const char *relative = !strncmp(normalized, "C:\\", 3) ? normalized + 3 : normalized;
+    const char *relative =
+        has_prefix(normalized, "C:\\") ? normalized + TB_GUEST_ROOT_LENGTH : normalized;
     const char *base = strrchr(relative, '\\');
     if (!base)
         return 0;
     base++;
     if (!strcmp(base, "COUNTRY.SYS") || !strcmp(base, "CONFIG.SYS"))
         return 0;
-    int kernel = !strncmp(relative, "OS2\\BOOT\\", 9) ||
-                 (!strncmp(relative, "OS2\\", 4) && !strchr(relative + 4, '\\'));
+    int kernel = has_prefix(relative, "OS2\\BOOT\\") ||
+                 (has_prefix(relative, "OS2\\") && !strchr(relative + strlen("OS2\\"), '\\'));
     if (kernel && (extract_extension(base, ".ADD") || extract_extension(base, ".IFS") ||
                    extract_extension(base, ".DMD") || extract_extension(base, ".FLT")))
         return 1;
     int network_driver =
-        !strncmp(relative, "IBMCOM\\MACS\\", 12) || !strncmp(relative, "IBMCOM\\PROTOCOL\\", 16);
+        has_prefix(relative, "IBMCOM\\MACS\\") || has_prefix(relative, "IBMCOM\\PROTOCOL\\");
     if (extract_extension(base, ".SYS") &&
-        (kernel || network_driver || !strncmp(relative, "OS2\\MDOS\\", 9) ||
-         !strncmp(relative, "MMOS2\\", 6)))
+        (kernel || network_driver || has_prefix(relative, "OS2\\MDOS\\") ||
+         has_prefix(relative, "MMOS2\\")))
         return 1;
     return network_driver && extract_extension(base, ".OS2");
 }
@@ -195,7 +222,7 @@ cJSON *open_os2_source(TbBall *c, const cJSON *request)
        those additions without rescanning the entire queue for each file. */
     for (const cJSON *node = queue->child; node && !c->error; node = node->next, at++)
     {
-        if (at >= 100000)
+        if (at >= EXTRACT_SEARCH_ENTRY_LIMIT)
         {
             tb_ball_fail(c, "Media search exceeded 100000 entries. Choose a smaller source.");
             break;
@@ -335,7 +362,7 @@ static char *extract_extra_path(TbBall *c, const char *layout, const char *sourc
 static char *extract_destination(TbBall *c, const char *layout, const char *source, int *category,
                                  int *provided, int *priority)
 {
-    *priority = 1;
+    *priority = EXTRACT_PRIORITY_LOOSE;
     char *path = tb_ball_keep(c, strdup(layout)), *upper = tb_ball_keep(c, strdup(layout));
     if (!path || !upper)
         return NULL;
@@ -349,8 +376,8 @@ static char *extract_destination(TbBall *c, const char *layout, const char *sour
     for (int i = 0; i < SUPPORT_COUNT; i++)
         if (equal_case(base, os2_support_names[i]))
         {
-            *category = 0;
-            *priority = 3;
+            *category = EXTRACT_CMD;
+            *priority = EXTRACT_PRIORITY_INSTALLED_LAYOUT;
             return tb_ball_keep(c, strdup(os2_support_paths[i]));
         }
     /* These services execute through 2ine's system/API bridges. HELPMGR is
@@ -418,43 +445,45 @@ static char *extract_destination(TbBall *c, const char *layout, const char *sour
     }
     const char *boundary = label ? strstr(label, " ▸ ") : NULL;
     int packed_layout = boundary && strstr(boundary + strlen(" ▸ "), " ▸ ");
-    *priority = anchor ? 3 : (strchr(path, '/') || packed_layout ? 2 : 1);
+    *priority = anchor ? EXTRACT_PRIORITY_INSTALLED_LAYOUT
+                       : (strchr(path, '/') || packed_layout ? EXTRACT_PRIORITY_NESTED
+                                                             : EXTRACT_PRIORITY_LOOSE);
     /* The installation boot disk can contain reduced/older copies of tools
        also shipped on the base disk set. Prefer the base disk counterpart. */
     if (label && strstr(label, "/DISK_0/"))
-        *priority = 0;
+        *priority = EXTRACT_PRIORITY_BOOT_DISK;
     /* Alternate Windows language/display packages lose ties to the base disk
        set; explicitly selecting one still imports its own files. */
     if (label && (strstr(label, "/W_AR/") || strstr(label, "/W_CE/") || strstr(label, "/W_EL/") ||
                   strstr(label, "/W_HE/") || strstr(label, "/W_TH/") || strstr(label, "/W_TR/") ||
                   strstr(label, "/DISP_")))
-        *priority = 1;
+        *priority = EXTRACT_PRIORITY_LOOSE;
     char *relative = anchor;
     if (*category == EXTRACT_FULL && anchor)
     {
         const char *root = upper + (anchor - path);
-        if (!strncmp(root, "MMOS2/", 6))
+        if (has_prefix(root, "MMOS2/"))
             *category = EXTRACT_MULTIMEDIA;
-        else if (!strncmp(root, "TCPIP/", 6) || !strncmp(root, "MPTN/", 5) ||
-                 !strncmp(root, "IBMLAN/", 7) || !strncmp(root, "IBMCOM/", 7))
+        else if (has_prefix(root, "TCPIP/") || has_prefix(root, "MPTN/") ||
+                 has_prefix(root, "IBMLAN/") || has_prefix(root, "IBMCOM/"))
             *category = EXTRACT_NETWORK;
     }
     {
         const char *root = anchor ? upper + (anchor - path) : "";
-        if (!strncmp(root, "OS2/MDOS/", 9))
+        if (has_prefix(root, "OS2/MDOS/"))
             *category = EXTRACT_LEGACY;
-        else if (!strncmp(root, "LANGUAGE/", 9) || !strncmp(root, "OS2/LANGUAGE/", 13) ||
+        else if (has_prefix(root, "LANGUAGE/") || has_prefix(root, "OS2/LANGUAGE/") ||
                  extract_extension(base, ".DCP") || extract_extension(base, ".NLS") ||
                  !strcmp(base, "COUNTRY.SYS") || !strcmp(base, "GLOCALE.EXE"))
             *category = EXTRACT_LANGUAGES;
-        else if (!strncmp(root, "MAINTENANCE/", 12) || strstr(root, "/TRACE/") ||
+        else if (has_prefix(root, "MAINTENANCE/") || strstr(root, "/TRACE/") ||
                  !strcmp(base, "PSTAT.EXE") || !strcmp(base, "TRACE.EXE") ||
                  !strcmp(base, "TRACEFMT.EXE") || !strcmp(base, "STRACE.EXE") ||
                  !strcmp(base, "CHKDSK.EXE") || !strcmp(base, "CHKDSK32.EXE") ||
                  !strcmp(base, "FDISK.EXE") || !strcmp(base, "LVM.EXE") ||
                  !strcmp(base, "PROCDUMP.EXE") || !strcmp(base, "SYSLOGPM.EXE"))
             *category = EXTRACT_DIAGNOSTICS;
-        else if ((!strncmp(root, "OS2/APPS/", 9) || !strcmp(base, "E.EXE")) &&
+        else if ((has_prefix(root, "OS2/APPS/") || !strcmp(base, "E.EXE")) &&
                  *category != EXTRACT_HELP && *category != EXTRACT_FONTS)
             *category = EXTRACT_UTILITIES;
     }
@@ -501,7 +530,7 @@ static char *extract_destination(TbBall *c, const char *layout, const char *sour
     else if (!relative && *category == EXTRACT_SOM && !extract_extension(base, ".DLL"))
         relative = tb_ball_format(c, "%s/%s",
                                   !strcmp(base, "SOM.IR") ? "OS2/ETC"
-                                  : !strncmp(base, "SOMDIMPL.", 9) || !strncmp(base, "SOMDCLS.", 8)
+                                  : has_prefix(base, "SOMDIMPL.") || has_prefix(base, "SOMDCLS.")
                                       ? "OS2/ETC/DSOM"
                                   : extract_extension(base, ".MSG") ? "OS2/SYSTEM"
                                                                     : "OS2",
@@ -523,7 +552,7 @@ static char *extract_destination(TbBall *c, const char *layout, const char *sour
         extract_extension(base, ".MAP"))
     {
         *category = EXTRACT_DIAGNOSTICS;
-        *priority = 1;
+        *priority = EXTRACT_PRIORITY_LOOSE;
         relative = extract_extra_path(c, path, source);
     }
     /* Media names are untrusted even when their target prefix is recognized. */
@@ -531,7 +560,7 @@ static char *extract_destination(TbBall *c, const char *layout, const char *sour
     {
         const char *slash = strchr(part, '/');
         size_t n = slash ? (size_t)(slash - part) : strlen(part);
-        if (!n || (n == 1 && *part == '.') || (n == 2 && !strncmp(part, "..", 2)) ||
+        if (!n || (n == 1 && *part == '.') || (n == 2 && has_prefix(part, "..")) ||
             memchr(part, ':', n))
             return NULL;
         if (!slash)
@@ -568,9 +597,9 @@ cJSON *plan_os2_extraction(TbBall *c, const cJSON *request)
     int at = 0;
     for (const cJSON *node = queue->child; node && !c->error; node = node->next, at++)
     {
-        if (!(at % 64) && component_cancelled(c))
+        if (!(at % EXTRACT_CANCEL_POLL_INTERVAL) && component_cancelled(c))
             break;
-        if (at >= 100000)
+        if (at >= EXTRACT_SEARCH_ENTRY_LIMIT)
         {
             tb_ball_fail(c, "Media search exceeded 100000 entries. Browse to a smaller source.");
             break;
@@ -595,7 +624,7 @@ cJSON *plan_os2_extraction(TbBall *c, const cJSON *request)
                 extract_children(c, queue, root, "");
             continue;
         }
-        int category = EXTRACT_FULL, provided = 0, priority = 1;
+        int category = EXTRACT_FULL, provided = 0, priority = EXTRACT_PRIORITY_LOOSE;
         char *destination = extract_destination(c, layout, path, &category, &provided, &priority);
         if (!destination)
         {
@@ -846,8 +875,8 @@ static cJSON *extract_os2_categories_impl(TbBall *c, const cJSON *request)
         rewind(input);
         /* Individual members are bounded by the media reader; a complete
            extraction may stage at most 2 GiB before committing any files. */
-        if (size < 0 || size > 256 * 1024 * 1024 ||
-            total + (uint64_t)size > UINT64_C(2) * 1024 * 1024 * 1024)
+        if (size < 0 || size > EXTRACT_MEMBER_SIZE_LIMIT ||
+            total + (uint64_t)size > EXTRACT_TOTAL_SIZE_LIMIT)
         {
             fclose(input);
             tb_ball_fail(c, "OS/2 extraction exceeds the file or total size limit");
@@ -869,7 +898,7 @@ static cJSON *extract_os2_categories_impl(TbBall *c, const cJSON *request)
         {
             FILE *other = tb_fopen(field(previous, "temporary"), "rb");
             ok = other != NULL;
-            unsigned char buffer[65536];
+            unsigned char buffer[EXTRACT_COMPARE_BUFFER_SIZE];
             size_t offset = 0, count;
             while (ok && (count = fread(buffer, 1, sizeof buffer, other)))
             {
@@ -915,7 +944,7 @@ static cJSON *extract_os2_categories_impl(TbBall *c, const cJSON *request)
         if (!c->error && !tb_atomic_write(temporary, data, (size_t)size))
             tb_ball_fail(c, "Cannot stage %s", destination);
         SHA256_CTX hash;
-        unsigned char digest[32];
+        unsigned char digest[TB_BALL_DIGEST_SIZE];
         sha256_init(&hash);
         sha256_update(&hash, data, (size_t)size);
         sha256_final(&hash, digest);
@@ -948,7 +977,7 @@ static cJSON *extract_os2_categories_impl(TbBall *c, const cJSON *request)
         int present_variant = 0;
         if (field(file, "originalPath") && destination && tb_is_file(destination))
         {
-            unsigned char digest[32];
+            unsigned char digest[TB_BALL_DIGEST_SIZE];
             present_variant = tb_ball_digest_file(c, destination, digest) &&
                               !strcmp(tb_ball_hex(c, digest), field(file, "sha256"));
         }

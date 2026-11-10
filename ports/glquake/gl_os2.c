@@ -10,6 +10,7 @@
 #include "gl_os2.h"
 #define TEXTURES 4096
 #define LEVELS 16
+#define TEXTURE_SIZE_MAX 4096
 
 typedef void(APIENTRY *bind_fn)(GLenum, GLuint);
 typedef void(APIENTRY *sub_fn)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum,
@@ -126,8 +127,8 @@ void QGL_TexImage2D(GLenum target, GLint level, GLint components, GLsizei width,
                    : format == GL_LUMINANCE_ALPHA ? 2
                                                   : 1;
         if (target != GL_TEXTURE_2D || level < 0 || level >= LEVELS || border ||
-            type != GL_UNSIGNED_BYTE || width < 1 || height < 1 || width > 4096 || height > 4096 ||
-            !pixels)
+            type != GL_UNSIGNED_BYTE || width < 1 || height < 1 || width > TEXTURE_SIZE_MAX ||
+            height > TEXTURE_SIZE_MAX || !pixels)
             Sys_Error("Unsupported GL 1.0 texture image");
         t = texture();
         m = &t->mip[level];

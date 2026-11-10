@@ -41,12 +41,20 @@ public enum RegistryType: UInt32, CaseIterable, Sendable, Identifiable {
 
 public enum RegistryCodec {
     public static let maximumPayload = 16 * 1024 * 1024
+    /// Longest key path; value names leave room for the two-byte "v:" key prefix.
+    public static let maximumPathBytes = 32767
+    public static let maximumValueNameBytes = 32765
+    /// How many payload bytes a summary previews in hex.
+    static let previewBytes = 24
+    private static let asciiUppercase: ClosedRange<UInt32> = 65...90
+    private static let asciiCaseOffset: UInt32 = 32
     public static let roots = ["hkcr", "hkcu", "hklm", "hku"]
     public static func foldASCII(_ value: String) -> String {
         String(
             String.UnicodeScalarView(
                 value.unicodeScalars.map {
-                    (65...90).contains($0.value) ? UnicodeScalar($0.value + 32)! : $0
+                    asciiUppercase.contains($0.value)
+                        ? UnicodeScalar($0.value + asciiCaseOffset)! : $0
                 }))
     }
     public static func rootTitle(_ value: String) -> String {
@@ -72,7 +80,8 @@ public enum RegistryCodec {
         let result = foldASCII(
             ([root] + components.dropFirst().map(String.init)).joined(separator: "\\"))
         guard !components.contains(where: \.isEmpty), !result.contains("\0"),
-            result.utf8.count <= 32767, !result.unicodeScalars.contains(where: { $0.value > 255 })
+            result.utf8.count <= maximumPathBytes,
+            !result.unicodeScalars.contains(where: { $0.value > 255 })
         else {
             throw BallError(
                 "A registry path must use Latin-1 characters, have nonempty components, no NUL characters and at most 32,767 bytes."
@@ -81,7 +90,7 @@ public enum RegistryCodec {
         return result
     }
     public static func valueName(_ value: String) throws -> String {
-        guard !value.contains("\0"), value.utf8.count <= 32765,
+        guard !value.contains("\0"), value.utf8.count <= maximumValueNameBytes,
             !value.unicodeScalars.contains(where: { $0.value > 255 })
         else {
             throw BallError(
@@ -216,8 +225,9 @@ public struct RegistryValueRecord: Identifiable, Hashable, Sendable {
             }
         }
         let bytes = type == nil ? entry.bytes : payload
-        return "\(bytes.count) bytes: " + ConfigurationValue.hex(Array(bytes.prefix(24)))
-            + (bytes.count > 24 ? "…" : "")
+        return "\(bytes.count) bytes: "
+            + ConfigurationValue.hex(Array(bytes.prefix(RegistryCodec.previewBytes)))
+            + (bytes.count > RegistryCodec.previewBytes ? "…" : "")
     }
 }
 

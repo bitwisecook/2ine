@@ -90,6 +90,7 @@ extension AppModel {
             guard status.ready, pendingLaunches[ball]?.autoContinue == true, selected == ball else {
                 return
             }
+            // Wait up to five seconds for other ball work to finish before continuing.
             for _ in 0..<50 {
                 if !busy && !mediaBusy && !componentOperationRunning { break }
                 try await Task.sleep(for: .milliseconds(100))

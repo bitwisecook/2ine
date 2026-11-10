@@ -21,11 +21,23 @@ const char *gl_vendor, *gl_renderer, *gl_version, *gl_extensions;
 qboolean isPermedia = false, gl_mtexable = false;
 void (*qglColorTableEXT)(int, int, int, int, int, const void *);
 
+/* Window sizes the port accepts; the default matches GLQuake's. */
+enum
+{
+    DEFAULT_WIDTH = 640,
+    DEFAULT_HEIGHT = 480,
+    MIN_WIDTH = 320,
+    MAX_WIDTH = 1600,
+    MIN_HEIGHT = 200,
+    MAX_HEIGHT = 1200,
+    WINDOW_ORIGIN = 40,
+};
+
 static HAB hab;
 static HMQ queue;
 static HWND frame, window;
 static HGC context;
-static int width = 640, height = 480;
+static int width = DEFAULT_WIDTH, height = DEFAULT_HEIGHT;
 static int mouse_x, mouse_y, active;
 static int scan_keys[256];
 
@@ -244,7 +256,7 @@ void VID_Init(unsigned char *palette)
     i = COM_CheckParm("-height");
     if (i && i + 1 < com_argc)
         height = atoi(com_argv[i + 1]);
-    if (width < 320 || width > 1600 || height < 200 || height > 1200)
+    if (width < MIN_WIDTH || width > MAX_WIDTH || height < MIN_HEIGHT || height > MAX_HEIGHT)
         Sys_Error("Video size outside 320x200 to 1600x1200");
     hab = WinInitialize(0);
     queue = WinCreateMsgQueue(hab, 0);
@@ -258,8 +270,8 @@ void VID_Init(unsigned char *palette)
     rect.xRight = width;
     rect.yTop = height;
     WinCalcFrameRect(frame, &rect, FALSE);
-    WinSetWindowPos(frame, HWND_TOP, 40, 40, rect.xRight - rect.xLeft, rect.yTop - rect.yBottom,
-                    SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ACTIVATE);
+    WinSetWindowPos(frame, HWND_TOP, WINDOW_ORIGIN, WINDOW_ORIGIN, rect.xRight - rect.xLeft,
+                    rect.yTop - rect.yBottom, SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ACTIVATE);
     config = pglChooseConfig(hab, attribs);
     if (!config)
         Sys_Error("No PGL RGB double-buffered depth visual");

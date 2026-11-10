@@ -26,6 +26,17 @@ from typing import BinaryIO, cast
 
 CATALOG = Path(__file__).with_name("data") / "soundfonts.json"
 CHUNK = 1024 * 1024
+# SoundFont 2 RIFF layout: a 12-byte "RIFF" size "sfbk" header, then 8-byte
+# chunk headers; preset headers (phdr) are 38-byte sfPresetHeader records
+# with wPreset and wBank at offset 20 and a terminal "EOP" record.
+RIFF_HEADER_SIZE = 12
+RIFF_CHUNK_HEADER_SIZE = 8
+SF2_PRESET_HEADER_SIZE = 38
+SF2_PRESET_PROGRAM_OFFSET = 20
+SF2_PRESET_LIMIT = 65536
+# General MIDI: programs 0-127 in bank 0, standard drum kit at bank 128.
+GM_PROGRAM_COUNT = 128
+GM_PERCUSSION_BANK = 128
 
 
 @dataclass(frozen=True)
@@ -171,39 +182,52 @@ def validate_sf2(path: Path) -> None:
     """Check RIFF bounds and the complete GM/percussion preset header inventory."""
     size = path.stat().st_size
     with path.open("rb") as stream:
-        header = stream.read(12)
+        header = stream.read(RIFF_HEADER_SIZE)
         if (
-            len(header) != 12
+            len(header) != RIFF_HEADER_SIZE
             or header[:4] != b"RIFF"
             or header[8:] != b"sfbk"
             or struct.unpack_from("<I", header, 4)[0] + 8 != size
         ):
             raise ValueError(f"not a complete RIFF SoundFont2 file: {path}")
         presets: set[tuple[int, int]] = set()
-        offset = 12
-        while offset + 8 <= size:
+        offset = RIFF_HEADER_SIZE
+        while offset + RIFF_CHUNK_HEADER_SIZE <= size:
             stream.seek(offset)
-            kind, length = struct.unpack("<4sI", stream.read(8))
-            end = offset + 8 + length
+            kind, length = struct.unpack("<4sI", stream.read(RIFF_CHUNK_HEADER_SIZE))
+            end = offset + RIFF_CHUNK_HEADER_SIZE + length
             if end > size:
                 raise ValueError("SoundFont RIFF chunk exceeds file")
             if kind == b"LIST" and length >= 4 and stream.read(4) == b"pdta":
-                sub = offset + 12
-                while sub + 8 <= end:
+                sub = offset + RIFF_HEADER_SIZE
+                while sub + RIFF_CHUNK_HEADER_SIZE <= end:
                     stream.seek(sub)
-                    subkind, sublength = struct.unpack("<4sI", stream.read(8))
-                    if sub + 8 + sublength > end:
+                    subkind, sublength = struct.unpack("<4sI", stream.read(RIFF_CHUNK_HEADER_SIZE))
+                    if sub + RIFF_CHUNK_HEADER_SIZE + sublength > end:
                         raise ValueError("SoundFont preset chunk exceeds list")
                     if subkind == b"phdr":
-                        if sublength < 38 or sublength % 38 or sublength > 38 * 65536:
+                        if (
+                            sublength < SF2_PRESET_HEADER_SIZE
+                            or sublength % SF2_PRESET_HEADER_SIZE
+                            or sublength > SF2_PRESET_HEADER_SIZE * SF2_PRESET_LIMIT
+                        ):
                             raise ValueError("invalid SoundFont preset header table")
-                        for record in range(sublength // 38 - 1):
-                            stream.seek(sub + 8 + record * 38 + 20)
+                        for record in range(sublength // SF2_PRESET_HEADER_SIZE - 1):
+                            stream.seek(
+                                sub
+                                + RIFF_CHUNK_HEADER_SIZE
+                                + record * SF2_PRESET_HEADER_SIZE
+                                + SF2_PRESET_PROGRAM_OFFSET
+                            )
                             program, bank = struct.unpack("<HH", stream.read(4))
                             presets.add((bank, program))
-                    sub += 8 + sublength + (sublength & 1)
+                    # RIFF chunks are padded to an even length.
+                    sub += RIFF_CHUNK_HEADER_SIZE + sublength + (sublength & 1)
             offset = end + (length & 1)
-    if not all((0, program) in presets for program in range(128)) or (128, 0) not in presets:
+    if (
+        not all((0, program) in presets for program in range(GM_PROGRAM_COUNT))
+        or (GM_PERCUSSION_BANK, 0) not in presets
+    ):
         raise ValueError("SoundFont must contain all 128 GM programs and standard percussion")
 
 

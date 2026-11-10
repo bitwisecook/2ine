@@ -3,6 +3,49 @@
 
 import struct
 
+# LX header field offsets (OS/2 Toolkit exe386.h names) and layout.
+E32_HEADER_SIZE = 196
+E32_CPU = 8
+E32_MFLAGS = 16
+E32_MPAGES = 20
+E32_STARTOBJ = 24
+E32_STACKOBJ = 32
+E32_ESP = 36
+E32_PAGESIZE = 40
+E32_OBJTAB = 64
+E32_OBJCNT = 68
+E32_OBJMAP = 72
+E32_RSRCTAB = 80
+E32_RESTAB = 88
+E32_ENTTAB = 92
+E32_FPAGETAB = 104
+E32_FRECTAB = 108
+E32_IMPMOD = 112
+E32_IMPPROC = 120
+E32_DATAPAGE = 128
+E32_AUTODATA = 148
+E32CPU386 = 2
+NE_OS2 = 1
+E32MODDLL = 0x8000
+O32_SIZE = 24
+OBJPAGELEN = 4096
+OBJREAD = 0x0001
+OBJWRITE = 0x0002
+OBJEXEC = 0x0004
+OBJRSRC = 0x0008
+OBJBIGDEF = 0x2000
+ENTRY32 = 3
+# Objects 1 and 2 (code, then data) and their preferred load addresses.
+CODE_OBJECT, DATA_OBJECT = 1, 2
+CODE_BASE, DATA_BASE = 0x10000, 0x20000
+DATA_OBJECT_SIZE = 65536
+INITIAL_ESP = 0xFFF0
+# DOS stub: a bare 64-byte MZ header whose e_lfanew points just past it.
+MZ_HEADER_SIZE = 64
+MZ_LFANEW = 60
+# Page data starts on a 512-byte file boundary.
+PAGE_DATA_ALIGNMENT = 512
+
 
 def linear_image(
     code,
@@ -17,11 +60,13 @@ def linear_image(
     export_names=(),
     import_names=b"\0",
 ):
-    header = bytearray(196)
+    header = bytearray(E32_HEADER_SIZE)
     header[:2] = b"LX"
-    struct.pack_into("<HH", header, 8, 2, 1)
-    objects = [(4096, 0x10000, 0x2005, 1, 1, 0)]
-    objects.append((65536, 0x20000, 0x2003, 2, int(bool(data)), 0))
+    struct.pack_into("<HH", header, E32_CPU, E32CPU386, NE_OS2)
+    objects = [(OBJPAGELEN, CODE_BASE, OBJBIGDEF | OBJEXEC | OBJREAD, 1, 1, 0)]
+    objects.append(
+        (DATA_OBJECT_SIZE, DATA_BASE, OBJBIGDEF | OBJWRITE | OBJREAD, 2, int(bool(data)), 0)
+    )
     pages = [code]
     if data:
         pages.append(data)
@@ -34,66 +79,68 @@ def linear_image(
         resource_bytes.extend(payload)
     if resources:
         # Resource objects in EXEs have no fixed load address.
-        objects.append((len(resource_bytes), 0, 9, len(pages) + 1, 1, 0))
+        objects.append((len(resource_bytes), 0, OBJRSRC | OBJREAD, len(pages) + 1, 1, 0))
         pages.append(resource_bytes)
-    assert all(len(page) <= 4096 for page in pages)
+    assert all(len(page) <= OBJPAGELEN for page in pages)
     for offset, value in {
-        16: 0x8000 if library else 0,
-        20: len(pages),
-        24: 1,
-        32: 2,
-        36: 0xFFF0,
-        40: 4096,
-        64: 196,
-        68: len(objects),
-        72: 196 + len(objects) * 24,
-        148: 2,
+        E32_MFLAGS: E32MODDLL if library else 0,
+        E32_MPAGES: len(pages),
+        E32_STARTOBJ: CODE_OBJECT,
+        E32_STACKOBJ: DATA_OBJECT,
+        E32_ESP: INITIAL_ESP,
+        E32_PAGESIZE: OBJPAGELEN,
+        E32_OBJTAB: E32_HEADER_SIZE,
+        E32_OBJCNT: len(objects),
+        E32_OBJMAP: E32_HEADER_SIZE + len(objects) * O32_SIZE,
+        E32_AUTODATA: DATA_OBJECT,
     }.items():
         struct.pack_into("<I", header, offset, value)
     tables = bytearray()
     for obj in objects:
         tables.extend(struct.pack("<IIIIII", *obj))
     for i, page in enumerate(pages):
-        tables.extend(struct.pack("<IHH", i * 4096, len(page), 0))
+        tables.extend(struct.pack("<IHH", i * OBJPAGELEN, len(page), 0))
     if resources:
-        struct.pack_into("<II", header, 80, len(header) + len(tables), len(resources))
+        struct.pack_into("<II", header, E32_RSRCTAB, len(header) + len(tables), len(resources))
         tables.extend(resource_table)
-    struct.pack_into("<I", header, 88, len(header) + len(tables))
+    struct.pack_into("<I", header, E32_RESTAB, len(header) + len(tables))
     tables.extend(bytes([len(name)]) + name.encode() + b"\x00\x00")
     for ordinal, exported_name in export_names:
         tables.extend(
             bytes([len(exported_name)]) + exported_name.encode() + struct.pack("<H", ordinal)
         )
     tables.extend(b"\x00")
-    struct.pack_into("<I", header, 92, len(header) + len(tables))
+    struct.pack_into("<I", header, E32_ENTTAB, len(header) + len(tables))
     if entry_table is not None:
         tables.extend(entry_table)
     elif exports:
-        tables.extend(bytes([len(exports), 3]) + struct.pack("<H", 1))
+        tables.extend(bytes([len(exports), ENTRY32]) + struct.pack("<H", CODE_OBJECT))
         for offset in exports:
             tables.extend(b"\x01" + struct.pack("<I", offset))
     tables.extend(b"\x00\x00")
-    struct.pack_into("<I", header, 104, len(header) + len(tables))
+    struct.pack_into("<I", header, E32_FPAGETAB, len(header) + len(tables))
     records = b"".join(fixups)
     tables.extend(struct.pack("<" + "I" * (len(pages) + 1), 0, *([len(records)] * len(pages))))
-    struct.pack_into("<I", header, 108, len(header) + len(tables))
+    struct.pack_into("<I", header, E32_FRECTAB, len(header) + len(tables))
     tables.extend(records)
-    struct.pack_into("<II", header, 112, len(header) + len(tables), len(modules))
+    struct.pack_into("<II", header, E32_IMPMOD, len(header) + len(tables), len(modules))
     for module in modules:
         tables.extend(bytes([len(module)]) + module.encode())
-    struct.pack_into("<I", header, 120, len(header) + len(tables))
+    struct.pack_into("<I", header, E32_IMPPROC, len(header) + len(tables))
     tables.extend(import_names)
-    mz = bytearray(64)
+    mz = bytearray(MZ_HEADER_SIZE)
     mz[:2] = b"MZ"
-    struct.pack_into("<I", mz, 60, 64)
-    data_offset = (64 + len(header) + len(tables) + 511) & ~511
-    struct.pack_into("<I", header, 128, data_offset)
+    struct.pack_into("<I", mz, MZ_LFANEW, MZ_HEADER_SIZE)
+    data_offset = (MZ_HEADER_SIZE + len(header) + len(tables) + PAGE_DATA_ALIGNMENT - 1) & ~(
+        PAGE_DATA_ALIGNMENT - 1
+    )
+    struct.pack_into("<I", header, E32_DATAPAGE, data_offset)
     image = mz + header + tables
     image.extend(bytes(data_offset - len(image)))
     for i, page in enumerate(pages):
         image.extend(page)
         if i + 1 < len(pages):
-            image.extend(bytes(4096 - len(page)))
+            image.extend(bytes(OBJPAGELEN - len(page)))
     return image
 
 
@@ -104,7 +151,7 @@ class FlatGuest:
         self.fixups = []
 
     def field(self, data):
-        address = 0x20000 + len(self.data)
+        address = DATA_BASE + len(self.data)
         self.data.extend(data)
         return address
 

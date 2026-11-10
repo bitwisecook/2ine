@@ -3,6 +3,13 @@
 #include "ball/ball_internal.h"
 #include "storage/volume.h"
 
+/* A dropped folder deeper or larger than this is almost certainly a mistake. */
+enum
+{
+    COPY_PLAN_DEPTH_LIMIT = 64,
+    COPY_PLAN_ENTRY_LIMIT = 100000,
+};
+
 cJSON *tb_ball_browse(TbBall *c, const char *path)
 {
     char *host = tb_ball_host_path(c, path, 0);
@@ -41,10 +48,11 @@ cJSON *tb_ball_browse(TbBall *c, const char *path)
         if (*p == '/')
             *p = '\\';
     cJSON *result = cJSON_CreateObject(), *entries = cJSON_AddArrayToObject(result, "entries");
-    if (strlen(guest) > 3)
+    if (strlen(guest) > TB_GUEST_ROOT_LENGTH)
     {
         const char *last = strrchr(guest, '\\');
-        size_t length = last == guest + 2 ? 3 : (size_t)(last - guest);
+        size_t length =
+            last == guest + TB_GUEST_DRIVE_LENGTH ? TB_GUEST_ROOT_LENGTH : (size_t)(last - guest);
         cJSON_AddStringToObject(result, "parent", tb_ball_format(c, "%.*s", (int)length, guest));
     }
     else
@@ -97,7 +105,7 @@ cJSON *tb_ball_browse(TbBall *c, const char *path)
 int tb_ball_plan_copy(TbBall *c, cJSON *plan, const char *source, const char *destination,
                       unsigned depth)
 {
-    if (depth > 64 || cJSON_GetArraySize(plan) > 100000)
+    if (depth > COPY_PLAN_DEPTH_LIMIT || cJSON_GetArraySize(plan) > COPY_PLAN_ENTRY_LIMIT)
         return tb_ball_fail(c, "The dropped folder is too deep or contains too many files");
     if (tb_is_link(source))
         return tb_ball_fail(c, "Symbolic links cannot be imported: %s", source);

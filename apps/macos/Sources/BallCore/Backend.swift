@@ -80,8 +80,12 @@ public actor ProcessRunner {
             let ended = !child.isRunning
             let size = try reader.seekToEnd()
             if size != lastSize || ended {
-                try reader.seek(toOffset: size > 65536 ? size - 65536 : 0)
-                tail = String(decoding: try reader.read(upToCount: 65536) ?? Data(), as: UTF8.self)
+                try reader.seek(
+                    toOffset: size > SessionLimits.logTailBytes
+                        ? size - SessionLimits.logTailBytes : 0)
+                tail = String(
+                    decoding: try reader.read(upToCount: Int(SessionLimits.logTailBytes)) ?? Data(),
+                    as: UTF8.self)
                 await update(tail)
                 lastSize = size
             }
@@ -92,9 +96,17 @@ public actor ProcessRunner {
             }
             // The manager owns this operation until actual exit; view/task
             // cancellation never abandons a still-running guest process.
-            await processPollingPause(.milliseconds(100))
+            await processPollingPause(SessionLimits.logPollInterval)
         }
     }
+}
+
+private enum SessionLimits {
+    /// The activity view shows only the tail of a log; the ball keeps all of it.
+    static let logTailBytes: UInt64 = 65536
+    static let logPollInterval: Duration = .milliseconds(100)
+    /// Finished and early-stopped session IDs remembered so a late Stop is ignored.
+    static let rememberedSessions = 256
 }
 
 struct LaunchPlan: Decodable, Sendable {
@@ -127,7 +139,9 @@ public actor BallBackend {
 
     private func retire(_ id: String) {
         sessions.removeValue(forKey: id)
-        if completedSessions.count >= 256, let oldest = completedSessions.first {
+        if completedSessions.count >= SessionLimits.rememberedSessions,
+            let oldest = completedSessions.first
+        {
             completedSessions.remove(oldest)
         }
         completedSessions.insert(id)
@@ -142,7 +156,9 @@ public actor BallBackend {
     public func stop(sessionID: String, force: Bool = false) async {
         guard let session = sessions[sessionID] else {
             if validLaunchSessionID(sessionID), !completedSessions.contains(sessionID) {
-                if pendingStops.count >= 256, let oldest = pendingStops.first {
+                if pendingStops.count >= SessionLimits.rememberedSessions,
+                    let oldest = pendingStops.first
+                {
                     pendingStops.remove(oldest)
                 }
                 pendingStops.insert(sessionID)

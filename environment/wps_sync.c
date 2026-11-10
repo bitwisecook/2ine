@@ -9,8 +9,17 @@
 #include "third_party/sha256/sha256.h"
 #define TB_WPS_PROFILE_LIMIT (8u * 1024u * 1024u)
 #define TB_WPS_OBJECT_LIMIT 8192u
+/* Persistent object handles are eight hex digits; abstract (non-file-system)
+   objects start at 0x20000. */
+#define TB_WPS_HANDLE_DIGITS 8u
+#define TB_WPS_ABSTRACT_HANDLE_MIN 0x20000ul
+/* Folder chains deeper than this are cyclic or corrupt. */
+#define TB_WPS_FOLDER_DEPTH_LIMIT 256u
+/* ICONRESOURCE ids are 16-bit resource ids. */
+#define TB_WPS_RESOURCE_ID_MAX 65535ul
 
-static void wps_digest(const unsigned char *bytes, size_t size, unsigned char digest[32])
+static void wps_digest(const unsigned char *bytes, size_t size,
+                       unsigned char digest[TB_BALL_DIGEST_SIZE])
 {
     SHA256_CTX hash;
     sha256_init(&hash);
@@ -220,8 +229,9 @@ static const cJSON *wps_previous(const cJSON *apps, const char *handle)
 static cJSON *wps_objects(TbBall *c, const unsigned char *bytes, size_t size)
 {
     if (size > TB_WPS_PROFILE_LIMIT ||
-        (size >= 12 && !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE) &&
-         tb_le32(bytes + 8) > TB_WPS_OBJECT_LIMIT))
+        (size >= TB_PROFILE_HEADER_SIZE &&
+         !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE) &&
+         tb_le32(bytes + TB_PROFILE_MAGIC_SIZE) > TB_WPS_OBJECT_LIMIT))
     {
         tb_ball_fail(c, "Workplace Shell profile exceeds the registration limit");
         return NULL;
@@ -236,8 +246,8 @@ static cJSON *wps_objects(TbBall *c, const unsigned char *bytes, size_t size)
         const char *handle = field(entry, "key");
         char *end = NULL;
         unsigned long id = strtoul(handle, &end, 16);
-        if (!*handle || strlen(handle) != 8 || *end || id < 0x20000 || id > INT32_MAX ||
-            ++count > TB_WPS_OBJECT_LIMIT)
+        if (!*handle || strlen(handle) != TB_WPS_HANDLE_DIGITS || *end ||
+            id < TB_WPS_ABSTRACT_HANDLE_MIN || id > INT32_MAX || ++count > TB_WPS_OBJECT_LIMIT)
         {
             tb_ball_fail(c, "Invalid Workplace Shell object handle");
             break;
@@ -270,7 +280,7 @@ static cJSON *wps_objects(TbBall *c, const unsigned char *bytes, size_t size)
                 if (value)
                     cJSON_AddStringToObject(record, properties[i], value);
             }
-            unsigned char digest[32];
+            unsigned char digest[TB_BALL_DIGEST_SIZE];
             wps_digest(data, n, digest);
             cJSON_AddStringToObject(record, "hash", tb_ball_hex(c, digest));
             put(objects, handle, record);
@@ -290,7 +300,7 @@ static cJSON *wps_objects(TbBall *c, const unsigned char *bytes, size_t size)
 static cJSON *wps_folders(TbBall *c, const cJSON *objects, const char *location)
 {
     cJSON *folders = cJSON_CreateArray();
-    for (unsigned depth = 0; location && depth < 256; depth++)
+    for (unsigned depth = 0; location && depth < TB_WPS_FOLDER_DEPTH_LIMIT; depth++)
     {
         if (equal_case(location, "<WP_DESKTOP>"))
             return folders;
@@ -412,7 +422,7 @@ int wps_sync(TbBall *c)
                 unsigned long resource = strtoul(icon_resource, &end, 0);
                 while (*end == ',' || isspace((unsigned char)*end))
                     end++;
-                if (resource <= 65535 && *end)
+                if (resource <= TB_WPS_RESOURCE_ID_MAX && *end)
                 {
                     char *module = strchr(end, '.') ? tb_ball_keep(c, strdup(end))
                                                     : tb_ball_format(c, "%s.DLL", end);
@@ -461,7 +471,7 @@ int wps_sync(TbBall *c)
         apps = NULL;
         tb_ball_save_manifest(c);
     }
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     wps_digest((unsigned char *)bytes, size, digest);
     cJSON_AddStringToObject(report, "profile", "C:\\OS2\\OBJECTS.INI");
     cJSON_AddStringToObject(report, "profileSha256", tb_ball_hex(c, digest));

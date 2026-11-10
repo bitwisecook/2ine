@@ -1,10 +1,24 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* 2ine-ball: runs one JSON ball request from stdin and, with --execute,
+   launches the program its plan describes. */
 #define _POSIX_C_SOURCE 200809L
 #include "ball/include/twoine_ball.h"
 #include "third_party/cjson/cJSON.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+enum
+{
+    /* Every failure exits with tb_request's failure status. */
+    CLI_FAILURE = TB_REQUEST_FAILURE,
+    /* Shell conventions: 127 when the program cannot be executed, 128 + n
+       when signal n ended it. */
+    CLI_EXEC_FAILED = 127,
+    CLI_SIGNAL_STATUS_BASE = 128,
+    REQUEST_INITIAL_CAPACITY = 4096,
+    REQUEST_SIZE_LIMIT = 64 * 1024 * 1024,
+};
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -36,7 +50,7 @@ static int spawn(char **argv, int count, const char *cwd)
     wchar_t **args = calloc((size_t)count, sizeof(*args));
     size_t capacity = 1;
     if (!args)
-        return 2;
+        return CLI_FAILURE;
     for (int i = 0; i < count; i++)
     {
         args[i] = wide(argv[i]);
@@ -45,8 +59,9 @@ static int spawn(char **argv, int count, const char *cwd)
             for (int j = 0; j < i; j++)
                 free(args[j]);
             free(args);
-            return 2;
+            return CLI_FAILURE;
         }
+        /* Worst case: every character escaped, plus quotes and a separator. */
         capacity += wcslen(args[i]) * 2 + 4;
     }
     wchar_t *command = malloc(capacity * sizeof(*command)), *at = command;
@@ -55,7 +70,7 @@ static int spawn(char **argv, int count, const char *cwd)
         for (int i = 0; i < count; i++)
             free(args[i]);
         free(args);
-        return 2;
+        return CLI_FAILURE;
     }
     /* Windows CreateProcess takes one command line. Quote each structured
        argument using the CRT's backslash-before-quote/end rules. */
@@ -92,11 +107,11 @@ static int spawn(char **argv, int count, const char *cwd)
     startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
     PROCESS_INFORMATION process = {0};
-    int code = 2;
+    int code = CLI_FAILURE;
     if (CreateProcessW(args[0], command, NULL, NULL, TRUE, 0, NULL, directory, &startup, &process))
     {
         WaitForSingleObject(process.hProcess, INFINITE);
-        DWORD status = 2;
+        DWORD status = CLI_FAILURE;
         GetExitCodeProcess(process.hProcess, &status);
         code = (int)status;
         CloseHandle(process.hThread);
@@ -127,19 +142,21 @@ static int spawn(char **argv, int count, const char *cwd)
     (void)count;
     pid_t child = fork();
     if (child < 0)
-        return 2;
+        return CLI_FAILURE;
     if (!child)
     {
         if (chdir(cwd))
-            _exit(2);
+            _exit(CLI_FAILURE);
         execv(argv[0], argv);
-        _exit(127);
+        _exit(CLI_EXEC_FAILED);
     }
     int status = 0;
     while (waitpid(child, &status, 0) < 0)
         if (errno != EINTR)
-            return 2;
-    return WIFEXITED(status) ? WEXITSTATUS(status) : WIFSIGNALED(status) ? -WTERMSIG(status) : 2;
+            return CLI_FAILURE;
+    return WIFEXITED(status)     ? WEXITSTATUS(status)
+           : WIFSIGNALED(status) ? -WTERMSIG(status)
+                                 : CLI_FAILURE;
 }
 #endif
 static int invoke(cJSON *request, char **result)
@@ -161,26 +178,26 @@ int main(int argc, char **argv)
         return 0;
     }
     int execute = argc > 1 && !strcmp(argv[1], "--execute");
-    size_t length = 0, capacity = 4096;
+    size_t length = 0, capacity = REQUEST_INITIAL_CAPACITY;
     char *text = malloc(capacity);
     if (!text)
-        return 2;
+        return CLI_FAILURE;
     int ch;
     while ((ch = getchar()) != EOF)
     {
         if (length + 1 >= capacity)
         {
-            if (capacity >= 64 * 1024 * 1024)
+            if (capacity >= REQUEST_SIZE_LIMIT)
             {
                 free(text);
-                return 2;
+                return CLI_FAILURE;
             }
             capacity *= 2;
             char *next = realloc(text, capacity);
             if (!next)
             {
                 free(text);
-                return 2;
+                return CLI_FAILURE;
             }
             text = next;
         }
@@ -193,7 +210,7 @@ int main(int argc, char **argv)
     {
         fputs("Invalid JSON request\n", stderr);
         cJSON_Delete(request);
-        return 2;
+        return CLI_FAILURE;
     }
     char *result = NULL;
     int status = invoke(request, &result);
@@ -218,14 +235,14 @@ int main(int argc, char **argv)
     {
         cJSON_Delete(plan);
         cJSON_Delete(request);
-        return 2;
+        return CLI_FAILURE;
     }
     char **arguments = calloc((size_t)count + 1, sizeof(*arguments));
     if (!arguments)
     {
         cJSON_Delete(plan);
         cJSON_Delete(request);
-        return 2;
+        return CLI_FAILURE;
     }
     for (int i = 0; i < count; i++)
         arguments[i] = cJSON_GetStringValue(cJSON_GetArrayItem(command, i));
@@ -271,5 +288,5 @@ int main(int argc, char **argv)
     }
     cJSON_Delete(plan);
     cJSON_Delete(request);
-    return status ? status : code < 0 ? 128 - code : code;
+    return status ? status : code < 0 ? CLI_SIGNAL_STATUS_BASE - code : code;
 }

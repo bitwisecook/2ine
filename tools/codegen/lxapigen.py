@@ -12,6 +12,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+# Export ordinals and stack argument sizes are 16-bit fields.
+ORDINAL_MAX = 0xFFFF
+ARGUMENT_BYTES_MAX = 0xFFFF
+# Each data export starts on its own 16-byte boundary in the module's data block.
+DATA_ALIGNMENT = 16
+
+
+def data_slot(size: int) -> int:
+    return (size + DATA_ALIGNMENT - 1) & ~(DATA_ALIGNMENT - 1)
+
+
 # Module definitions (LINK386 .def files) name each DLL's exports and ordinals.
 # The test module exercises native forwarder exports.
 DEFINITION_GLOBS = ("os2/**/*.def", "tests/emulator/loader/natfwd/*.def")
@@ -146,7 +157,7 @@ def read_policies32(path: Path) -> Policies32:
             size = integer(fields.get("argument_bytes"), name)
             pop = integer(fields.get("callee_pop"), name)
             convention = string(fields.get("convention"), name)
-            if not 0 <= pop <= size <= 65535 or convention not in {
+            if not 0 <= pop <= size <= ARGUMENT_BYTES_MAX or convention not in {
                 "LX_ABI_STACK32",
                 "LX_ABI_EAX32",
             }:
@@ -301,7 +312,7 @@ def parse_definition(text: str, location: str = "<def>") -> Definition:
         raise ValueError(f"{location}: missing LIBRARY statement")
     seen: dict[int, str] = {}
     for export in exports:
-        if not 0 < export.ordinal < 65536:
+        if not 0 < export.ordinal <= ORDINAL_MAX:
             raise ValueError(f"{location}: {export.name}: ordinal out of range")
         if export.ordinal in seen:
             raise ValueError(
@@ -322,7 +333,7 @@ def bind_exports(
         if "." in export.internal:
             module, target = export.internal.split(".", 1)
             if target.isdecimal():
-                if not 0 < int(target) < 65536:
+                if not 0 < int(target) <= ORDINAL_MAX:
                     raise ValueError(f"{export.name}: forwarder ordinal out of range")
                 forwarders.append(Forwarder(export.name, export.ordinal, module, int(target), ""))
             else:
@@ -518,7 +529,7 @@ def render(
     if data and not api32 and not use16:
         lines.append(f"LX_NATIVE_MODULE_DEINIT({{\n{data_deinit}}})\n")
     if data:
-        total = sum((item.size + 15) & ~15 for item in data)
+        total = sum(data_slot(item.size) for item in data)
         lines.append(
             f"static int initdata_{module}(void) {{\n"
             f"    LX_NATIVE_MODULE_INIT_DATA_SUPPORT({total})\n"
@@ -526,7 +537,7 @@ def render(
         offset = 0
         for item in data:
             lines.append(f"    LX_NATIVE_INIT_DATA({item.name}, {offset})\n")
-            offset += (item.size + 15) & ~15
+            offset += data_slot(item.size)
         lines.append("    return 1;\n}\n")
     for item in forwarders:
         lines.append(

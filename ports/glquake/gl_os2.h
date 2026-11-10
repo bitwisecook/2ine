@@ -1,7 +1,9 @@
 /* Public domain. No rights reserved. */
+/* Texture objects GLQuake expects, emulated over the GL 1.0 that Warp ships. */
 #ifndef GL_OS2_H
 #define GL_OS2_H
 #include <GL/gl.h>
+/* GL 1.1's GL_INTENSITY, absent from the GL 1.0 headers. */
 #ifndef GL_INTENSITY
 #define GL_INTENSITY 0x8049
 #endif

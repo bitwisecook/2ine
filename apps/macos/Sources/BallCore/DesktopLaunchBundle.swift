@@ -2,6 +2,13 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
+/// Bounds on a guest-supplied launcher icon before it is written into a bundle.
+private enum DesktopIcon {
+    static let maximumSide = 1024
+    static let rgbaBytes = 4
+    static let maximumImageBytes = 16 * 1024 * 1024
+}
+
 struct DesktopIdentity: Decodable, Sendable {
     let name: String
     let nameSource: String
@@ -59,10 +66,12 @@ struct DesktopLaunchBundle: Sendable {
     ) throws -> String? {
         var png: Data?
         if let bytes = icon?.rgba, let width = icon?.width, let height = icon?.height,
-            width > 0, height > 0, width <= 1024, height <= 1024, bytes.count == width * height * 4
+            width > 0, height > 0, width <= DesktopIcon.maximumSide,
+            height <= DesktopIcon.maximumSide,
+            bytes.count == width * height * DesktopIcon.rgbaBytes
         {
             png = pngImage(rgba: bytes, width: width, height: height)
-        } else if let bytes = icon?.image, bytes.count <= 16 * 1024 * 1024 {
+        } else if let bytes = icon?.image, bytes.count <= DesktopIcon.maximumImageBytes {
             png = pngImage(image: bytes)
         }
         if let png {
@@ -125,8 +134,9 @@ struct DesktopLaunchBundle: Sendable {
             var iconURL: URL?
             if let icon = identity?.icon {
                 if let bytes = icon.rgba, let width = icon.width, let height = icon.height,
-                    width > 0, height > 0, width <= 1024, height <= 1024,
-                    bytes.count == width * height * 4
+                    width > 0, height > 0, width <= DesktopIcon.maximumSide,
+                    height <= DesktopIcon.maximumSide,
+                    bytes.count == width * height * DesktopIcon.rgbaBytes
                 {
                     var data = Data("2INERGBA".utf8)
                     for value in [UInt32(width), UInt32(height)] {
@@ -137,7 +147,7 @@ struct DesktopLaunchBundle: Sendable {
                     let output = resources.appending(path: "Application.rgba")
                     try data.write(to: output, options: .atomic)
                     iconURL = output
-                } else if let bytes = icon.image, bytes.count <= 16 * 1024 * 1024 {
+                } else if let bytes = icon.image, bytes.count <= DesktopIcon.maximumImageBytes {
                     let output = resources.appending(path: "Application.image")
                     try bytes.write(to: output, options: .atomic)
                     iconURL = output

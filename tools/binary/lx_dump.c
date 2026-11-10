@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* lx_dump: prints the headers, objects, fixups and tables of an LX or NE executable. */
 
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +16,132 @@
 #include "formats/executable/ne.h"
 #include "emulator/diagnostics.h"
 
+/* Executable format values, by their OS/2 Toolkit names (exe386.h and
+   newexe.h) where the Toolkit has one. */
+enum
+{
+    /* DOS stub: e_lfanew, the offset of the new-format header. */
+    DOS_HEADER_NEW_EXE_OFFSET = 0x3C,
+    EXE_HEADER_MINIMUM = 62,
+
+    /* LX header. */
+    E32LEBO = 0x00,
+    E32LEWO = 0x00,
+    E32LEVEL = 0,
+    E32CPU486 = 0x003,
+    OBJPAGELEN = 4096,
+    /* LX module flags. */
+    E32LIBINIT = 0x0004,
+    E32NOINTFIX = 0x0010,
+    E32NOEXTFIX = 0x0020,
+    E32NOPMW = 0x0100,
+    E32PMW = 0x0200,
+    E32PMAPI = 0x0300,
+    E32NOLOAD = 0x2000,
+    E32MODDLL = 0x08000,
+    E32MODPROTDLL = 0x18000,
+    E32MODPDEV = 0x20000,
+    E32MODVDEV = 0x28000,
+    E32LIBTERM = 0x40000000,
+    /* LX object flags. */
+    OBJREAD = 0x0001,
+    OBJWRITE = 0x0002,
+    OBJEXEC = 0x0004,
+    OBJRSRC = 0x0008,
+    OBJDISCARD = 0x0010,
+    OBJSHARED = 0x0020,
+    OBJPRELOAD = 0x0040,
+    OBJINVALID = 0x0080,
+    OBJPERM = 0x0100,
+    OBJRESIDENT = 0x0200,
+    OBJCONTIG = 0x0300,
+    OBJDYNAMIC = 0x0400,
+    OBJRESERVED = 0x0800,
+    OBJALIAS16 = 0x1000,
+    OBJBIGDEF = 0x2000,
+    OBJCONFORM = 0x4000,
+    OBJIOPL = 0x8000,
+    /* LX object page flags. */
+    VALID = 0x0000,
+    ITERDATA = 0x0001,
+    INVALID = 0x0002,
+    ZEROED = 0x0003,
+    RANGE = 0x0004,
+    ITERDATA2 = 0x0005,
+    /* LX and NE fixup source types and flags. */
+    NRSTYP = 0x0f,
+    NRSBYT = 0x00,
+    NRSSEG = 0x02,
+    NRSPTR = 0x03,
+    NRSOFF = 0x05,
+    NRPTR48 = 0x06,
+    NROFF32 = 0x07,
+    NRSOFF32 = 0x08,
+    NRALIAS = 0x10,
+    NRCHAIN = 0x20,
+    NRRTYP = 0x03,
+    NRRINT = 0x00,
+    NRRORD = 0x01,
+    NRRNAM = 0x02,
+    NRRENT = 0x03, /* LX: internal reference via the entry table */
+    NRROSF = 0x03, /* NE: operating-system fixup */
+    NRADD = 0x04,
+    NRICHAIN = 0x08,
+    NR32BITOFF = 0x10,
+    NR32BITADD = 0x20,
+    NR16OBJMOD = 0x40,
+    NR8BITORD = 0x80,
+    /* Length-prefixed names keep their length in the low seven bits. */
+    NAME_LENGTH_MASK = 0x7F,
+    /* LX entry table bundles. */
+    EMPTY = 0x00,
+    ENTRY16 = 0x01,
+    GATE16 = 0x02,
+    ENTRY32 = 0x03,
+    ENTRYFWD = 0x04,
+    TYPEINFO = 0x80,
+    E32EXPORT = 0x01,
+    E32SHARED = 0x02,
+    E32PARAMS = 0xf8,
+    E32PARAMS_SHIFT = 3,
+    FWD_ORDINAL = 0x01,
+
+    /* NE header. */
+    NE_OS2 = 0x1,
+    NESOLO = 0x0001,
+    NEINST = 0x0002,
+    NEPPLI = 0x0004,
+    NEIERR = 0x2000,
+    NENOTMPSAFE = 0x4000,
+    NENOTP = 0x8000,
+    NE_APPTYPE_SHIFT = 8,
+    NE_APPTYPE_BITS = 0x3,
+    NELONGNAMES = 0x01,
+    NEWINISPROT = 0x02,
+    NEWINGETPROPFON = 0x04,
+    NE_GANGLOAD_AREA = 0x08,
+    /* NE segment table: a zero size or allocation means 64 KiB. */
+    NE_SEGMENT_64K = 0x10000,
+    NE_SEGMENT_TYPE_BITS = 0x3,
+    NSCODE = 0x0000,
+    NSDATA = 0x0001,
+    NE_SEGMENT_REALMODE = 0x0004,
+    NSITER = 0x0008,
+    NSMOVE = 0x0010,
+    NSSHARED = 0x0020,
+    NSPRELOAD = 0x0040,
+    NSEXRD = 0x0080,
+    NSRELOC = 0x0100,
+    NE_SEGMENT_DEBUGINFO = 0x0200,
+    NE_SEGMENT_DISCARD_PRIORITY = 0xF000,
+    NE_DISCARD_PRIORITY_SHIFT = 13,
+    NE_DISCARD_PRIORITY_BITS = 0x7,
+    /* An internal fixup to segment 0xFF names a movable entry by ordinal. */
+    NE_MOVABLE_SEGMENT = 0xFF,
+    /* Resource type and name ids with the high bit set are integers. */
+    NE_RESOURCE_INTEGER_ID = 0x8000,
+};
+
 static int sanityCheckLxExe(const uint8 *exe, const uint32 exelen)
 {
     if (sizeof(LxHeader) >= exelen)
@@ -24,31 +151,31 @@ static int sanityCheckLxExe(const uint8 *exe, const uint32 exelen)
     }
 
     const LxHeader *lx = (const LxHeader *)exe;
-    if ((lx->byte_order != 0) || (lx->word_order != 0))
+    if ((lx->byte_order != E32LEBO) || (lx->word_order != E32LEWO))
     {
         fprintf(stderr, "Program is not little-endian!\n");
         return 0;
     }
 
-    if (lx->lx_version != 0)
+    if (lx->lx_version != E32LEVEL)
     {
         fprintf(stderr, "Program is unknown LX EXE version (%u)\n", (uint)lx->lx_version);
         return 0;
     }
 
-    if (lx->cpu_type > 3)
-    { // 1==286, 2==386, 3==486
+    if (lx->cpu_type > E32CPU486)
+    {
         fprintf(stderr, "Program needs unknown CPU type (%u)\n", (uint)lx->cpu_type);
         return 0;
     }
 
-    if (lx->os_type != 1)
-    { // 1==OS/2, others: dos4, windows, win386, unknown.
+    if (lx->os_type != NE_OS2)
+    {
         fprintf(stderr, "Program needs unknown OS type (%u)\n", (uint)lx->os_type);
         return 0;
     }
 
-    if (lx->page_size != 4096)
+    if (lx->page_size != OBJPAGELEN)
     {
         fprintf(stderr, "Program page size isn't 4096 (%u)\n", (uint)lx->page_size);
         return 0;
@@ -66,7 +193,7 @@ static int sanityCheckNeExe(const uint8 *exe, const uint32 exelen)
     }
 
     const NeHeader *ne = (const NeHeader *)exe;
-    if (ne->exe_type > 1)
+    if (ne->exe_type > NE_OS2)
     {
         fprintf(stderr, "Not an OS/2 NE EXE file (exe_type is %d, not 1)\n", (int)ne->exe_type);
         return 0;
@@ -77,12 +204,12 @@ static int sanityCheckNeExe(const uint8 *exe, const uint32 exelen)
 
 static int sanityCheckExe(uint8 **_exe, uint32 *_exelen, int *_is_lx)
 {
-    if (*_exelen < 62)
+    if (*_exelen < EXE_HEADER_MINIMUM)
     {
         fprintf(stderr, "not an OS/2 EXE\n");
         return 0;
     }
-    const uint32 header_offset = *((uint32 *)(*_exe + 0x3C));
+    const uint32 header_offset = *((uint32 *)(*_exe + DOS_HEADER_NEW_EXE_OFFSET));
 
     *_exe += header_offset;
     *_exelen -= header_offset;
@@ -111,29 +238,29 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
     printf("module version: %u\n", (uint)lx->module_version);
 
     printf("module flags:");
-    if (lx->module_flags & 0x4)
+    if (lx->module_flags & E32LIBINIT)
         printf(" LIBINIT");
-    if (lx->module_flags & 0x10)
+    if (lx->module_flags & E32NOINTFIX)
         printf(" INTERNALFIXUPS");
-    if (lx->module_flags & 0x20)
+    if (lx->module_flags & E32NOEXTFIX)
         printf(" EXTERNALFIXUPS");
-    if (lx->module_flags & 0x100)
+    if (lx->module_flags & E32NOPMW)
         printf(" PMINCOMPAT");
-    if (lx->module_flags & 0x200)
+    if (lx->module_flags & E32PMW)
         printf(" PMCOMPAT");
-    if (lx->module_flags & 0x300)
+    if (lx->module_flags & E32PMAPI)
         printf(" USESPM");
-    if (lx->module_flags & 0x2000)
+    if (lx->module_flags & E32NOLOAD)
         printf(" NOTLOADABLE");
-    if (lx->module_flags & 0x8000)
+    if (lx->module_flags & E32MODDLL)
         printf(" LIBRARYMODULE");
-    if (lx->module_flags & 0x18000)
+    if (lx->module_flags & E32MODPROTDLL)
         printf(" PROTMEMLIBRARYMODULE");
-    if (lx->module_flags & 0x20000)
+    if (lx->module_flags & E32MODPDEV)
         printf(" PHYSDRIVERMODULE");
-    if (lx->module_flags & 0x28000)
+    if (lx->module_flags & E32MODVDEV)
         printf(" VIRTDRIVERMODULE");
-    if (lx->module_flags & 0x40000000)
+    if (lx->module_flags & E32LIBTERM)
         printf(" LIBTERM");
     printf("\n");
 
@@ -193,39 +320,39 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
         printf("Virtual size: %u\n", (uint)obj->virtual_size);
         printf("Relocation base address: 0x%X\n", (uint)obj->reloc_base_addr);
         printf("Object flags:");
-        if (obj->object_flags & 0x1)
+        if (obj->object_flags & OBJREAD)
             printf(" READ");
-        if (obj->object_flags & 0x2)
+        if (obj->object_flags & OBJWRITE)
             printf(" WRITE");
-        if (obj->object_flags & 0x4)
+        if (obj->object_flags & OBJEXEC)
             printf(" EXEC");
-        if (obj->object_flags & 0x8)
+        if (obj->object_flags & OBJRSRC)
             printf(" RESOURCE");
-        if (obj->object_flags & 0x10)
+        if (obj->object_flags & OBJDISCARD)
             printf(" DISCARD");
-        if (obj->object_flags & 0x20)
+        if (obj->object_flags & OBJSHARED)
             printf(" SHARED");
-        if (obj->object_flags & 0x40)
+        if (obj->object_flags & OBJPRELOAD)
             printf(" PRELOAD");
-        if (obj->object_flags & 0x80)
+        if (obj->object_flags & OBJINVALID)
             printf(" INVALID");
-        if (obj->object_flags & 0x100)
+        if (obj->object_flags & OBJPERM)
             printf(" ZEROFILL");
-        if (obj->object_flags & 0x200)
+        if (obj->object_flags & OBJRESIDENT)
             printf(" RESIDENT");
-        if (obj->object_flags & 0x300)
+        if (obj->object_flags & OBJCONTIG)
             printf(" RESIDENT+CONTIG");
-        if (obj->object_flags & 0x400)
+        if (obj->object_flags & OBJDYNAMIC)
             printf(" RESIDENT+LONGLOCK");
-        if (obj->object_flags & 0x800)
+        if (obj->object_flags & OBJRESERVED)
             printf(" SYSRESERVED");
-        if (obj->object_flags & 0x1000)
+        if (obj->object_flags & OBJALIAS16)
             printf(" 16:16");
-        if (obj->object_flags & 0x2000)
+        if (obj->object_flags & OBJBIGDEF)
             printf(" BIG");
-        if (obj->object_flags & 0x4000)
+        if (obj->object_flags & OBJCONFORM)
             printf(" CONFORM");
-        if (obj->object_flags & 0x8000)
+        if (obj->object_flags & OBJIOPL)
             printf(" IOPL");
         printf("\n");
         printf("Page table index: %u\n", (uint)obj->page_table_index);
@@ -244,17 +371,17 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
             printf("Page data offset: 0x%X\n", (uint)objpage->page_data_offset);
             printf("Page data size: %u\n", (uint)objpage->data_size);
             printf("Page flags: (%u)", (uint)objpage->flags);
-            if (objpage->flags == 0x0)
+            if (objpage->flags == VALID)
                 printf(" PHYSICAL");
-            else if (objpage->flags == 0x1)
+            else if (objpage->flags == ITERDATA)
                 printf(" ITERATED");
-            else if (objpage->flags == 0x2)
+            else if (objpage->flags == INVALID)
                 printf(" INVALID");
-            else if (objpage->flags == 0x3)
+            else if (objpage->flags == ZEROED)
                 printf(" ZEROFILL");
-            else if (objpage->flags == 0x4)
+            else if (objpage->flags == RANGE)
                 printf(" RANGE");
-            else if (objpage->flags == 0x5)
+            else if (objpage->flags == ITERDATA2)
                 printf(" COMPRESSED");
             else
                 printf(" UNKNOWN");
@@ -271,31 +398,31 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 printf("Fixup Record #%u:\n", (uint)(i + 1));
                 printf("Source type: ");
                 const uint8 srctype = *(fixup++);
-                if (srctype & 0x10)
+                if (srctype & NRALIAS)
                     printf("[FIXUPTOALIAS] ");
-                if (srctype & 0x20)
+                if (srctype & NRCHAIN)
                     printf("[SOURCELIST] ");
-                switch (srctype & 0xF)
+                switch (srctype & NRSTYP)
                 {
-                    case 0x00:
+                    case NRSBYT:
                         printf("Byte fixup");
                         break;
-                    case 0x02:
+                    case NRSSEG:
                         printf("16-bit selector fixup");
                         break;
-                    case 0x03:
+                    case NRSPTR:
                         printf("16:16 pointer fixup");
                         break;
-                    case 0x05:
+                    case NRSOFF:
                         printf("16-bit offset fixup");
                         break;
-                    case 0x06:
+                    case NRPTR48:
                         printf("16:32 pointer fixup");
                         break;
-                    case 0x07:
+                    case NROFF32:
                         printf("32-bit offset fixup");
                         break;
-                    case 0x08:
+                    case NRSOFF32:
                         printf("32-bit self-relative offset fixup");
                         break;
                     default:
@@ -306,38 +433,38 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
 
                 const uint8 fixupflags = *(fixup++);
                 printf("Target flags:");
-                switch (fixupflags & 0x3)
+                switch (fixupflags & NRRTYP)
                 {
-                    case 0x0:
+                    case NRRINT:
                         printf(" INTERNAL");
                         break;
-                    case 0x1:
+                    case NRRORD:
                         printf(" IMPORTBYORDINAL");
                         break;
-                    case 0x2:
+                    case NRRNAM:
                         printf(" IMPORTBYNAME");
                         break;
-                    case 0x3:
+                    case NRRENT:
                         printf(" INTERNALVIAENTRY");
                         break;
                 }
 
-                if (fixupflags & 0x4)
+                if (fixupflags & NRADD)
                     printf(" ADDITIVE");
-                if (fixupflags & 0x8)
+                if (fixupflags & NRICHAIN)
                     printf(" INTERNALCHAINING");
-                if (fixupflags & 0x10)
+                if (fixupflags & NR32BITOFF)
                     printf(" 32BITTARGETOFFSET");
-                if (fixupflags & 0x20)
+                if (fixupflags & NR32BITADD)
                     printf(" 32BITADDITIVE");
-                if (fixupflags & 0x40)
+                if (fixupflags & NR16OBJMOD)
                     printf(" 16BITORDINAL");
-                if (fixupflags & 0x80)
+                if (fixupflags & NR8BITORD)
                     printf(" 8BITORDINAL");
                 printf("\n");
 
                 uint8 srclist_count = 0;
-                if (srctype & 0x20)
+                if (srctype & NRCHAIN)
                 { // source list
                     srclist_count = *(fixup++);
                     printf("Source offset list count: %u\n", (uint)srclist_count);
@@ -350,11 +477,11 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 }
                 printf("\n");
 
-                switch (fixupflags & 0x3)
+                switch (fixupflags & NRRTYP)
                 {
-                    case 0x0:
+                    case NRRINT:
                         printf("Internal fixup record:\n");
-                        if (fixupflags & 0x40)
+                        if (fixupflags & NR16OBJMOD)
                         {
                             const uint16 val = *((uint16 *)fixup);
                             fixup += 2;
@@ -367,11 +494,11 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         }
 
                         printf("Target offset: ");
-                        if ((srctype & 0xF) == 0x2)
+                        if ((srctype & NRSTYP) == NRSSEG)
                         { // 16-bit selector fixup
                             printf("[not used for 16-bit selector fixups]\n");
                         }
-                        else if (fixupflags & 0x10)
+                        else if (fixupflags & NR32BITOFF)
                         { // 32-bit target offset
                             const uint32 val = *((uint32 *)fixup);
                             fixup += 4;
@@ -385,9 +512,9 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         }
                         break;
 
-                    case 0x1:
+                    case NRRORD:
                         printf("Import by ordinal fixup record:\n");
-                        if (fixupflags & 0x40)
+                        if (fixupflags & NR16OBJMOD)
                         {
                             const uint16 val = *((uint16 *)fixup);
                             fixup += 2;
@@ -399,12 +526,12 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                             printf("Module ordinal: %u\n", (uint)val);
                         }
 
-                        if (fixupflags & 0x80)
+                        if (fixupflags & NR8BITORD)
                         {
                             const uint8 val = *(fixup++);
                             printf("Import ordinal: %u\n", (uint)val);
                         }
-                        else if (fixupflags & 0x10)
+                        else if (fixupflags & NR32BITOFF)
                         {
                             const uint32 val = *((uint32 *)fixup);
                             fixup += 4;
@@ -418,9 +545,9 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         }
 
                         uint32 additive = 0;
-                        if (fixupflags & 0x4)
+                        if (fixupflags & NRADD)
                         { // Has additive.
-                            if (fixupflags & 0x20)
+                            if (fixupflags & NR32BITADD)
                             {
                                 additive = *((uint32 *)fixup);
                                 fixup += 4;
@@ -434,10 +561,10 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         printf("Additive: %u\n", (uint)additive);
                         break;
 
-                    case 0x2:
+                    case NRRNAM:
                     {
                         printf("Import by name fixup record:\n");
-                        if (fixupflags & 0x40)
+                        if (fixupflags & NR16OBJMOD)
                         {
                             const uint16 val = *((uint16 *)fixup);
                             fixup += 2;
@@ -450,7 +577,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         }
 
                         uint32 name_offset = 0;
-                        if (fixupflags & 0x10)
+                        if (fixupflags & NR32BITOFF)
                         {
                             name_offset = *((uint32 *)fixup);
                             fixup += 4;
@@ -464,15 +591,15 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         const uint8 *import_name =
                             (exe + lx->import_proc_table_offset) + name_offset;
                         char name[128];
-                        const uint8 namelen = *(import_name++) & 0x7F;
+                        const uint8 namelen = *(import_name++) & NAME_LENGTH_MASK;
                         memcpy(name, import_name, namelen);
                         name[namelen] = '\0';
                         printf("Name offset: %u ('%s')\n", (uint)name_offset, name);
 
                         uint32 additive = 0;
-                        if (fixupflags & 0x4)
+                        if (fixupflags & NRADD)
                         { // Has additive.
-                            if (fixupflags & 0x20)
+                            if (fixupflags & NR32BITADD)
                             {
                                 additive = *((uint32 *)fixup);
                                 fixup += 4;
@@ -488,14 +615,14 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         break;
                     }
 
-                    case 0x3:
+                    case NRRENT:
                         printf("Internal entry table fixup record:\n");
                         printf("WRITE ME\n");
                         exit(1);
                         break;
                 }
 
-                if (srctype & 0x20)
+                if (srctype & NRCHAIN)
                 { // source list
                     printf("Source offset list:");
                     for (uint8 i = 0; i < srclist_count; i++)
@@ -537,8 +664,8 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
     while (*entryptr)
     {
         const uint8 numentries = *(entryptr++); /* number of entries in this bundle */
-        const uint8 bundletype = (*entryptr) & ~0x80;
-        const uint8 paramtypes = (*(entryptr++) & 0x80) ? 1 : 0;
+        const uint8 bundletype = (*entryptr) & ~TYPEINFO;
+        const uint8 paramtypes = (*(entryptr++) & TYPEINFO) ? 1 : 0;
 
         printf("Bundle %d (%u entries): ", bundleid, (uint)numentries);
         bundleid++;
@@ -548,13 +675,13 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
 
         switch (bundletype)
         {
-            case 0x00:
+            case EMPTY:
                 printf("UNUSED\n");
                 printf(" %u unused entries.\n\n", (uint)numentries);
                 ordinal += numentries;
                 break;
 
-            case 0x01:
+            case ENTRY16:
                 printf("16BIT\n");
                 printf(" Object number: %u\n", (uint) * ((const uint16 *)entryptr));
                 entryptr += 2;
@@ -562,10 +689,11 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 {
                     printf(" %d:\n", ordinal++);
                     printf(" Flags:");
-                    if (*entryptr & 0x1)
+                    if (*entryptr & E32EXPORT)
                         printf(" EXPORTED");
                     printf("\n");
-                    printf(" Parameter word count: %u\n", (uint)((*entryptr & 0xF8) >> 3));
+                    printf(" Parameter word count: %u\n",
+                           (uint)((*entryptr & E32PARAMS) >> E32PARAMS_SHIFT));
                     entryptr++;
                     printf(" Offset: %u\n", (uint) * ((const uint16 *)entryptr));
                     entryptr += 2;
@@ -573,7 +701,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 }
                 break;
 
-            case 0x02:
+            case GATE16:
                 printf("286CALLGATE\n");
                 printf(" Object number: %u\n", (uint) * ((const uint16 *)entryptr));
                 entryptr += 2;
@@ -581,10 +709,11 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 {
                     printf(" %d:\n", ordinal++);
                     printf(" Flags:");
-                    if (*entryptr & 0x1)
+                    if (*entryptr & E32EXPORT)
                         printf(" EXPORTED");
                     printf("\n");
-                    printf(" Parameter word count: %u\n", (uint)((*entryptr & 0xF8) >> 3));
+                    printf(" Parameter word count: %u\n",
+                           (uint)((*entryptr & E32PARAMS) >> E32PARAMS_SHIFT));
                     entryptr++;
                     printf(" Offset: %u\n", (uint) * ((const uint16 *)entryptr));
                     entryptr += 2;
@@ -594,7 +723,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 }
                 break;
 
-            case 0x03:
+            case ENTRY32:
                 printf("32BIT\n");
                 printf(" Object number: %u\n", (uint) * ((const uint16 *)entryptr));
                 entryptr += 2;
@@ -602,10 +731,11 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 {
                     printf(" %d:\n", ordinal++);
                     printf(" Flags:");
-                    if (*entryptr & 0x1)
+                    if (*entryptr & E32EXPORT)
                         printf(" EXPORTED");
                     printf("\n");
-                    printf(" Parameter word count: %u\n", (uint)((*entryptr & 0xF8) >> 3));
+                    printf(" Parameter word count: %u\n",
+                           (uint)((*entryptr & E32PARAMS) >> E32PARAMS_SHIFT));
                     entryptr++;
                     printf(" Offset: %u\n", (uint) * ((const uint32 *)entryptr));
                     entryptr += 4;
@@ -613,7 +743,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 }
                 break;
 
-            case 0x04:
+            case ENTRYFWD:
                 printf("FORWARDER\n");
                 break;
                 printf(" Reserved field: %u\n", (uint) * ((const uint16 *)entryptr));
@@ -622,11 +752,12 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 {
                     printf(" %d:\n", ordinal++);
                     printf(" Flags:");
-                    const int isordinal = (*entryptr & 0x1);
+                    const int isordinal = (*entryptr & E32EXPORT);
                     if (isordinal)
                         printf(" IMPORTBYORDINAL");
                     printf("\n");
-                    printf(" Reserved for future use: %u\n", (uint)((*entryptr & 0xF8) >> 3));
+                    printf(" Reserved for future use: %u\n",
+                           (uint)((*entryptr & E32PARAMS) >> E32PARAMS_SHIFT));
                     entryptr++;
                     printf(" Module ordinal number: %u\n", (uint) * ((const uint16 *)entryptr));
                     entryptr += 2;
@@ -735,21 +866,21 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
     printf("Module flags:");
     if (ne->module_flags == 0)
         printf(" NOAUTODATA");
-    if (ne->module_flags & 0x1)
+    if (ne->module_flags & NESOLO)
         printf(" SINGLEDATA");
-    if (ne->module_flags & 0x2)
+    if (ne->module_flags & NEINST)
         printf(" MULTIPLEDATA");
-    if (ne->module_flags & 0x4)
+    if (ne->module_flags & NEPPLI)
         printf(" FAMILYAPI");
-    if (ne->module_flags & 0x2000)
+    if (ne->module_flags & NEIERR)
         printf(" NOTLOADABLE");
-    if (ne->module_flags & 0x4000)
+    if (ne->module_flags & NENOTMPSAFE)
         printf(" NONCONFORMING");
-    if (ne->module_flags & 0x8000)
+    if (ne->module_flags & NENOTP)
         printf(" LIBRARYMODULE");
     printf("\n");
     printf("Application type: ");
-    switch ((ne->module_flags >> 8) & 0x3)
+    switch ((ne->module_flags >> NE_APPTYPE_SHIFT) & NE_APPTYPE_BITS)
     {
         case 0x0:
             printf("CONSOLE");
@@ -792,13 +923,13 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
     }
     else
     {
-        if (ne->os2_exe_flags & (1 << 0))
+        if (ne->os2_exe_flags & NELONGNAMES)
             printf(" LONGFILENAMES");
-        if (ne->os2_exe_flags & (1 << 1))
+        if (ne->os2_exe_flags & NEWINISPROT)
             printf(" PROTECTEDMODE");
-        if (ne->os2_exe_flags & (1 << 2))
+        if (ne->os2_exe_flags & NEWINGETPROPFON)
             printf(" PROPORTIONALFONTS");
-        if (ne->os2_exe_flags & (1 << 3))
+        if (ne->os2_exe_flags & NE_GANGLOAD_AREA)
             printf(" GANGLOADAREA");
     }
     printf("\n");
@@ -824,48 +955,51 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
             {
                 printf(" (byte position %u)\n", (uint)(((uint32)seg->offset) << sector_shift));
             }
-            printf("  Size: %u\n", (seg->size == 0) ? (uint)0x10000 : (uint)seg->size);
+            printf("  Size: %u\n", (seg->size == 0) ? (uint)NE_SEGMENT_64K : (uint)seg->size);
             printf("  Segment flags:");
-            switch (seg->segment_flags & 0x3)
+            switch (seg->segment_flags & NE_SEGMENT_TYPE_BITS)
             {
-                case 0:
+                case NSCODE:
                     printf(" CODE");
                     break;
-                case 1:
+                case NSDATA:
                     printf(" DATA");
                     break;
                 default:
                     printf(" [UNKNOWN SEGMENT TYPE]");
                     break;
             }
-            if (seg->segment_flags & 0x4)
+            if (seg->segment_flags & NE_SEGMENT_REALMODE)
                 printf(" REALMODE");
-            if (seg->segment_flags & 0x8)
+            if (seg->segment_flags & NSITER)
                 printf(" ITERATED");
-            if (seg->segment_flags & 0x10)
+            if (seg->segment_flags & NSMOVE)
                 printf(" MOVABLE");
-            if (seg->segment_flags & 0x20)
+            if (seg->segment_flags & NSSHARED)
                 printf(" SHAREABLE");
-            if (seg->segment_flags & 0x40)
+            if (seg->segment_flags & NSPRELOAD)
                 printf(" PRELOAD");
-            if (seg->segment_flags & 0x80)
+            if (seg->segment_flags & NSEXRD)
                 printf(" READONLY");
-            if (seg->segment_flags & 0x100)
+            if (seg->segment_flags & NSRELOC)
                 printf(" RELOCINFO");
-            if (seg->segment_flags & 0x200)
+            if (seg->segment_flags & NE_SEGMENT_DEBUGINFO)
                 printf(" DEBUGINFO");
-            if (seg->segment_flags & 0xF000)
+            if (seg->segment_flags & NE_SEGMENT_DISCARD_PRIORITY)
                 printf(" DISCARD");
             printf("\n");
 
-            printf("  Discard priority: %u\n", (uint)((seg->segment_flags >> 13) & 0x7));
-            printf("  Minimum allocation: %u\n",
-                   (seg->minimum_allocation == 0) ? (uint)0x10000 : (uint)seg->minimum_allocation);
+            printf("  Discard priority: %u\n",
+                   (uint)((seg->segment_flags >> NE_DISCARD_PRIORITY_SHIFT) &
+                          NE_DISCARD_PRIORITY_BITS));
+            printf("  Minimum allocation: %u\n", (seg->minimum_allocation == 0)
+                                                     ? (uint)NE_SEGMENT_64K
+                                                     : (uint)seg->minimum_allocation);
 
-            if (seg->segment_flags & 0x100)
+            if (seg->segment_flags & NSRELOC)
             { // has relocations (fixups)
                 const uint8 *segptr = origexe + (((uint32)seg->offset) << sector_shift);
-                const uint8 *fixupptr = segptr + (seg->size ? seg->size : 0xFFFF);
+                const uint8 *fixupptr = segptr + (seg->size ? seg->size : NE_SEGMENT_64K - 1);
                 const uint32 num_fixups = (uint32) * ((const uint16 *)fixupptr);
                 fixupptr += 2;
                 printf("  Fixup records (%u entries):\n", (uint)num_fixups);
@@ -877,21 +1011,21 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                     fixupptr += 2;
                     const uint8 *targetptr = fixupptr;
                     fixupptr += 4;
-                    const int additive = (flags & 0x4) != 0;
+                    const int additive = (flags & NRADD) != 0;
                     printf("   %u:\n", (uint)j);
                     printf("    Source type: ");
-                    switch (srctype & 0xF)
+                    switch (srctype & NRSTYP)
                     {
-                        case 0:
+                        case NRSBYT:
                             printf("LOBYTE");
                             break;
-                        case 2:
+                        case NRSSEG:
                             printf("SEGMENT");
                             break;
-                        case 3:
+                        case NRSPTR:
                             printf("FAR_ADDR");
                             break;
-                        case 5:
+                        case NRSOFF:
                             printf("OFFSET");
                             break;
                         default:
@@ -902,22 +1036,22 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                     printf("    Fixup type:");
                     if (additive)
                         printf(" ADDITIVE");
-                    switch (flags & 0x3)
+                    switch (flags & NRRTYP)
                     {
-                        case 0:
+                        case NRRINT:
                         {
                             const uint8 segment = targetptr[0];
 
                             const uint16 offset = *((const uint16 *)&targetptr[2]);
                             printf(" INTERNALREF (");
-                            if (segment == 0xFF)
+                            if (segment == NE_MOVABLE_SEGMENT)
                                 printf("movable segment, ordinal %u)", (uint)offset);
                             else
                                 printf("segment %u, offset %u)", (uint)segment, (uint)offset);
                         }
                         break;
 
-                        case 1:
+                        case NRRORD:
                         {
                             const uint16 module = ((const uint16 *)targetptr)[0];
                             const uint16 ordinal = ((const uint16 *)targetptr)[1];
@@ -926,7 +1060,7 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                         }
                         break;
 
-                        case 2:
+                        case NRRNAM:
                         {
                             const uint16 module = ((const uint16 *)targetptr)[0];
                             const uint16 offset = ((const uint16 *)targetptr)[1];
@@ -935,7 +1069,7 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                         }
                         break;
 
-                        case 3:
+                        case NRROSF:
                         {
                             const uint16 type = ((const uint16 *)targetptr)[0];
                             printf(" OSFIXUP (type %u)", (uint)type);
@@ -982,9 +1116,9 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                 idx++;
                 printf(" %d:", idx);
                 printf("  Type ID: ");
-                if (typeid & 0x8000)
+                if (typeid & NE_RESOURCE_INTEGER_ID)
                 {
-                    printf("%u\n", (uint)(typeid & ~0x8000));
+                    printf("%u\n", (uint)(typeid & ~NE_RESOURCE_INTEGER_ID));
                 }
                 else
                 {
@@ -1010,17 +1144,17 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                 printf("  Offset: %u\n", (uint)offset);
                 printf("  Size: %u\n", (uint)size);
                 printf("  Flags:");
-                if (flags & 0x10)
+                if (flags & NSMOVE)
                     printf(" MOVABLE");
-                if (flags & 0x20)
+                if (flags & NSSHARED)
                     printf(" PURE");
-                if (flags & 0x40)
+                if (flags & NSPRELOAD)
                     printf(" PRELOAD");
                 printf("\n");
                 printf("  Resource ID: ");
-                if (resourceid & 0x8000)
+                if (resourceid & NE_RESOURCE_INTEGER_ID)
                 {
-                    printf("%u\n", (uint)(resourceid & ~0x8000));
+                    printf("%u\n", (uint)(resourceid & ~NE_RESOURCE_INTEGER_ID));
                 }
                 else
                 {
@@ -1119,11 +1253,11 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                 const uint8 bundletype = *(ptr++);
                 switch (bundletype)
                 {
-                    case 0x00: // unused entries, to skip ordinals.
+                    case EMPTY: // unused entries, to skip ordinals.
                         ordinal += bundled;
                         break;
 
-                    case 0xFF: // Moveable segment entries.
+                    case NE_MOVABLE_SEGMENT: // Moveable segment entries.
                         for (uint32 i = 0; i < bundled; i++, ordinal++)
                         {
                             const uint8 flags = *(ptr++);
@@ -1134,9 +1268,9 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                             ptr += 2;
                             printf(" %u:\n", (uint)ordinal);
                             printf("  Flags: MOVABLE");
-                            if (flags & 0x1)
+                            if (flags & E32EXPORT)
                                 printf(" EXPORTED");
-                            if (flags & 0x2)
+                            if (flags & E32SHARED)
                                 printf(" GLOBAL");
                             printf("\n");
                             printf("  Int3f: %X\n", (uint)int3f);
@@ -1153,9 +1287,9 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                             ptr += 2;
                             printf(" %u:\n", (uint)ordinal);
                             printf("  Flags: FIXED");
-                            if (flags & 0x1)
+                            if (flags & E32EXPORT)
                                 printf(" EXPORTED");
-                            if (flags & 0x2)
+                            if (flags & E32SHARED)
                                 printf(" GLOBAL");
                             printf("\n");
                             printf("  Segment: %u\n", (uint)bundletype);

@@ -9,6 +9,13 @@ from .navigation_state import PAGE_ITEMS
 
 Adw, Gtk, GLib = views.Adw, views.Gtk, views.GLib
 
+# Activity log text size, in points.
+LOG_FONT_SIZE_DEFAULT = 12
+LOG_FONT_SIZE_MIN = 10
+LOG_FONT_SIZE_MAX = 24
+# How long a setting reached from search stays highlighted.
+SETTING_HIGHLIGHT_MS = 5000
+
 SETTINGS = {
     "general": ("General", "applications-system-symbolic", "Runtime and diagnostics"),
     "display": ("Graphics & Sound", "video-display-symbolic", "Display, video, audio and MIDI"),
@@ -169,9 +176,9 @@ class PreferencesDialog(Adw.PreferencesDialog):
         self.system_size = Adw.SwitchRow(title="Use Desktop Text Size")
         self.system_size.set_active(not window.app_preferences.get("customLogSize", False))
         group.add(self.system_size)
-        self.size = Adw.SpinRow.new_with_range(10, 24, 1)
+        self.size = Adw.SpinRow.new_with_range(LOG_FONT_SIZE_MIN, LOG_FONT_SIZE_MAX, 1)
         self.size.set_title("Log Text Size (pt)")
-        self.size.set_value(window.app_preferences.get("logFontSize", 12))
+        self.size.set_value(window.app_preferences.get("logFontSize", LOG_FONT_SIZE_DEFAULT))
         self.size.set_sensitive(not self.system_size.get_active())
         group.add(self.size)
         self.system_size.connect("notify::active", self.font_changed)
@@ -443,4 +450,6 @@ def highlight_setting(widget):
             target.grab_focus()
 
         handler = widget.connect("map", mapped)
-    GLib.timeout_add(5000, lambda: widget.remove_css_class("twoine-setting-highlight") or False)
+    GLib.timeout_add(
+        SETTING_HIGHLIGHT_MS, lambda: widget.remove_css_class("twoine-setting-highlight") or False
+    )

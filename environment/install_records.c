@@ -16,7 +16,7 @@ int environment_record_install(TbBall *c, const cJSON *request)
         return 0;
     }
     cJSON *saved = cJSON_Duplicate(receipt, 1);
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     if (!field(saved, "program_sha256") && !tb_ball_digest_file(c, program, digest))
     {
         cJSON_Delete(saved);

@@ -5,6 +5,12 @@
 #include "environment/media/groups.h"
 #include "environment/media/tree.h"
 
+/* Bounds one selection request so a client cannot exhaust the worker. */
+enum
+{
+    TREE_SELECTION_LIMIT = 100000
+};
+
 static int extract_source_order(const void *first, const void *second)
 {
     return strcmp(*(const char *const *)first, *(const char *const *)second);
@@ -74,7 +80,7 @@ int extract_selection(TbBall *c, const cJSON *request, const cJSON *plan,
     if (!tb_ball_array_strings(c, requested))
         return 0;
     int count = cJSON_GetArraySize(requested), planned = cJSON_GetArraySize(get(plan, "files"));
-    if (count > 100000)
+    if (count > TREE_SELECTION_LIMIT)
         return tb_ball_fail(c, "The file selection exceeds 100000 entries");
     const char **available =
         (const char **)tb_ball_keep(c, calloc((size_t)planned + 1, sizeof *available));

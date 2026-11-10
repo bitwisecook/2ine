@@ -9,6 +9,11 @@ import shutil
 import subprocess
 from pathlib import Path
 
+# A full git commit id; shorter revisions are not published sources.
+GIT_REVISION_HEX_LENGTH = 40
+# Characters per adjacent C string literal in the generated header.
+C_LITERAL_CHUNK = 96
+
 ROOT = Path(__file__).resolve().parents[2]
 CATALOGUE = ROOT / "tools/codegen/data/project-sources.json"
 
@@ -132,7 +137,7 @@ def installed_catalogue(sources):
             build = json.loads(info.read_text())
             revision = build.get("sourceRevision", "unknown")
             data["runtimeBuild"] = build
-            if re.fullmatch(r"[0-9a-f]{40}", revision):
+            if re.fullmatch(rf"[0-9a-f]{{{GIT_REVISION_HEX_LENGTH}}}", revision):
                 entry = next(item for item in data["projects"] if item["id"] == "2ine")
                 entry.update(
                     version=build.get("sourceVersion", revision),
@@ -216,7 +221,13 @@ def generate():
     )
     header += "static const char tb_project_sources[] =\n"
     # Short adjacent literals remain compatible with C compilers' token limits.
-    header += "\n".join(json.dumps(encoded[i : i + 96]) for i in range(0, len(encoded), 96)) + ";\n"
+    header += (
+        "\n".join(
+            json.dumps(encoded[i : i + C_LITERAL_CHUNK])
+            for i in range(0, len(encoded), C_LITERAL_CHUNK)
+        )
+        + ";\n"
+    )
     return {
         ROOT / "docs/project-sources.md": "\n".join(lines),
         ROOT / "ball/facade/project_sources.h": header,

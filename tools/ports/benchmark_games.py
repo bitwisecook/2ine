@@ -12,6 +12,9 @@ import subprocess
 import time
 from pathlib import Path
 
+# Doom's game logic runs at 35 tics per second.
+DOOM_TICRATE = 35
+
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -112,7 +115,7 @@ def main():
             result.update(
                 gametics=int(match[1]),
                 realtics=int(match[2]),
-                fps=35 * int(match[1]) / int(match[2]),
+                fps=DOOM_TICRATE * int(match[1]) / int(match[2]),
             )
     (work / "results.json").write_text(json.dumps(result, indent=2) + "\n")
     if digest(program) != result["program_sha256"]:

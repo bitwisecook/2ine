@@ -15,6 +15,12 @@ try:
 except (ImportError, ValueError) as error:
     raise SystemExit("GTK 4 and libadwaita are required: " + str(error)) from error
 
+MIDI_CHANNEL_COUNT = 16
+# Program 0 follows the MIDI stream; 1-128 pin General MIDI programs 0-127.
+PROGRAM_CHOICE_MAX = 128
+# Bank select is a 14-bit MSB/LSB pair; -1 follows the MIDI stream.
+MIDI_BANK_MAX = 16383
+
 
 class AudioDialog(FormDialog):
     def __init__(self, window):
@@ -92,7 +98,8 @@ class AudioDialog(FormDialog):
                 title=f"Channel {index + 1}", subtitle="Bank, instrument and output channel"
             )
             target = Adw.ComboRow(
-                title="Output Channel", model=Gtk.StringList.new([str(i) for i in range(1, 17)])
+                title="Output Channel",
+                model=Gtk.StringList.new([str(i) for i in range(1, MIDI_CHANNEL_COUNT + 1)]),
             )
             target.set_selected(saved["target"] - 1)
             row.add_row(target)
@@ -101,11 +108,11 @@ class AudioDialog(FormDialog):
             )
             bank.set_selected(self.bank_ids.index(saved["bank"]) + 1 if saved["bank"] else 0)
             row.add_row(bank)
-            program = Adw.SpinRow.new_with_range(0, 128, 1)
+            program = Adw.SpinRow.new_with_range(0, PROGRAM_CHOICE_MAX, 1)
             program.set_title("Program (0 Follows MIDI)")
             program.set_value(saved["program"] + 1)
             row.add_row(program)
-            number = Adw.SpinRow.new_with_range(-1, 16383, 1)
+            number = Adw.SpinRow.new_with_range(-1, MIDI_BANK_MAX, 1)
             number.set_title("Bank Number (−1 Follows MIDI)")
             number.set_value(saved["bankNumber"])
             row.add_row(number)

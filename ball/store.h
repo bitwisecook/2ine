@@ -17,6 +17,12 @@
 /* Drive letters A: to Z: index the drive table; C: is the ball's private drive. */
 #define TB_BALL_DRIVE_COUNT 26
 #define TB_BALL_DRIVE_C 2
+/* Guest path prefixes: a drive ("C:") and a drive root ("C:\"). */
+#define TB_GUEST_DRIVE_LENGTH 2
+#define TB_GUEST_ROOT_LENGTH 3
+/* Content digests are SHA-256: 32 bytes, printed as 64 hex digits. */
+#define TB_BALL_DIGEST_SIZE 32
+#define TB_BALL_DIGEST_HEX_LENGTH (TB_BALL_DIGEST_SIZE * 2)
 #ifdef _WIN32
 #define strdup _strdup
 #define PATH_SEPARATOR ";"
@@ -128,6 +134,11 @@ static inline int compare_names(const void *a, const void *b)
     return strcmp(*(const char *const *)a, *(const char *const *)b);
 }
 
+static inline int has_prefix(const char *text, const char *prefix)
+{
+    return !strncmp(text, prefix, strlen(prefix));
+}
+
 static inline int equal_case(const char *a, const char *b)
 {
     while (*a && *b)
@@ -147,8 +158,8 @@ char *tb_ball_read_file(TbBall *c, const char *path, size_t *length, int optiona
 int tb_ball_write_json(TbBall *c, const char *path, cJSON *value);
 char *tb_ball_latin1_to_utf8(TbBall *c, const char *bytes, size_t n);
 char *tb_ball_utf8_to_latin1(TbBall *c, const char *text, size_t *length);
-int tb_ball_digest_file(TbBall *c, const char *path, unsigned char hash[32]);
-char *tb_ball_hex(TbBall *c, const unsigned char hash[32]);
+int tb_ball_digest_file(TbBall *c, const char *path, unsigned char hash[TB_BALL_DIGEST_SIZE]);
+char *tb_ball_hex(TbBall *c, const unsigned char hash[TB_BALL_DIGEST_SIZE]);
 char *tb_ball_trim(char *s);
 char *tb_ball_now(TbBall *c);
 int tb_ball_array_strings(TbBall *c, const cJSON *array);

@@ -9,6 +9,26 @@
 #include "environment/media/support.h"
 #include "environment/media/tree.h"
 
+/* Bounds one request's file lists so a client cannot exhaust the worker. */
+enum
+{
+    COMPONENT_REQUEST_ENTRY_LIMIT = 100000
+};
+
+/* Recent hash verdicts kept per polling thread. */
+enum
+{
+    COMPONENT_VERDICT_CACHE_SIZE = 64
+};
+
+/* OS/2 path buffer for cached verdicts; longer paths are simply not cached. */
+enum
+{
+    COMPONENT_VERDICT_PATH_SIZE = 1024
+};
+
+#define SYSTEM_DLL_DIRECTORY "C:\\OS2\\DLL\\"
+
 static cJSON *component_current_progress(TbBall *c, const cJSON *request)
 {
     const char *id = field(request, "operationID");
@@ -46,10 +66,10 @@ static int component_hash_matches(TbBall *c, const char *host, const cJSON *reco
                                   TbFileIdentity *identity)
 {
     const char *expected = field(record, "sha256");
-    if (!expected || strlen(expected) != 64)
+    if (!expected || strlen(expected) != TB_BALL_DIGEST_HEX_LENGTH)
         return 0;
     TbFileIdentity before, after;
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     if (!tb_path_identity(host, &before) || !tb_ball_digest_file(c, host, digest) ||
         !tb_path_identity(host, &after) || memcmp(&before, &after, sizeof before))
         return 0;
@@ -65,20 +85,21 @@ static int component_poll_hash(TbBall *c, const char *host, const cJSON *record)
 {
     typedef struct ComponentHashVerdict
     {
-        char path[1024], sha256[65];
+        char path[COMPONENT_VERDICT_PATH_SIZE], sha256[TB_BALL_DIGEST_HEX_LENGTH + 1];
         TbFileIdentity identity;
         int matches;
     } ComponentHashVerdict;
 
-    static _Thread_local ComponentHashVerdict verdicts[64];
+    static _Thread_local ComponentHashVerdict verdicts[COMPONENT_VERDICT_CACHE_SIZE];
     static _Thread_local unsigned next;
     TbFileIdentity before, after;
     const char *expected = field(record, "sha256");
-    if (!expected || strlen(expected) != 64 || !tb_path_identity(host, &before))
+    if (!expected || strlen(expected) != TB_BALL_DIGEST_HEX_LENGTH ||
+        !tb_path_identity(host, &before))
         return 0;
     int cacheable = strlen(host) < sizeof verdicts[0].path;
     if (cacheable)
-        for (unsigned i = 0; i < 64; i++)
+        for (unsigned i = 0; i < COMPONENT_VERDICT_CACHE_SIZE; i++)
             if (!strcmp(verdicts[i].path, host) && !strcmp(verdicts[i].sha256, expected) &&
                 !memcmp(&verdicts[i].identity, &before, sizeof before))
                 return verdicts[i].matches;
@@ -86,7 +107,7 @@ static int component_poll_hash(TbBall *c, const char *host, const cJSON *record)
     if (cacheable && !c->error && tb_path_identity(host, &after) &&
         !memcmp(&before, &after, sizeof before))
     {
-        ComponentHashVerdict *entry = &verdicts[next++ % 64];
+        ComponentHashVerdict *entry = &verdicts[next++ % COMPONENT_VERDICT_CACHE_SIZE];
         strcpy(entry->path, host);
         strcpy(entry->sha256, expected);
         entry->identity = after;
@@ -113,7 +134,7 @@ static cJSON *component_file_state_record(TbBall *c, const char *guest, const cJ
     else if (present)
     {
         const char *hash = field(record, "sha256");
-        if (!hash || strlen(hash) != 64 || !field(record, "path") ||
+        if (!hash || strlen(hash) != TB_BALL_DIGEST_HEX_LENGTH || !field(record, "path") ||
             strcmp(component_key(c, field(record, "path")), component_key(c, guest)))
         {
             status = "unowned";
@@ -194,12 +215,14 @@ static void component_state_add(cJSON *result, cJSON *file)
 cJSON *os2_component_state(TbBall *c, const cJSON *request)
 {
     const cJSON *paths = get(request, "paths"), *selection = get(request, "selection"), *item;
-    if (paths && (!tb_ball_array_strings(c, paths) || cJSON_GetArraySize(paths) > 100000))
+    if (paths && (!tb_ball_array_strings(c, paths) ||
+                  cJSON_GetArraySize(paths) > COMPONENT_REQUEST_ENTRY_LIMIT))
     {
         tb_ball_fail(c, "Component state accepts at most 100000 file paths");
         return NULL;
     }
-    if (selection && (!cJSON_IsArray(selection) || cJSON_GetArraySize(selection) > 100000))
+    if (selection && (!cJSON_IsArray(selection) ||
+                      cJSON_GetArraySize(selection) > COMPONENT_REQUEST_ENTRY_LIMIT))
     {
         tb_ball_fail(c, "Component state accepts at most 100000 source and destination pairs");
         return NULL;
@@ -273,7 +296,7 @@ cJSON *os2_component_state(TbBall *c, const cJSON *request)
         while (end < count && !strcmp(index[end].source, source))
             end++;
         resolved_count += end > low ? end - low : 1;
-        if (resolved_count > 100000)
+        if (resolved_count > COMPONENT_REQUEST_ENTRY_LIMIT)
         {
             tb_ball_fail(c, "Component state exceeds 100000 resolved file records");
             break;
@@ -346,7 +369,7 @@ static int component_som_essential(const char *path)
     static const char *libraries[] = {"SOM.DLL",   "SOMD.DLL",   "SOMIR.DLL",
                                       "SOMU.DLL",  "SOMUC.DLL",  "SOMEM.DLL",
                                       "SOMTC.DLL", "SOMSEC.DLL", NULL};
-    if (!strncmp(path, "C:\\OS2\\DLL\\", 11))
+    if (has_prefix(path, SYSTEM_DLL_DIRECTORY))
         for (unsigned i = 0; libraries[i]; i++)
             if (equal_case(base + 1, libraries[i]))
                 return 1;
@@ -368,7 +391,7 @@ cJSON *remove_os2_components(TbBall *c, const cJSON *request)
     if (selected)
     {
         if (paths || get(request, "fileSelection") || !cJSON_IsArray(selected) ||
-            cJSON_GetArraySize(selected) > 100000)
+            cJSON_GetArraySize(selected) > COMPONENT_REQUEST_ENTRY_LIMIT)
         {
             tb_ball_fail(
                 c,
@@ -414,7 +437,7 @@ cJSON *remove_os2_components(TbBall *c, const cJSON *request)
             int matched = 0;
             for (size_t at = low; at < count && !strcmp(index[at].source, source); at++)
             {
-                if (resolved++ >= 100000)
+                if (resolved++ >= COMPONENT_REQUEST_ENTRY_LIMIT)
                 {
                     tb_ball_fail(
                         c, "Exact source selection resolves to more than 100000 destinations");
@@ -483,7 +506,8 @@ cJSON *remove_os2_components(TbBall *c, const cJSON *request)
             }
         }
     }
-    if (!paths || !tb_ball_array_strings(c, paths) || cJSON_GetArraySize(paths) > 100000)
+    if (!paths || !tb_ball_array_strings(c, paths) ||
+        cJSON_GetArraySize(paths) > COMPONENT_REQUEST_ENTRY_LIMIT)
     {
         tb_ball_fail(c, "Select up to 100000 component file paths to remove");
         goto finished;
