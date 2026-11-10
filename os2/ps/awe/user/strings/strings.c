@@ -4,7 +4,17 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/user/strings/case_tables.h"
 #include "os2/include/pmwin.h"
-#define STRING_LIMIT (1024u * 1024u)
+
+enum
+{
+    /* Bytes; bounds every guest string these functions copy. */
+    STRING_LIMIT = 1024 * 1024,
+    /* The process OEM code page; the ANSI one is Windows Latin 1 (WIN32_CP_WINANSI). */
+    OEM_CODEPAGE = 437,
+    /* Character classes come from the US English locale's CT_CTYPE1 table. */
+    LCID_ENGLISH_US = 0x0409,
+    UTF16_UNIT_SIZE = 2
+};
 
 static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG from, ULONG to)
 {
@@ -49,22 +59,22 @@ static BOOL convert_string(ULONG source, ULONG destination, ULONG from, ULONG to
 
 BOOL OemToChar(ULONG source, ULONG destination)
 {
-    return convert_string(source, destination, 437, 1004);
+    return convert_string(source, destination, OEM_CODEPAGE, WIN32_CP_WINANSI);
 }
 
 BOOL CharToOem(ULONG source, ULONG destination)
 {
-    return convert_string(source, destination, 1004, 437);
+    return convert_string(source, destination, WIN32_CP_WINANSI, OEM_CODEPAGE);
 }
 
 BOOL OemToCharBuff(ULONG source, ULONG destination, ULONG count)
 {
-    return convert_buffer(source, destination, count, 437, 1004);
+    return convert_buffer(source, destination, count, OEM_CODEPAGE, WIN32_CP_WINANSI);
 }
 
 BOOL CharToOemBuff(ULONG source, ULONG destination, ULONG count)
 {
-    return convert_buffer(source, destination, count, 1004, 437);
+    return convert_buffer(source, destination, count, WIN32_CP_WINANSI, OEM_CODEPAGE);
 }
 
 static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
@@ -81,7 +91,8 @@ static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
         return 0;
     }
     size_t length = strlen(input), before = prefix ? strlen(prefix) : 0;
-    if ((uint64_t)destination + before + length + 1 > UINT64_C(0x100000000))
+    /* The result must end inside the 32-bit guest address space. */
+    if ((uint64_t)destination + before + length + 1 > (uint64_t)UINT32_MAX + 1)
     {
         free(input);
         free(prefix);
@@ -150,6 +161,7 @@ static ULONG case_buffer(ULONG pointer, ULONG count, const uint8 table[256])
 
 static ULONG case_string(ULONG value, const uint8 table[256])
 {
+    /* As on Windows, a value below 64K is one character rather than a string pointer. */
     if (value <= UINT16_MAX)
         return (value & 0xff00) | table[value & 255];
     char *copy = lx_execution_copy_string(GProcessState.execution, value, STRING_LIMIT);
@@ -262,22 +274,24 @@ static ULONG character_type(ULONG character)
         return 0;
     char byte = (char)character;
     uint8 flags[2];
-    return GetStringTypeEx(0x409, 1, &byte, 1, flags) ? lx_guest_load_u16(flags) : 0;
+    return GetStringTypeEx(LCID_ENGLISH_US, WIN32_CT_CTYPE1, &byte, 1, flags)
+               ? lx_guest_load_u16(flags)
+               : 0;
 }
 
 BOOL IsCharUpper(ULONG character)
 {
-    return (character_type(character) & 1) != 0;
+    return (character_type(character) & WIN32_C1_UPPER) != 0;
 }
 
 BOOL IsCharAlpha(ULONG character)
 {
-    return (character_type(character) & 0x100) != 0;
+    return (character_type(character) & WIN32_C1_ALPHA) != 0;
 }
 
 BOOL IsCharAlphaNumeric(ULONG character)
 {
-    return (character_type(character) & 0x104) != 0;
+    return (character_type(character) & (WIN32_C1_ALPHA | WIN32_C1_DIGIT)) != 0;
 }
 
 LONG lstrcmp2(PSZ first, PSZ second)
@@ -289,18 +303,19 @@ LONG lstrcmp2(PSZ first, PSZ second)
     }
     /* Both operands are compared as UTF-16 units from the OEM code page. */
     ULONG page = GetOEMCP();
-    LONG a = MultiByteToWideChar(page, 1, first, -1, NULL, 0);
-    LONG b = MultiByteToWideChar(page, 1, second, -1, NULL, 0);
-    uint8 *left = a > 0 ? malloc((size_t)a * 2) : NULL;
-    uint8 *right = b > 0 ? malloc((size_t)b * 2) : NULL;
+    LONG a = MultiByteToWideChar(page, WIN32_MB_PRECOMPOSED, first, -1, NULL, 0);
+    LONG b = MultiByteToWideChar(page, WIN32_MB_PRECOMPOSED, second, -1, NULL, 0);
+    uint8 *left = a > 0 ? malloc((size_t)a * UTF16_UNIT_SIZE) : NULL;
+    uint8 *right = b > 0 ? malloc((size_t)b * UTF16_UNIT_SIZE) : NULL;
     LONG result = 0;
-    if (!left || !right || !MultiByteToWideChar(page, 1, first, -1, left, a) ||
-        !MultiByteToWideChar(page, 1, second, -1, right, b))
+    if (!left || !right || !MultiByteToWideChar(page, WIN32_MB_PRECOMPOSED, first, -1, left, a) ||
+        !MultiByteToWideChar(page, WIN32_MB_PRECOMPOSED, second, -1, right, b))
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     else
         for (LONG i = 0; i < a && i < b && !result; i++)
         {
-            USHORT x = lx_guest_load_u16(left + i * 2), y = lx_guest_load_u16(right + i * 2);
+            USHORT x = lx_guest_load_u16(left + i * UTF16_UNIT_SIZE),
+                   y = lx_guest_load_u16(right + i * UTF16_UNIT_SIZE);
             result = x < y ? -1 : x > y;
         }
     free(left);

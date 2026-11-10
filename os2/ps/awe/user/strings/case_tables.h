@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Byte case conversion for the current United States CP437 process. */
+/* Byte case conversion tables for the process code page, US CP437. */
 #ifndef TWOINE_OPEN32_CASE_TABLES_H
 #define TWOINE_OPEN32_CASE_TABLES_H
 static const uint8 upper_case[256] = {
