@@ -5,6 +5,7 @@
 #include "os2/include/pmhelp.h"
 #include "os2/include/pmwp.h"
 #include "os2/include/os2win.h"
+#include "os2/include/bseerr.h"
 #include "emulator/runtime.h"
 #include "host/thread.h"
 #include <limits.h>
@@ -183,7 +184,7 @@ int main(int argc, char **argv)
     char untouched[4] = "xyz";
     CHECK(!PrfQueryProfileString(profile, "Absent", "Missing", NULL, untouched, sizeof untouched));
     CHECK(!strcmp(untouched, "xyz"));
-    CHECK((WinGetLastError(anchor) & 0xffff) == 0x1304);
+    CHECK((WinGetLastError(anchor) & 0xffff) == PMERR_NOT_IN_IDX);
     CHECK(!WinGetLastError(anchor));
     if (writing)
     {
@@ -268,8 +269,8 @@ int main(int argc, char **argv)
 
     SWCNTRL switch_value = {0};
     switch_value.hwnd = 123;
-    switch_value.uchVisibility = 4;
-    switch_value.fbJump = 2;
+    switch_value.uchVisibility = SWL_VISIBLE;
+    switch_value.fbJump = SWL_JUMPABLE;
     strcpy(switch_value.szSwtitle, "Suite installer");
     CHECK(sizeof switch_value == 96);
     ULONG switch_handle = WinAddSwitchEntry(&switch_value);
@@ -281,13 +282,14 @@ int main(int argc, char **argv)
     CHECK(!WinChangeSwitchEntry(switch_handle, &switch_value));
     CHECK(!WinQuerySwitchEntry(switch_handle, &switch_copy) &&
           !strcmp(switch_copy.szSwtitle, "Suite progress"));
-    CHECK(!WinRemoveSwitchEntry(switch_handle) && WinRemoveSwitchEntry(switch_handle) == 6);
+    CHECK(!WinRemoveSwitchEntry(switch_handle) &&
+          WinRemoveSwitchEntry(switch_handle) == ERROR_INVALID_HANDLE);
     CHECK(!WinQuerySwitchHandle(123, 0));
 
     ULONG key = 0, disposition = 0;
     if (writing)
     {
-        CHECK(RegOpenKeyEx(0xffffffef, "Software\\Test", 0, 3, &key) == 2);
+        CHECK(RegOpenKeyEx(0xffffffef, "Software\\Test", 0, 3, &key) == ERROR_FILE_NOT_FOUND);
         CHECK(!RegCreateKeyEx(0xffffffef, "Software\\Test", 0, NULL, 0, 0x001f003f, NULL, &key,
                               &disposition) &&
               disposition == 1);
@@ -295,7 +297,8 @@ int main(int argc, char **argv)
         CHECK(!RegSetValueEx(key, "Raw", 0, 3, binary, 4));
         CHECK(!RegCloseKey(key));
     }
-    CHECK(RegOpenKeyEx(0x80000002, "Software\\Test", 0, 0x00200000, &key) == 87);
+    CHECK(RegOpenKeyEx(0x80000002, "Software\\Test", 0, 0x00200000, &key) ==
+          ERROR_INVALID_PARAMETER);
     CHECK(!RegOpenKeyEx(0x80000002, "Software\\Test", 0, 0x001f003f, &key));
     CHECK(!RegCloseKey(key));
     CHECK(!RegOpenKeyEx(0x80000002, "SOFTWARE\\TEST\\", 0, 1, &key));
@@ -306,53 +309,57 @@ int main(int argc, char **argv)
     char value[16];
     memset(value, 0xcc, sizeof value);
     size = 3;
-    CHECK(RegQueryValueEx(key, NULL, NULL, &type, value, &size) == 234 && size == 8);
+    CHECK(RegQueryValueEx(key, NULL, NULL, &type, value, &size) == ERROR_MORE_DATA && size == 8);
     CHECK((uint8)value[0] == 0xcc);
     size = sizeof value;
     CHECK(!RegQueryValueEx(key, NULL, NULL, &type, value, &size) && !strcmp(value, "default"));
     size = 4;
     CHECK(!RegQueryValueEx(key, "rAw", NULL, &type, binary, &size) && type == 3 && size == 4);
     CHECK(binary[0] == 0 && binary[1] == 0xff && binary[2] == 0x42);
-    CHECK(RegSetValueEx(key, "NoWrite", 0, 1, "", 1) == 5);
-    CHECK(RegDeleteValue(key, "Raw") == 5);
-    CHECK(RegCreateKeyEx(key, "Child", 0, NULL, 0, 3, NULL, &disposition, NULL) == 5);
-    CHECK(!RegCloseKey(key) && RegCloseKey(key) == 6);
-    CHECK(RegQueryValueEx(key, NULL, NULL, NULL, NULL, &size) == 6);
+    CHECK(RegSetValueEx(key, "NoWrite", 0, 1, "", 1) == ERROR_ACCESS_DENIED);
+    CHECK(RegDeleteValue(key, "Raw") == ERROR_ACCESS_DENIED);
+    CHECK(RegCreateKeyEx(key, "Child", 0, NULL, 0, 3, NULL, &disposition, NULL) ==
+          ERROR_ACCESS_DENIED);
+    CHECK(!RegCloseKey(key) && RegCloseKey(key) == ERROR_INVALID_HANDLE);
+    CHECK(RegQueryValueEx(key, NULL, NULL, NULL, NULL, &size) == ERROR_INVALID_HANDLE);
     CHECK(!RegCreateKeyEx(0x80000002, "software\\test", 0, NULL, 0, 3, NULL, &key, &disposition) &&
           disposition == 2);
     CHECK(!RegCloseKey(key));
     CHECK(!RegCloseKey(0xffffffef));
-    CHECK(RegOpenKey(0xffffffef, "Software\\Absent", &key) == 2);
+    CHECK(RegOpenKey(0xffffffef, "Software\\Absent", &key) == ERROR_FILE_NOT_FOUND);
     CHECK(!RegOpenKey(0xffffffef, "Software\\Test", &key));
     ULONG same = 0;
     CHECK(!RegOpenKey(key, NULL, &same) && same == key);
     CHECK(!RegSetValueEx(key, "Legacy", 0, 1, "value", 6));
-    CHECK(!RegDeleteValue(key, "lEgAcY") && RegDeleteValue(key, "Legacy") == 2);
-    CHECK(RegDeleteValue(0xdeadbeef, "Legacy") == 6);
+    CHECK(!RegDeleteValue(key, "lEgAcY") && RegDeleteValue(key, "Legacy") == ERROR_FILE_NOT_FOUND);
+    CHECK(RegDeleteValue(0xdeadbeef, "Legacy") == ERROR_INVALID_HANDLE);
     CHECK(!RegCloseKey(key));
-    CHECK(RegOpenKey(key, "", &same) == 6);
+    CHECK(RegOpenKey(key, "", &same) == ERROR_INVALID_HANDLE);
     CHECK(!RegOpenKey(0xffffffef, "", &same) && same == 0xffffffef);
-    CHECK(RegOpenKey(0xffffffef, "", NULL) == 87);
+    CHECK(RegOpenKey(0xffffffef, "", NULL) == ERROR_INVALID_PARAMETER);
     CHECK(!RegCreateKey(0xffffffef, "Software\\Legacy\\Child", &key));
     CHECK(!RegSetValueEx(key, NULL, 0, 1, "legacy", 7) && !RegCloseKey(key));
     CHECK(!RegOpenKey(0xffffffef, "Software\\Legacy\\Child", &key) && !RegCloseKey(key));
     CHECK(!RegCreateKey(0xffffffef, NULL, &same) && same == 0xffffffef);
-    CHECK(RegCreateKey(0xffffffef, "Software", NULL) == 87);
+    CHECK(RegCreateKey(0xffffffef, "Software", NULL) == ERROR_INVALID_PARAMETER);
     CHECK(!RegCreateKey(0xffffffef, "Software\\Enumeration", &key));
     CHECK(!RegSetValueEx(key, "MixedName", 0, 1, "text", 5));
     char enum_name[32], enum_data[8];
     ULONG name_size = 2, data_size = sizeof enum_data;
-    CHECK(RegEnumValue(key, 0, enum_name, &name_size, NULL, &type, enum_data, &data_size) == 234);
+    CHECK(RegEnumValue(key, 0, enum_name, &name_size, NULL, &type, enum_data, &data_size) ==
+          ERROR_MORE_DATA);
     CHECK(name_size == 2 && data_size == 5 && type == 1);
     name_size = sizeof enum_name;
     data_size = 2;
-    CHECK(RegEnumValue(key, 0, enum_name, &name_size, NULL, &type, enum_data, &data_size) == 234);
+    CHECK(RegEnumValue(key, 0, enum_name, &name_size, NULL, &type, enum_data, &data_size) ==
+          ERROR_MORE_DATA);
     CHECK(!strcmp(enum_name, "mixedname") && name_size == 9 && data_size == 5);
     name_size = sizeof enum_name;
     data_size = sizeof enum_data;
     CHECK(!RegEnumValue(key, 0, enum_name, &name_size, NULL, &type, enum_data, &data_size));
     CHECK(!strcmp(enum_data, "text"));
-    CHECK(RegEnumValue(key, 1, enum_name, &name_size, NULL, NULL, NULL, NULL) == 259);
+    CHECK(RegEnumValue(key, 1, enum_name, &name_size, NULL, NULL, NULL, NULL) ==
+          ERROR_NO_MORE_ITEMS);
     CHECK(!RegCloseKey(key));
     CHECK(MulDiv(5, 1, 2) == 3 && MulDiv(-5, 1, 2) == -3);
     CHECK(MulDiv(5, -1, -2) == 3 && MulDiv(1, 1, 0) == -1);

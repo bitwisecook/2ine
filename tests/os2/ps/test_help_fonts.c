@@ -18,6 +18,12 @@
         }                                                                                          \
     } while (0)
 
+/* FIXED: a 16.16 fixed-point number. */
+enum
+{
+    FIXED_ONE = 65536
+};
+
 static FATTRS attributes(const FONTMETRICS *metrics, USHORT selection)
 {
     FATTRS result = {0};
@@ -28,7 +34,7 @@ static FATTRS attributes(const FONTMETRICS *metrics, USHORT selection)
     result.usCodePage = metrics->usCodePage;
     result.lMaxBaselineExt = metrics->lMaxBaselineExt;
     result.lAveCharWidth = metrics->lAveCharWidth;
-    result.fsFontUse = 2; /* FATTR_FONTUSE_OUTLINE */
+    result.fsFontUse = 2;
     return result;
 }
 
@@ -84,8 +90,8 @@ int main(void)
     CHECK(original.lMatch == 1 && !strcmp(original.szFacename, "Helv") && !original.fsSelection);
     for (unsigned i = 0; i < 3; i++)
     {
-        FATTRS bold = attributes(&original, 0x20);
-        CHECK(GpiCreateLogFont(ps, NULL, 2, &bold) == 2 && GpiSetCharSet(ps, 2));
+        FATTRS bold = attributes(&original, FATTR_SEL_BOLD);
+        CHECK(GpiCreateLogFont(ps, NULL, 2, &bold) == FONT_MATCH && GpiSetCharSet(ps, 2));
         LxHostFontMetrics rendered;
         CHECK(lx_host_font_metrics(lx_pm_font(ps), &rendered) && rendered.bold);
         CHECK(GpiQueryFontMetrics(ps, sizeof selected, &selected));
@@ -93,19 +99,19 @@ int main(void)
               !selected.fsSelection && selected.lEmHeight == original.lEmHeight &&
               selected.lMaxBaselineExt == original.lMaxBaselineExt);
         FATTRS normal = attributes(&selected, selected.fsSelection);
-        CHECK(GpiCreateLogFont(ps, NULL, 0, &normal) == 2 && GpiSetCharSet(ps, 0));
+        CHECK(GpiCreateLogFont(ps, NULL, 0, &normal) == FONT_MATCH && GpiSetCharSet(ps, 0));
         CHECK(lx_host_font_metrics(lx_pm_font(ps), &rendered) && !rendered.bold);
         CHECK(GpiQueryFontMetrics(ps, sizeof selected, &selected) &&
               selected.lEmHeight == original.lEmHeight &&
               selected.lMaxBaselineExt == original.lMaxBaselineExt);
     }
-    FATTRS explicit_bold = attributes(&original, 0x20);
+    FATTRS explicit_bold = attributes(&original, FATTR_SEL_BOLD);
     explicit_bold.lMatch = 2;
     strcpy(explicit_bold.szFacename, "Helv Bold");
-    CHECK(GpiCreateLogFont(ps, NULL, 3, &explicit_bold) == 2 && GpiSetCharSet(ps, 3));
+    CHECK(GpiCreateLogFont(ps, NULL, 3, &explicit_bold) == FONT_MATCH && GpiSetCharSet(ps, 3));
     CHECK(GpiQueryFontMetrics(ps, sizeof selected, &selected) && selected.lMatch == 2 &&
-          (selected.fsSelection & 0x20) && !strcmp(selected.szFacename, "Helv Bold"));
-    SIZEF box = {24 * 65536, 24 * 65536};
+          (selected.fsSelection & FM_SEL_BOLD) && !strcmp(selected.szFacename, "Helv Bold"));
+    SIZEF box = {24 * FIXED_ONE, 24 * FIXED_ONE};
     CHECK(GpiSetCharBox(ps, &box) && GpiQueryFontMetrics(ps, sizeof selected, &selected) &&
           selected.lEmHeight == 24);
     CHECK(GpiSetCharSet(ps, 0) && GpiQueryFontMetrics(ps, sizeof selected, &selected) &&
