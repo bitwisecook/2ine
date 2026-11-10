@@ -3,6 +3,7 @@
    owns lives in its guest instance data, so it is released with the object; state
    that survives the object is kept in the persistent store under its handle. */
 #include "os2/wpsh/pmwp/internal.h"
+#include "os2/include/wpobject.h"
 #include "emulator/abi.h"
 #include "host/sync.h"
 #include <stdio.h>
@@ -24,17 +25,6 @@ enum
     INIT_CONTROL_MASK = 0,
     INIT_CONTROL_INFO = 4,
     INIT_CONTROL_SIZE = 8
-};
-
-/* Toolkit wpobject.h values. */
-enum
-{
-    CLSSTYLE_NEVERTEMPLATE = 0x00000010,
-    CLSSTYLE_PRIVATE = 0x00001000,
-    OK_DELETE = 1,
-    NO_DELETE = 2,
-    MINWIN_VIEWER = 2,
-    DEFAULTBUTTON = 3
 };
 
 /* USEITEM is {type, next}; a memory item adds its size, and the caller's block follows. */

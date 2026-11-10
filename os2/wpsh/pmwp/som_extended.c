@@ -3,6 +3,7 @@
    icons, appearance, object semaphores, file attributes, association and class
    manager queries. */
 #include "os2/wpsh/pmwp/internal.h"
+#include "os2/include/wpobject.h"
 #include "os2/include/bsedos.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/pmshl.h"
@@ -18,29 +19,9 @@
 
 #define ARG(a, n) lx_guest_load_u32((a) + 4 * (n))
 
-/* Workplace Shell values from the Toolkit's wpobject.h, wpfolder.h and wpfsys.h. */
+/* Workplace Shell value from the Toolkit's wpfsys.h. */
 enum
 {
-    OPEN_CONTENTS = 1,
-    OPEN_HELP = 3,
-    OPEN_RUNNING = 4,
-    VIEW_CONTENTS = 0x0001,
-    VIEW_SETTINGS = 0x0002,
-    VIEW_HELP = 0x0004,
-    VIEW_RUNNING = 0x0008,
-    OK_DELETE = 1,
-    NO_DELETE = 2,
-    CANCEL_DELETE = 3,
-    CONFIRM_DELETE = 0x0001,
-    CONFIRM_DELETEFOLDER = 0x0002,
-    OR_REFERENCE = 0x10000000,
-    OR_FROMTEMPLATE = 0x00000004 | OR_REFERENCE,
-    RC_DROP_ITEMCOMPLETE = 1,
-    DEFAULTBUTTON = 3,
-    NAMECLASH_CANCEL = 0x00,
-    NAMECLASH_NONE = 0x01,
-    NO_NAMECLASH_APPEND = 0x20,
-    QC_NEXT = 1,
     DISCARD_RENAMEFILESWITHEXT = 2
 };
 

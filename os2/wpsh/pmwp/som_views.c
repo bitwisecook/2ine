@@ -3,6 +3,7 @@
    view is a frame whose client lists its pages and shows the selected page. Help opens
    the object's help library in the system information viewer. */
 #include "os2/wpsh/pmwp/internal.h"
+#include "os2/include/wpobject.h"
 #include "os2/include/bsedos.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/pmshl.h"
@@ -24,15 +25,6 @@ enum
     HELP_QUERY_LIBRARY = 4,
     /* wpQueryDetailsData: title, style and class title, one ULONG each. */
     DETAILS_DATA_BYTES = 12,
-    /* Workplace Shell values (wpobject.h) */
-    WPMENUID_PRIMARY = 0,
-    WPMENUID_DELETE = 109,
-    WPMENUID_PROPERTIES = 112,
-    WPMENUID_CLOSE = 120,
-    CONFIRM_DELETE = 1,
-    OR_REFERENCE = 0x10000000,
-    OR_FROMCOPY = 0x00000008 | OR_REFERENCE,
-    OR_SHADOW = 0x00000010 | OR_REFERENCE,
     /* PMWP.DLL's operation for a create-from-template drag; not a Toolkit DO_* value. */
     DO_CREATE_OPERATION = 0xc002,
     /* USEITEM followed by VIEWITEM {view, handle, state, cnr, record}. */

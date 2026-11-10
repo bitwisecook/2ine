@@ -2,6 +2,7 @@
 /* M_WPObject class services and the file system, folder, disk, program and data file
    classes, plus creation of objects of classes registered from a guest module. */
 #include "os2/wpsh/pmwp/internal.h"
+#include "os2/include/wpobject.h"
 #include "os2/include/bsedos.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/pmshl.h"
@@ -41,26 +42,12 @@ enum
     PRINT_TOKEN_BYTES = 64
 };
 
-/* Workplace Shell values (wpobject.h, wpfolder.h, wpdisk.h, pmwp.h). */
+/* Workplace Shell views (wpfolder.h, wpdisk.h). */
 enum
 {
-    CLSSTYLE_NEVERTEMPLATE = 0x10,
-    CLSSTYLE_NEVERMOVE = PMWP_OBJSTYLE_NOMOVE,
-    CLSSTYLE_NEVERCOPY = PMWP_OBJSTYLE_NOCOPY,
-    CLSSTYLE_NEVERDELETE = PMWP_OBJSTYLE_NODELETE,
-    CLSSTYLE_NEVERPRINT = PMWP_OBJSTYLE_NOPRINT,
-    OPEN_CONTENTS = 1,
     OPEN_TREE = 101,
     OPEN_DETAILS = 102,
-    OPEN_AUTO = 120,
-    OR_REFERENCE = 0x10000000,
-    OR_FROMCOPY = 0x00000008 | OR_REFERENCE,
-    QC_FIRST = 0,
-    QC_NEXT = 1,
-    QC_LAST = 2,
-    OK_DELETE = 1,
-    NO_DELETE = 2,
-    RC_DROP_ITEMCOMPLETE = 1
+    OPEN_AUTO = 120
 };
 
 /* CLASSFIELDINFO (wpobject.h) records for the details view. */

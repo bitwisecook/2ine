@@ -29,6 +29,14 @@ extern "C"
 
     /* INCL_WPCLASS */
 
+    /* wpQueryContent codes */
+    enum
+    {
+        QC_FIRST = 0,
+        QC_NEXT = 1,
+        QC_LAST = 2
+    };
+
     OS2EXPORT BOOL OS2API WinRegisterObjectClass(PSZ name, PSZ module);
 
     OS2EXPORT BOOL OS2API WinDeregisterObjectClass(PSZ name);

@@ -78,7 +78,7 @@ socket headers apart from the host's.
 | `pmgpi.h`, `pmdev.h`, `pmfont.h` | Gpi* by INCL_GPI* group, Dev*, font records (PMGPI) |
 | `pmstddlg.h` | File and font dialogs, Drg* (PMCTLS; Drg* forwarded by PMDRAG) |
 | `pmspl.h` | Spl* (PMSPL) |
-| `pmwp.h` | Workplace Shell API and SOM class constructors and data (PMWP) |
+| `pmwp.h` (+ `wpobject.h`) | Workplace Shell API, SOM class constructors and data, and WPObject method values (PMWP) |
 | `os2win.h` | Open32 (PMWINX) |
 | `os2me.h` (+ `os2medef.h`, `meerror.h`, `mcios2.h`, `mmioos2.h`) | MCI messages, flags and errors, mci* and mmio* (MMPM; forwarded by MDM, MMIO) |
 | `dive.h` | Dive* (DIVE) |
