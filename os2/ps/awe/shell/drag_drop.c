@@ -8,13 +8,7 @@
 
 enum
 {
-    DM_DRAGOVER = 0x32e,
-    DM_DROP = 0x32f,
     WM_DROPFILES = 0x233,
-    DO_DEFAULT = 0xbffe,
-    DOR_DROP = 1,
-    DOR_NODROPOP = 2,
-    DOR_NEVERDROP = 3,
     DROP_HEADER = 20,
     DROP_PATH = 260,
     GHND = 0x42,

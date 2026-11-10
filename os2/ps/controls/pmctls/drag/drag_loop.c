@@ -13,15 +13,23 @@
 
 enum
 {
-    DRG_ICON = 1,
-    DRG_BITMAP = 2,
-    DRG_POLYGON = 4,
-    DRG_STRETCH = 8,
-    DRG_TRANSPARENT = 0x10,
-    DRG_CLOSED = 0x20,
+    /* DRAGIMAGE in guest memory. */
+    DRAGIMAGE_CB_OFFSET = 0,
+    DRAGIMAGE_CPTL_OFFSET = 2,
+    DRAGIMAGE_HIMAGE_OFFSET = 4,
+    DRAGIMAGE_CX_STRETCH_OFFSET = 8,
+    DRAGIMAGE_CY_STRETCH_OFFSET = 12,
+    DRAGIMAGE_FL_OFFSET = 16,
+    DRAGIMAGE_CXOFFSET_OFFSET = 20,
+    DRAGIMAGE_CYOFFSET_OFFSET = 22,
+    DRAGIMAGE_WIRE_SIZE = 24,
     DRAG_IMAGE_LIMIT = 64,
     DRAG_POINT_LIMIT = 4096,
-    DRAG_CANVAS_LIMIT = 1024
+    DRAG_CANVAS_LIMIT = 1024,
+    /* WinGetKeyState's key-down bit. */
+    KEY_DOWN = 0x8000,
+    /* How often the drag loop samples the pointer and keys. */
+    DRAG_POLL_INTERVAL_MS = 5
 };
 
 typedef struct DragImage
@@ -59,8 +67,8 @@ static BOOL drag_image_size(DragImage *image, const uint8 *wire)
         return FALSE;
     if (image->kind & DRG_STRETCH)
     {
-        image->width = (LONG)lx_guest_load_u32(wire + 8);
-        image->height = (LONG)lx_guest_load_u32(wire + 12);
+        image->width = (LONG)lx_guest_load_u32(wire + DRAGIMAGE_CX_STRETCH_OFFSET);
+        image->height = (LONG)lx_guest_load_u32(wire + DRAGIMAGE_CY_STRETCH_OFFSET);
     }
     return image->width > 0 && image->height > 0;
 }
@@ -167,17 +175,17 @@ static HPOINTER drag_pointer(ULONG address, ULONG count)
         goto done;
     for (ULONG i = 0; i < count; i++)
     {
-        uint8 wire[24];
+        uint8 wire[DRAGIMAGE_WIRE_SIZE];
         if (!lx_execution_read(GProcessState.execution, address, wire, sizeof wire))
             break;
-        ULONG size = lx_guest_load_u16(wire);
+        ULONG size = lx_guest_load_u16(wire + DRAGIMAGE_CB_OFFSET);
         address += size >= sizeof wire ? size : sizeof wire;
         DragImage *image = &images[used];
-        image->kind = lx_guest_load_u32(wire + 16);
-        image->handle = lx_guest_load_u32(wire + 4);
-        image->points = lx_guest_load_u16(wire + 2);
-        image->x = (SHORT)lx_guest_load_u16(wire + 20);
-        image->y = (SHORT)lx_guest_load_u16(wire + 22);
+        image->kind = lx_guest_load_u32(wire + DRAGIMAGE_FL_OFFSET);
+        image->handle = lx_guest_load_u32(wire + DRAGIMAGE_HIMAGE_OFFSET);
+        image->points = lx_guest_load_u16(wire + DRAGIMAGE_CPTL_OFFSET);
+        image->x = (SHORT)lx_guest_load_u16(wire + DRAGIMAGE_CXOFFSET_OFFSET);
+        image->y = (SHORT)lx_guest_load_u16(wire + DRAGIMAGE_CYOFFSET_OFFSET);
         if (image->kind & DRG_POLYGON)
         {
             ULONG n = drag_points(image, points);
@@ -232,7 +240,7 @@ static HPOINTER drag_pointer(ULONG address, ULONG count)
     lx_handle_release(&mask_borrow);
     if (ready)
     {
-        LXPOINTERINFO info = {.fPointer = 1,
+        LXPOINTERINFO info = {.fPointer = TRUE,
                               .xHotspot = -canvas.left,
                               .yHotspot = -canvas.bottom,
                               .hbmPointer = mask,
@@ -255,14 +263,16 @@ HWND DrgDrag(HWND source, ULONG info, ULONG images, ULONG count, LONG terminate,
 {
     uint8 header[DRAGINFO_WIRE_SIZE];
     HAB hab = WinQueryAnchorBlock(source);
-    if (!hab || reserved || !drag_info(info, header) || count > 65535 ||
-        (count && !lx_execution_memory(GProcessState.execution, images, count * 24, LX_GUEST_READ)))
+    if (!hab || reserved || !drag_info(info, header) || count > UINT16_MAX ||
+        (count && !lx_execution_memory(GProcessState.execution, images, count * DRAGIMAGE_WIRE_SIZE,
+                                       LX_GUEST_READ)))
         return 0;
-    lx_guest_store_u32(header + 8, source);
+    lx_guest_store_u32(header + DRAGINFO_HWNDSOURCE_OFFSET, source);
     HWND previous = 0, result = 0;
-    LONG button = terminate == 0x38 ? 2 : terminate;
-    if (button < 1 || button > 3)
-        button = 2;
+    /* VK_ENDDRAG ends the drag on the system drag button. */
+    LONG button = terminate == VK_ENDDRAG ? VK_BUTTON2 : terminate;
+    if (button < VK_BUTTON1 || button > VK_BUTTON3)
+        button = VK_BUTTON2;
     BOOL accepted = FALSE;
     HPOINTER cursor = 0, created = count ? drag_pointer(images, count) : 0;
     if (created)
@@ -276,54 +286,54 @@ HWND DrgDrag(HWND source, ULONG info, ULONG images, ULONG count, LONG terminate,
         POINTL point;
         if (!WinQueryPointerPos(HWND_DESKTOP, &point))
             break;
-        lx_guest_store_u16(header + 12, point.x);
-        lx_guest_store_u16(header + 14, point.y);
+        lx_guest_store_u16(header + DRAGINFO_XDROP_OFFSET, point.x);
+        lx_guest_store_u16(header + DRAGINFO_YDROP_OFFSET, point.y);
         if (!lx_execution_write(GProcessState.execution, info, header, sizeof header))
             break;
         HWND target = WinWindowFromPoint(HWND_DESKTOP, &point, TRUE);
         if (target != previous)
         {
             if (previous)
-                WinSendMsg(previous, 0x32d, (MPARAM)(uintptr_t)info, 0);
+                WinSendMsg(previous, DM_DRAGLEAVE, (MPARAM)(uintptr_t)info, 0);
             previous = target;
         }
         if (target)
         {
             ULONG position = (ULONG)(USHORT)point.x | (ULONG)(USHORT)point.y << 16;
-            ULONG reply = (ULONG)(uintptr_t)WinSendMsg(target, 0x32e, (MPARAM)(uintptr_t)info,
+            ULONG reply = (ULONG)(uintptr_t)WinSendMsg(target, DM_DRAGOVER, (MPARAM)(uintptr_t)info,
                                                        (MPARAM)(uintptr_t)position);
-            accepted = (reply & 0xffff) == 1;
-            if (accepted)
-                lx_guest_store_u16(header + 6, reply >> 16);
+            accepted = (reply & 0xffff) == DOR_DROP;
+            if (accepted) /* The operation the target accepts. */
+                lx_guest_store_u16(header + DRAGINFO_USOPERATION_OFFSET, reply >> 16);
         }
         else
             accepted = FALSE;
-        if (WinGetKeyState(HWND_DESKTOP, 0x0f) & 0x8000)
-            break;                                       /* escape */
-        if (WinGetKeyState(HWND_DESKTOP, 0x20) & 0x8000) /* VK_F1 asks the target for help */
+        if (WinGetKeyState(HWND_DESKTOP, VK_ESC) & KEY_DOWN)
+            break;
+        if (WinGetKeyState(HWND_DESKTOP, VK_F1) & KEY_DOWN)
         {
             if (target)
-                WinSendMsg(target, 0x32c, (MPARAM)(uintptr_t)info, 0); /* DM_DROPHELP */
+                WinSendMsg(target, DM_DROPHELP, (MPARAM)(uintptr_t)info, 0);
             break;
         }
-        if (!(WinGetKeyState(HWND_DESKTOP, button) & 0x8000))
+        if (!(WinGetKeyState(HWND_DESKTOP, button) & KEY_DOWN))
         {
             if (accepted && target)
             {
                 lx_execution_write(GProcessState.execution, info, header, sizeof header);
-                WinSendMsg(target, 0x32f, (MPARAM)(uintptr_t)info, 0);
+                WinSendMsg(target, DM_DROP, (MPARAM)(uintptr_t)info, 0);
                 result = target;
             }
             break;
         }
         QMSG message;
-        while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+        while (WinPeekMsg(hab, &message, 0, 0, 0, PM_REMOVE))
             WinDispatchMsg(hab, &message);
         lx_execution_poll_termination(GProcessState.execution);
-        lx_host_sleep_ms(5);
+        lx_host_sleep_ms(DRAG_POLL_INTERVAL_MS);
     }
     if (previous && !result)
-        WinSendMsg(previous, 0x32d, (MPARAM)(uintptr_t)info, 0);
+        WinSendMsg(previous, DM_DRAGLEAVE, (MPARAM)(uintptr_t)info, 0);
     if (cursor)
         WinSetPointer(HWND_DESKTOP, cursor);
     if (created)

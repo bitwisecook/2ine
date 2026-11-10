@@ -6,9 +6,21 @@
 
 enum
 {
-    /* Bytes of the DRAGINFO header in guest memory (pmstddlg.h DRAGINFO, 32-bit packing). */
+    /* The DRAGINFO header in guest memory (pmstddlg.h DRAGINFO, 32-bit packing); the DRAGITEM
+       array follows it. */
+    DRAGINFO_CBDRAGINFO_OFFSET = 0,
+    DRAGINFO_CBDRAGITEM_OFFSET = 4,
+    DRAGINFO_USOPERATION_OFFSET = 6,
+    DRAGINFO_HWNDSOURCE_OFFSET = 8,
+    DRAGINFO_XDROP_OFFSET = 12,
+    DRAGINFO_YDROP_OFFSET = 14,
+    DRAGINFO_CDITEM_OFFSET = 16,
     DRAGINFO_WIRE_SIZE = 20,
-    /* Bytes of one DRAGITEM (pmstddlg.h DRAGITEM). */
+    /* One DRAGITEM (pmstddlg.h DRAGITEM); its string handles run from hstrType to
+       hstrTargetName. */
+    DRAGITEM_HSTRTYPE_OFFSET = 8,
+    DRAGITEM_HSTRRMF_OFFSET = 12,
+    DRAGITEM_HSTRTARGETNAME_OFFSET = 24,
     DRAGITEM_WIRE_SIZE = 36
 };
 

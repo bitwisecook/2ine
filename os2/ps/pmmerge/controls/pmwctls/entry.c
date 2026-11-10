@@ -2,25 +2,11 @@
 /* Byte-oriented entry selection and editing in the presentation space's codepage. */
 #include "os2/include/private/pmwctlp.h"
 
-enum
-{
-    EM_QUERYCHANGED = 0x140,
-    EM_QUERYSEL = 0x141,
-    EM_SETSEL = 0x142,
-    EM_SETTEXTLIMIT = 0x143,
-    EM_CLEAR = 0x146,
-    EM_QUERYFIRST = 0x148,
-    EM_SETFIRST = 0x149,
-    EM_QUERYREADONLY = 0x14a,
-    EM_SETREADONLY = 0x14b,
-    EM_SETINSERT = 0x14c
-};
-
 void controlReplaceSelection(Window *window, const char *text, size_t bytes)
 {
     PmControl *c = window->control;
-    if (window->style & (c->kind == 10 ? 0x10 : 0x20))
-        return; /* ES_READONLY */
+    if (window->style & (c->kind == PM_CLASS_MLE ? MLS_READONLY : ES_READONLY))
+        return;
     const char *old = window->text ? window->text : "";
     size_t length = strlen(old), low = c->first < c->last ? c->first : c->last,
            high = c->first < c->last ? c->last : c->first;
@@ -32,13 +18,13 @@ void controlReplaceSelection(Window *window, const char *text, size_t bytes)
         high++;
     if (length - (high - low) + bytes > c->limit)
     {
-        controlNotify(window, 0x20);
+        controlNotify(window, EN_OVERFLOW);
         return;
     }
     char *copy = malloc(length - (high - low) + bytes + 1);
     if (!copy)
     {
-        controlNotify(window, 0x10);
+        controlNotify(window, EN_MEMERROR);
         return;
     }
     memcpy(copy, old, low);
@@ -49,7 +35,7 @@ void controlReplaceSelection(Window *window, const char *text, size_t bytes)
     c->first = c->last = (unsigned)(low + bytes);
     c->changed = TRUE;
     controlRepaint(window);
-    controlNotify(window, 4); /* EN_CHANGE */
+    controlNotify(window, EN_CHANGE);
 }
 
 MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
@@ -76,24 +62,24 @@ MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
             controlRepaint(window);
             return controlReply(TRUE);
         case EM_SETTEXTLIMIT:
-            if (!(USHORT)(uintptr_t)first || (USHORT)(uintptr_t)first > 32767)
+            if (!(USHORT)(uintptr_t)first || (USHORT)(uintptr_t)first > CONTROL_TEXT_LIMIT_MAX)
                 return 0;
             c->limit = (USHORT)(uintptr_t)first;
             return controlReply(TRUE);
         case EM_QUERYREADONLY:
-            return controlReply((window->style & 0x20) != 0);
+            return controlReply((window->style & ES_READONLY) != 0);
         case EM_SETREADONLY:
             if ((USHORT)(uintptr_t)first)
-                window->style |= 0x20;
+                window->style |= ES_READONLY;
             else
-                window->style &= ~0x20u;
+                window->style &= ~(unsigned)ES_READONLY;
             return controlReply(TRUE);
-        case EM_SETINSERT:
+        case EM_SETINSERTMODE:
             c->insert = (USHORT)(uintptr_t)first != 0;
             return controlReply(TRUE);
-        case EM_QUERYFIRST:
+        case EM_QUERYFIRSTCHAR:
             return controlReply((LONG)c->view);
-        case EM_SETFIRST:
+        case EM_SETFIRSTCHAR:
             c->view = (USHORT)(uintptr_t)first;
             controlRepaint(window);
             return controlReply(TRUE);
@@ -102,7 +88,7 @@ MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
             return controlReply(TRUE);
         case WM_SETFOCUS:
             controlRepaint(window);
-            controlNotify(window, (uintptr_t)second ? 1 : 2);
+            controlNotify(window, (uintptr_t)second ? EN_SETFOCUS : EN_KILLFOCUS);
             return 0;
         case WM_BUTTON1DOWN:
             c->first = c->last = (unsigned)length;
@@ -115,54 +101,54 @@ MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
     }
     ULONG flags = (USHORT)(uintptr_t)first;
     unsigned character = (USHORT)(uintptr_t)second, key = (USHORT)((uintptr_t)second >> 16);
-    if (flags & 0x40)
-        return 0;                   /* KC_KEYUP */
-    if ((flags & 2) && key == 0x1a) /* VK_INSERT toggles the shared SV_INSERTMODE */
+    if (flags & KC_KEYUP)
+        return 0;
+    if ((flags & KC_VIRTUALKEY) && key == VK_INSERT) /* Insert mode is shared by all controls. */
     {
-        BOOL insert = !WinQuerySysValue(HWND_DESKTOP, 59);
-        WinSetSysValue(HWND_DESKTOP, 59, insert);
+        BOOL insert = !WinQuerySysValue(HWND_DESKTOP, SV_INSERTMODE);
+        WinSetSysValue(HWND_DESKTOP, SV_INSERTMODE, insert);
         c->insert = insert;
         return (MRESULT)(uintptr_t)TRUE;
     }
-    if ((flags & 0x10) && (character == 'a' || character == 'A'))
+    if ((flags & KC_CTRL) && (character == 'a' || character == 'A'))
     {
         c->first = 0;
         c->last = (unsigned)length;
         controlRepaint(window);
         return 0;
     }
-    if (flags & 2) /* KC_VIRTUALKEY */
+    if (flags & KC_VIRTUALKEY)
     {
         unsigned position = c->last;
-        if (key == 5 || key == 0x1b) /* VK_BACKSPACE / VK_DELETE */
+        if (key == VK_BACKSPACE || key == VK_DELETE)
         {
             if (c->first == c->last)
             {
-                if (key == 5 && c->first)
+                if (key == VK_BACKSPACE && c->first)
                     c->first--;
-                else if (key == 0x1b && c->last < length)
+                else if (key == VK_DELETE && c->last < length)
                     c->last++;
             }
             controlReplaceSelection(window, "", 0);
             return 0;
         }
-        if (key == 0x15 && position)
+        if (key == VK_LEFT && position)
             position--;
-        else if (key == 0x17 && position < length)
+        else if (key == VK_RIGHT && position < length)
             position++;
-        else if (key == 0x14)
+        else if (key == VK_HOME)
             position = 0;
-        else if (key == 0x13)
+        else if (key == VK_END)
             position = (unsigned)length;
         else
             return WinDefWindowProc(window->hwnd, message, first, second);
         c->last = position;
-        if (!(flags & 8))
+        if (!(flags & KC_SHIFT)) /* Shift extends the selection from its anchor. */
             c->first = position;
         controlRepaint(window);
         return 0;
     }
-    if ((flags & 1) && !(flags & (0x10 | 0x20)) && character >= 32 && character <= 255)
+    if ((flags & KC_CHAR) && !(flags & (KC_CTRL | KC_ALT)) && character >= ' ' && character <= 255)
     {
         char byte = (char)character;
         controlReplaceSelection(window, &byte, 1);

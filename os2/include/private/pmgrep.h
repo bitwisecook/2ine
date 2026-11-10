@@ -66,6 +66,13 @@ void lx_pm_pick_line(struct PresentationSpace *ps, const POINTL *from, const POI
 /* Character-extra spacing converted from world units to device pels. */
 LONG lx_pm_char_extra(struct PresentationSpace *ps);
 
+/* Bounds on one raster surface or transfer, so that pel buffers stay within 64 MiB. */
+enum
+{
+    LX_PM_RASTER_MAX_DIMENSION = 16384,
+    LX_PM_RASTER_MAX_PELS = 16777216
+};
+
 typedef struct PmBitmap
 {
     void *anchor;
