@@ -4,22 +4,7 @@
 #define TWOINE_MIDI_SEQUENCE_H
 #include <stddef.h>
 #include <stdint.h>
-
-/* MIDI status bytes, meta events and channel-mode controllers. */
-enum
-{
-    MIDI_NOTE_OFF = 0x80,
-    MIDI_NOTE_ON = 0x90,
-    MIDI_CONTROL_CHANGE = 0xb0,
-    MIDI_PROGRAM_CHANGE = 0xc0,
-    MIDI_PITCH_BEND = 0xe0,
-    MIDI_SYSEX = 0xf0,
-    MIDI_SYSEX_END = 0xf7,
-    MIDI_META = 0xff,
-    MIDI_META_TEMPO = 0x51,
-    MIDI_ALL_SOUND_OFF = 120,
-    MIDI_ALL_NOTES_OFF = 123
-};
+#include "os2/mm/midi/midi_messages.h"
 
 typedef struct LxMidiEvent
 {

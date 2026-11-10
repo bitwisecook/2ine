@@ -22,7 +22,7 @@ HMODULE GetModuleHandle(PSZ name)
     size_t length = strlen(base);
     if (length >= sizeof module)
     {
-        open32SetError(126);
+        open32SetError(ERROR_MOD_NOT_FOUND);
         return 0;
     }
     memcpy(module, base, length + 1);
@@ -32,7 +32,7 @@ HMODULE GetModuleHandle(PSZ name)
     for (LxModule *loaded = GProcessState.loaded_modules; loaded; loaded = loaded->next)
         if (!loaded->load_failed && !strcasecmp(module, loaded->name))
             return loaded->handle;
-    open32SetError(126);
+    open32SetError(ERROR_MOD_NOT_FOUND);
     return 0;
 }
 
@@ -40,13 +40,13 @@ ULONG GetModuleFileName(HMODULE module, PSZ output, ULONG capacity)
 {
     if (!output || !capacity)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(module_handle(module), LX_HANDLE_MODULE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     LxModule *loaded = borrow.resource;
@@ -57,7 +57,7 @@ ULONG GetModuleFileName(HMODULE module, PSZ output, ULONG capacity)
     lx_handle_release(&borrow);
     if (length >= capacity)
     {
-        open32SetError(122);
+        open32SetError(ERROR_INSUFFICIENT_BUFFER);
         return capacity;
     }
     return (ULONG)length;
@@ -68,7 +68,7 @@ HMODULE LoadLibrary(PSZ name)
     TRACE_NATIVE("LoadLibrary('%s')", name);
     LxModule *module = name && GProcessState.loadModule ? GProcessState.loadModule(name) : NULL;
     if (!module)
-        open32SetError(name ? 126 : 87);
+        open32SetError(name ? ERROR_MOD_NOT_FOUND : ERROR_INVALID_PARAMETER);
     return module ? module->handle : 0;
 }
 
@@ -77,7 +77,7 @@ BOOL FreeLibrary(HMODULE module)
     LxHandleBorrow borrow = {0};
     if (!GProcessState.freeModule || !lx_handle_borrow(module, LX_HANDLE_MODULE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     GProcessState.freeModule(borrow.resource);
@@ -89,13 +89,13 @@ PFN GetProcAddress(HMODULE module, PSZ name)
 {
     if (!name)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return NULL;
     }
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(module_handle(module), LX_HANDLE_MODULE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return NULL;
     }
     const LxModule *loaded = borrow.resource;
@@ -113,7 +113,7 @@ PFN GetProcAddress(HMODULE module, PSZ name)
     }
     lx_handle_release(&borrow);
     if (!address)
-        open32SetError(127);
+        open32SetError(ERROR_PROC_NOT_FOUND);
     return address;
 }
 

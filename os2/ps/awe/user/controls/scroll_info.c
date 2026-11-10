@@ -8,7 +8,7 @@ static Open32Scroll *scroll_state(ULONG handle, LONG bar, Open32Window **owner)
     Open32Window *window = open32FindWindow(handle);
     if (!window || bar < 0 || bar > 2)
     {
-        open32SetError(window ? 87 : 1400);
+        open32SetError(window ? ERROR_INVALID_PARAMETER : ERROR_INVALID_WINDOW_HANDLE);
         return NULL;
     }
     if (owner)
@@ -43,7 +43,7 @@ BOOL SetScrollRange(ULONG handle, LONG bar, LONG minimum, LONG maximum, BOOL red
         return FALSE;
     if (maximum < minimum || (int64_t)maximum - minimum > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     state->minimum = minimum;
@@ -59,7 +59,7 @@ BOOL GetScrollRange(ULONG handle, LONG bar, PVOID minimum, PVOID maximum)
     if (!state || !minimum || !maximum)
     {
         if (state)
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     lx_guest_store_u32(minimum, (ULONG)state->minimum);
@@ -91,7 +91,7 @@ BOOL ShowScrollBar(ULONG handle, LONG bar, BOOL show)
     Open32Window *window = open32FindWindow(handle);
     if (!window || bar < 0 || bar > 3)
     {
-        open32SetError(window ? 87 : 1400);
+        open32SetError(window ? ERROR_INVALID_PARAMETER : ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     if (bar == 3)

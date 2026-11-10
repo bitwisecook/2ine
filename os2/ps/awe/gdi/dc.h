@@ -1,8 +1,22 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* Open32 device contexts: the Win32 DC state kept beside each PM presentation space. */
 #ifndef TWOINE_OPEN32_DRAWING_H
 #define TWOINE_OPEN32_DRAWING_H
 #include "os2/include/private/export.h"
 #include "os2/include/pmwin.h"
+
+/* How a DC was made, which decides how it is released and whether it can draw. */
+enum
+{
+    OPEN32_DC_MEMORY = 1,              /* CreateCompatibleDC */
+    OPEN32_DC_PAINT = 2,               /* BeginPaint */
+    OPEN32_DC_WINDOW = 3,              /* GetDC, GetWindowDC */
+    OPEN32_DC_DISPLAY_INFORMATION = 4, /* CreateIC("DISPLAY") */
+    OPEN32_DC_PRINTER = 5,             /* CreateDC for a printer */
+    OPEN32_DC_PRINTER_INFORMATION = 6, /* CreateIC for a printer */
+    OPEN32_DC_PS_WRAPPER = 7,          /* HPSToHDC over a caller's PS */
+    OPEN32_DC_DISPLAY = 8              /* CreateDC("DISPLAY") */
+};
 
 typedef struct Open32DC
 {

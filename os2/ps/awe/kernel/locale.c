@@ -4,123 +4,139 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/include/bsedos.h"
 
+enum
+{
+    /* MAKELCID(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), SORT_DEFAULT) */
+    ENGLISH_US_LCID = 0x0409,
+    OEM_CODE_PAGE = 437,
+    ANSI_CODE_PAGE = 1252,
+    /* GetLocaleInfo types may carry LOCALE_NOUSEROVERRIDE and LOCALE_USE_CP_ACP;
+       any other bit above the type is refused. */
+    LOCALE_TYPE_RESERVED_BITS = 0x3FFF0000,
+    /* DosQueryDBCSEnv: up to five lead-byte ranges and the 0,0 that ends them. */
+    DBCS_RANGE_BYTES = 12,
+    STRING_TYPE_INPUT_LIMIT = 1024 * 1024,
+    UTF16_UNIT_BYTES = 2
+};
+
 static const struct
 {
     ULONG type;
     const char *value;
 } locale_items[] = {
-    {0x0001, "0409"},          /* LOCALE_ILANGUAGE */
-    {0x0002, "English"},       /* LOCALE_SLOCALIZEDDISPLAYNAME */
-    {0x0003, "ENU"},           /* LOCALE_SABBREVLANGNAME */
-    {0x0004, "English"},       /* LOCALE_SNATIVELANGUAGENAME */
-    {0x0005, "1"},             /* LOCALE_ICOUNTRY */
-    {0x0006, "United States"}, /* LOCALE_SLOCALIZEDCOUNTRYNAME */
-    {0x0007, "US"},            /* LOCALE_SABBREVCTRYNAME */
-    {0x0008, "United States"}, /* LOCALE_SNATIVECOUNTRYNAME */
-    {0x0009, "409"},           /* LOCALE_IDEFAULTLANGUAGE */
-    {0x000A, "1"},             /* LOCALE_IDEFAULTCOUNTRY */
-    {0x000B, "437"},           /* LOCALE_IDEFAULTCODEPAGE */
-    {0x000C, ","},             /* LOCALE_SLIST */
-    {0x000D, "1"},             /* LOCALE_IMEASURE */
-    {0x000E, "."},             /* LOCALE_SDECIMAL */
-    {0x000F, ","},             /* LOCALE_STHOUSAND */
-    {0x0010, "3;0"},           /* LOCALE_SGROUPING */
-    {0x0011, "2"},             /* LOCALE_IDIGITS */
-    {0x0012, "0"},             /* LOCALE_ILZERO */
-    {0x0013, "0123456789"},    /* LOCALE_SNATIVEDIGITS */
-    {0x0014, "$"},             /* LOCALE_SCURRENCY */
-    {0x0015, "USD"},           /* LOCALE_SINTLSYMBOL */
-    {0x0016, "."},             /* LOCALE_SMONDECIMALSEP */
-    {0x0017, ","},             /* LOCALE_SMONTHOUSANDSEP */
-    {0x0018, "3;0"},           /* LOCALE_SMONGROUPING */
-    {0x0019, "2"},             /* LOCALE_ICURRDIGITS */
-    {0x001A, "2"},             /* LOCALE_IINTLCURRDIGITS */
-    {0x001B, "0"},             /* LOCALE_ICURRENCY */
-    {0x001C, "0"},             /* LOCALE_INEGCURR */
-    {0x001D, "/"},             /* LOCALE_SDATE */
-    {0x001E, ":"},             /* LOCALE_STIME */
-    {0x001F, "MM/dd/yy"},      /* LOCALE_SSHORTDATE */
-    {0x0020, "MMMM dd, yyyy"}, /* LOCALE_SLONGDATE */
-    {0x0021, "0"},             /* LOCALE_IDATE */
-    {0x0022, "0"},             /* LOCALE_ILDATE */
-    {0x0023, "0"},             /* LOCALE_ITIME */
-    {0x0024, "0"},             /* LOCALE_ICENTURY */
-    {0x0025, "0"},             /* LOCALE_ITLZERO */
-    {0x0026, "0"},             /* LOCALE_IDAYLZERO */
-    {0x0027, "0"},             /* LOCALE_IMONLZERO */
-    {0x0028, "am"},            /* LOCALE_S1159 */
-    {0x0029, "pm"},            /* LOCALE_S2359 */
-    {0x002A, "Monday"},        /* LOCALE_SDAYNAME1 */
-    {0x002B, "Tuesday"},       /* LOCALE_SDAYNAME2 */
-    {0x002C, "Wednesday"},     /* LOCALE_SDAYNAME3 */
-    {0x002D, "Thursday"},      /* LOCALE_SDAYNAME4 */
-    {0x002E, "Friday"},        /* LOCALE_SDAYNAME5 */
-    {0x002F, "Saturday"},      /* LOCALE_SDAYNAME6 */
-    {0x0030, "Sunday"},        /* LOCALE_SDAYNAME7 */
-    {0x0031, "Mon"},           /* LOCALE_SABBREVDAYNAME1 */
-    {0x0032, "Tue"},           /* LOCALE_SABBREVDAYNAME2 */
-    {0x0033, "Wed"},           /* LOCALE_SABBREVDAYNAME3 */
-    {0x0034, "Thu"},           /* LOCALE_SABBREVDAYNAME4 */
-    {0x0035, "Fri"},           /* LOCALE_SABBREVDAYNAME5 */
-    {0x0036, "Sat"},           /* LOCALE_SABBREVDAYNAME6 */
-    {0x0037, "Sun"},           /* LOCALE_SABBREVDAYNAME7 */
-    {0x0038, "January"},       /* LOCALE_SMONTHNAME1 */
-    {0x0039, "February"},      /* LOCALE_SMONTHNAME2 */
-    {0x003A, "March"},         /* LOCALE_SMONTHNAME3 */
-    {0x003B, "April"},         /* LOCALE_SMONTHNAME4 */
-    {0x003C, "May"},           /* LOCALE_SMONTHNAME5 */
-    {0x003D, "June"},          /* LOCALE_SMONTHNAME6 */
-    {0x003E, "July"},          /* LOCALE_SMONTHNAME7 */
-    {0x003F, "August"},        /* LOCALE_SMONTHNAME8 */
-    {0x0040, "September"},     /* LOCALE_SMONTHNAME9 */
-    {0x0041, "October"},       /* LOCALE_SMONTHNAME10 */
-    {0x0042, "November"},      /* LOCALE_SMONTHNAME11 */
-    {0x0043, "December"},      /* LOCALE_SMONTHNAME12 */
-    {0x0044, "Jan"},           /* LOCALE_SABBREVMONTHNAME1 */
-    {0x0045, "Feb"},           /* LOCALE_SABBREVMONTHNAME2 */
-    {0x0046, "Mar"},           /* LOCALE_SABBREVMONTHNAME3 */
-    {0x0047, "Apr"},           /* LOCALE_SABBREVMONTHNAME4 */
-    {0x0048, "May"},           /* LOCALE_SABBREVMONTHNAME5 */
-    {0x0049, "Jun"},           /* LOCALE_SABBREVMONTHNAME6 */
-    {0x004A, "Jul"},           /* LOCALE_SABBREVMONTHNAME7 */
-    {0x004B, "Aug"},           /* LOCALE_SABBREVMONTHNAME8 */
-    {0x004C, "Sep"},           /* LOCALE_SABBREVMONTHNAME9 */
-    {0x004D, "Oct"},           /* LOCALE_SABBREVMONTHNAME10 */
-    {0x004E, "Nov"},           /* LOCALE_SABBREVMONTHNAME11 */
-    {0x004F, "Dec"},           /* LOCALE_SABBREVMONTHNAME12 */
-    {0x0050, ""},              /* LOCALE_SPOSITIVESIGN */
-    {0x0051, "-"},             /* LOCALE_SNEGATIVESIGN */
-    {0x0052, "1"},             /* LOCALE_IPOSSIGNPOSN */
-    {0x0053, "0"},             /* LOCALE_INEGSIGNPOSN */
-    {0x0054, "1"},             /* LOCALE_IPOSSYMPRECEDES */
-    {0x0055, "0"},             /* LOCALE_IPOSSEPBYSPACE */
-    {0x0056, "1"},             /* LOCALE_INEGSYMPRECEDES */
-    {0x0057, "0"},             /* LOCALE_INEGSEPBYSPACE */
-    {0x1001, "English"},       /* LOCALE_SENGLISHLANGUAGENAME */
-    {0x1002, "United States"}, /* LOCALE_SENGLISHCOUNTRYNAME */
-    {0x1003, "hh:mm:ss tt"},   /* LOCALE_STIMEFORMAT */
-    {0x1004, "1252"},          /* LOCALE_IDEFAULTANSICODEPAGE */
-    {0x1005, "0"},             /* LOCALE_ITIMEMARKPOSN */
-    {0x1009, "1"},             /* LOCALE_ICALENDARTYPE */
-    {0x100B, "0"},             /* LOCALE_IOPTIONALCALENDAR */
-    {0x100C, "6"},             /* LOCALE_IFIRSTDAYOFWEEK */
-    {0x100D, "0"},             /* LOCALE_IFIRSTWEEKOFYEAR */
-    {0x100E, ""},              /* LOCALE_SMONTHNAME13 */
-    {0x100F, ""},              /* LOCALE_SABBREVMONTHNAME13 */
-    {0x1010, "1"},             /* LOCALE_INEGNUMBER */
+    {WIN32_LOCALE_ILANGUAGE, "0409"},
+    {WIN32_LOCALE_SLANGUAGE, "English"},
+    {WIN32_LOCALE_SABBREVLANGNAME, "ENU"},
+    {WIN32_LOCALE_SNATIVELANGNAME, "English"},
+    {WIN32_LOCALE_ICOUNTRY, "1"},
+    {WIN32_LOCALE_SCOUNTRY, "United States"},
+    {WIN32_LOCALE_SABBREVCTRYNAME, "US"},
+    {WIN32_LOCALE_SNATIVECTRYNAME, "United States"},
+    {WIN32_LOCALE_IDEFAULTLANGUAGE, "409"},
+    {WIN32_LOCALE_IDEFAULTCOUNTRY, "1"},
+    {WIN32_LOCALE_IDEFAULTCODEPAGE, "437"},
+    {WIN32_LOCALE_SLIST, ","},
+    {WIN32_LOCALE_IMEASURE, "1"},
+    {WIN32_LOCALE_SDECIMAL, "."},
+    {WIN32_LOCALE_STHOUSAND, ","},
+    {WIN32_LOCALE_SGROUPING, "3;0"},
+    {WIN32_LOCALE_IDIGITS, "2"},
+    {WIN32_LOCALE_ILZERO, "0"},
+    {WIN32_LOCALE_SNATIVEDIGITS, "0123456789"},
+    {WIN32_LOCALE_SCURRENCY, "$"},
+    {WIN32_LOCALE_SINTLSYMBOL, "USD"},
+    {WIN32_LOCALE_SMONDECIMALSEP, "."},
+    {WIN32_LOCALE_SMONTHOUSANDSEP, ","},
+    {WIN32_LOCALE_SMONGROUPING, "3;0"},
+    {WIN32_LOCALE_ICURRDIGITS, "2"},
+    {WIN32_LOCALE_IINTLCURRDIGITS, "2"},
+    {WIN32_LOCALE_ICURRENCY, "0"},
+    {WIN32_LOCALE_INEGCURR, "0"},
+    {WIN32_LOCALE_SDATE, "/"},
+    {WIN32_LOCALE_STIME, ":"},
+    {WIN32_LOCALE_SSHORTDATE, "MM/dd/yy"},
+    {WIN32_LOCALE_SLONGDATE, "MMMM dd, yyyy"},
+    {WIN32_LOCALE_IDATE, "0"},
+    {WIN32_LOCALE_ILDATE, "0"},
+    {WIN32_LOCALE_ITIME, "0"},
+    {WIN32_LOCALE_ICENTURY, "0"},
+    {WIN32_LOCALE_ITLZERO, "0"},
+    {WIN32_LOCALE_IDAYLZERO, "0"},
+    {WIN32_LOCALE_IMONLZERO, "0"},
+    {WIN32_LOCALE_S1159, "am"},
+    {WIN32_LOCALE_S2359, "pm"},
+    {WIN32_LOCALE_SDAYNAME1, "Monday"},
+    {WIN32_LOCALE_SDAYNAME2, "Tuesday"},
+    {WIN32_LOCALE_SDAYNAME3, "Wednesday"},
+    {WIN32_LOCALE_SDAYNAME4, "Thursday"},
+    {WIN32_LOCALE_SDAYNAME5, "Friday"},
+    {WIN32_LOCALE_SDAYNAME6, "Saturday"},
+    {WIN32_LOCALE_SDAYNAME7, "Sunday"},
+    {WIN32_LOCALE_SABBREVDAYNAME1, "Mon"},
+    {WIN32_LOCALE_SABBREVDAYNAME2, "Tue"},
+    {WIN32_LOCALE_SABBREVDAYNAME3, "Wed"},
+    {WIN32_LOCALE_SABBREVDAYNAME4, "Thu"},
+    {WIN32_LOCALE_SABBREVDAYNAME5, "Fri"},
+    {WIN32_LOCALE_SABBREVDAYNAME6, "Sat"},
+    {WIN32_LOCALE_SABBREVDAYNAME7, "Sun"},
+    {WIN32_LOCALE_SMONTHNAME1, "January"},
+    {WIN32_LOCALE_SMONTHNAME2, "February"},
+    {WIN32_LOCALE_SMONTHNAME3, "March"},
+    {WIN32_LOCALE_SMONTHNAME4, "April"},
+    {WIN32_LOCALE_SMONTHNAME5, "May"},
+    {WIN32_LOCALE_SMONTHNAME6, "June"},
+    {WIN32_LOCALE_SMONTHNAME7, "July"},
+    {WIN32_LOCALE_SMONTHNAME8, "August"},
+    {WIN32_LOCALE_SMONTHNAME9, "September"},
+    {WIN32_LOCALE_SMONTHNAME10, "October"},
+    {WIN32_LOCALE_SMONTHNAME11, "November"},
+    {WIN32_LOCALE_SMONTHNAME12, "December"},
+    {WIN32_LOCALE_SABBREVMONTHNAME1, "Jan"},
+    {WIN32_LOCALE_SABBREVMONTHNAME2, "Feb"},
+    {WIN32_LOCALE_SABBREVMONTHNAME3, "Mar"},
+    {WIN32_LOCALE_SABBREVMONTHNAME4, "Apr"},
+    {WIN32_LOCALE_SABBREVMONTHNAME5, "May"},
+    {WIN32_LOCALE_SABBREVMONTHNAME6, "Jun"},
+    {WIN32_LOCALE_SABBREVMONTHNAME7, "Jul"},
+    {WIN32_LOCALE_SABBREVMONTHNAME8, "Aug"},
+    {WIN32_LOCALE_SABBREVMONTHNAME9, "Sep"},
+    {WIN32_LOCALE_SABBREVMONTHNAME10, "Oct"},
+    {WIN32_LOCALE_SABBREVMONTHNAME11, "Nov"},
+    {WIN32_LOCALE_SABBREVMONTHNAME12, "Dec"},
+    {WIN32_LOCALE_SPOSITIVESIGN, ""},
+    {WIN32_LOCALE_SNEGATIVESIGN, "-"},
+    {WIN32_LOCALE_IPOSSIGNPOSN, "1"},
+    {WIN32_LOCALE_INEGSIGNPOSN, "0"},
+    {WIN32_LOCALE_IPOSSYMPRECEDES, "1"},
+    {WIN32_LOCALE_IPOSSEPBYSPACE, "0"},
+    {WIN32_LOCALE_INEGSYMPRECEDES, "1"},
+    {WIN32_LOCALE_INEGSEPBYSPACE, "0"},
+    {WIN32_LOCALE_SENGLANGUAGE, "English"},
+    {WIN32_LOCALE_SENGCOUNTRY, "United States"},
+    {WIN32_LOCALE_STIMEFORMAT, "hh:mm:ss tt"},
+    {WIN32_LOCALE_IDEFAULTANSICODEPAGE, "1252"},
+    {WIN32_LOCALE_ITIMEMARKPOSN, "0"},
+    {WIN32_LOCALE_ICALENDARTYPE, "1"},
+    {WIN32_LOCALE_IOPTIONALCALENDAR, "0"},
+    {WIN32_LOCALE_IFIRSTDAYOFWEEK, "6"},
+    {WIN32_LOCALE_IFIRSTWEEKOFYEAR, "0"},
+    {WIN32_LOCALE_SMONTHNAME13, ""},
+    {WIN32_LOCALE_SABBREVMONTHNAME13, ""},
+    {WIN32_LOCALE_INEGNUMBER, "1"},
 };
 
 LONG GetLocaleInfo(ULONG locale, ULONG type, PSZ output, LONG capacity)
 {
     TRACE_NATIVE("GetLocaleInfo(%X, %X, %p, %d)", locale, type, output, capacity);
-    if (capacity < 0 || (capacity && !output) || (type & 0x3FFF0000))
+    if (capacity < 0 || (capacity && !output) || (type & LOCALE_TYPE_RESERVED_BITS))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    if (locale && locale != 0x400 && locale != 0x800 && locale != 0x409)
+    if (locale && locale != WIN32_LOCALE_USER_DEFAULT && locale != WIN32_LOCALE_SYSTEM_DEFAULT &&
+        locale != ENGLISH_US_LCID)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     type &= 0xFFFF;
@@ -132,13 +148,13 @@ LONG GetLocaleInfo(ULONG locale, ULONG type, PSZ output, LONG capacity)
                 return (LONG)required;
             if ((size_t)capacity < required)
             {
-                open32SetError(122);
+                open32SetError(ERROR_INSUFFICIENT_BUFFER);
                 return 0;
             }
             memcpy(output, locale_items[i].value, required);
             return (LONG)required;
         }
-    open32SetError(87);
+    open32SetError(ERROR_INVALID_PARAMETER);
     return 0;
 }
 
@@ -147,8 +163,9 @@ BOOL IsDBCSLeadByte(ULONG character)
     typedef APIRET(OS2API * QueryFn)(ULONG, PCOUNTRYCODE, PCHAR);
     QueryFn query = (QueryFn)open32DosService("DosQueryDBCSEnv");
     COUNTRYCODE country = {0, 0};
-    unsigned char ranges[12] = {0};
-    ULONG error = query ? query(sizeof ranges, &country, (PCHAR)ranges) : 120;
+    unsigned char ranges[DBCS_RANGE_BYTES] = {0};
+    ULONG error =
+        query ? query(sizeof ranges, &country, (PCHAR)ranges) : ERROR_CALL_NOT_IMPLEMENTED;
     if (error)
     {
         open32SetError(error);
@@ -169,28 +186,29 @@ USHORT GetUserDefaultLangID(void)
 BOOL GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count, PVOID output)
 {
     (void)locale; /* Input is single-byte text, and its classes do not vary by locale here. */
-    if (!input || !output || count == 0 || count < -1 || count > 1024 * 1024 ||
-        (kind != 1 && kind != 2 && kind != 4))
+    if (!input || !output || count == 0 || count < -1 || count > STRING_TYPE_INPUT_LIMIT ||
+        (kind != WIN32_CT_CTYPE1 && kind != WIN32_CT_CTYPE2 && kind != WIN32_CT_CTYPE3))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (count == -1)
         count = (LONG)strlen(input) + 1;
-    uint8 *wide = malloc((size_t)count * 2);
+    uint8 *wide = malloc((size_t)count * UTF16_UNIT_BYTES);
     if (!wide)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
-    if (!MultiByteToWideChar(0, 0, input, count, wide, count))
+    if (!MultiByteToWideChar(WIN32_CP_ACP, 0, input, count, wide, count))
     {
         free(wide);
         return FALSE;
     }
     for (LONG i = 0; i < count; i++)
     {
-        ULONG c = lx_guest_load_u16(wide + i * 2);
+        /* Latin-1 letters plus the letters CP1252 adds in 0x80-0x9F. */
+        ULONG c = lx_guest_load_u16(wide + i * UTF16_UNIT_BYTES);
         BOOL upper = (c >= 'A' && c <= 'Z') || (c >= 0xC0 && c <= 0xDE && c != 0xD7) ||
                      c == 0x178 || c == 0x152 || c == 0x160 || c == 0x17D;
         BOOL lower = (c >= 'a' && c <= 'z') || (c >= 0xDF && c <= 0xFF && c != 0xF7) ||
@@ -201,29 +219,31 @@ BOOL GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count, PVOID outp
         BOOL blank = c == 9 || c == 32 || c == 0xA0;
         BOOL defined = c != 0xFFFD;
         USHORT value = 0;
-        if (kind == 1)
-            value = (upper ? 1 : 0) | (lower ? 2 : 0) | (digit ? 4 : 0) | (space ? 8 : 0) |
-                    (!alpha && !digit && !space && !control && defined ? 0x10 : 0) |
-                    (control ? 0x20 : 0) | (blank ? 0x40 : 0) |
-                    (digit || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f') ? 0x80 : 0) |
-                    (alpha ? 0x100 : 0) | (defined ? 0x200 : 0);
-        else if (kind == 2)
-            value = alpha                                               ? 1
-                    : digit                                             ? 3
-                    : c == '\r' || c == '\n'                            ? 8
-                    : c == '\t'                                         ? 9
-                    : space                                             ? 10
-                    : c == '+' || c == '-'                              ? 4
-                    : c == '$' || c == 0xA3 || c == 0xA5 || c == 0x20AC ? 5
-                    : c == ',' || c == '.' || c == ':'                  ? 7
-                                                                        : 11;
-        else
+        if (kind == WIN32_CT_CTYPE1)
             value =
-                (alpha ? 0x8000 : 0) |
-                (c == 0xA8 || c == 0xAF || c == 0xB4 || c == 0xB8 || c == 0x2C6 || c == 0x2DC ? 2
-                                                                                              : 0) |
-                (!alpha && !digit && !space && !control ? 8 : 0);
-        lx_guest_store_u16((uint8 *)output + i * 2, value);
+                (upper ? WIN32_C1_UPPER : 0) | (lower ? WIN32_C1_LOWER : 0) |
+                (digit ? WIN32_C1_DIGIT : 0) | (space ? WIN32_C1_SPACE : 0) |
+                (!alpha && !digit && !space && !control && defined ? WIN32_C1_PUNCT : 0) |
+                (control ? WIN32_C1_CNTRL : 0) | (blank ? WIN32_C1_BLANK : 0) |
+                (digit || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f') ? WIN32_C1_XDIGIT : 0) |
+                (alpha ? WIN32_C1_ALPHA : 0) | (defined ? WIN32_C1_DEFINED : 0);
+        else if (kind == WIN32_CT_CTYPE2)
+            value = alpha                                               ? WIN32_C2_LEFTTORIGHT
+                    : digit                                             ? WIN32_C2_EUROPENUMBER
+                    : c == '\r' || c == '\n'                            ? WIN32_C2_BLOCKSEPARATOR
+                    : c == '\t'                                         ? WIN32_C2_SEGMENTSEPARATOR
+                    : space                                             ? WIN32_C2_WHITESPACE
+                    : c == '+' || c == '-'                              ? WIN32_C2_EUROPESEPARATOR
+                    : c == '$' || c == 0xA3 || c == 0xA5 || c == 0x20AC ? WIN32_C2_EUROPETERMINATOR
+                    : c == ',' || c == '.' || c == ':'                  ? WIN32_C2_COMMONSEPARATOR
+                                                                        : WIN32_C2_OTHERNEUTRAL;
+        else
+            value = (alpha ? WIN32_C3_ALPHA : 0) |
+                    (c == 0xA8 || c == 0xAF || c == 0xB4 || c == 0xB8 || c == 0x2C6 || c == 0x2DC
+                         ? WIN32_C3_DIACRITIC
+                         : 0) |
+                    (!alpha && !digit && !space && !control ? WIN32_C3_SYMBOL : 0);
+        lx_guest_store_u16((uint8 *)output + i * UTF16_UNIT_BYTES, value);
     }
     free(wide);
     return TRUE;
@@ -232,17 +252,17 @@ BOOL GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count, PVOID outp
 ULONG GetUserDefaultLCID(void)
 {
     /* The current NLS provider exposes United States country and English locale. */
-    return 0x0409;
+    return ENGLISH_US_LCID;
 }
 
 ULONG GetOEMCP(void)
 {
     /* The NLS provider currently exposes CP437 as the process OEM code page. */
-    return 437;
+    return OEM_CODE_PAGE;
 }
 
 ULONG GetACP(void)
 {
     /* Windows code-page identifier for the ANSI encoding exposed by GetLocaleInfo. */
-    return 1252;
+    return ANSI_CODE_PAGE;
 }

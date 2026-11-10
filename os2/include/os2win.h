@@ -4,7 +4,43 @@
 #ifndef _INCL_OS2WIN_H_
 #define _INCL_OS2WIN_H_
 #include "os2/include/os2def.h"
+#include "os2/include/bseerr.h"
+
+/* Directions of Open32's PM/Win32 translations. */
+typedef enum
+{
+    WINX2PM,
+    PM2WINX
+} XLATEDIR;
+
 typedef LONG(OS2API *PFNWINMAIN)(ULONG instance, ULONG previous, PSZ command, LONG show);
+
+/* Error codes (GetLastError) that bseerr.h does not declare. Open32's
+   os2werr.h shares the base OS's names and values below 1000, so
+   ERROR_INVALID_PARAMETER and the like come from bseerr.h. */
+enum
+{
+    ERROR_SUCCESS = 0,
+    ERROR_CAN_NOT_COMPLETE = 1003,
+    ERROR_INVALID_FLAGS = 1004,
+    ERROR_NO_UNICODE_TRANSLATION = 1113,
+    ERROR_IO_DEVICE = 1117,
+    ERROR_INTERNAL_ERROR = 1359,
+    ERROR_INVALID_WINDOW_HANDLE = 1400,
+    ERROR_INVALID_MENU_HANDLE = 1401,
+    ERROR_INVALID_ACCEL_HANDLE = 1403,
+    ERROR_INVALID_HOOK_HANDLE = 1404,
+    ERROR_CANNOT_FIND_WND_CLASS = 1407,
+    ERROR_CLASS_ALREADY_EXISTS = 1410,
+    ERROR_CLASS_DOES_NOT_EXIST = 1411,
+    ERROR_CLASS_HAS_WINDOWS = 1412,
+    ERROR_INVALID_INDEX = 1413,
+    ERROR_CLIPBOARD_NOT_OPEN = 1418,
+    ERROR_MENU_ITEM_NOT_FOUND = 1456,
+    ERROR_INVALID_PRINTER_NAME = 1801,
+    ERROR_RESOURCE_TYPE_NOT_FOUND = 1813,
+    ERROR_RESOURCE_NAME_NOT_FOUND = 1814
+};
 
 /* GDI values, with the Win32 names Open32's os2win.h uses. */
 enum
@@ -67,6 +103,8 @@ enum
     BS_HATCHED = 2,
     BS_PATTERN = 3,
     BS_DIBPATTERN = 5,
+    BS_DIBPATTERNPT = 6,
+    BS_DIBPATTERN8X8 = 8,
     HS_HORIZONTAL = 0,
     HS_VERTICAL = 1,
     HS_FDIAGONAL = 2,

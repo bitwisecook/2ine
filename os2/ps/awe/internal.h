@@ -3,6 +3,14 @@
 #define TWOINE_PMWINX_INTERNAL_H
 #include <stddef.h>
 #include "os2/include/os2win.h"
+#include "os2/ps/awe/win32.h"
+
+enum
+{
+    /* Guest memory is mapped and protected in whole pages. */
+    OPEN32_PAGE_SIZE = 4096
+};
+
 void open32SetError(ULONG error);
 void open32CommonDialogError(ULONG error);
 ULONG open32ScrollWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);

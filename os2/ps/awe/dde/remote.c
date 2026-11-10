@@ -10,6 +10,19 @@
 #include <stdio.h>
 #include "os2/ps/awe/dde/dde.h"
 
+enum
+{
+    MAILBOX_NAME_SIZE = 32,
+    DIRECTORY_NAME_SIZE = 40,
+    /* Attempts, a millisecond apart, to take the shared directory's lock. */
+    DIRECTORY_LOCK_ATTEMPTS = 2000,
+    NOTIFY_THREAD_LIMIT = 64,
+    /* The listener's pause after an empty or failed mailbox read. */
+    LISTENER_IDLE_MS = 2
+};
+
+static const uint64 FNV1A_OFFSET_BASIS = 1469598103934665603ULL, FNV1A_PRIME = 1099511628211ULL;
+
 typedef struct RemoteRecord
 {
     uint32 kind, sequence, process, conversation, peer, type, format, first, second, one, two;
@@ -48,22 +61,23 @@ static RemoteReply *remote_replies;
 
 static uint32 remote_sequence, remote_stop;
 
-static void mailbox_name(char name[32], uint32 process)
+static void mailbox_name(char name[MAILBOX_NAME_SIZE], uint32 process)
 {
-    snprintf(name, 32, "dde-%u", (unsigned)process);
+    snprintf(name, MAILBOX_NAME_SIZE, "dde-%u", (unsigned)process);
 }
 
 static void initialize_directory(void)
 {
     uint32 parent;
     lx_host_process_ids(&own_process, &parent);
-    uint64 hash = 1469598103934665603ULL;
+    /* The directory is named by an FNV-1a hash of the ball, so each ball has its own. */
+    uint64 hash = FNV1A_OFFSET_BASIS;
     const char *scope = getenv("TWOINE_BALL");
     if (!scope)
         scope = getenv("TWOINE_IPC_DIR");
     for (const char *p = scope; p && *p; p++)
-        hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
-    char name[40];
+        hash = (hash ^ (unsigned char)*p) * FNV1A_PRIME;
+    char name[DIRECTORY_NAME_SIZE];
     snprintf(name, sizeof name, "/2ine-dde1-%016llx", (unsigned long long)hash);
     LxHostShared *shared = NULL;
     LxHostSharedResult opened = lx_host_shared_open(name, sizeof *directory, &shared);
@@ -84,7 +98,8 @@ static BOOL lock_directory(void)
         if (__atomic_compare_exchange_n(&directory->lock, &expected, 1, 0, __ATOMIC_ACQUIRE,
                                         __ATOMIC_RELAXED))
             return TRUE;
-        if (attempt == 2000) /* The holder died; the table itself stays consistent. */
+        /* After this long the holder died; the table itself stays consistent. */
+        if (attempt == DIRECTORY_LOCK_ATTEMPTS)
             return TRUE;
         lx_host_sleep_ms(1);
     }
@@ -97,7 +112,7 @@ static void unlock_directory(void)
 
 static BOOL process_alive(uint32 process)
 {
-    char name[32];
+    char name[MAILBOX_NAME_SIZE];
     mailbox_name(name, process);
     LxHostMailbox *mailbox;
     uint32 owner;
@@ -142,7 +157,7 @@ void dde_withdraw_service(ULONG instance, ULONG atom, BOOL all)
 
 static BOOL remote_send(uint32 process, const RemoteRecord *record, const void *data)
 {
-    char name[32];
+    char name[MAILBOX_NAME_SIZE];
     mailbox_name(name, process);
     LxHostMailbox *mailbox;
     uint32 owner;
@@ -187,7 +202,7 @@ void dde_notify_processes(ULONG type, ULONG skip, ULONG atom)
 /* Waits for the reply while serving this thread's own queued work. */
 static RemoteReply *remote_wait(uint32 sequence, ULONG timeout)
 {
-    uint64 deadline = lx_host_monotonic_us() + (uint64)timeout * 1000;
+    uint64 deadline = lx_host_monotonic_us() + (uint64)timeout * US_PER_MS;
     for (;;)
     {
         open32DdeDeliver();
@@ -205,7 +220,7 @@ static RemoteReply *remote_wait(uint32 sequence, ULONG timeout)
             lx_host_monitor_unlock(dde_lock);
             return NULL;
         }
-        lx_host_monitor_wait(dde_lock, 20);
+        lx_host_monitor_wait(dde_lock, DDE_POLL_MS);
         lx_host_monitor_unlock(dde_lock);
     }
 }
@@ -293,7 +308,7 @@ void dde_serve_remote(DdeRequest *request)
                                       request->remote_process, request->remote_peer);
             reply.peer = handle;
             reply.result = handle != 0;
-            request->type = 0x8072; /* XTYP_CONNECT_CONFIRM */
+            request->type = WIN32_XTYP_CONNECT_CONFIRM;
             request->conversation = handle;
             if (handle)
                 dde_run_callback(request);
@@ -310,26 +325,26 @@ void dde_serve_remote(DdeRequest *request)
         if (lx_handle_borrow(request->conversation, LX_HANDLE_OPEN32_DDE_CONVERSATION, &borrow))
         {
             DdeConversation *conversation = borrow.resource;
-            if ((request->type & ~0xCu) == 0x1030)
+            if ((request->type & ~ADVISE_START_MODIFIERS) == WIN32_XTYP_ADVSTART)
             {
                 conversation->item = request->second;
                 conversation->format = request->format;
             }
-            if ((request->type & ~0xCu) == 0x1030 && result)
+            if ((request->type & ~ADVISE_START_MODIFIERS) == WIN32_XTYP_ADVSTART && result)
                 conversation->advise = TRUE;
-            if (request->type == 0x8040)
+            if (request->type == WIN32_XTYP_ADVSTOP)
                 conversation->advise = FALSE;
             lx_handle_release(&borrow);
         }
         reply.result = result;
-        if (request->type == 0x20B0 && result)
+        if (request->type == WIN32_XTYP_REQUEST && result)
         {
             bytes = copy_data(result, &reply.size);
             DdeFreeDataHandle(result);
         }
         if (request->data)
             DdeFreeDataHandle(request->data);
-        if (request->type == 0x80C2)
+        if (request->type == WIN32_XTYP_DISCONNECT)
             lx_handle_close(request->conversation, LX_HANDLE_OPEN32_DDE_CONVERSATION);
     }
     remote_send(request->remote_process, &reply, bytes);
@@ -397,7 +412,7 @@ static void receive_connect(const RemoteRecord *record)
     }
     *request = (DdeRequest){.thread = ((DdeInstance *)owner.resource)->thread,
                             .instance = record->peer,
-                            .type = 0x1062, /* XTYP_CONNECT */
+                            .type = WIN32_XTYP_CONNECT,
                             .first = record->first,
                             .second = record->second,
                             .remote_process = record->process,
@@ -422,9 +437,9 @@ static void receive_notify(const RemoteRecord *record)
         request->first = record->first;
         dde_queue_request(request);
     }
-    ULONG threads[64];
+    ULONG threads[NOTIFY_THREAD_LIMIT];
     unsigned count = 0;
-    for (DdeInstance *peer = dde_instances; peer && count < 64; peer = peer->next)
+    for (DdeInstance *peer = dde_instances; peer && count < NOTIFY_THREAD_LIMIT; peer = peer->next)
         threads[count++] = peer->thread;
     lx_host_monitor_unlock(dde_lock);
     for (unsigned i = 0; i < count; i++)
@@ -442,7 +457,7 @@ static void *remote_listener(void *argument)
         uint32 token = 0;
         if (lx_host_mailbox_receive(remote_inbox, wire, REMOTE_LIMIT, &size, &priority, &token, 0))
         {
-            lx_host_sleep_ms(2);
+            lx_host_sleep_ms(LISTENER_IDLE_MS);
             continue;
         }
         RemoteRecord record;
@@ -486,7 +501,7 @@ void dde_start_listener(void)
     lx_host_monitor_unlock(dde_lock);
     if (started)
         return;
-    char name[32];
+    char name[MAILBOX_NAME_SIZE];
     uint32 owner;
     mailbox_name(name, own_process);
     if (lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), name, 1, 0, &remote_inbox, &owner))

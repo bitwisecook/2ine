@@ -177,10 +177,10 @@ static LONG format_words(char *output, const char *format, ReadArgument read, vo
     output[used] = 0;
     return (LONG)used;
 invalid:
-    open32SetError(87);
+    open32SetError(ERROR_INVALID_PARAMETER);
     return -1;
 too_long:
-    open32SetError(122);
+    open32SetError(ERROR_INSUFFICIENT_BUFFER);
     return -1;
 }
 
@@ -208,7 +208,7 @@ static LONG write_output(PSZ output, const char *formatted, LONG count)
                                &address) ||
          !lx_execution_write(GProcessState.execution, address, formatted, (size_t)count + 1)))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     return count;
@@ -219,7 +219,7 @@ LONG wsprintf(PSZ output, PSZ format, ...)
     char *copy = format_snapshot(format), formatted[1024];
     if (!copy)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     va_list arguments;
@@ -236,7 +236,7 @@ LONG wvsprintf(PSZ output, PSZ format, PVOID arguments)
     if (!copy || (uintptr_t)arguments > UINT32_MAX)
     {
         free(copy);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     LONG count = open32FormatGuest(copy, (ULONG)(uintptr_t)arguments, formatted);

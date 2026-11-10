@@ -2,7 +2,22 @@
 /* Local memory handles retain their mappings and movable-block lock counts. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
+#include "os2/include/bsedos.h"
 #include "host/sync.h"
+
+enum
+{
+    /* LocalAlloc keeps the moveable bit and the discard level of its flags. */
+    LOCAL_KEPT_FLAGS = WIN32_LMEM_DISCARDABLE | WIN32_LMEM_MOVEABLE,
+    LOCAL_REALLOC_FLAGS = WIN32_LMEM_VALID_FLAGS | WIN32_LMEM_MODIFY,
+    /* GlobalAlloc and GlobalReAlloc pass on the flags with a LocalAlloc meaning. */
+    GLOBAL_ALLOC_FLAGS = WIN32_GMEM_MOVEABLE | WIN32_GMEM_NOCOMPACT | WIN32_GMEM_NODISCARD |
+                         WIN32_GMEM_ZEROINIT | WIN32_GMEM_DISCARDABLE,
+    GLOBAL_REALLOC_FLAGS = GLOBAL_ALLOC_FLAGS | WIN32_GMEM_MODIFY,
+    GLOBAL_REALLOC_VALID_FLAGS = WIN32_GMEM_VALID_FLAGS | WIN32_GMEM_MODIFY,
+    GLOBAL_FLAGS_MASK = WIN32_GMEM_INVALID_HANDLE | WIN32_GMEM_DISCARDED | WIN32_GMEM_DISCARDABLE |
+                        WIN32_GMEM_LOCKCOUNT
+};
 
 typedef struct LocalMemory
 {
@@ -38,9 +53,10 @@ static void lock_heap(void)
 
 static LxGuestMapping *allocate(ULONG size)
 {
-    if (size > UINT32_MAX - 4095)
+    if (size > UINT32_MAX - (OPEN32_PAGE_SIZE - 1))
         return NULL;
-    size_t capacity = ((size_t)(size ? size : 1) + 4095) & ~(size_t)4095;
+    size_t capacity =
+        ((size_t)(size ? size : 1) + OPEN32_PAGE_SIZE - 1) & ~(size_t)(OPEN32_PAGE_SIZE - 1);
     return lx_execution_map(GProcessState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE,
                             0);
 }
@@ -48,37 +64,39 @@ static LxGuestMapping *allocate(ULONG size)
 ULONG LocalAlloc(ULONG flags, ULONG size)
 {
     TRACE_NATIVE("LocalAlloc(%X, %u)", flags, size);
-    if (flags & ~0xF72u)
+    if (flags & ~(unsigned)WIN32_LMEM_VALID_FLAGS)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LocalMemory *block = calloc(1, sizeof *block);
     if (!block)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     block->size = size;
-    block->flags = flags & 0xF02;
-    if (size || !(flags & 2))
+    block->flags = flags & LOCAL_KEPT_FLAGS;
+    /* A moveable block of size 0 starts discarded. */
+    if (size || !(flags & WIN32_LMEM_MOVEABLE))
     {
         block->mapping = allocate(size);
         if (!block->mapping)
         {
             free(block);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
     }
-    block->handle = flags & 2 ? lx_handle_create(LX_HANDLE_OPEN32_MEMORY, block, NULL)
-                              : lx_execution_mapping_address(block->mapping);
+    block->handle = flags & WIN32_LMEM_MOVEABLE
+                        ? lx_handle_create(LX_HANDLE_OPEN32_MEMORY, block, NULL)
+                        : lx_execution_mapping_address(block->mapping);
     if (!block->handle)
     {
         if (block->mapping)
             lx_execution_unmap(GProcessState.execution, block->mapping);
         free(block);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     lock_heap();
@@ -99,15 +117,15 @@ ULONG LocalFree(ULONG handle)
     LocalMemory *block = *link;
     ULONG result = handle;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     else if (block->locks)
-        open32SetError(212); /* ERROR_LOCKED */
+        open32SetError(ERROR_LOCKED);
     else if (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping))
-        open32SetError(212);
+        open32SetError(ERROR_LOCKED);
     else
     {
         *link = block->next;
-        if (block->flags & 2)
+        if (block->flags & WIN32_LMEM_MOVEABLE)
             lx_handle_close(handle, LX_HANDLE_OPEN32_MEMORY);
         free(block);
         result = 0;
@@ -122,15 +140,15 @@ ULONG LocalLock(ULONG handle)
     LocalMemory *block = find_block(handle);
     ULONG result = 0;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     else if (!block->mapping)
-        open32SetError(157); /* ERROR_DISCARDED */
-    else if ((block->flags & 2) && block->locks == 255)
-        open32SetError(8);
+        open32SetError(ERROR_DISCARDED);
+    else if ((block->flags & WIN32_LMEM_MOVEABLE) && block->locks == WIN32_LMEM_LOCKCOUNT)
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     else
     {
         result = lx_execution_mapping_address(block->mapping);
-        if (block->flags & 2)
+        if (block->flags & WIN32_LMEM_MOVEABLE)
             block->locks++;
     }
     lx_host_monitor_unlock(monitor);
@@ -143,16 +161,16 @@ BOOL LocalUnlock(ULONG handle)
     LocalMemory *block = find_block(handle);
     BOOL result = FALSE;
     if (!block)
-        open32SetError(6);
-    else if (!(block->flags & 2))
-        open32SetError(0);
+        open32SetError(ERROR_INVALID_HANDLE);
+    else if (!(block->flags & WIN32_LMEM_MOVEABLE))
+        open32SetError(ERROR_SUCCESS);
     else if (!block->locks)
-        open32SetError(158); /* ERROR_NOT_LOCKED */
+        open32SetError(ERROR_NOT_LOCKED);
     else
     {
         result = --block->locks != 0;
         if (!result)
-            open32SetError(0);
+            open32SetError(ERROR_SUCCESS);
     }
     lx_host_monitor_unlock(monitor);
     return result;
@@ -164,7 +182,7 @@ ULONG LocalSize(ULONG handle)
     LocalMemory *block = find_block(handle);
     ULONG result = block ? block->size : 0;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_host_monitor_unlock(monitor);
     return result;
 }
@@ -173,10 +191,11 @@ ULONG LocalFlags(ULONG handle)
 {
     lock_heap();
     LocalMemory *block = find_block(handle);
-    ULONG result =
-        block ? (block->flags & 0xF00) | block->locks | (block->mapping ? 0 : 0x4000) : 0x8000;
+    ULONG result = block ? (block->flags & WIN32_LMEM_DISCARDABLE) | block->locks |
+                               (block->mapping ? 0 : WIN32_LMEM_DISCARDED)
+                         : WIN32_LMEM_INVALID_HANDLE;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_host_monitor_unlock(monitor);
     return result;
 }
@@ -192,33 +211,33 @@ ULONG LocalHandle(ULONG pointer)
             break;
         }
     if (!result)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_host_monitor_unlock(monitor);
     return result;
 }
 
 ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
 {
-    if (flags & ~0xFF2u)
+    if (flags & ~(unsigned)LOCAL_REALLOC_FLAGS)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     lock_heap();
     LocalMemory *block = find_block(handle);
     ULONG result = 0;
     if (!block)
-        open32SetError(6);
-    else if (flags & 0x80)
+        open32SetError(ERROR_INVALID_HANDLE);
+    else if (flags & WIN32_LMEM_MODIFY)
     {
-        block->flags = (block->flags & 2) | (flags & 0xF00);
+        block->flags = (block->flags & WIN32_LMEM_MOVEABLE) | (flags & WIN32_LMEM_DISCARDABLE);
         result = handle;
     }
-    else if (!size && (block->flags & 2))
+    else if (!size && (block->flags & WIN32_LMEM_MOVEABLE))
     {
         if (block->locks ||
             (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping)))
-            open32SetError(212);
+            open32SetError(ERROR_LOCKED);
         else
         {
             block->mapping = NULL;
@@ -228,19 +247,20 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
     }
     else if (block->mapping && size <= lx_execution_mapping_size(block->mapping))
     {
-        if ((flags & 0x40) && size > block->size)
+        if ((flags & WIN32_LMEM_ZEROINIT) && size > block->size)
             memset((uint8 *)lx_execution_mapping_host(block->mapping) + block->size, 0,
                    size - block->size);
         block->size = size;
         result = handle;
     }
-    else if (block->locks || (!(block->flags & 2) && !(flags & 2)))
-        open32SetError(8);
+    else if (block->locks ||
+             (!(block->flags & WIN32_LMEM_MOVEABLE) && !(flags & WIN32_LMEM_MOVEABLE)))
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     else
     {
         LxGuestMapping *replacement = allocate(size);
         if (!replacement)
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         else
         {
             if (block->mapping)
@@ -250,13 +270,13 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
             if (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping))
             {
                 lx_execution_unmap(GProcessState.execution, replacement);
-                open32SetError(212);
+                open32SetError(ERROR_LOCKED);
             }
             else
             {
                 block->mapping = replacement;
                 block->size = size;
-                if (!(block->flags & 2))
+                if (!(block->flags & WIN32_LMEM_MOVEABLE))
                     block->handle = lx_execution_mapping_address(replacement);
                 result = block->handle;
             }
@@ -275,7 +295,7 @@ void open32MemoryCleanup(void)
         blocks = block->next;
         if (block->mapping)
             lx_execution_unmap(GProcessState.execution, block->mapping);
-        if (block->flags & 2)
+        if (block->flags & WIN32_LMEM_MOVEABLE)
             lx_handle_close(block->handle, LX_HANDLE_OPEN32_MEMORY);
         free(block);
     }
@@ -284,23 +304,23 @@ void open32MemoryCleanup(void)
 
 ULONG GlobalAlloc(ULONG flags, ULONG size)
 {
-    if (flags & ~0x7F72u)
+    if (flags & ~(unsigned)WIN32_GMEM_VALID_FLAGS)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* Win32 share/bank/notification hints do not change process-heap ownership. */
-    return LocalAlloc(flags & 0x172, size);
+    return LocalAlloc(flags & GLOBAL_ALLOC_FLAGS, size);
 }
 
 ULONG GlobalReAlloc(ULONG handle, ULONG size, ULONG flags)
 {
-    if (flags & ~0x7FF2u)
+    if (flags & ~(unsigned)GLOBAL_REALLOC_VALID_FLAGS)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    return LocalReAlloc(handle, size, flags & 0x1F2);
+    return LocalReAlloc(handle, size, flags & GLOBAL_REALLOC_FLAGS);
 }
 
 ULONG GlobalFree(ULONG handle)
@@ -330,7 +350,7 @@ ULONG GlobalHandle(ULONG pointer)
 
 ULONG GlobalFlags(ULONG handle)
 {
-    return LocalFlags(handle) & 0xC1FF;
+    return LocalFlags(handle) & GLOBAL_FLAGS_MASK;
 }
 
 VOID ZeroMemory(PVOID output, ULONG count)
@@ -343,13 +363,14 @@ VOID GlobalMemoryStatus(PVOID output)
 {
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     typedef APIRET(OS2API * Fn)(ULONG, ULONG, PVOID, ULONG);
     Fn query = (Fn)open32DosService("DosQuerySysInfo");
-    ULONG info[5] = {0};
-    ULONG error = query ? query(17, 21, info, sizeof info) : 120;
+    ULONG info[QSV_MAXSHMEM - QSV_TOTPHYSMEM + 1] = {0};
+    ULONG error =
+        query ? query(QSV_TOTPHYSMEM, QSV_MAXSHMEM, info, sizeof info) : ERROR_CALL_NOT_IMPLEMENTED;
     if (error)
     {
         open32SetError(error);
@@ -357,10 +378,15 @@ VOID GlobalMemoryStatus(PVOID output)
     }
     /* TOTPHYSMEM, TOTRESMEM, TOTAVAILMEM: the paging file is what exceeds physical memory. */
     ULONG available = info[0] - info[1], paging = info[2] - info[0];
-    ULONG fields[] = {32,      info[0] ? (ULONG)((uint64_t)info[1] * 100 / info[0]) : 0,
-                      info[0], available,
-                      paging,  paging,
-                      info[0], available};
-    for (unsigned i = 0; i < 8; i++)
-        lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
+    /* MEMORYSTATUS, from dwLength to dwAvailVirtual. */
+    ULONG fields[] = {WIN32_MEMORYSTATUS_SIZE,
+                      info[0] ? (ULONG)((uint64_t)info[1] * 100 / info[0]) : 0,
+                      info[0],
+                      available,
+                      paging,
+                      paging,
+                      info[0],
+                      available};
+    for (unsigned i = 0; i < sizeof fields / sizeof *fields; i++)
+        lx_guest_store_u32((uint8 *)output + i * sizeof *fields, fields[i]);
 }

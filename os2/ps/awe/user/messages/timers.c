@@ -5,6 +5,13 @@
 #include "os2/include/private/pmp.h"
 #include "host/window.h"
 
+enum
+{
+    /* Windows raises shorter timer intervals to 10 ms (USER_TIMER_MINIMUM); the
+       driver ticks at that rate. */
+    TIMER_MINIMUM_MS = 10
+};
+
 typedef struct Open32Timer
 {
     struct Open32Timer *next;
@@ -34,12 +41,12 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
         return 0;
     if (window && !open32FindWindow(window) && !open32NativeDialogWindow(window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     if (callback && !open32ValidProcedure(callback))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Open32Timer *timer;
@@ -64,15 +71,15 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
         timer = calloc(1, sizeof *timer);
         if (!timer)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         if (!driver)
-            driver = lx_pm_timer_create(HWND_OBJECT, 10, tick);
+            driver = lx_pm_timer_create(HWND_OBJECT, TIMER_MINIMUM_MS, tick);
         if (!driver)
         {
             free(timer);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         timer->window = window;
@@ -81,7 +88,9 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
         timers = timer;
     }
     timer->callback = callback;
-    timer->interval = milliseconds < 10 ? 10 : milliseconds > INT32_MAX ? INT32_MAX : milliseconds;
+    timer->interval = milliseconds < TIMER_MINIMUM_MS ? TIMER_MINIMUM_MS
+                      : milliseconds > INT32_MAX      ? INT32_MAX
+                                                      : milliseconds;
     timer->due = lx_host_video_ticks_ms() + timer->interval;
     return timer->id;
 }

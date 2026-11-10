@@ -5,16 +5,19 @@
 #include "os2/include/pmshl.h"
 #include "os2/ps/awe/user/strings/case_tables.h"
 
+/* Prefix of the OS/2 user-profile application that holds a WIN.INI section. */
+#define WINI_PREFIX "WINI_"
+
 static char *profile_section(const char *section)
 {
     if (!section)
         return NULL;
     size_t length = strlen(section);
-    char *app = malloc(length + 6);
+    char *app = malloc(length + sizeof WINI_PREFIX);
     if (app)
     {
-        memcpy(app, "WINI_", 5);
-        memcpy(app + 5, section, length + 1);
+        memcpy(app, WINI_PREFIX, sizeof WINI_PREFIX - 1);
+        memcpy(app + sizeof WINI_PREFIX - 1, section, length + 1);
     }
     return app;
 }
@@ -26,7 +29,7 @@ ULONG GetProfileInt(PSZ section, PSZ key, LONG fallback)
     if (!app || !key)
     {
         free(app);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return (ULONG)fallback;
     }
     ULONG result = (ULONG)PrfQueryProfileInt(HINI_USERPROFILE, app, key, fallback);
@@ -42,7 +45,7 @@ ULONG GetProfileString(PSZ section, PSZ key, PSZ fallback, PSZ output, ULONG cap
     if (!app || !output || !capacity)
     {
         free(app);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG result = PrfQueryProfileString(HINI_USERPROFILE, app, key, fallback, output, capacity);
@@ -67,14 +70,14 @@ ULONG GetPrivateProfileString(PSZ section, PSZ key, PSZ fallback, PSZ output, UL
                  filename ? filename : "");
     if (!output || !fallback || !capacity || !filename)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     output[0] = 0;
     char *normalized = private_key(key);
     if (key && !normalized)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     HINI profile = PrfOpenProfile(0, filename);
@@ -101,13 +104,13 @@ BOOL WritePrivateProfileString(PSZ section, PSZ key, PSZ value, PSZ filename)
 {
     if (!filename || (!section && (key || value)))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     char *normalized = private_key(key);
     if (key && !normalized)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     HINI profile = PrfOpenProfile(0, filename);
@@ -124,7 +127,7 @@ ULONG GetPrivateProfileInt(PSZ section, PSZ key, LONG fallback, PSZ filename)
     char text[64], *end;
     if (!section || !key || !filename)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return (ULONG)fallback;
     }
     if (!GetPrivateProfileString(section, key, "", text, sizeof text, filename))
@@ -137,14 +140,14 @@ BOOL WriteProfileString(PSZ section, PSZ key, PSZ value)
 {
     if (!section)
         return !key && !value;
-    size_t size = strlen(section) + 6;
+    size_t size = strlen(section) + sizeof WINI_PREFIX;
     char *app = malloc(size);
     if (!app)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
-    snprintf(app, size, "WINI_%s", section);
+    snprintf(app, size, WINI_PREFIX "%s", section);
     BOOL result = PrfWriteProfileString(HINI_USERPROFILE, app, key, value);
     free(app);
     return result;

@@ -4,6 +4,12 @@
 #include "os2/mm/mmpm/mci/svmc/video.h"
 #include "os2/mm/mmpm/mci/mdm/mdm.h"
 
+/* After the last frame the worker waits for the media clock, re-checking this often. */
+enum
+{
+    DRAIN_POLL_MS = 10
+};
+
 static void release_frame(void *context)
 {
     LxDecodedVideoFrame *frame = context;
@@ -20,7 +26,7 @@ void *lx_dgv_play_worker(void *context)
     {
         lx_host_monitor_lock(lx_dgv_monitor);
         while (!d->stop && d->mode == MCI_MODE_PAUSE && lx_pm_video_ready(d->target))
-            lx_host_monitor_wait(lx_dgv_monitor, 20);
+            lx_host_monitor_wait(lx_dgv_monitor, VIDEO_POLL_MS);
         int stopped = d->stop;
         lx_host_monitor_unlock(lx_dgv_monitor);
         if (stopped)
@@ -48,7 +54,7 @@ void *lx_dgv_play_worker(void *context)
         {
             if (d->mode == MCI_MODE_PAUSE)
             {
-                lx_host_monitor_wait(lx_dgv_monitor, 20);
+                lx_host_monitor_wait(lx_dgv_monitor, VIDEO_POLL_MS);
                 continue;
             }
             int64_t now = lx_dgv_media_clock(d);
@@ -56,7 +62,8 @@ void *lx_dgv_play_worker(void *context)
             if (due <= now)
                 break;
             uint64_t wait = (uint64_t)(due - now);
-            lx_host_monitor_wait(lx_dgv_monitor, wait > 20 ? 20 : (uint32_t)wait);
+            lx_host_monitor_wait(lx_dgv_monitor,
+                                 wait > VIDEO_POLL_MS ? VIDEO_POLL_MS : (uint32_t)wait);
         }
         int present = !d->stop && (d->until < 0 || frame->milliseconds < d->until);
         void *target = d->target;
@@ -84,7 +91,10 @@ void *lx_dgv_play_worker(void *context)
         int64_t end = d->until >= 0 && d->until < last_end ? d->until : last_end;
         if (d->audio)
         {
-            int64_t audio_end = d->sound.origin / 48 + (int64_t)((d->sound.end + 47) / 48);
+            /* Round the last queued frame up to a whole millisecond. */
+            int64_t audio_end = d->sound.origin / LX_VIDEO_AUDIO_FRAMES_PER_MS +
+                                (int64_t)((d->sound.end + LX_VIDEO_AUDIO_FRAMES_PER_MS - 1) /
+                                          LX_VIDEO_AUDIO_FRAMES_PER_MS);
             if (d->until >= 0 && audio_end > d->until)
                 audio_end = d->until;
             if (audio_end > end)
@@ -92,7 +102,7 @@ void *lx_dgv_play_worker(void *context)
         }
         while (!d->stop && lx_pm_video_ready(d->target) &&
                (d->mode == MCI_MODE_PAUSE || lx_dgv_media_clock(d) < end))
-            lx_host_monitor_wait(lx_dgv_monitor, 10);
+            lx_host_monitor_wait(lx_dgv_monitor, DRAIN_POLL_MS);
         if (!d->stop && !lx_pm_video_ready(d->target))
             result = -1;
         if (!d->stop)

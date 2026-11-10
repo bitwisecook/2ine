@@ -8,6 +8,39 @@
 #define MIDI_SYSEX_TOTAL_MAX (32u * 1024u * 1024u)
 #define MIDI_EVENT_MAX 262144u
 
+/* Standard MIDI file layout: chunks of a 4-byte ID and a big-endian 32-bit length;
+   the MThd chunk holds format, track count and division as big-endian 16-bit fields. */
+enum
+{
+    SMF_CHUNK_HEADER_SIZE = 8,
+    SMF_CHUNK_LENGTH = 4,
+    SMF_HEADER_DATA_MIN = 6,
+    SMF_HEADER_SIZE = SMF_CHUNK_HEADER_SIZE + SMF_HEADER_DATA_MIN,
+    SMF_FORMAT = 8,
+    SMF_TRACK_COUNT = 10,
+    SMF_DIVISION = 12,
+    /* Format 0 holds one track; format 1 holds simultaneous tracks. */
+    SMF_FORMAT_SINGLE_TRACK = 0,
+    SMF_FORMAT_MAX = 1,
+    SMF_TRACK_LIMIT = 256,
+    /* A negative (SMPTE) division is not supported. */
+    SMF_DIVISION_SMPTE = 0x8000,
+    /* Delta times and lengths are variable-length quantities of at most four bytes. */
+    SMF_VLQ_MAX_BYTES = 4,
+    SMF_VLQ_CONTINUE = 0x80,
+    SMF_VLQ_VALUE_MASK = 0x7f,
+    SMF_TEMPO_BYTES = 3,
+    /* Microseconds per quarter note until the first tempo event: 120 beats per minute. */
+    SMF_DEFAULT_TEMPO = 500000,
+    MIDI_EVENTS_INITIAL_CAPACITY = 1024,
+    /* Masks the type bit that separates program change (0xCn) from channel pressure (0xDn). */
+    ONE_DATA_BYTE_TYPE_MASK = 0xe0
+};
+
+static const double MICROSECONDS_PER_SECOND = 1000000.0;
+/* Playback continues briefly after the last event so that its notes can sound. */
+static const double SEQUENCE_TAIL_SECONDS = 0.1;
+
 typedef struct MidiParser
 {
     LxMidiSequence *sequence;
@@ -34,11 +67,11 @@ static uint32_t big32(const unsigned char *p)
 static int vlq(const unsigned char **p, const unsigned char *end, uint32_t *v)
 {
     *v = 0;
-    for (unsigned i = 0; i < 4 && *p < end; i++)
+    for (unsigned i = 0; i < SMF_VLQ_MAX_BYTES && *p < end; i++)
     {
         unsigned c = *(*p)++;
-        *v = (*v << 7) | (c & 127);
-        if (!(c & 128))
+        *v = (*v << MIDI_DATA_BITS) | (c & SMF_VLQ_VALUE_MASK);
+        if (!(c & SMF_VLQ_CONTINUE))
             return 1;
     }
     return 0;
@@ -63,7 +96,7 @@ static int append_event(MidiParser *parser, LxMidiEvent event)
     {
         if (parser->capacity >= MIDI_EVENT_MAX)
             goto fail;
-        size_t capacity = parser->capacity ? parser->capacity * 2 : 1024;
+        size_t capacity = parser->capacity ? parser->capacity * 2 : MIDI_EVENTS_INITIAL_CAPACITY;
         LxMidiEvent *events = realloc(sequence->events, capacity * sizeof *events);
         if (!events)
             goto fail;
@@ -118,7 +151,7 @@ static int sysex_packet(MidiParser *parser, uint32_t tick, unsigned status,
     if (parser->pending_size)
     {
         for (size_t i = 0; i < size; i++)
-            if (bytes[i] >= 0x80 && !(bytes[i] == MIDI_SYSEX_END && i + 1 == size))
+            if (bytes[i] >= MIDI_STATUS_BIT && !(bytes[i] == MIDI_SYSEX_END && i + 1 == size))
                 return 0;
         if (!append_fragment(parser, bytes, size))
             return 0;
@@ -132,7 +165,7 @@ static int sysex_packet(MidiParser *parser, uint32_t tick, unsigned status,
         if (bytes[offset] != MIDI_SYSEX)
             return 0;
         size_t end = offset + 1;
-        while (end < size && bytes[end] < 0x80)
+        while (end < size && bytes[end] < MIDI_STATUS_BIT)
             end++;
         if (end == size || bytes[end] != MIDI_SYSEX_END)
             return 0;
@@ -147,25 +180,29 @@ static int sysex_packet(MidiParser *parser, uint32_t tick, unsigned status,
 static int parse_midi_contents(MidiParser *parser, const unsigned char *bytes, size_t size)
 {
     LxMidiSequence *sequence = parser->sequence;
-    if (size < 14 || memcmp(bytes, "MThd", 4) || big32(bytes + 4) < 6 ||
-        big32(bytes + 4) > size - 8 || bytes[8] || bytes[9] > 1)
+    if (size < SMF_HEADER_SIZE || memcmp(bytes, "MThd", 4) ||
+        big32(bytes + SMF_CHUNK_LENGTH) < SMF_HEADER_DATA_MIN ||
+        big32(bytes + SMF_CHUNK_LENGTH) > size - SMF_CHUNK_HEADER_SIZE || bytes[SMF_FORMAT] ||
+        bytes[SMF_FORMAT + 1] > SMF_FORMAT_MAX)
         return 0;
-    unsigned division = (bytes[12] << 8) | bytes[13];
-    if (!division || division & 0x8000)
+    unsigned division = (bytes[SMF_DIVISION] << 8) | bytes[SMF_DIVISION + 1];
+    if (!division || division & SMF_DIVISION_SMPTE)
         return 0;
-    unsigned expected_tracks = (bytes[10] << 8) | bytes[11], tracks = 0;
-    if (!expected_tracks || expected_tracks > 256 || (!bytes[9] && expected_tracks != 1))
+    unsigned expected_tracks = (bytes[SMF_TRACK_COUNT] << 8) | bytes[SMF_TRACK_COUNT + 1],
+             tracks = 0;
+    if (!expected_tracks || expected_tracks > SMF_TRACK_LIMIT ||
+        (bytes[SMF_FORMAT + 1] == SMF_FORMAT_SINGLE_TRACK && expected_tracks != 1))
         return 0;
-    size_t offset = 8 + big32(bytes + 4);
+    size_t offset = SMF_CHUNK_HEADER_SIZE + big32(bytes + SMF_CHUNK_LENGTH);
     uint32_t end_tick = 0;
-    while (offset <= size && size - offset >= 8)
+    while (offset <= size && size - offset >= SMF_CHUNK_HEADER_SIZE)
     {
         if (++tracks > expected_tracks)
             return 0;
-        uint32_t length = big32(bytes + offset + 4);
-        if (length > size - offset - 8 || memcmp(bytes + offset, "MTrk", 4))
+        uint32_t length = big32(bytes + offset + SMF_CHUNK_LENGTH);
+        if (length > size - offset - SMF_CHUNK_HEADER_SIZE || memcmp(bytes + offset, "MTrk", 4))
             return 0;
-        const unsigned char *p = bytes + offset + 8, *end = p + length;
+        const unsigned char *p = bytes + offset + SMF_CHUNK_HEADER_SIZE, *end = p + length;
         uint32_t tick = 0;
         unsigned running = 0;
         while (p < end)
@@ -177,7 +214,8 @@ static int parse_midi_contents(MidiParser *parser, const unsigned char *bytes, s
             if (tick > end_tick)
                 end_tick = tick;
             unsigned status = *p;
-            if (status & 128)
+            /* A data byte where a status is due repeats the running status. */
+            if (status & MIDI_STATUS_BIT)
             {
                 p++;
                 running = status < MIDI_SYSEX ? status : 0;
@@ -197,7 +235,7 @@ static int parse_midi_contents(MidiParser *parser, const unsigned char *bytes, s
                     return 0;
                 if (meta == MIDI_META_TEMPO)
                 {
-                    if (n < 3)
+                    if (n < SMF_TEMPO_BYTES)
                         return 0;
                     event.tempo = (p[0] << 16) | (p[1] << 8) | p[2];
                     if (!event.tempo)
@@ -221,15 +259,15 @@ static int parse_midi_contents(MidiParser *parser, const unsigned char *bytes, s
                 if (status >= MIDI_SYSEX || parser->pending_size)
                     return 0;
                 /* Program change and channel pressure carry one data byte. */
-                unsigned n = (status & 0xe0) == MIDI_PROGRAM_CHANGE ? 1 : 2;
+                unsigned n = (status & ONE_DATA_BYTE_TYPE_MASK) == MIDI_PROGRAM_CHANGE ? 1 : 2;
                 if (n > (size_t)(end - p))
                     return 0;
                 event.key = *p++;
                 if (n == 2)
                     event.value = *p++;
-                if ((event.key | event.value) & 128)
+                if ((event.key | event.value) & MIDI_STATUS_BIT)
                     return 0;
-                unsigned type = status & 0xf0;
+                unsigned type = status & MIDI_STATUS_TYPE_MASK;
                 if (type != MIDI_NOTE_OFF && type != MIDI_NOTE_ON && type != MIDI_CONTROL_CHANGE &&
                     type != MIDI_PROGRAM_CHANGE && type != MIDI_PITCH_BEND)
                     continue;
@@ -239,24 +277,26 @@ static int parse_midi_contents(MidiParser *parser, const unsigned char *bytes, s
         }
         if (parser->pending_size)
             return 0;
-        offset += 8 + length;
+        offset += SMF_CHUNK_HEADER_SIZE + length;
     }
     if (tracks != expected_tracks || offset != size)
         return 0;
     if (sequence->count > 1)
         qsort(sequence->events, sequence->count, sizeof *sequence->events, compare_event);
-    uint32_t tick = 0, tempo = 500000;
+    uint32_t tick = 0, tempo = SMF_DEFAULT_TEMPO;
     double time = 0;
     for (size_t i = 0; i < sequence->count; i++)
     {
         LxMidiEvent *event = &sequence->events[i];
-        time += (event->tick - tick) * (double)tempo / (division * 1000000.0);
+        time += (event->tick - tick) * (double)tempo / (division * MICROSECONDS_PER_SECOND);
         tick = event->tick;
         event->time = time;
         if (event->tempo)
             tempo = event->tempo;
     }
-    sequence->duration = time + (end_tick - tick) * (double)tempo / (division * 1000000.0) + 0.1;
+    sequence->duration = time +
+                         (end_tick - tick) * (double)tempo / (division * MICROSECONDS_PER_SECOND) +
+                         SEQUENCE_TAIL_SECONDS;
     return 1;
 }
 

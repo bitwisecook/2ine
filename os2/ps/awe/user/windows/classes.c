@@ -4,10 +4,27 @@
 #include "os2/ps/awe/internal.h"
 #include "host/sync.h"
 #include "os2/include/private/pmgrep.h"
+
+enum
+{
+    /* Windows class atoms are string atoms: 0xC000 to 0xFFFF. */
+    CLASS_ATOM_FIRST = 0xC000,
+    /* Longest class or menu name copied from the guest, including its terminator. */
+    CLASS_NAME_LIMIT = 256,
+    /* The class's guest names page holds the class name, then the menu name here. */
+    NAMES_MENU_OFFSET = 256,
+    /* Most class or window extra bytes a class may ask for. */
+    EXTRA_BYTES_LIMIT = 4096,
+    /* A window procedure takes handle, message, wParam and lParam. */
+    WINDOW_PROCEDURE_ARGUMENT_BYTES = 16,
+    /* A dialog control's low style word is its class's own style bits in both systems. */
+    CONTROL_STYLE_MASK = 0xFFFF
+};
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static Open32Class *classes;
-static ULONG next_atom = 0xC000;
+static ULONG next_atom = CLASS_ATOM_FIRST;
 
 static void initialize(void)
 {
@@ -19,7 +36,7 @@ static void initialize(void)
 static Open32Class *find_class(ULONG instance, PSZ name)
 {
     for (Open32Class *c = classes; c; c = c->next)
-        if ((c->instance == instance || (c->style & 0x4000)) &&
+        if ((c->instance == instance || (c->style & WIN32_CS_GLOBALCLASS)) &&
             ((uintptr_t)name <= UINT16_MAX ? c->atom == (ULONG)(uintptr_t)name
                                            : !strcasecmp(c->name, name)))
             return c;
@@ -51,15 +68,22 @@ static Open32Class *builtin_class(const char *name)
     if (!c)
         return NULL;
     c->name = strdup(canonical ? canonical : scroll ? "SCROLLBAR" : "MDICLIENT");
-    c->style = 0x4008;
-    c->builtin = canonical ? OPEN32_BUILTIN_CONTROL : scroll ? 2 : 1;
-    c->brush = canonical ? 0 : scroll ? 1 : 13;
-    c->names = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
-    c->procedure_mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
-    const LxExecutionApi32 bridge = {builtin_procedure, 16, 0, LX_ABI_STACK32};
+    c->style = WIN32_CS_GLOBALCLASS | WIN32_CS_DBLCLKS;
+    c->builtin = canonical ? OPEN32_BUILTIN_CONTROL
+                 : scroll  ? OPEN32_BUILTIN_SCROLLBAR
+                           : OPEN32_BUILTIN_MDI_CLIENT;
+    /* A class brush may be a system colour index plus one. */
+    c->brush = canonical ? 0 : scroll ? WIN32_COLOR_SCROLLBAR + 1 : WIN32_COLOR_APPWORKSPACE + 1;
+    c->names = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    c->procedure_mapping = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                            LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    const LxExecutionApi32 bridge = {builtin_procedure, WINDOW_PROCEDURE_ARGUMENT_BYTES, 0,
+                                     LX_ABI_STACK32};
     if (!c->name || !c->names || !c->procedure_mapping ||
         !lx_execution_emit_bridge32(GProcessState.execution,
-                                    lx_execution_mapping_host(c->procedure_mapping), 4096, &bridge))
+                                    lx_execution_mapping_host(c->procedure_mapping),
+                                    OPEN32_PAGE_SIZE, &bridge))
         goto fail;
     strcpy(lx_execution_mapping_host(c->names), c->name);
     if (!lx_execution_protect(GProcessState.execution, c->names, LX_GUEST_READ) ||
@@ -127,8 +151,9 @@ static HWND dialog_control(HWND parent, const char *name, const char *text, ULON
     RECTL area;
     if (!WinQueryWindowRect(parent, &area))
         return 0;
-    ULONG windows_style = 0x40000000u | (style & WS_VISIBLE ? 0x10000000u : 0) |
-                          (style & WS_DISABLED ? 0x08000000u : 0) | (style & 0xFFFF);
+    ULONG windows_style =
+        (ULONG)WIN32_WS_CHILD | (style & WS_VISIBLE ? (ULONG)WIN32_WS_VISIBLE : 0) |
+        (style & WS_DISABLED ? (ULONG)WIN32_WS_DISABLED : 0) | (style & CONTROL_STYLE_MASK);
     return CreateWindowEx(0, (PSZ)name, (PSZ)text, windows_style, x,
                           area.yTop - area.yBottom - y - height, width, height, parent, id,
                           UINT32_MAX, 0);
@@ -138,56 +163,61 @@ ULONG RegisterClass(PVOID record)
 {
     if (!record || !GProcessState.execution)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     const uint8 *bytes = record;
     Open32Class *c = calloc(1, sizeof *c);
     if (!c)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
-    c->style = lx_guest_load_u32(bytes);
-    c->procedure = lx_guest_load_u32(bytes + 4);
-    c->class_extra = lx_guest_load_u32(bytes + 8);
-    c->window_extra = lx_guest_load_u32(bytes + 12);
-    c->instance = lx_guest_load_u32(bytes + 16);
-    c->icon = lx_guest_load_u32(bytes + 20);
-    c->cursor = lx_guest_load_u32(bytes + 24);
-    c->brush = lx_guest_load_u32(bytes + 28);
-    c->menu_id = lx_guest_load_u32(bytes + 32);
-    c->name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(bytes + 36), 256);
+    c->style = lx_guest_load_u32(bytes + WIN32_WNDCLASS_STYLE);
+    c->procedure = lx_guest_load_u32(bytes + WIN32_WNDCLASS_PROCEDURE);
+    c->class_extra = lx_guest_load_u32(bytes + WIN32_WNDCLASS_CLASS_EXTRA);
+    c->window_extra = lx_guest_load_u32(bytes + WIN32_WNDCLASS_WINDOW_EXTRA);
+    c->instance = lx_guest_load_u32(bytes + WIN32_WNDCLASS_INSTANCE);
+    c->icon = lx_guest_load_u32(bytes + WIN32_WNDCLASS_ICON);
+    c->cursor = lx_guest_load_u32(bytes + WIN32_WNDCLASS_CURSOR);
+    c->brush = lx_guest_load_u32(bytes + WIN32_WNDCLASS_BACKGROUND);
+    c->menu_id = lx_guest_load_u32(bytes + WIN32_WNDCLASS_MENU_NAME);
+    c->name = lx_execution_copy_string(GProcessState.execution,
+                                       lx_guest_load_u32(bytes + WIN32_WNDCLASS_CLASS_NAME),
+                                       CLASS_NAME_LIMIT);
+    /* A menu "name" up to 0xFFFF is a resource number (MAKEINTRESOURCE). */
     if (c->menu_id > UINT16_MAX)
-        c->menu = lx_execution_copy_string(GProcessState.execution, c->menu_id, 256);
-    if (!c->name || !*c->name || c->class_extra > 4096 || c->window_extra > 4096 ||
-        (c->menu_id > UINT16_MAX && !c->menu) || !open32ValidProcedure(c->procedure))
+        c->menu = lx_execution_copy_string(GProcessState.execution, c->menu_id, CLASS_NAME_LIMIT);
+    if (!c->name || !*c->name || c->class_extra > EXTRA_BYTES_LIMIT ||
+        c->window_extra > EXTRA_BYTES_LIMIT || (c->menu_id > UINT16_MAX && !c->menu) ||
+        !open32ValidProcedure(c->procedure))
     {
         destroy_class(c);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (c->class_extra && !(c->class_data = calloc(1, c->class_extra)))
     {
         destroy_class(c);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
-    c->names = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
+    c->names = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!c->names)
     {
         destroy_class(c);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     char *names = lx_execution_mapping_host(c->names);
     strcpy(names, c->name);
     if (c->menu)
-        strcpy(names + 256, c->menu);
+        strcpy(names + NAMES_MENU_OFFSET, c->menu);
     if (!lx_execution_protect(GProcessState.execution, c->names, LX_GUEST_READ))
     {
         destroy_class(c);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     lx_host_once(&once, initialize);
@@ -196,7 +226,7 @@ ULONG RegisterClass(PVOID record)
     {
         lx_host_monitor_unlock(monitor);
         destroy_class(c);
-        open32SetError(1410);
+        open32SetError(ERROR_CLASS_ALREADY_EXISTS);
         return 0;
     }
     c->atom = next_atom++;
@@ -213,7 +243,7 @@ BOOL RegisterClassAlias(PSZ name, PSZ alias)
 {
     if ((uintptr_t)name <= UINT16_MAX || (uintptr_t)alias <= UINT16_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     TRACE_NATIVE("RegisterClassAlias('%s', '%s')", name, alias);
@@ -234,7 +264,7 @@ BOOL RegisterClassAlias(PSZ name, PSZ alias)
         source->alias = target;
     lx_host_monitor_unlock(monitor);
     if (!source || !target)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return source && target;
 }
 
@@ -246,7 +276,7 @@ BOOL UnregisterClass(PSZ name, ULONG instance)
     if (!c || c->references || c->builtin)
     {
         lx_host_monitor_unlock(monitor);
-        open32SetError(c ? 1412 : 1411);
+        open32SetError(c ? ERROR_CLASS_HAS_WINDOWS : ERROR_CLASS_DOES_NOT_EXIST);
         return FALSE;
     }
     Open32Class **link = &classes;
@@ -266,13 +296,13 @@ BOOL GetClassInfo(ULONG instance, PSZ name, PVOID output)
     TRACE_NATIVE("GetClassInfo(%u, %p)", instance, name);
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     Open32Class *c = open32ClassAcquire(instance, name);
     if (!c)
     {
-        open32SetError(1411);
+        open32SetError(ERROR_CLASS_DOES_NOT_EXIST);
         return FALSE;
     }
     uint32 names = lx_execution_mapping_address(c->names);
@@ -284,7 +314,7 @@ BOOL GetClassInfo(ULONG instance, PSZ name, PVOID output)
                        c->icon,
                        c->cursor,
                        c->brush,
-                       c->menu ? names + 256 : c->menu_id,
+                       c->menu ? names + NAMES_MENU_OFFSET : c->menu_id,
                        names};
     for (unsigned i = 0; i < 10; i++)
         lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
@@ -307,7 +337,7 @@ ULONG GetClassLong(ULONG handle, LONG index)
     Open32Window *window = open32FindWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     Open32Class *c = window->class;
@@ -315,35 +345,36 @@ ULONG GetClassLong(ULONG handle, LONG index)
     {
         if ((ULONG)index <= c->class_extra && c->class_extra - (ULONG)index >= 4)
             return lx_guest_load_u32((uint8 *)c->class_data + index);
-        open32SetError(1413);
+        open32SetError(ERROR_INVALID_INDEX);
         return 0;
     }
     switch (index)
     {
-        case -8:
-            return c->menu ? lx_execution_mapping_address(c->names) + 256 : c->menu_id;
-        case -10:
+        case WIN32_GCL_MENUNAME:
+            return c->menu ? lx_execution_mapping_address(c->names) + NAMES_MENU_OFFSET
+                           : c->menu_id;
+        case WIN32_GCL_HBRBACKGROUND:
             return c->brush;
-        case -12:
+        case WIN32_GCL_HCURSOR:
             return c->cursor;
-        case -14:
+        case WIN32_GCL_HICON:
             return c->icon;
-        case -16:
+        case WIN32_GCL_HMODULE:
             return c->instance;
-        case -18:
+        case WIN32_GCL_CBWNDEXTRA:
             return c->window_extra;
-        case -20:
+        case WIN32_GCL_CBCLSEXTRA:
             return c->class_extra;
-        case -24:
+        case WIN32_GCL_WNDPROC:
             return c->procedure;
-        case -26:
+        case WIN32_GCL_STYLE:
             return c->style;
-        case -32:
+        case WIN32_GCW_ATOM:
             return c->atom;
-        case -34:
+        case WIN32_GCL_HICONSM:
             return c->small_icon;
         default:
-            open32SetError(1413);
+            open32SetError(ERROR_INVALID_INDEX);
             return 0;
     }
 }
@@ -354,20 +385,20 @@ ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
     Open32Window *window = open32FindWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
-    if (index == -24 && !open32ValidProcedure(value))
+    if (index == WIN32_GCL_WNDPROC && !open32ValidProcedure(value))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    if (index == -8 && value > UINT16_MAX)
+    if (index == WIN32_GCL_MENUNAME && value > UINT16_MAX)
     {
-        char *name = lx_execution_copy_string(GProcessState.execution, value, 256);
+        char *name = lx_execution_copy_string(GProcessState.execution, value, CLASS_NAME_LIMIT);
         if (!name)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         free(name);
@@ -383,11 +414,12 @@ ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
             lx_guest_store_u32((uint8 *)c->class_data + index, value);
         }
         else
-            open32SetError(1413);
+            open32SetError(ERROR_INVALID_INDEX);
     }
-    else if (index == -8)
+    else if (index == WIN32_GCL_MENUNAME)
     {
-        previous = c->menu ? lx_execution_mapping_address(c->names) + 256 : c->menu_id;
+        previous =
+            c->menu ? lx_execution_mapping_address(c->names) + NAMES_MENU_OFFSET : c->menu_id;
         free(c->menu);
         c->menu = NULL;
         c->menu_id = value;
@@ -396,33 +428,33 @@ ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
     {
         switch (index)
         {
-            case -10:
+            case WIN32_GCL_HBRBACKGROUND:
                 field = &c->brush;
                 break;
-            case -12:
+            case WIN32_GCL_HCURSOR:
                 field = &c->cursor;
                 break;
-            case -14:
+            case WIN32_GCL_HICON:
                 field = &c->icon;
                 break;
-            case -16:
+            case WIN32_GCL_HMODULE:
                 field = &c->instance;
                 break;
-            case -24:
+            case WIN32_GCL_WNDPROC:
                 field = &c->procedure;
                 break;
-            case -26:
+            case WIN32_GCL_STYLE:
                 field = &c->style;
                 break;
-            case -34:
+            case WIN32_GCL_HICONSM:
                 field = &c->small_icon;
                 break;
-            case -18:
-            case -20:
-                open32SetError(50);
+            case WIN32_GCL_CBWNDEXTRA:
+            case WIN32_GCL_CBCLSEXTRA:
+                open32SetError(ERROR_NOT_SUPPORTED);
                 break;
             default:
-                open32SetError(1413);
+                open32SetError(ERROR_INVALID_INDEX);
                 break;
         }
         if (field)
@@ -443,7 +475,7 @@ LONG GetClassName(ULONG handle, PCHAR output, LONG capacity)
                                                           : NULL;
     if (!name || !output || capacity <= 0)
     {
-        open32SetError(name ? 87 : 1400);
+        open32SetError(name ? ERROR_INVALID_PARAMETER : ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     size_t length = strlen(name);

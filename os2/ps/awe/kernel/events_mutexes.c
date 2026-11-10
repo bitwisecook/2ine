@@ -7,17 +7,28 @@
 #include "host/clock.h"
 #include "host/sync.h"
 #include "host/shared_memory.h"
+#include "os2/include/bsedos.h"
 #include <stdio.h>
 
 enum
 {
-    EVENT_MODIFY_STATE_RIGHT = 2
+    /* Longest Win32 object name; the shared record keeps it with its terminator. */
+    SYNC_NAME_LIMIT = 240,
+    /* Separates the scope from the name in the digest; never a byte of a name. */
+    HASH_SEPARATOR = 255,
+    /* Retries when a last close races another process's create or open. */
+    SHARED_OPEN_ATTEMPTS = 8,
+    /* How long an opener waits for the creator to publish a named object. */
+    CREATOR_PUBLISH_WAIT_US = 1000000,
+    US_PER_MS = 1000
 };
+
+static const uint64 FNV_OFFSET_BASIS = 1469598103934665603ULL, FNV_PRIME = 1099511628211ULL;
 
 typedef struct SyncMetadata
 {
     ULONG ready, event, manual;
-    char name[241];
+    char name[SYNC_NAME_LIMIT + 1];
 } SyncMetadata;
 
 typedef struct Open32Sync
@@ -44,7 +55,7 @@ static ULONG close_native(ULONG handle, BOOL event)
 {
     typedef APIRET(OS2API * Fn)(ULONG);
     Fn call = (Fn)open32DosService(event ? "DosCloseEventSem" : "DosCloseMutexSem");
-    return call ? call(handle) : 120;
+    return call ? call(handle) : ERROR_CALL_NOT_IMPLEMENTED;
 }
 
 static void destroy_sync(void *resource)
@@ -77,8 +88,9 @@ static ULONG native_create(PSZ name, BOOL event, BOOL initial, ULONG *handle, BO
     typedef APIRET(OS2API * Open)(PSZ, PULONG);
     Create create = (Create)open32DosService(event ? "DosCreateEventSem" : "DosCreateMutexSem");
     Open open = (Open)open32DosService(event ? "DosOpenEventSem" : "DosOpenMutexSem");
-    ULONG error = create ? create(name, handle, name ? 1 : 0, initial) : 120;
-    if (name && error == 285 && open)
+    ULONG error = create ? create(name, handle, name ? DC_SEM_SHARED : 0, initial)
+                         : ERROR_CALL_NOT_IMPLEMENTED;
+    if (name && error == ERROR_DUPLICATE_NAME && open)
     {
         *handle = 0;
         error = open(name, handle);
@@ -92,22 +104,23 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
 {
     /* The inherit word only marks the handle, and no child process ever receives one. */
     (void)security;
-    if (name && (!*name || strlen(name) > 240))
+    if (name && (!*name || strlen(name) > SYNC_NAME_LIMIT))
     {
-        open32SetError(123);
+        open32SetError(ERROR_INVALID_NAME);
         return 0;
     }
     char identifier[80], gate[84], shared_name[40];
     PSZ native_name = NULL;
     if (name)
     {
-        uint64 hash = 1469598103934665603ULL;
+        /* FNV-1a of the ball scope and the name. */
+        uint64 hash = FNV_OFFSET_BASIS;
         const char *scope = getenv("TWOINE_BALL");
         for (const char *p = scope; p && *p; p++)
-            hash = (hash ^ (uint8)*p) * 1099511628211ULL;
-        hash = (hash ^ 255) * 1099511628211ULL;
+            hash = (hash ^ (uint8)*p) * FNV_PRIME;
+        hash = (hash ^ HASH_SEPARATOR) * FNV_PRIME;
         for (const char *p = name; *p; p++)
-            hash = (hash ^ (uint8)*p) * 1099511628211ULL;
+            hash = (hash ^ (uint8)*p) * FNV_PRIME;
         snprintf(identifier, sizeof identifier, "\\SEM32\\2ine-open32-%016llx",
                  (unsigned long long)hash);
         snprintf(gate, sizeof gate, "%s-g", identifier);
@@ -117,7 +130,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     Open32Sync *sync = calloc(1, sizeof *sync);
     if (!sync)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     sync->event = event;
@@ -125,7 +138,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     if (name)
     {
         BOOL found = FALSE;
-        for (unsigned attempt = 0; attempt < 8; attempt++)
+        for (unsigned attempt = 0; attempt < SHARED_OPEN_ATTEMPTS; attempt++)
         {
             LxHostSharedResult opened = lx_host_shared_open(shared_name, 0, &sync->shared);
             if (opened == LX_HOST_SHARED_OK)
@@ -142,14 +155,14 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
                     continue;
             }
             destroy_sync(sync);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         if (!sync->shared || lx_host_shared_size(sync->shared) != sizeof(SyncMetadata) ||
             !(sync->metadata = lx_host_shared_map(sync->shared, NULL, 0)))
         {
             destroy_sync(sync);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         if (!found)
@@ -160,7 +173,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
         }
         else
         {
-            uint64 deadline = lx_host_monotonic_us() + 1000000;
+            uint64 deadline = lx_host_monotonic_us() + CREATOR_PUBLISH_WAIT_US;
             while (!__atomic_load_n(&sync->metadata->ready, __ATOMIC_ACQUIRE) &&
                    lx_host_monotonic_us() < deadline)
                 lx_host_sleep_ms(1);
@@ -168,7 +181,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
                 sync->metadata->event != (ULONG)event || strcmp(sync->metadata->name, name))
             {
                 destroy_sync(sync);
-                open32SetError(6);
+                open32SetError(ERROR_INVALID_HANDLE);
                 return 0;
             }
             sync->manual = sync->metadata->manual;
@@ -187,7 +200,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     if (!handle)
     {
         destroy_sync(sync);
-        open32SetError(error ? error : 8);
+        open32SetError(error ? error : ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     lx_host_once(&sync_once, initialize_sync_objects);
@@ -197,7 +210,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     sync_objects = sync;
     lx_host_monitor_unlock(sync_lock);
     if (existing)
-        open32SetError(183);
+        open32SetError(ERROR_ALREADY_EXISTS);
     return handle;
 }
 
@@ -224,14 +237,14 @@ static BOOL event_operation(ULONG handle, BOOL set)
     if (!lx_handle_access(handle, LX_HANDLE_OPEN32_EVENT, &access) ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_EVENT, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
-    if (!(access & EVENT_MODIFY_STATE_RIGHT))
+    if (!(access & WIN32_EVENT_MODIFY_STATE))
     {
         lx_handle_release(&borrow);
         /* The original reports a refused SetEvent as a bad handle, ResetEvent as denied. */
-        open32SetError(set ? 6 : 5);
+        open32SetError(set ? ERROR_INVALID_HANDLE : ERROR_ACCESS_DENIED);
         return FALSE;
     }
     Open32Sync *sync = borrow.resource;
@@ -240,8 +253,8 @@ static BOOL event_operation(ULONG handle, BOOL set)
     {
         typedef APIRET(OS2API * Fn)(ULONG);
         Fn call = (Fn)open32DosService("DosPostEventSem");
-        error = call ? call(sync->native) : 120;
-        if (error == 299)
+        error = call ? call(sync->native) : ERROR_CALL_NOT_IMPLEMENTED;
+        if (error == ERROR_ALREADY_POSTED)
             error = 0; /* Already posted is still a signalled event. */
     }
     else
@@ -249,8 +262,8 @@ static BOOL event_operation(ULONG handle, BOOL set)
         typedef APIRET(OS2API * Fn)(ULONG, PULONG);
         Fn call = (Fn)open32DosService("DosResetEventSem");
         ULONG count;
-        error = call ? call(sync->native, &count) : 120;
-        if (error == 300)
+        error = call ? call(sync->native, &count) : ERROR_CALL_NOT_IMPLEMENTED;
+        if (error == ERROR_ALREADY_RESET)
             error = 0;
     }
     lx_handle_release(&borrow);
@@ -274,12 +287,12 @@ BOOL ReleaseMutex(ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_MUTEX, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     typedef APIRET(OS2API * Fn)(ULONG);
     Fn call = (Fn)open32DosService("DosReleaseMutexSem");
-    ULONG error = call ? call(((Open32Sync *)borrow.resource)->native) : 120;
+    ULONG error = call ? call(((Open32Sync *)borrow.resource)->native) : ERROR_CALL_NOT_IMPLEMENTED;
     lx_handle_release(&borrow);
     if (error)
         open32SetError(error);
@@ -290,7 +303,7 @@ static ULONG wait_native(ULONG handle, BOOL event, ULONG timeout)
 {
     typedef APIRET(OS2API * Fn)(ULONG, ULONG);
     Fn call = (Fn)open32DosService(event ? "DosWaitEventSem" : "DosRequestMutexSem");
-    return call ? call(handle, timeout) : 120;
+    return call ? call(handle, timeout) : ERROR_CALL_NOT_IMPLEMENTED;
 }
 
 typedef struct SyncWait
@@ -310,19 +323,19 @@ static ULONG wait_sync(void *argument)
     Open32Sync *sync = wait->borrow.resource;
     ULONG error = 0;
     BOOL gate = FALSE;
-    uint64 deadline = lx_host_monotonic_us() + (uint64)wait->timeout * 1000;
+    uint64 deadline = lx_host_monotonic_us() + (uint64)wait->timeout * US_PER_MS;
     if (sync->gate)
     {
         error = wait_native(sync->gate, FALSE, wait->timeout);
-        gate = !error || error == 105;
+        gate = !error || error == ERROR_SEM_OWNER_DIED;
     }
-    if (!error || error == 105)
+    if (!error || error == ERROR_SEM_OWNER_DIED)
     {
         ULONG timeout = wait->timeout;
-        if (timeout != UINT32_MAX)
+        if (timeout != WIN32_INFINITE)
         {
             uint64 now = lx_host_monotonic_us();
-            timeout = now >= deadline ? 0 : (ULONG)((deadline - now + 999) / 1000);
+            timeout = now >= deadline ? 0 : (ULONG)((deadline - now + US_PER_MS - 1) / US_PER_MS);
         }
         error = wait_native(sync->native, sync->event, timeout);
         if (!error && sync->event && !sync->manual)
@@ -330,7 +343,7 @@ static ULONG wait_sync(void *argument)
             typedef APIRET(OS2API * Fn)(ULONG, PULONG);
             ULONG count;
             Fn reset = (Fn)open32DosService("DosResetEventSem");
-            error = reset ? reset(sync->native, &count) : 120;
+            error = reset ? reset(sync->native, &count) : ERROR_CALL_NOT_IMPLEMENTED;
         }
     }
     if (gate)
@@ -340,16 +353,17 @@ static ULONG wait_sync(void *argument)
         if (release)
             release(sync->gate);
     }
-    if (error == 640 || error == 121)
-        return 258;
-    if (error == 105)
-        return 0x80; /* ERROR_SEM_OWNER_DIED / WAIT_ABANDONED */
+    if (error == ERROR_TIMEOUT || error == ERROR_SEM_TIMEOUT)
+        return WIN32_WAIT_TIMEOUT;
+    /* A mutex whose owner died is still acquired. */
+    if (error == ERROR_SEM_OWNER_DIED)
+        return WIN32_WAIT_ABANDONED;
     if (error)
     {
         open32SetError(error);
-        return UINT32_MAX;
+        return WIN32_WAIT_FAILED;
     }
-    return 0;
+    return WIN32_WAIT_OBJECT_0;
 }
 
 int open32WaitSync(ULONG handle, ULONG timeout, ULONG *result)

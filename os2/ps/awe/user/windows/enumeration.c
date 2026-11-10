@@ -4,6 +4,17 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/include/private/pmp.h"
 
+enum
+{
+    /* Deepest window nesting walked, and most windows snapshotted by one enumeration. */
+    WINDOW_NESTING_LIMIT = 256,
+    SNAPSHOT_LIMIT = 65536,
+    SNAPSHOT_INITIAL_CAPACITY = 32,
+    /* FindWindow compares at most this much of a class name or title. */
+    FIND_CLASS_NAME_SIZE = 256,
+    FIND_TITLE_SIZE = 100
+};
+
 typedef struct WindowSnapshot
 {
     ULONG *handles;
@@ -12,17 +23,18 @@ typedef struct WindowSnapshot
 
 static BOOL collect(WindowSnapshot *snapshot, ULONG parent, unsigned depth)
 {
-    if (depth > 256)
+    if (depth > WINDOW_NESTING_LIMIT)
         return FALSE;
-    for (ULONG child = WinQueryWindow(open32ClientWindow(parent), 2); child;
-         child = WinQueryWindow(child, 0))
+    for (ULONG child = WinQueryWindow(open32ClientWindow(parent), QW_TOP); child;
+         child = WinQueryWindow(child, QW_NEXT))
     {
         if (open32FindWindow(child) || open32NativeDialogWindow(child))
         {
             if (snapshot->count == snapshot->capacity)
             {
-                size_t capacity = snapshot->capacity ? snapshot->capacity * 2 : 32;
-                if (capacity > 65536)
+                size_t capacity =
+                    snapshot->capacity ? snapshot->capacity * 2 : SNAPSHOT_INITIAL_CAPACITY;
+                if (capacity > SNAPSHOT_LIMIT)
                     return FALSE;
                 ULONG *next = realloc(snapshot->handles, capacity * sizeof *next);
                 if (!next)
@@ -46,14 +58,14 @@ BOOL EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), parent) ||
         !open32ValidProcedure(procedure))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     WindowSnapshot snapshot = {0};
     if (!collect(&snapshot, parent, 0))
     {
         free(snapshot.handles);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     BOOL result = TRUE;
@@ -62,9 +74,9 @@ BOOL EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
         ULONG child = snapshot.handles[i];
         if (!open32FindWindow(child) && !open32NativeDialogWindow(child))
             continue;
-        ULONG ancestor = WinQueryWindow(child, 5);
+        ULONG ancestor = WinQueryWindow(child, QW_PARENT);
         while (ancestor && ancestor != parent)
-            ancestor = WinQueryWindow(ancestor, 5);
+            ancestor = WinQueryWindow(ancestor, QW_PARENT);
         if (!ancestor)
             continue;
         if (!lx_execution_callback32_4(GProcessState.execution, procedure, child, parameter, 0, 0))
@@ -81,7 +93,7 @@ ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
 {
     if (!open32FindWindow(window) || !WinIsWindow(open32Presentation(), window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     if (process)
@@ -92,24 +104,24 @@ ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
 ULONG GetTopWindow(ULONG parent)
 {
     return open32PublicWindow(
-        WinQueryWindow(parent ? open32ClientWindow(parent) : HWND_DESKTOP, 2));
+        WinQueryWindow(parent ? open32ClientWindow(parent) : HWND_DESKTOP, QW_TOP));
 }
 
 ULONG GetNextWindow(ULONG window, ULONG direction)
 {
-    if (direction != 2 && direction != 3)
+    if (direction != WIN32_GW_HWNDNEXT && direction != WIN32_GW_HWNDPREV)
         return 0;
-    return open32PublicWindow(
-        WinQueryWindow(window ? window : HWND_DESKTOP, direction == 2 ? 0 : 1));
+    return open32PublicWindow(WinQueryWindow(window ? window : HWND_DESKTOP,
+                                             direction == WIN32_GW_HWNDNEXT ? QW_NEXT : QW_PREV));
 }
 
 BOOL IsChild(ULONG parent, ULONG child)
 {
     if (!parent)
         parent = HWND_DESKTOP;
-    for (unsigned depth = 0; child && depth < 256; depth++)
+    for (unsigned depth = 0; child && depth < WINDOW_NESTING_LIMIT; depth++)
     {
-        child = WinQueryWindow(child, 5);
+        child = WinQueryWindow(child, QW_PARENT);
         if (child == open32ClientWindow(parent) || child == parent)
             return TRUE;
     }
@@ -124,12 +136,12 @@ ULONG GetLastActivePopup(ULONG window)
     if (open32PublicWindow(GetActiveWindow()) == target)
         return window;
     /* The uppermost of the window and its owned popups is the answer. */
-    for (ULONG at = WinQueryWindow(HWND_DESKTOP, 2); at; at = WinQueryWindow(at, 0))
+    for (ULONG at = WinQueryWindow(HWND_DESKTOP, QW_TOP); at; at = WinQueryWindow(at, QW_NEXT))
     {
         if (at == target)
             return at;
-        if (((ULONG)GetWindowLong(at, -16) & 0x80000000u) &&
-            open32PublicWindow(WinQueryWindow(at, 4)) == target)
+        if (((ULONG)GetWindowLong(at, WIN32_GWL_STYLE) & (ULONG)WIN32_WS_POPUP) &&
+            open32PublicWindow(WinQueryWindow(at, QW_OWNER)) == target)
             return at;
     }
     return window;
@@ -141,7 +153,7 @@ ULONG ChildWindowFromPoint(ULONG parent, LONG x, LONG y)
     ULONG native = open32ClientWindow(parent);
     if (!WinQueryWindowRect(native, &bounds))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     POINTL point = {x, bounds.yTop - y};
@@ -152,7 +164,7 @@ ULONG ChildWindowFromPoint(ULONG parent, LONG x, LONG y)
 typedef struct WindowNames
 {
     ULONG window, atom;
-    char name[256], text[100];
+    char name[FIND_CLASS_NAME_SIZE], text[FIND_TITLE_SIZE];
 } WindowNames;
 
 /* Runs on the window's own thread, where its Open32 record and PM window can be read. */
@@ -175,15 +187,17 @@ ULONG FindWindow(PSZ class_name, PSZ title)
 {
     if (!class_name)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    for (ULONG window = WinQueryWindow(HWND_DESKTOP, 2); window; window = WinQueryWindow(window, 0))
+    for (ULONG window = WinQueryWindow(HWND_DESKTOP, QW_TOP); window;
+         window = WinQueryWindow(window, QW_NEXT))
     {
         WindowNames names = {.window = window};
         uintptr_t ignored;
         if (!lx_pm_window_call(window, read_window_names, &names, sizeof names, &ignored))
             read_window_names(&names);
+        /* A class "name" up to 0xFFFF is a class atom. */
         if ((uintptr_t)class_name <= 0xFFFF ? names.atom != (ULONG)(uintptr_t)class_name
                                             : strcasecmp(names.name, class_name) != 0)
             continue;
@@ -198,7 +212,7 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
 {
     if (!open32ValidProcedure(procedure))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG *snapshot = NULL;
@@ -207,12 +221,12 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
     size_t objects = thread ? 0 : lx_pm_object_windows(NULL, 0);
     HWND *object_list = objects ? calloc(objects, sizeof *object_list) : NULL;
     objects = object_list ? lx_pm_object_windows(object_list, objects) : 0;
-    ULONG window = WinQueryWindow(HWND_DESKTOP, 2);
+    ULONG window = WinQueryWindow(HWND_DESKTOP, QW_TOP);
     for (size_t next_object = 0; window || next_object < objects;)
     {
         BOOL from_object = !window;
         ULONG current = from_object ? object_list[next_object++] : window;
-        window = from_object ? 0 : WinQueryWindow(window, 0);
+        window = from_object ? 0 : WinQueryWindow(window, QW_NEXT);
         if (open32ThreadQueueWindow(current))
             continue;
         ULONG pid = 0, tid = 0;
@@ -220,13 +234,13 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
             continue;
         if (count == capacity)
         {
-            size_t next = capacity ? capacity * 2 : 32;
+            size_t next = capacity ? capacity * 2 : SNAPSHOT_INITIAL_CAPACITY;
             ULONG *grown = realloc(snapshot, next * sizeof *grown);
             if (!grown)
             {
                 free(snapshot);
                 free(object_list);
-                open32SetError(8);
+                open32SetError(ERROR_NOT_ENOUGH_MEMORY);
                 return FALSE;
             }
             snapshot = grown;

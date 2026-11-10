@@ -82,11 +82,11 @@ void lx_mimc_render(LxMciDevice *d, float *samples, int count, int frequency)
         if (remaining < block)
             block = remaining > 1 ? (int)remaining : 1;
 #if TWOINE_MIDI_SYNTH || TWOINE_MT32_SYNTH
-        lx_midi_synth_render_stereo(d->synth, samples + 2 * n, (unsigned)block, (unsigned)frequency,
-                                    d->volume);
+        lx_midi_synth_render_stereo(d->synth, samples + MCI_MIXER_CHANNELS * n, (unsigned)block,
+                                    (unsigned)frequency, d->volume);
 #else
-        lx_midi_oscillator_render_stereo(&d->oscillator, samples + 2 * n, (unsigned)block,
-                                         (unsigned)frequency, d->volume);
+        lx_midi_oscillator_render_stereo(&d->oscillator, samples + MCI_MIXER_CHANNELS * n,
+                                         (unsigned)block, (unsigned)frequency, d->volume);
 #endif
         n += block;
         d->time += (double)block / frequency;

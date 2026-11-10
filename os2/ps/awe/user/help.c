@@ -9,6 +9,6 @@ BOOL WinHelp(ULONG window, PSZ filename, ULONG command, ULONG data)
                  (uint)data);
     if (command == 2) /* HELP_QUIT */
         return filename != NULL;
-    open32SetError(50);
+    open32SetError(ERROR_NOT_SUPPORTED);
     return FALSE;
 }

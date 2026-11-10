@@ -28,7 +28,7 @@ BOOL MessageBeep(ULONG type)
             frequency = 1047;
             break;
         default:
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
     }
     typedef APIRET(OS2API * BeepFn)(ULONG, ULONG);

@@ -5,6 +5,12 @@
 #include "emulator/handles.h"
 #include "os2/ps/awe/dde/dde.h"
 
+enum
+{
+    /* Largest DDE data object, in bytes. */
+    DDE_DATA_LIMIT = 16u * 1024u * 1024u
+};
+
 DdeData *dde_data;
 
 static void destroy_dde_data(void *resource)
@@ -30,23 +36,26 @@ ULONG DdeCreateDataHandle(ULONG id, PVOID input, ULONG count, ULONG offset, ULON
         return 0;
     DdeData *data = NULL;
     ULONG handle = 0;
-    if ((flags & ~1u) || offset > 16u * 1024u * 1024u || count > 16u * 1024u * 1024u - offset)
+    if ((flags & ~(ULONG)WIN32_HDATA_APPOWNED) || offset > DDE_DATA_LIMIT ||
+        count > DDE_DATA_LIMIT - offset)
     {
-        ((DdeInstance *)instance.resource)->error = 0x4006;
+        ((DdeInstance *)instance.resource)->error = WIN32_DMLERR_INVALIDPARAMETER;
         goto data_done;
     }
     data = calloc(1, sizeof *data);
     if (data)
-        data->mapping = lx_execution_map(GProcessState.execution, 0,
-                                         (((size_t)offset + count + 4095) & ~(size_t)4095)
-                                             ? (((size_t)offset + count + 4095) & ~(size_t)4095)
-                                             : 4096,
-                                         3, 0);
+        data->mapping = lx_execution_map(
+            GProcessState.execution, 0,
+            (((size_t)offset + count + OPEN32_PAGE_SIZE - 1) & ~(size_t)(OPEN32_PAGE_SIZE - 1))
+                ? (((size_t)offset + count + OPEN32_PAGE_SIZE - 1) &
+                   ~(size_t)(OPEN32_PAGE_SIZE - 1))
+                : OPEN32_PAGE_SIZE,
+            LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!data || !data->mapping)
     {
         if (data)
             free(data);
-        ((DdeInstance *)instance.resource)->error = 0x4007;
+        ((DdeInstance *)instance.resource)->error = WIN32_DMLERR_LOW_MEMORY;
         goto data_done;
     }
     data->owner = id;
@@ -61,7 +70,7 @@ ULONG DdeCreateDataHandle(ULONG id, PVOID input, ULONG count, ULONG offset, ULON
     {
         lx_execution_unmap(GProcessState.execution, data->mapping);
         free(data);
-        ((DdeInstance *)instance.resource)->error = 0x4007;
+        ((DdeInstance *)instance.resource)->error = WIN32_DMLERR_LOW_MEMORY;
         goto data_done;
     }
     data->handle = handle;
@@ -111,7 +120,7 @@ BOOL DdeFreeDataHandle(ULONG handle)
     if (valid)
         valid = lx_handle_close(handle, LX_HANDLE_OPEN32_DDE_DATA);
     else
-        open32DdeSetError(data->owner, 0x4004);
+        open32DdeSetError(data->owner, WIN32_DMLERR_DLL_USAGE);
     lx_handle_release(&borrow);
     return valid;
 }
@@ -123,20 +132,22 @@ ULONG DdeAddData(ULONG handle, PVOID input, ULONG count, ULONG offset)
         return 0;
     DdeData *data = borrow.resource;
     ULONG result = 0;
-    if (data->accesses || (count && !input) || offset > 16u * 1024u * 1024u ||
-        count > 16u * 1024u * 1024u - offset)
+    if (data->accesses || (count && !input) || offset > DDE_DATA_LIMIT ||
+        count > DDE_DATA_LIMIT - offset)
     {
-        open32DdeSetError(data->owner, 0x4006);
+        open32DdeSetError(data->owner, WIN32_DMLERR_INVALIDPARAMETER);
         goto add_done;
     }
     ULONG required = count + offset;
     if (required > lx_execution_mapping_size(data->mapping))
     {
         LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0,
-                                                   ((size_t)required + 4095) & ~(size_t)4095, 3, 0);
+                                                   ((size_t)required + OPEN32_PAGE_SIZE - 1) &
+                                                       ~(size_t)(OPEN32_PAGE_SIZE - 1),
+                                                   LX_GUEST_READ | LX_GUEST_WRITE, 0);
         if (!mapping)
         {
-            open32DdeSetError(data->owner, 0x4007);
+            open32DdeSetError(data->owner, WIN32_DMLERR_LOW_MEMORY);
             goto add_done;
         }
         memcpy(lx_execution_mapping_host(mapping), lx_execution_mapping_host(data->mapping),

@@ -5,6 +5,12 @@
 #include "emulator/handles.h"
 #include "os2/ps/awe/dde/dde.h"
 
+/* The DdeInitialize flags accepted: monitor flags, callback filters, client-only and
+   filter-initiates commands, and the application class. */
+static const ULONG DDE_INITIALIZE_FLAGS =
+    WIN32_MF_MASK | WIN32_CBF_FAIL_ALLSVRXACTIONS | WIN32_CBF_SKIP_ALLNOTIFICATIONS |
+    WIN32_APPCMD_CLIENTONLY | WIN32_APPCMD_FILTERINITS | WIN32_APPCLASS_MONITOR;
+
 static void cleanup_dde_owned(ULONG id);
 
 static LxHostOnce dde_once = LX_HOST_ONCE_INIT;
@@ -59,16 +65,17 @@ BOOL dde_borrow_instance(ULONG handle, LxHandleBorrow *borrow)
 ULONG DdeInitialize(PULONG id, ULONG callback, ULONG flags, ULONG reserved)
 {
     TRACE_NATIVE("DdeInitialize(%p, %x, %x, %u)", id, (uint)callback, (uint)flags, (uint)reserved);
-    if (!id || reserved || (flags & ~0xff3ff031u) || (flags & 15) > 1 ||
-        !open32ValidProcedure(callback))
-        return 0x4006; /* DMLERR_INVALIDPARAMETER */
-    if ((flags & 15) == 1)
-        return 0x4004; /* DMLERR_DLL_USAGE: monitor callbacks are not provided. */
+    if (!id || reserved || (flags & ~DDE_INITIALIZE_FLAGS) ||
+        (flags & WIN32_APPCLASS_MASK) > WIN32_APPCLASS_MONITOR || !open32ValidProcedure(callback))
+        return WIN32_DMLERR_INVALIDPARAMETER;
+    /* Monitor callbacks are not provided. */
+    if ((flags & WIN32_APPCLASS_MASK) == WIN32_APPCLASS_MONITOR)
+        return WIN32_DMLERR_DLL_USAGE;
     if (*id)
     {
         LxHandleBorrow borrow;
         if (!dde_borrow_instance(*id, &borrow))
-            return 0x4006;
+            return WIN32_DMLERR_INVALIDPARAMETER;
         DdeInstance *instance = borrow.resource;
         instance->callback = callback;
         instance->flags = flags;
@@ -77,10 +84,10 @@ ULONG DdeInitialize(PULONG id, ULONG callback, ULONG flags, ULONG reserved)
         return 0;
     }
     if (!open32Presentation())
-        return 0x400f; /* DMLERR_SYS_ERROR */
+        return WIN32_DMLERR_SYS_ERROR;
     DdeInstance *instance = calloc(1, sizeof *instance);
     if (!instance)
-        return 0x4007;
+        return WIN32_DMLERR_LOW_MEMORY;
     lx_host_once(&dde_once, dde_initialize);
     instance->owner = lxHostThreadState();
     instance->thread = GetCurrentThreadId();
@@ -91,7 +98,7 @@ ULONG DdeInitialize(PULONG id, ULONG callback, ULONG flags, ULONG reserved)
     if (!instance->handle)
     {
         free(instance);
-        return 0x4007;
+        return WIN32_DMLERR_LOW_MEMORY;
     }
     lx_host_monitor_lock(dde_lock);
     instance->next = dde_instances;
@@ -106,7 +113,7 @@ ULONG DdeGetLastError(ULONG id)
 {
     LxHandleBorrow borrow;
     if (!dde_borrow_instance(id, &borrow))
-        return 0x4006;
+        return WIN32_DMLERR_INVALIDPARAMETER;
     DdeInstance *instance = borrow.resource;
     ULONG error = instance->error;
     instance->error = 0;

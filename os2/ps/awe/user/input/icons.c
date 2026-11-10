@@ -42,7 +42,7 @@ ULONG LoadIcon(HMODULE module, PSZ name)
         GProcessState.queryResourceSize(module, 1, resource & 0xFFFF, &size) || size < 26 ||
         size > 1048576 || GProcessState.getResource(module, 1, resource & 0xFFFF, &data))
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     const uint8 *bytes = data;
@@ -71,7 +71,7 @@ ULONG LoadIcon(HMODULE module, PSZ name)
         GProcessState.freeResource(data);
     if (!icon)
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     icon->size = size;
@@ -81,7 +81,7 @@ ULONG LoadIcon(HMODULE module, PSZ name)
     if (!icon->handle)
     {
         destroy_icon(icon);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     icon->next = icons;
@@ -94,7 +94,7 @@ BOOL DestroyIcon(ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_ICON, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Icon *icon = borrow.resource;
@@ -110,7 +110,7 @@ BOOL DestroyIcon(ULONG handle)
     }
     lx_handle_release(&borrow);
     if (!ok)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return ok;
 }
 
@@ -131,7 +131,7 @@ ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG dept
     ULONG bits = planes * depth;
     if (bits != 1 && bits != 2 && bits != 4 && bits != 8)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     size_t mask_stride = ((size_t)width + 31) / 32 * 4,
@@ -177,7 +177,7 @@ ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG dept
             pmPointerImageFree(image);
             free(icon);
         }
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     icon->next = icons;
@@ -190,7 +190,7 @@ BOOL DrawIcon(ULONG dc, LONG x, LONG y, ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!open32FindDC(dc) || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_ICON, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Icon *icon = borrow.resource;
@@ -250,7 +250,7 @@ BOOL DrawIcon(ULONG dc, LONG x, LONG y, ULONG handle)
         }
     lx_handle_release(&borrow);
     if (!ok)
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
     return ok;
 }
 
@@ -269,7 +269,7 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     (void)instance;
     if (!path || !*path)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 1; /* The value Open32 gives a caller with no file. */
     }
     uint32 error = 0;
@@ -280,7 +280,7 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     free(host);
     if (!bytes)
     {
-        open32SetError(error ? error : 2);
+        open32SetError(error ? error : ERROR_FILE_NOT_FOUND);
         return 0;
     }
     PmPointerImage *image = pmPointerImage(bytes, size);
@@ -303,7 +303,7 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
         {
             pmPointerImageFree(image);
             free(bytes);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         icon->image = image;
@@ -314,7 +314,7 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
         if (!icon->handle)
         {
             destroy_icon(icon);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         icon->next = icons;

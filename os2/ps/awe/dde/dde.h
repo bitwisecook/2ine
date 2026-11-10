@@ -103,7 +103,14 @@ enum
     REMOTE_NOTIFY,
     REMOTE_LIMIT = 4 * 1024 * 1024 - 256,
     SERVICE_LIMIT = 256,
-    REMOTE_TIMEOUT = 10000
+    REMOTE_TIMEOUT = 10000,
+    /* Milliseconds a local server has to answer XTYP_CONNECT and XTYP_CONNECT_CONFIRM. */
+    CONNECT_TIMEOUT = 10000,
+    /* A waiting sender re-checks for its answer, and serves its own queue, this often. */
+    DDE_POLL_MS = 20,
+    US_PER_MS = 1000,
+    /* XTYPF_NODATA and XTYPF_ACKREQ may accompany XTYP_ADVSTART. */
+    ADVISE_START_MODIFIERS = WIN32_XTYPF_NODATA | WIN32_XTYPF_ACKREQ
 };
 
 LX_PRIVATE void dde_publish_service(ULONG instance, ULONG atom);

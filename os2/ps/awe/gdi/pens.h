@@ -5,13 +5,22 @@
 #include "os2/include/os2win.h"
 #include "emulator/handles.h"
 
+/* Open32Pen's cap and join: the PS_ENDCAP_* and PS_JOIN_* selectors shifted down. */
+enum
+{
+    PEN_CAP_ROUND = 0,
+    PEN_CAP_SQUARE = 1,
+    PEN_CAP_FLAT = 2,
+    PEN_JOIN_ROUND = 0,
+    PEN_JOIN_BEVEL = 1,
+    PEN_JOIN_MITER = 2
+};
+
 typedef struct Open32Pen
 {
     LONG style, width;
     ULONG color;
     BOOL stock;
-    /* Windows PS_ENDCAP and PS_JOIN selectors: 0 round; caps 1 square, 2 flat; joins 1 bevel,
-       2 miter. */
     ULONG cap, join;
     ULONG brush_handle;
     LxHandleBorrow brush;

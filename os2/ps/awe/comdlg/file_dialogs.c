@@ -331,7 +331,7 @@ static BOOL common_dialog(PVOID address, BOOL save)
                       OFN_NONETWORKBUTTON | OFN_NOLONGNAMES;
     if (flags & ~supported || lx_guest_load_u32(record + 16))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return fail(0xffff);
     }
     ULONG callback = flags & OFN_ENABLEHOOK ? lx_guest_load_u32(record + 68) : 0;

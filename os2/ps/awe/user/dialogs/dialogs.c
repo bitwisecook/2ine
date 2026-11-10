@@ -141,12 +141,12 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
                  parameter);
     if (!resource || !open32ValidProcedure(procedure) || !open32Presentation())
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     if (owner && !WinIsWindow(open32Presentation(), owner))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return -1;
     }
     if ((!module || module == UINT32_MAX) && GProcessState.main_module)
@@ -154,7 +154,7 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
     ULONG identity = open32ResourceIdentity(module, resource, 4); /* RT_DIALOG */
     if (!identity)
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return -1;
     }
     Open32Dialog dialog = {.procedure = procedure, .parameter = parameter, .previous = dialogs};
@@ -166,7 +166,7 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
         return dialog.result;
     if (result == 0xffff)
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return -1;
     }
     return (LONG)result;
@@ -191,7 +191,7 @@ BOOL EndDialog(ULONG handle, LONG result)
     for (Open32Dialog *dialog = modeless_dialogs; dialog; dialog = dialog->previous)
         if (dialog->window == handle)
             return WinDestroyWindow(handle);
-    open32SetError(1400);
+    open32SetError(ERROR_INVALID_WINDOW_HANDLE);
     return FALSE;
 }
 
@@ -200,7 +200,7 @@ ULONG GetDlgItem(ULONG handle, LONG identity)
     TRACE_NATIVE("GetDlgItem(%u, %d)", (uint)handle, (int)identity);
     if (identity < 0 || identity > UINT16_MAX || !open32Presentation())
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return WinWindowFromID(open32ClientWindow(handle), (ULONG)identity);
@@ -211,7 +211,7 @@ BOOL SetDlgItemText(ULONG handle, LONG identity, PSZ text)
     ULONG child = GetDlgItem(handle, identity);
     if (!child || !text)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     return SetWindowText(child, text);
@@ -222,7 +222,7 @@ ULONG GetDlgItemText(ULONG handle, LONG identity, PCHAR output, LONG capacity)
     ULONG child = GetDlgItem(handle, identity);
     if (!child || !output || capacity <= 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return (ULONG)GetWindowText(child, output, capacity);
@@ -239,7 +239,7 @@ LONG SendDlgItemMessage(ULONG dialog, LONG identity, ULONG message, ULONG first,
         return SendMessage(child, message, first, second);
     if (!open32NativeDialogWindow(child))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     return open32NativeControlMessage(child, message, first, second, FALSE);
@@ -255,7 +255,7 @@ BOOL CheckDlgButton(ULONG dialog, LONG identity, ULONG check)
     ULONG child = GetDlgItem(dialog, identity);
     if (!child || check > 2)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     SendDlgItemMessage(dialog, identity, 0xf1, check, 0);
@@ -266,7 +266,7 @@ ULONG CreateDialogParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure
 {
     if (!resource || !open32ValidProcedure(procedure) || !open32Presentation())
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if ((!module || module == UINT32_MAX) && GProcessState.main_module)
@@ -274,13 +274,13 @@ ULONG CreateDialogParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure
     ULONG identity = open32ResourceIdentity(module, resource, 4); /* RT_DIALOG */
     if (!identity)
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     Open32Dialog *dialog = calloc(1, sizeof *dialog);
     if (!dialog)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     dialog->procedure = procedure;
@@ -293,7 +293,7 @@ ULONG CreateDialogParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure
     if (!window)
     {
         free(dialog);
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     dialog->window = window;
@@ -666,21 +666,21 @@ ULONG _CreateDialogIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG
 {
     if (!open32ValidProcedure(procedure) || !open32Presentation())
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     DialogMenu menu = {0};
     PDLGTEMPLATE data = convert_dialog(address, &menu);
     if (!data)
     {
-        open32SetError(1813);
+        open32SetError(ERROR_RESOURCE_TYPE_NOT_FOUND);
         return 0;
     }
     Open32Dialog *dialog = calloc(1, sizeof *dialog);
     if (!dialog)
     {
         free(data);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     dialog->procedure = procedure;
@@ -695,7 +695,7 @@ ULONG _CreateDialogIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG
     if (!window)
     {
         free(dialog);
-        open32SetError(1813);
+        open32SetError(ERROR_RESOURCE_TYPE_NOT_FOUND);
         return 0;
     }
     dialog->window = window;
@@ -710,14 +710,14 @@ LONG _DialogBoxIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG pro
 {
     if (!open32ValidProcedure(procedure) || !open32Presentation())
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     DialogMenu menu = {0};
     PDLGTEMPLATE data = convert_dialog(address, &menu);
     if (!data)
     {
-        open32SetError(1813);
+        open32SetError(ERROR_RESOURCE_TYPE_NOT_FOUND);
         return -1;
     }
     Open32Dialog dialog = {.procedure = procedure,

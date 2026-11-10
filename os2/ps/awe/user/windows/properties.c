@@ -22,13 +22,13 @@ BOOL SetProp(ULONG handle, PSZ name, ULONG data)
     Open32Window *window = open32PropertyWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     ULONG atom = property_atom(name, TRUE);
     if (!atom)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     BOOL owns = (uintptr_t)name > UINT16_MAX;
@@ -47,7 +47,7 @@ BOOL SetProp(ULONG handle, PSZ name, ULONG data)
     {
         if (owns)
             GlobalDeleteAtom(atom);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     property->atom = atom;
@@ -63,7 +63,7 @@ ULONG GetProp(ULONG handle, PSZ name)
     Open32Window *window = open32PropertyWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     ULONG atom = property_atom(name, FALSE);
@@ -78,7 +78,7 @@ ULONG RemoveProp(ULONG handle, PSZ name)
     Open32Window *window = open32PropertyWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     ULONG atom = property_atom(name, FALSE);

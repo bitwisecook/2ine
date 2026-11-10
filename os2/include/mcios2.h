@@ -14,6 +14,7 @@ enum
     MCI_PAUSE = 7,
     MCI_GETDEVCAPS = 9,
     MCI_STATUS = 10,
+    MCI_SPIN = 11,
     MCI_SET = 12,
     MCI_LOAD = 22,
     MCI_RESUME = 29,

@@ -86,12 +86,12 @@ static ULONG find_atom(PSZ name, BOOL add)
         return integer;
     if ((uintptr_t)name <= 0xFFFF || !*name || strlen(name) > 255 || *name == '#')
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!lock_atoms())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     ULONG result = 0, vacant = 0x4000;
@@ -124,7 +124,7 @@ static ULONG find_atom(PSZ name, BOOL add)
     }
     unlock_atoms();
     if (!result)
-        open32SetError(add ? 8 : 2);
+        open32SetError(add ? ERROR_NOT_ENOUGH_MEMORY : ERROR_FILE_NOT_FOUND);
     return result;
 }
 
@@ -144,7 +144,7 @@ ULONG GlobalDeleteAtom(ULONG atom)
         return 0;
     if (!lock_atoms())
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return atom;
     }
     BOOL valid = atom >= 0xC000 && atom <= 0xFFFF && table->atoms[atom - 0xC000].references;
@@ -152,7 +152,7 @@ ULONG GlobalDeleteAtom(ULONG atom)
         table->atoms[atom - 0xC000].references--;
     unlock_atoms();
     if (!valid)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return valid ? 0 : atom;
 }
 
@@ -160,7 +160,7 @@ ULONG GlobalGetAtomName(ULONG atom, PSZ output, LONG capacity)
 {
     if (!output || capacity <= 0 || !atom || atom > 0xFFFF)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     char integer[8];
@@ -185,7 +185,7 @@ ULONG GlobalGetAtomName(ULONG atom, PSZ output, LONG capacity)
     if (locked)
         unlock_atoms();
     if (!name)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return (ULONG)copied;
 }
 
@@ -194,7 +194,7 @@ ULONG RegisterClipboardFormat(PSZ name)
 {
     if (!name || !*name || strlen(name) > 255)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG atom = WinFindAtom(WinQuerySystemAtomTable(), name);
@@ -233,7 +233,7 @@ static ULONG local_find_atom(PSZ name, BOOL add)
         return integer;
     if ((uintptr_t)name <= 0xFFFF || !*name || strlen(name) > 255 || *name == '#')
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     lx_host_once(&local_once, local_initialize);
@@ -269,7 +269,7 @@ static ULONG local_find_atom(PSZ name, BOOL add)
     }
     lx_host_monitor_unlock(local_monitor);
     if (!result)
-        open32SetError(add ? 8 : 2);
+        open32SetError(add ? ERROR_NOT_ENOUGH_MEMORY : ERROR_FILE_NOT_FOUND);
     return result;
 }
 
@@ -297,6 +297,6 @@ ULONG DeleteAtom(ULONG atom)
     }
     lx_host_monitor_unlock(local_monitor);
     if (!valid)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return valid ? 0 : atom;
 }

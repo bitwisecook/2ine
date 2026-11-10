@@ -106,6 +106,46 @@ extern "C"
         SWP_NOAUTOCLOSE = 0x8000
     };
 
+    /* Entry field notifications */
+    enum
+    {
+        EN_CHANGE = 0x0004
+    };
+
+    /* Entry field styles */
+    enum
+    {
+        ES_MARGIN = 0x00000008
+    };
+
+    /* Button styles */
+    enum
+    {
+        BS_USERBUTTON = 7,
+        BS_PRIMARYSTYLES = 0x000f,
+        BS_DEFAULT = 0x0400
+    };
+
+    /* Button notifications */
+    enum
+    {
+        BN_PAINT = 3
+    };
+
+    /* Button draw states */
+    enum
+    {
+        BDS_HILITED = 0x0100,
+        BDS_DISABLED = 0x0200,
+        BDS_DEFAULT = 0x0400
+    };
+
+    /* Combo box notifications */
+    enum
+    {
+        CBN_LBSELECT = 4
+    };
+
     /* Static control styles (INCL_WINSTATICS) */
     enum
     {
@@ -124,6 +164,12 @@ extern "C"
     };
 
     /* List box messages (INCL_WINLISTBOXES) */
+    /* List box item indices */
+    enum
+    {
+        LIT_FIRST = -1
+    };
+
     enum
     {
         LM_QUERYITEMCOUNT = 0x0160,
@@ -240,6 +286,45 @@ extern "C"
     OS2EXPORT BOOL OS2API WinSetMultWindowPos(HAB a0, PSWP a1, ULONG a2);
 
     /* INCL_WINWINDOWMGR */
+    /* WinDrawText flags */
+    enum
+    {
+        DT_QUERYEXTENT = 0x00000002,
+        DT_EXTERNALLEADING = 0x00000080,
+        DT_CENTER = 0x00000100,
+        DT_RIGHT = 0x00000200,
+        DT_VCENTER = 0x00000400,
+        DT_BOTTOM = 0x00000800,
+        DT_WORDBREAK = 0x00004000
+    };
+
+    /* Window words */
+    enum
+    {
+        QWL_STYLE = -2,
+        QWS_ID = -1,
+        QWS_XRESTORE = 0x000c,
+        QWS_YRESTORE = 0x000e,
+        QWS_CXRESTORE = 0x0010,
+        QWS_CYRESTORE = 0x0012
+    };
+
+    /* Window styles */
+    enum
+    {
+        WS_TABSTOP = 0x00020000
+    };
+
+    /* WinQueryWindow codes */
+    enum
+    {
+        QW_NEXT = 0,
+        QW_PREV = 1,
+        QW_TOP = 2,
+        QW_BOTTOM = 3,
+        QW_OWNER = 4,
+        QW_PARENT = 5
+    };
 
     typedef HANDLE HENUM;
 
@@ -346,6 +431,12 @@ extern "C"
     OS2EXPORT BOOL OS2API WinValidateRegion(HWND a0, ULONG a1, BOOL a2);
 
     /* INCL_WINMESSAGEMGR */
+    /* WinBroadcastMsg flags */
+    enum
+    {
+        BMSG_SEND = 0x0001,
+        BMSG_FRAMEONLY = 0x0008
+    };
 
     typedef struct
     {
@@ -551,6 +642,15 @@ extern "C"
     OS2EXPORT BOOL OS2API WinBroadcastMsg(HWND a0, ULONG a1, MPARAM a2, MPARAM a3, ULONG a4);
 
     /* INCL_WININPUT */
+    /* Virtual keys */
+    enum
+    {
+        VK_BUTTON1 = 0x01,
+        VK_BUTTON2 = 0x02,
+        VK_BUTTON3 = 0x03,
+        VK_SHIFT = 0x09,
+        VK_CTRL = 0x0A
+    };
 
     OS2EXPORT BOOL OS2API WinSetFocus(HWND desktop, HWND window);
 
@@ -569,6 +669,27 @@ extern "C"
     OS2EXPORT BOOL OS2API WinSetKeyboardStateTable(HWND a0, PBYTE a1, BOOL a2);
 
     /* INCL_WINDIALOGS */
+    /* Message box styles */
+    enum
+    {
+        MB_YESNO = 0x0004,
+        MB_ICONQUESTION = 0x0010,
+        MB_ICONHAND = 0x0040,
+        MB_SYSTEMMODAL = 0x1000
+    };
+
+    /* Message box results */
+    enum
+    {
+        MBID_YES = 6,
+        MBID_ERROR = 0xffff
+    };
+
+    /* Dialog codes */
+    enum
+    {
+        DID_OK = 1
+    };
 
 #pragma pack(push, 2)
 
@@ -657,6 +778,24 @@ extern "C"
                                        ULONG flags);
 
     /* INCL_WINFRAMEMGR */
+    /* Frame creation flags */
+    enum
+    {
+        FCF_SIZEBORDER = 0x00000008,
+        FCF_MINBUTTON = 0x00000010,
+        FCF_MAXBUTTON = 0x00000020
+    };
+
+    /* System commands */
+    enum
+    {
+        SC_SIZE = 0x8000,
+        SC_MOVE = 0x8001,
+        SC_MINIMIZE = 0x8002,
+        SC_MAXIMIZE = 0x8003,
+        SC_CLOSE = 0x8004,
+        SC_RESTORE = 0x8008
+    };
 
     // Built-in window class specific data...
 
@@ -735,6 +874,11 @@ extern "C"
     OS2EXPORT BOOL OS2API WinPtInRect(HAB hab, PRECTL rect, PPOINTL point);
 
     /* INCL_WINSYS */
+    /* System colours */
+    enum
+    {
+        SYSCLR_DIALOGBACKGROUND = -34
+    };
 
     OS2EXPORT BOOL OS2API WinSetPresParam(HWND window, ULONG id, ULONG size, PVOID data);
 

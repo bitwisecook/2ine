@@ -104,7 +104,7 @@ static BOOL search_next(FileSearch *search, PVOID output, BOOL first)
         size_t length = strlen(name);
         if (length >= 260)
         {
-            open32SetError(206);
+            open32SetError(ERROR_FILENAME_EXCED_RANGE);
             return FALSE;
         }
         uint8 wire[320] = {0};
@@ -119,7 +119,9 @@ static BOOL search_next(FileSearch *search, PVOID output, BOOL first)
         memcpy(output, wire, sizeof wire);
         return TRUE;
     }
-    open32SetError(status < 0 ? find_error(error) : first ? 2 : 18);
+    open32SetError(status < 0 ? find_error(error)
+                   : first    ? ERROR_FILE_NOT_FOUND
+                              : ERROR_NO_MORE_FILES);
     return FALSE;
 }
 
@@ -128,19 +130,19 @@ ULONG FindFirstFile(PSZ name, PVOID output)
     TRACE_NATIVE("FindFirstFile('%s', %p)", name, output);
     if (!name || !*name || !output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     size_t length = strlen(name);
     if (name[length - 1] == '\\' || name[length - 1] == '/')
     {
-        open32SetError(3);
+        open32SetError(ERROR_PATH_NOT_FOUND);
         return UINT32_MAX;
     }
     FileSearch *search = calloc(1, sizeof *search);
     if (!search)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return UINT32_MAX;
     }
     ULONG error = 0;
@@ -148,14 +150,14 @@ ULONG FindFirstFile(PSZ name, PVOID output)
     if (!search->path)
     {
         search_destroy(search);
-        open32SetError(error ? error : 87);
+        open32SetError(error ? error : ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     search->pattern = strrchr(search->path, '/');
     if (!search->pattern)
     {
         search_destroy(search);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     *search->pattern++ = 0;
@@ -164,7 +166,7 @@ ULONG FindFirstFile(PSZ name, PVOID output)
     search->monitor = lx_host_monitor_create();
     if (!search->directory || !search->monitor)
     {
-        open32SetError(search->directory ? 8 : find_error(host_error));
+        open32SetError(search->directory ? ERROR_NOT_ENOUGH_MEMORY : find_error(host_error));
         search_destroy(search);
         return UINT32_MAX;
     }
@@ -177,7 +179,7 @@ ULONG FindFirstFile(PSZ name, PVOID output)
     if (!handle)
     {
         search_destroy(search);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return UINT32_MAX;
     }
     return handle;
@@ -188,7 +190,7 @@ BOOL FindNextFile(ULONG handle, PVOID output)
     LxHandleBorrow borrow = {0};
     if (!output || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_FIND, &borrow))
     {
-        open32SetError(output ? 6 : 87);
+        open32SetError(output ? ERROR_INVALID_HANDLE : ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     FileSearch *search = borrow.resource;
@@ -203,6 +205,6 @@ BOOL FindClose(ULONG handle)
 {
     if (lx_handle_close(handle, LX_HANDLE_OPEN32_FIND))
         return TRUE;
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return FALSE;
 }

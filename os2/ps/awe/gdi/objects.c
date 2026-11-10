@@ -5,11 +5,18 @@
 #include "os2/ps/awe/gdi/dc.h"
 #include "os2/include/private/pmgrep.h"
 
+enum
+{
+    /* BITMAP rows are padded to whole 16-bit words. */
+    BITMAP_ROW_ALIGN_BITS = 16,
+    BITMAP_ROW_ALIGN_BYTES = 2
+};
+
 LONG GetObject(ULONG handle, LONG capacity, PVOID output)
 {
     if (capacity < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LxHandleBorrow borrow = {0};
@@ -24,27 +31,30 @@ LONG GetObject(ULONG handle, LONG capacity, PVOID output)
         if (!result)
             result = open32PaletteObject(handle, capacity, output);
         if (!result)
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
         return result;
     }
-    if (!bitmap || capacity < 0 || (output && capacity < 24))
+    if (!bitmap || capacity < 0 || (output && capacity < WIN32_BITMAP_SIZE))
     {
         lx_handle_release(&borrow);
-        open32SetError(bitmap ? 87 : 6);
+        open32SetError(bitmap ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     if (output)
     {
-        uint8 bytes[24] = {0};
-        lx_guest_store_u32(bytes + 4, bitmap->width);
-        lx_guest_store_u32(bytes + 8, bitmap->height);
-        lx_guest_store_u32(bytes + 12, ((bitmap->width * bitmap->depth + 15) / 16) * 2);
-        lx_guest_store_u16(bytes + 16, bitmap->planes);
-        lx_guest_store_u16(bytes + 18, bitmap->depth);
+        uint8 bytes[WIN32_BITMAP_SIZE] = {0};
+        lx_guest_store_u32(bytes + WIN32_BITMAP_WIDTH, bitmap->width);
+        lx_guest_store_u32(bytes + WIN32_BITMAP_HEIGHT, bitmap->height);
+        lx_guest_store_u32(
+            bytes + WIN32_BITMAP_WIDTH_BYTES,
+            ((bitmap->width * bitmap->depth + BITMAP_ROW_ALIGN_BITS - 1) / BITMAP_ROW_ALIGN_BITS) *
+                BITMAP_ROW_ALIGN_BYTES);
+        lx_guest_store_u16(bytes + WIN32_BITMAP_PLANES, bitmap->planes);
+        lx_guest_store_u16(bytes + WIN32_BITMAP_BITS_PIXEL, bitmap->depth);
         memcpy(output, bytes, sizeof bytes);
     }
     lx_handle_release(&borrow);
-    return 24;
+    return WIN32_BITMAP_SIZE;
 }
 
 BOOL DeleteObject(ULONG handle)
@@ -52,7 +62,7 @@ BOOL DeleteObject(ULONG handle)
     if (lx_pm_bitmap_delete(handle) || open32DeleteFont(handle) || open32DeleteBrush(handle) ||
         open32DeletePalette(handle) || open32DeleteRegion(handle) || open32DeletePen(handle))
         return TRUE;
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return FALSE;
 }
 
@@ -60,16 +70,20 @@ ULONG GetObjectType(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
     if (dc)
-        return dc->kind == 1 ? 10 : 3;
+        return dc->kind == OPEN32_DC_MEMORY ? WIN32_OBJ_MEMDC : WIN32_OBJ_DC;
 
     static const struct
     {
         LxHandleKind kind;
         ULONG type;
-    } types[] = {{LX_HANDLE_OPEN32_PEN, 1},      {LX_HANDLE_OPEN32_BRUSH, 2},
-                 {LX_HANDLE_OPEN32_METAFILE, 9}, {LX_HANDLE_OPEN32_ENHMETAFILE, 13},
-                 {LX_HANDLE_OPEN32_PALETTE, 5},  {LX_HANDLE_OPEN32_FONT, 6},
-                 {LX_HANDLE_PM_BITMAP, 7},       {LX_HANDLE_OPEN32_REGION, 8}};
+    } types[] = {{LX_HANDLE_OPEN32_PEN, WIN32_OBJ_PEN},
+                 {LX_HANDLE_OPEN32_BRUSH, WIN32_OBJ_BRUSH},
+                 {LX_HANDLE_OPEN32_METAFILE, WIN32_OBJ_METAFILE},
+                 {LX_HANDLE_OPEN32_ENHMETAFILE, WIN32_OBJ_ENHMETAFILE},
+                 {LX_HANDLE_OPEN32_PALETTE, WIN32_OBJ_PAL},
+                 {LX_HANDLE_OPEN32_FONT, WIN32_OBJ_FONT},
+                 {LX_HANDLE_PM_BITMAP, WIN32_OBJ_BITMAP},
+                 {LX_HANDLE_OPEN32_REGION, WIN32_OBJ_REGION}};
 
     for (unsigned i = 0; i < sizeof types / sizeof types[0]; i++)
     {
@@ -80,7 +94,7 @@ ULONG GetObjectType(ULONG handle)
             return types[i].type;
         }
     }
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return 0;
 }
 

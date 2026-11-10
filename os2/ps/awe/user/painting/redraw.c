@@ -5,20 +5,6 @@
 #include "os2/include/private/pmp.h"
 #include "os2/include/private/pmgrep.h"
 
-enum
-{
-    RDW_INVALIDATE = 1,
-    RDW_INTERNALPAINT = 2,
-    RDW_ERASE = 4,
-    RDW_VALIDATE = 8,
-    RDW_NOINTERNALPAINT = 16,
-    RDW_NOERASE = 32,
-    RDW_NOCHILDREN = 64,
-    RDW_ALLCHILDREN = 128,
-    RDW_UPDATENOW = 256,
-    RDW_ERASENOW = 512
-};
-
 static LONG clamped_coordinate(int64_t value)
 {
     return value < INT32_MIN ? INT32_MIN : value > INT32_MAX ? INT32_MAX : (LONG)value;
@@ -34,21 +20,22 @@ static BOOL redraw_rect(ULONG handle, const RECTL *rect, ULONG flags)
     Open32Window *w = open32FindWindow(handle);
     if (w)
     {
-        if (flags & RDW_ERASE)
+        if (flags & WIN32_RDW_ERASE)
             w->erase_pending = TRUE;
-        if (flags & RDW_NOERASE)
+        if (flags & WIN32_RDW_NOERASE)
             w->erase_pending = FALSE;
     }
-    if (flags & RDW_VALIDATE)
+    if (flags & WIN32_RDW_VALIDATE)
         lx_pm_validate_rect(handle, rect, FALSE);
-    if (flags & RDW_NOINTERNALPAINT)
+    if (flags & WIN32_RDW_NOINTERNALPAINT)
         lx_pm_validate_rect(handle, NULL, TRUE);
-    if ((flags & RDW_INVALIDATE) && !WinInvalidateRect(handle, &area, FALSE))
+    if ((flags & WIN32_RDW_INVALIDATE) && !WinInvalidateRect(handle, &area, FALSE))
         return FALSE;
-    if ((flags & RDW_INTERNALPAINT) && !WinPostMsg(handle, WM_PAINT, 0, 0))
+    if ((flags & WIN32_RDW_INTERNALPAINT) && !WinPostMsg(handle, WM_PAINT, 0, 0))
         return FALSE;
-    if ((flags & RDW_ALLCHILDREN) && !(flags & RDW_NOCHILDREN))
-        for (ULONG child = WinQueryWindow(handle, 2); child; child = WinQueryWindow(child, 0))
+    if ((flags & WIN32_RDW_ALLCHILDREN) && !(flags & WIN32_RDW_NOCHILDREN))
+        for (ULONG child = WinQueryWindow(handle, QW_TOP); child;
+             child = WinQueryWindow(child, QW_NEXT))
         {
             SWP position;
             if (!WinQueryWindowPos(child, &position))
@@ -58,7 +45,7 @@ static BOOL redraw_rect(ULONG handle, const RECTL *rect, ULONG flags)
             local.xRight = clamped_coordinate((int64_t)local.xRight - position.x);
             local.yBottom = clamped_coordinate((int64_t)local.yBottom - position.y);
             local.yTop = clamped_coordinate((int64_t)local.yTop - position.y);
-            if (!redraw_rect(child, &local, flags & ~(RDW_UPDATENOW | RDW_ERASENOW)))
+            if (!redraw_rect(child, &local, flags & ~(WIN32_RDW_UPDATENOW | WIN32_RDW_ERASENOW)))
                 return FALSE;
         }
     return TRUE;
@@ -67,28 +54,28 @@ static BOOL redraw_rect(ULONG handle, const RECTL *rect, ULONG flags)
 static BOOL update_tree(ULONG handle, ULONG flags)
 {
     handle = open32ClientWindow(handle);
-    if ((flags & RDW_ALLCHILDREN) && !(flags & RDW_NOCHILDREN))
+    if ((flags & WIN32_RDW_ALLCHILDREN) && !(flags & WIN32_RDW_NOCHILDREN))
     {
-        ULONG child = WinQueryWindow(handle, 2);
+        ULONG child = WinQueryWindow(handle, QW_TOP);
         while (child)
         {
-            ULONG next = WinQueryWindow(child, 0);
+            ULONG next = WinQueryWindow(child, QW_NEXT);
             update_tree(child, flags);
             child = next;
         }
     }
     Open32Window *w = open32FindWindow(handle);
-    if (w && w->erase_pending && (flags & (RDW_ERASENOW | RDW_UPDATENOW)))
+    if (w && w->erase_pending && (flags & (WIN32_RDW_ERASENOW | WIN32_RDW_UPDATENOW)))
     {
         w->erase_pending = FALSE;
         ULONG dc = GetDC(handle);
         if (dc)
         {
-            open32WindowCallback(w, 0x14, dc, 0);
+            open32WindowCallback(w, WIN32_WM_ERASEBKGND, dc, 0);
             ReleaseDC(handle, dc);
         }
     }
-    return !(flags & RDW_UPDATENOW) || WinUpdateWindow(handle);
+    return !(flags & WIN32_RDW_UPDATENOW) || WinUpdateWindow(handle);
 }
 
 BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flags)
@@ -102,7 +89,7 @@ BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flag
     RECTL bounds;
     if (!WinQueryWindowRect(handle, &bounds))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     LxHandleBorrow borrow = {0};
@@ -111,7 +98,7 @@ BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flag
     {
         if (!lx_handle_borrow(region_handle, LX_HANDLE_OPEN32_REGION, &borrow))
         {
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return FALSE;
         }
         PmRegion *region = borrow.resource;
@@ -128,37 +115,45 @@ BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flag
     {
         RECTL local;
         if (rectangle)
-            local = (RECTL){(LONG)lx_guest_load_u32(rectangle),
-                            clamped_coordinate((int64_t)bounds.yTop -
-                                               (LONG)lx_guest_load_u32((uint8 *)rectangle + 12)),
-                            (LONG)lx_guest_load_u32((uint8 *)rectangle + 8),
-                            clamped_coordinate((int64_t)bounds.yTop -
-                                               (LONG)lx_guest_load_u32((uint8 *)rectangle + 4))};
+            local = (RECTL){
+                (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_LEFT),
+                clamped_coordinate((int64_t)bounds.yTop -
+                                   (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_BOTTOM)),
+                (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_RIGHT),
+                clamped_coordinate((int64_t)bounds.yTop -
+                                   (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_TOP))};
         result = redraw_rect(handle, rectangle ? &local : NULL, flags);
     }
-    if (result && (flags & (RDW_UPDATENOW | RDW_ERASENOW)))
+    if (result && (flags & (WIN32_RDW_UPDATENOW | WIN32_RDW_ERASENOW)))
         result = update_tree(handle, flags);
     return result;
 }
 
+/* A null window means the desktop, and with it every top-level window. */
 BOOL InvalidateRect(ULONG window, PVOID rectangle, BOOL erase)
 {
-    return RedrawWindow(window, rectangle, 0, 1 | (erase ? 4 : 0) | (window ? 0 : 128));
+    return RedrawWindow(window, rectangle, 0,
+                        WIN32_RDW_INVALIDATE | (erase ? WIN32_RDW_ERASE : 0) |
+                            (window ? 0 : WIN32_RDW_ALLCHILDREN));
 }
 
 BOOL ValidateRect(ULONG window, PVOID rectangle)
 {
-    return RedrawWindow(window, rectangle, 0, 8 | (window ? 0 : 128));
+    return RedrawWindow(window, rectangle, 0,
+                        WIN32_RDW_VALIDATE | (window ? 0 : WIN32_RDW_ALLCHILDREN));
 }
 
 BOOL InvalidateRgn(ULONG window, ULONG region, BOOL erase)
 {
-    return RedrawWindow(window, NULL, region, 1 | (erase ? 4 : 0) | (window ? 0 : 128));
+    return RedrawWindow(window, NULL, region,
+                        WIN32_RDW_INVALIDATE | (erase ? WIN32_RDW_ERASE : 0) |
+                            (window ? 0 : WIN32_RDW_ALLCHILDREN));
 }
 
 BOOL ValidateRgn(ULONG window, ULONG region)
 {
-    return RedrawWindow(window, NULL, region, 8 | (window ? 0 : 128));
+    return RedrawWindow(window, NULL, region,
+                        WIN32_RDW_VALIDATE | (window ? 0 : WIN32_RDW_ALLCHILDREN));
 }
 
 BOOL GetUpdateRect(ULONG window, PVOID output, BOOL erase)
@@ -166,7 +161,7 @@ BOOL GetUpdateRect(ULONG window, PVOID output, BOOL erase)
     window = open32ClientWindow(window);
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     RECTL rectangle = {0}, bounds;
@@ -174,17 +169,17 @@ BOOL GetUpdateRect(ULONG window, PVOID output, BOOL erase)
     if (output)
     {
         uint8 *wire = output;
-        memset(wire, 0, 16);
+        memset(wire, 0, WIN32_RECT_SIZE);
         if (damaged && WinQueryWindowRect(window, &bounds))
         {
-            lx_guest_store_u32(wire, (ULONG)rectangle.xLeft);
-            lx_guest_store_u32(wire + 4, (ULONG)(bounds.yTop - rectangle.yTop));
-            lx_guest_store_u32(wire + 8, (ULONG)rectangle.xRight);
-            lx_guest_store_u32(wire + 12, (ULONG)(bounds.yTop - rectangle.yBottom));
+            lx_guest_store_u32(wire + WIN32_RECT_LEFT, (ULONG)rectangle.xLeft);
+            lx_guest_store_u32(wire + WIN32_RECT_TOP, (ULONG)(bounds.yTop - rectangle.yTop));
+            lx_guest_store_u32(wire + WIN32_RECT_RIGHT, (ULONG)rectangle.xRight);
+            lx_guest_store_u32(wire + WIN32_RECT_BOTTOM, (ULONG)(bounds.yTop - rectangle.yBottom));
         }
     }
     if (damaged && erase)
-        update_tree(window, RDW_ERASENOW);
+        update_tree(window, WIN32_RDW_ERASENOW);
     return damaged;
 }
 
@@ -201,7 +196,7 @@ BOOL LockWindowUpdate(ULONG window)
 {
     if (window && !IsWindow(window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     if (window)

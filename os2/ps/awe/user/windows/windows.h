@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* Open32's record of each Windows window it created over a PM window. */
 #ifndef TWOINE_OPEN32_WINDOWS_H
 #define TWOINE_OPEN32_WINDOWS_H
 #include "os2/ps/awe/user/windows/classes.h"
@@ -23,6 +24,7 @@ typedef struct Open32Window
     char *title;
     LxGuestMapping *creation;
     struct Open32Property *properties;
+    /* Indexed by SB_HORZ, SB_VERT and SB_CTL. */
     Open32Scroll scroll[3];
     BOOL scroll_dragging;
     LONG scroll_drag_offset, scroll_track_position;

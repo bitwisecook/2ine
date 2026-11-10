@@ -38,7 +38,7 @@ static BOOL ready(void)
     lx_host_once(&once, initialize);
     if (monitor)
         return TRUE;
-    open32SetError(8);
+    open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return FALSE;
 }
 
@@ -73,7 +73,7 @@ static ULONG retain_table(AcceleratorTable *table)
     if (!table->handle)
     {
         free(table);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return table->handle;
@@ -83,7 +83,7 @@ static AcceleratorTable *allocate_table(ULONG count)
 {
     AcceleratorTable *table = calloc(1, sizeof *table + (size_t)count * sizeof *table->entries);
     if (!table)
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     else
         table->count = count;
     return table;
@@ -102,7 +102,7 @@ ULONG CreateAcceleratorTable(PVOID data, LONG count)
     TRACE_NATIVE("CreateAcceleratorTable(%p, %d)", data, (int)count);
     if (!data || count <= 0 || count > 32767)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     AcceleratorTable *table = allocate_table((ULONG)count);
@@ -114,7 +114,7 @@ ULONG CreateAcceleratorTable(PVOID data, LONG count)
         if (wire[0] & ~0x1f)
         {
             free(table);
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         table->entries[i] = (AcceleratorEntry){0, 0, lx_guest_load_u16(wire + 4), wire[0],
@@ -135,7 +135,7 @@ ULONG LoadAccelerators(HMODULE module, PSZ name)
     }
     if (!id || id > UINT16_MAX || !GProcessState.queryResourceSize || !GProcessState.getResource)
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     if ((!module || module == UINT32_MAX) && GProcessState.main_module)
@@ -145,7 +145,7 @@ ULONG LoadAccelerators(HMODULE module, PSZ name)
     if (GProcessState.queryResourceSize(module, 8, (ULONG)id, &size) || size < 4 ||
         GProcessState.getResource(module, 8, (ULONG)id, &resource))
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     ULONG count = lx_guest_load_u16(resource), cp = lx_guest_load_u16((UCHAR *)resource + 2);
@@ -190,7 +190,7 @@ ULONG LoadAccelerators(HMODULE module, PSZ name)
         GProcessState.freeResource(resource);
     if (!table)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     return retain_table(table);
@@ -201,7 +201,7 @@ LONG CopyAcceleratorTable(ULONG handle, PVOID data, LONG count)
     LxHandleBorrow borrow = {0};
     if (count < 0 || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_ACCEL, &borrow))
     {
-        open32SetError(count < 0 ? 87 : 1403);
+        open32SetError(count < 0 ? ERROR_INVALID_PARAMETER : ERROR_INVALID_ACCEL_HANDLE);
         return 0;
     }
     AcceleratorTable *table = borrow.resource;
@@ -223,7 +223,7 @@ BOOL DestroyAcceleratorTable(ULONG handle)
 {
     if (lx_handle_close(handle, LX_HANDLE_OPEN32_ACCEL))
         return TRUE;
-    open32SetError(1403);
+    open32SetError(ERROR_INVALID_ACCEL_HANDLE);
     return FALSE;
 }
 
@@ -254,7 +254,7 @@ LONG TranslateAccelerator(ULONG window, ULONG handle, PVOID message)
     TRACE_NATIVE("TranslateAccelerator(%u, %u, %p)", (uint)window, (uint)handle, message);
     if (!message)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG kind = lx_guest_load_u32((UCHAR *)message + 4);
@@ -262,13 +262,13 @@ LONG TranslateAccelerator(ULONG window, ULONG handle, PVOID message)
         return 0;
     if (!IsWindow(window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_ACCEL, &borrow))
     {
-        open32SetError(1403);
+        open32SetError(ERROR_INVALID_ACCEL_HANDLE);
         return 0;
     }
     AcceleratorTable *table = borrow.resource;
@@ -290,7 +290,7 @@ LONG TranslateAccelerator(ULONG window, ULONG handle, PVOID message)
         return 0;
     if (match.flags & 0x200)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     /* Drop the table lease before invoking original code: it may destroy it. */

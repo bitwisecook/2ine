@@ -14,7 +14,7 @@ ULONG SetActiveWindow(ULONG window)
     ULONG previous = GetActiveWindow();
     if (!WinSetActiveWindow(HWND_DESKTOP, window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     return previous;
@@ -30,7 +30,7 @@ ULONG SetFocus(ULONG window)
     ULONG previous = GetFocus();
     if (!WinSetFocus(HWND_DESKTOP, open32ClientWindow(window)))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     return previous;
@@ -46,7 +46,7 @@ ULONG SetCapture(ULONG window)
     ULONG previous = GetCapture();
     if (!WinSetCapture(HWND_DESKTOP, open32ClientWindow(window)))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     return previous;
@@ -61,7 +61,7 @@ BOOL EnableWindow(ULONG handle, BOOL enable)
 {
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), handle))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     BOOL disabled = !WinIsWindowEnabled(handle);
@@ -69,13 +69,13 @@ BOOL EnableWindow(ULONG handle, BOOL enable)
     if (window)
     {
         if (enable)
-            window->style &= ~0x08000000u;
+            window->style &= ~(ULONG)WIN32_WS_DISABLED;
         else
-            window->style |= 0x08000000u;
+            window->style |= (ULONG)WIN32_WS_DISABLED;
     }
     if (!WinEnableWindow(handle, enable))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     return disabled;
@@ -90,7 +90,7 @@ BOOL IsWindowVisible(ULONG window)
 {
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
         return FALSE;
-    for (ULONG cursor = window; cursor; cursor = WinQueryWindow(cursor, 5))
+    for (ULONG cursor = window; cursor; cursor = WinQueryWindow(cursor, QW_PARENT))
         if (!WinIsWindowVisible(cursor))
             return FALSE;
     return TRUE;
@@ -106,7 +106,7 @@ BOOL BringWindowToTop(ULONG window)
     if (!open32Presentation() ||
         !WinSetWindowPos(window, HWND_TOP, 0, 0, 0, 0, SWP_ZORDER | SWP_ACTIVATE))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     return TRUE;
@@ -116,11 +116,11 @@ BOOL SetForegroundWindow(ULONG handle)
 {
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), handle))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     ULONG parent;
-    while ((parent = WinQueryWindow(handle, 5)) && parent != HWND_DESKTOP)
+    while ((parent = WinQueryWindow(handle, QW_PARENT)) && parent != HWND_DESKTOP)
         handle = parent;
     return BringWindowToTop(handle);
 }

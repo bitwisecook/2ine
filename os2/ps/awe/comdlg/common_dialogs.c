@@ -5,6 +5,13 @@
 #include "os2/ps/awe/comdlg/common_dialogs.h"
 #include "os2/ps/awe/user/input/keyboard.h"
 #include "os2/include/private/pmp.h"
+#include "os2/include/bsedos.h"
+
+enum
+{
+    /* Bytes of the longest template name copied from the guest. */
+    TEMPLATE_NAME_LIMIT = 1024
+};
 
 /* Translates one PM dialog message for a Windows hook; nonzero means the hook consumed it. */
 ULONG open32CommonDialogHook(ULONG hook, ULONG window, ULONG message, ULONG first, ULONG second)
@@ -15,13 +22,13 @@ ULONG open32CommonDialogHook(ULONG hook, ULONG window, ULONG message, ULONG firs
     if (message == WM_COMMAND || message == WM_CONTROL)
     {
         ULONG child = WinWindowFromID(window, first & 0xffff);
-        kind = WIN_COMMAND;
+        kind = WIN32_WM_COMMAND;
         a = message == WM_CONTROL ? open32ControlNotification(child, first) : first & 0xffff;
         b = child;
     }
     else if (message == WM_DESTROY)
     {
-        kind = WIN_DESTROY;
+        kind = WIN32_WM_DESTROY;
         a = b = 0;
     }
     else
@@ -39,10 +46,11 @@ ULONG open32CommonDialogHook(ULONG hook, ULONG window, ULONG message, ULONG firs
 /* The template name is a resource number or a guest string. */
 ULONG open32DialogTemplateIdentity(ULONG module, ULONG name)
 {
-    if (name <= 0xFFFF)
+    /* Like MAKEINTRESOURCE, a value below 64K is a resource number, not a string address. */
+    if (name <= UINT16_MAX)
         return name;
-    char *text = lx_execution_copy_string(GProcessState.execution, name, 1024);
-    ULONG identity = text ? open32ResourceIdentity(module, text, 4) : 0; /* RT_DIALOG */
+    char *text = lx_execution_copy_string(GProcessState.execution, name, TEMPLATE_NAME_LIMIT);
+    ULONG identity = text ? open32ResourceIdentity(module, text, RT_DIALOG) : 0;
     free(text);
     return identity;
 }

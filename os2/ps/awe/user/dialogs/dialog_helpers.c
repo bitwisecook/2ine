@@ -96,7 +96,7 @@ BOOL MapDialogRect(ULONG dialog, PVOID rectangle)
 {
     if (!rectangle || !IsWindow(dialog))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG units = GetDialogBaseUnits();
@@ -114,7 +114,7 @@ BOOL IsDialogMessage(ULONG dialog, PVOID message)
 {
     if (!message || !IsWindow(dialog))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG target = lx_guest_load_u32(message), kind = lx_guest_load_u32((uint8 *)message + 4),
@@ -149,7 +149,7 @@ BOOL DlgDirSelectEx(ULONG dialog, PSZ output, LONG capacity, LONG id)
 {
     if (!output || capacity <= 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG index = SendDlgItemMessage(dialog, id, 0x188, 0, 0);
@@ -168,7 +168,7 @@ BOOL DlgDirSelectEx(ULONG dialog, PSZ output, LONG capacity, LONG id)
         lx_execution_map(GProcessState.execution, 0, ((size_t)length + 4096) & ~(size_t)4095, 3, 0);
     if (!mapping)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     char *text = lx_execution_mapping_host(mapping);

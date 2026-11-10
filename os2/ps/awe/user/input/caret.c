@@ -81,7 +81,7 @@ BOOL DestroyCaret(void)
 {
     if (!caret.owner)
     {
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
         return FALSE;
     }
     display(FALSE);
@@ -96,7 +96,7 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
 {
     if (!open32FindWindow(owner))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     LxHandleBorrow image = {0};
@@ -105,7 +105,7 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
         PmBitmap *source = lx_pm_bitmap(bitmap, &image);
         if (!source)
         {
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return FALSE;
         }
         width = (LONG)source->width;
@@ -118,7 +118,7 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
     if (width < 1 || height < 1 || width > 512 || height > 512)
     {
         lx_handle_release(&image);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (caret.owner)
@@ -135,7 +135,7 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
     if (!caret.timer && blink_time != UINT32_MAX)
     {
         DestroyCaret();
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     return TRUE;
@@ -145,12 +145,12 @@ BOOL HideCaret(ULONG owner)
 {
     if (!caret.owner || (owner && caret.owner != owner))
     {
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
         return FALSE;
     }
     if (caret.visibility == INT32_MIN)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     caret.visibility--;
@@ -163,12 +163,12 @@ BOOL ShowCaret(ULONG owner)
 {
     if (!caret.owner || (owner && caret.owner != owner))
     {
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
         return FALSE;
     }
     if (caret.visibility == INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     caret.visibility++;
@@ -184,7 +184,7 @@ BOOL SetCaretPos(LONG x, LONG y)
 {
     if (!caret.owner)
     {
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
         return FALSE;
     }
     display(FALSE);
@@ -200,7 +200,7 @@ BOOL GetCaretPos(PVOID output)
 {
     if (!caret.owner || !output)
     {
-        open32SetError(output ? 5 : 87);
+        open32SetError(output ? ERROR_ACCESS_DENIED : ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     lx_guest_store_u32(output, (ULONG)caret.x);
@@ -217,7 +217,7 @@ BOOL SetCaretBlinkTime(ULONG interval)
 {
     if (!interval)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG replacement = caret.owner && interval != UINT32_MAX
@@ -225,7 +225,7 @@ BOOL SetCaretBlinkTime(ULONG interval)
                             : 0;
     if (caret.owner && interval != UINT32_MAX && !replacement)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     if (caret.timer)

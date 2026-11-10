@@ -30,7 +30,7 @@ static BOOL enter(void)
     lx_host_once(&once, initialize);
     if (!monitor)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     lx_host_monitor_lock(monitor);
@@ -44,7 +44,8 @@ ULONG TlsAlloc(void)
         return UINT32_MAX;
     for (unsigned n = 0; n < OPEN32_TLS_SLOTS; n++)
     {
-        unsigned index = (n >> 1) + ((n & 1) ? 32 : 0);
+        /* Interleave the two halves of the table: 0, 32, 1, 33, ... */
+        unsigned index = (n >> 1) + ((n & 1) ? OPEN32_TLS_SLOTS / 2 : 0);
         if (!allocated[index])
         {
             allocated[index] = 1;
@@ -54,7 +55,7 @@ ULONG TlsAlloc(void)
         }
     }
     lx_host_monitor_unlock(monitor);
-    open32SetError(8);
+    open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return UINT32_MAX;
 }
 
@@ -63,7 +64,7 @@ BOOL TlsFree(ULONG index)
     TRACE_NATIVE("TlsFree(%u)", (uint)index);
     if (index >= OPEN32_TLS_SLOTS)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (!enter())
@@ -78,7 +79,7 @@ ULONG TlsGetValue(ULONG index)
     TRACE_NATIVE("TlsGetValue(%u)", (uint)index);
     if (index >= OPEN32_TLS_SLOTS)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!enter())
@@ -95,7 +96,7 @@ BOOL TlsSetValue(ULONG index, ULONG value)
     TRACE_NATIVE("TlsSetValue(%u, %X)", (uint)index, (uint)value);
     if (index >= OPEN32_TLS_SLOTS)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (!enter())

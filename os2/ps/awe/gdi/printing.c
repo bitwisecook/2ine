@@ -39,7 +39,7 @@ LONG StartDoc(ULONG handle, PVOID info)
     ULONG size = info ? lx_guest_load_u32(info) : 0;
     if (!dc || dc->kind != 5 || dc->print_active || (size != 12 && size != 16 && size != 20))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     uint32 name = lx_guest_load_u32((uint8 *)info + 4),
@@ -53,7 +53,7 @@ LONG StartDoc(ULONG handle, PVOID info)
     {
         free(title);
         free(destination);
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return -1;
     }
     LONG result = print_boundary(handle, &dc);
@@ -134,7 +134,7 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
 {
     if (output && *output && strcasecmp(output, "FILE:"))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     if (!mode)
@@ -145,12 +145,12 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
                            sizeof settings) ||
         lx_guest_load_u16(settings + 36) < sizeof settings || !memchr(settings, 0, 32))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (kind < 1 || kind > 2 || strcasecmp((const char *)settings, lx_printer_queues[kind - 1]))
     {
-        open32SetError(1801); /* ERROR_INVALID_PRINTER_NAME */
+        open32SetError(ERROR_INVALID_PRINTER_NAME);
         return FALSE;
     }
     ULONG fields = lx_guest_load_u32(settings + 40), paper = lx_guest_load_u16(settings + 46),
@@ -164,7 +164,7 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
         ((fields & 0x800) && lx_guest_load_u16(settings + 60) != (kind == 1 ? 2 : 1)) ||
         ((fields & 0x2000) && lx_guest_load_u16(settings + 64) != 300))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     return TRUE;
@@ -179,7 +179,7 @@ BOOL open32PrinterApply(ULONG handle, PVOID mode)
     if (!lx_execution_read(GProcessState.execution, (uint32)(uintptr_t)mode, settings,
                            sizeof settings))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG fields = lx_guest_load_u32(settings + 40);
@@ -192,7 +192,7 @@ BOOL open32PrinterApply(ULONG handle, PVOID mode)
     if (!dc || !lx_pm_printer_page(GpiQueryDevice(handle), landscape ? height : width,
                                    landscape ? width : height))
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     if (fields & 0x100)
@@ -210,7 +210,7 @@ LONG SetAbortProc(ULONG h, ULONG procedure)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !procedure || !open32ValidProcedure(procedure))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     dc->abort_proc = procedure;
@@ -232,7 +232,7 @@ BOOL ResetDC(ULONG h, PVOID mode)
     Open32DC *dc = open32FindDC(h);
     if (!dc || (dc->kind != 5 && dc->kind != 6) || dc->print_page || !mode)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     unsigned kind = lx_pm_printer_kind(GpiQueryDevice(h));
@@ -249,7 +249,7 @@ ULONG DeviceCapabilities(PSZ device, PSZ port, ULONG capability, PVOID output, P
     int printer = lx_printer_index(device);
     if (printer < 0)
     {
-        open32SetError(1801);
+        open32SetError(ERROR_INVALID_PRINTER_NAME);
         return UINT32_MAX;
     }
     static const USHORT papers[3] = {1, 5, 9};
@@ -336,7 +336,7 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
     Open32DC *dc = open32FindDC(h);
     if (!dc || count < 0 || (count && !input))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (code == 8)
@@ -522,7 +522,7 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
             lx_execution_map(GProcessState.execution, 0, (size_t)count + 1, 3, 0);
         if (!title)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         memcpy(lx_execution_mapping_host(title), input, (size_t)count);
@@ -552,7 +552,7 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
     }
     if (output)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     return DevEscape(GpiQueryDevice(h), code, count, input, NULL, NULL);

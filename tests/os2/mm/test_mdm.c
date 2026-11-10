@@ -44,7 +44,7 @@ static void detach_tib(uint16 token)
 #if !TWOINE_PORTABLE_LOADER
 static ULONG OS2API completed(ULONG status, PVOID record, ULONG flags)
 {
-    CHECK(!status && record && flags == 2);
+    CHECK(!status && record && flags == MIX_WRITE_COMPLETE);
     __atomic_add_fetch(&completions, 1, __ATOMIC_RELEASE);
     return 1;
 }
@@ -238,46 +238,50 @@ int main(void)
     GProcessState.deinitOs2Tib = detach_tib;
     GProcessState.registerAudioGenerator = lxRegisterAudioGenerator;
     GProcessState.registerStereoAudioGenerator = lxRegisterStereoAudioGenerator;
-    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 0x10000, 3, 0);
+    LxGuestMapping *mapping =
+        lx_execution_map(GProcessState.execution, 0, 0x10000, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     CHECK(mapping);
     unsigned char *p = lx_execution_mapping_host(mapping);
     ULONG base = lx_execution_mapping_address(mapping);
-    CHECK(mciSendCommand(777, 2, 0, p, 0) == 5001);
-    lx_guest_store_u32(p + 8, 9);
-    CHECK(!mciSendCommand(0, 1, 0x1000, p, 0));
-    USHORT device = lx_guest_load_u16(p + 4);
+    CHECK(mciSendCommand(777, MCI_CLOSE, 0, p, 0) == MCIERR_INVALID_DEVICE_ID);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE, MCI_DEVTYPE_AUDIO_AMPMIX);
+    CHECK(!mciSendCommand(0, MCI_OPEN, MCI_OPEN_TYPE_ID, p, 0));
+    USHORT device = lx_guest_load_u16(p + MCI_OPEN_PARMS_DEVICE_ID);
     CHECK(device);
-    memset(p, 0, 56);
-    lx_guest_store_u32(p + 4, 16);
-    lx_guest_store_u32(p + 8, 1);
-    lx_guest_store_u32(p + 12, 22050);
-    lx_guest_store_u32(p + 16, 2);
-    lx_guest_store_u32(p + 20, 4);
+    memset(p, 0, MCI_MIXSETUP_PARMS_SIZE);
+    lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_BITS_PER_SAMPLE, 16);
+    lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_FORMAT_TAG, MCI_WAVE_FORMAT_PCM);
+    lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_SAMPLES_PER_SEC, 22050);
+    lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_CHANNELS, 2);
+    lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_FORMAT_MODE, MCI_PLAY);
 #if TWOINE_PORTABLE_LOADER
     unsigned char body[] = {0xba, 0, 0, 0, 0, 0xff, 0x02, 0xb8, 1, 0, 0, 0, 0xc3};
     lx_guest_store_u32(body + 1, base + 0x3000);
     memcpy(p + 0x2000, body, sizeof body);
-    CHECK(lx_execution_protect(GProcessState.execution, mapping, 7));
-    lx_guest_store_u32(p + 40, base + 0x2000);
+    CHECK(lx_execution_protect(GProcessState.execution, mapping,
+                               LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE));
+    lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_MIX_EVENT, base + 0x2000);
 #else
-    lx_guest_store_u32(p + 40, (ULONG)(uintptr_t)completed);
+    lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_MIX_EVENT, (ULONG)(uintptr_t)completed);
 #endif
-    CHECK(!mciSendCommand(device, 63, 0x10000, p, 0));
-    ULONG write_entry = lx_guest_load_u32(p + 32);
+    CHECK(!mciSendCommand(device, MCI_MIXSETUP, MCI_MIXSETUP_INIT, p, 0));
+    ULONG write_entry = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_MIX_WRITE);
     CHECK(write_entry);
-    memset(p, 0, 32);
-    lx_guest_store_u32(p + 8, 2);
-    lx_guest_store_u32(p + 12, 4096);
-    lx_guest_store_u32(p + 28, base + 128);
-    CHECK(!mciSendCommand(device, 62, 0x40000, p, 0));
-    lx_guest_store_u32(p + 16, 101);
-    CHECK(mciSendCommand(device, 12, 0x80000, p, 0));
-    lx_guest_store_u32(p + 16, 50);
-    CHECK(!mciSendCommand(device, 12, 0x80000, p, 0));
+    memset(p, 0, MCI_BUFFER_PARMS_SIZE);
+    lx_guest_store_u32(p + MCI_BUFFER_PARMS_NUM_BUFFERS, 2);
+    lx_guest_store_u32(p + MCI_BUFFER_PARMS_BUFFER_SIZE, 4096);
+    lx_guest_store_u32(p + MCI_BUFFER_PARMS_BUFFER_LIST, base + 128);
+    CHECK(!mciSendCommand(device, MCI_BUFFER, MCI_ALLOCATE_MEMORY, p, 0));
+    lx_guest_store_u32(p + MCI_SET_PARMS_LEVEL, 101);
+    CHECK(mciSendCommand(device, MCI_SET, MCI_SET_VOLUME, p, 0));
+    lx_guest_store_u32(p + MCI_SET_PARMS_LEVEL, 50);
+    CHECK(!mciSendCommand(device, MCI_SET, MCI_SET_VOLUME, p, 0));
     for (unsigned b = 0; b < 2; b++)
     {
-        ULONG address = lx_guest_load_u32(p + 128 + b * 32 + 4);
-        int16_t *samples = lx_execution_memory(GProcessState.execution, address, 4096, 3);
+        ULONG address =
+            lx_guest_load_u32(p + 128 + b * MCI_MIX_BUFFER_SIZE + MCI_MIX_BUFFER_BUFFER);
+        int16_t *samples = lx_execution_memory(GProcessState.execution, address, 4096,
+                                               LX_GUEST_READ | LX_GUEST_WRITE);
         CHECK(samples);
         for (unsigned n = 0; n < 1024; n++)
         {
@@ -297,32 +301,32 @@ int main(void)
     for (unsigned n = 0; n < 500 && __atomic_load_n(completion_count, __ATOMIC_ACQUIRE) < 2; n++)
         lx_host_sleep_ms(2);
     CHECK(*completion_count == 2);
-    CHECK(!mciSendCommand(device, 2, 0, p, 0));
-    CHECK(mciSendCommand(device, 2, 0, p, 0) == 5001);
+    CHECK(!mciSendCommand(device, MCI_CLOSE, 0, p, 0));
+    CHECK(mciSendCommand(device, MCI_CLOSE, 0, p, 0) == MCIERR_INVALID_DEVICE_ID);
     if (capture)
         goto finished;
     const unsigned char midi[] = {'M', 'T', 'h', 'd',  0,   0,   0, 6,    0,    0,  0, 1,
                                   0,   96,  'M', 'T',  'r', 'k', 0, 0,    0,    12, 0, 0x90,
                                   60,  100, 96,  0x80, 60,  0,   0, 0xff, 0x2f, 0};
     memcpy(p + 512, midi, sizeof midi);
-    memset(p, 0, 80);
-    lx_guest_store_u32(p + 16, sizeof midi);
-    lx_guest_store_u32(p + 20, base + 512);
-    lx_guest_store_u32(p + 68, 0x204d454d);
-    ULONG media = mmioOpen(NULL, p, 4);
+    memset(p, 0, MMIOINFO_SIZE);
+    lx_guest_store_u32(p + MMIOINFO_BUFFER_SIZE, sizeof midi);
+    lx_guest_store_u32(p + MMIOINFO_BUFFER, base + 512);
+    lx_guest_store_u32(p + MMIOINFO_CHILD_IOPROC_FOURCC, FOURCC_MEM);
+    ULONG media = mmioOpen(NULL, p, MMIO_READ);
     CHECK(media);
     memset(p + 512, 0, sizeof midi);
     size_t length = 0;
     unsigned char *copy = lx_mmio_copy(media, &length);
     CHECK(copy && length == sizeof midi && !memcmp(copy, midi, length));
     free(copy);
-    memset(p, 0, 20);
-    lx_guest_store_u32(p + 12, media);
-    CHECK(!mciSendCommand(0, 1, 0x4000, p, 0));
-    device = lx_guest_load_u16(p + 4);
-    CHECK(!mciSendCommand(device, 4, 0, p, 0));
+    memset(p, 0, MCI_OPEN_PARMS_SIZE);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME, media);
+    CHECK(!mciSendCommand(0, MCI_OPEN, MCI_OPEN_MMIO, p, 0));
+    device = lx_guest_load_u16(p + MCI_OPEN_PARMS_DEVICE_ID);
+    CHECK(!mciSendCommand(device, MCI_PLAY, 0, p, 0));
     lx_host_sleep_ms(600);
-    CHECK(!mciSendCommand(device, 2, 0, p, 0));
+    CHECK(!mciSendCommand(device, MCI_CLOSE, 0, p, 0));
     CHECK(!mmioClose(media, 0));
     CHECK(mmioClose(media, 0));
     for (unsigned malformed = 0; malformed < 4; malformed++)
@@ -336,15 +340,15 @@ int main(void)
             p[512 + 24] = 0xff; /* Note data cannot carry a status bit. */
         else
             p[512 + 21] = 127; /* Track body exceeds the element. */
-        memset(p, 0, 80);
-        lx_guest_store_u32(p + 16, sizeof midi);
-        lx_guest_store_u32(p + 20, base + 512);
-        lx_guest_store_u32(p + 68, 0x204d454d);
-        media = mmioOpen(NULL, p, 4);
+        memset(p, 0, MMIOINFO_SIZE);
+        lx_guest_store_u32(p + MMIOINFO_BUFFER_SIZE, sizeof midi);
+        lx_guest_store_u32(p + MMIOINFO_BUFFER, base + 512);
+        lx_guest_store_u32(p + MMIOINFO_CHILD_IOPROC_FOURCC, FOURCC_MEM);
+        media = mmioOpen(NULL, p, MMIO_READ);
         CHECK(media);
-        memset(p, 0, 20);
-        lx_guest_store_u32(p + 12, media);
-        CHECK(mciSendCommand(0, 1, 0x4000, p, 0));
+        memset(p, 0, MCI_OPEN_PARMS_SIZE);
+        lx_guest_store_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME, media);
+        CHECK(mciSendCommand(0, MCI_OPEN, MCI_OPEN_MMIO, p, 0));
         CHECK(!mmioClose(media, 0));
     }
 finished:

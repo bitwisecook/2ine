@@ -16,8 +16,14 @@ enum
     VIDEO_DEVICES = 16,
     /* Video device IDs start above the waveaudio and sequencer IDs. */
     VIDEO_FIRST_ID = 0x8000,
-    /* Ring of 48 kHz stereo frames between the decoder and the host mixer */
-    VIDEO_AUDIO_FRAMES = 96000
+    /* Ring of decoded sound frames between the decoder and the host mixer: two seconds. */
+    VIDEO_AUDIO_FRAMES = 2 * LX_VIDEO_AUDIO_RATE,
+    /* Bytes of an alias, including its terminator. */
+    VIDEO_ALIAS_SIZE = 128,
+    /* Bytes of the longest element (file) name copied from the guest. */
+    VIDEO_NAME_LIMIT = 4096,
+    /* How long a paused or waiting worker sleeps before it re-checks the device. */
+    VIDEO_POLL_MS = 20
 };
 
 typedef struct LxDgvAudio
@@ -43,7 +49,7 @@ typedef struct LxDgvDevice
     RECTL destination;
     uint32_t mode, format, notify, user, error, canceled;
     float volume;
-    char alias[128];
+    char alias[VIDEO_ALIAS_SIZE];
     int stop, closing;
     int64_t position, until;
     uint64_t started, paused_at;

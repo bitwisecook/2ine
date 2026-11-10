@@ -131,6 +131,12 @@ extern "C"
     OS2EXPORT ULONG OS2API GpiPathToRegion(HPS a0, LONG a1, LONG a2);
 
     /* INCL_GPILOGCOLORTABLE */
+    /* Logical colour table formats */
+    enum
+    {
+        LCOLF_CONSECRGB = 2,
+        LCOLF_RGB = 3
+    };
 
     OS2EXPORT BOOL OS2API GpiQueryColorData(HPS ps, LONG count, PLONG output);
 
@@ -160,6 +166,16 @@ extern "C"
                                               PULONG a5);
 
     /* INCL_GPIBITMAPS */
+    /* Bitmap file types */
+    enum
+    {
+        BFT_BITMAPARRAY = 0x4142,
+        BFT_ICON = 0x4349,
+        BFT_COLORICON = 0x4943,
+        BFT_BMAP = 0x4d42,
+        BFT_COLORPOINTER = 0x5043,
+        BFT_POINTER = 0x5450
+    };
 
     enum
     {
@@ -221,6 +237,11 @@ extern "C"
     OS2EXPORT LONG OS2API GpiQueryPel(HPS a0, PPOINTL a1);
 
     /* INCL_GPIPRIMITIVES */
+    /* GpiSetAttrs primitive types */
+    enum
+    {
+        PRIM_AREA = 4
+    };
 
     enum
     {
@@ -418,6 +439,23 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetCharExtra(HPS a0, LONG a1);
 
     /* INCL_GPILCIDS */
+    /* Local identifiers */
+    enum
+    {
+        LCID_DEFAULT = 0
+    };
+
+    /* GpiQueryFonts options */
+    enum
+    {
+        QF_PUBLIC = 0x0001
+    };
+
+    /* Font weights */
+    enum
+    {
+        FWEIGHT_BOLD = 7
+    };
 
     OS2EXPORT LONG OS2API GpiCreateLogFont(HPS ps, PVOID name, LONG id, PFATTRS attrs);
 
@@ -443,6 +481,15 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiUnloadPublicFonts(HAB a0, PSZ a1);
 
     /* INCL_GPIREGIONS */
+    /* Region combination modes */
+    enum
+    {
+        CRGN_OR = 1,
+        CRGN_COPY = 2,
+        CRGN_XOR = 4,
+        CRGN_AND = 6,
+        CRGN_DIFF = 7
+    };
 
     typedef struct RGNRECT
     {

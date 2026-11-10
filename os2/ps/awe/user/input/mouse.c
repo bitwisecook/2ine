@@ -33,7 +33,7 @@ BOOL ClipCursor(PVOID rectangle)
 {
     if (!open32Presentation())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     if (!rectangle)

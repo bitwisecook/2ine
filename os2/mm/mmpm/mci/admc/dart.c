@@ -10,8 +10,15 @@ enum
     MIX_SUGGESTED_BUFFER_SIZE = 4096,
     MIX_SUGGESTED_BUFFERS = 3,
     MIX_RATE_MIN = 4000,
-    MIX_RATE_MAX = 192000
+    MIX_RATE_MAX = 192000,
+    MIX_CHANNELS_MAX = 2,
+    /* MCI_ALLOCATE_MEMORY buffers occupy whole guest pages. */
+    GUEST_PAGE_SIZE = 4096,
+    /* 8-bit PCM is unsigned, centred on 128; 16-bit PCM is signed little-endian. */
+    PCM8_MIDPOINT = 128
 };
+
+static const float PCM8_FULL_SCALE = 128.0f, PCM16_FULL_SCALE = 32768.0f;
 
 #if !TWOINE_PORTABLE_LOADER
 static LONG OS2API mixWrite(ULONG handle, PVOID records, ULONG count)
@@ -43,8 +50,8 @@ ULONG lx_admc_mixsetup(LxMciDevice *d, ULONG flags, unsigned char *p)
     ULONG bits = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_BITS_PER_SAMPLE),
           channels = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_CHANNELS),
           rate = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_SAMPLES_PER_SEC);
-    if (d->kind != LX_MCI_WAVEAUDIO || (bits != 8 && bits != 16) || !channels || channels > 2 ||
-        rate < MIX_RATE_MIN || rate > MIX_RATE_MAX ||
+    if (d->kind != LX_MCI_WAVEAUDIO || (bits != 8 && bits != 16) || !channels ||
+        channels > MIX_CHANNELS_MAX || rate < MIX_RATE_MIN || rate > MIX_RATE_MAX ||
         lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_FORMAT_TAG) != MCI_WAVE_FORMAT_PCM ||
         lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_FORMAT_MODE) != MCI_PLAY)
         return MCIERR_INVALID_BUFFER;
@@ -89,7 +96,8 @@ ULONG lx_admc_buffer(LxMciDevice *d, ULONG flags, unsigned char *p)
         unsigned char records[MIX_BUFFER_MAX * MCI_MIX_BUFFER_SIZE] = {0};
         for (ULONG i = 0; i < count; i++)
         {
-            d->buffers[i] = lx_execution_map(GProcessState.execution, 0, (size + 4095) & ~4095u,
+            d->buffers[i] = lx_execution_map(GProcessState.execution, 0,
+                                             (size + GUEST_PAGE_SIZE - 1) & ~(GUEST_PAGE_SIZE - 1u),
                                              LX_GUEST_READ | LX_GUEST_WRITE, 0);
             if (!d->buffers[i])
             {
@@ -164,7 +172,7 @@ LONG lx_admc_queue_buffers(ULONG handle, ULONG address, ULONG count)
             free(p);
             goto fail;
         }
-        p->samples = malloc(frames * 2 * sizeof(float));
+        p->samples = malloc(frames * MCI_MIXER_CHANNELS * sizeof(float));
         p->count = frames;
         p->record = address + i * MCI_MIX_BUFFER_SIZE;
         if (!p->samples || !lx_execution_read(GProcessState.execution, data, pcm, length))
@@ -176,12 +184,13 @@ LONG lx_admc_queue_buffers(ULONG handle, ULONG address, ULONG count)
         }
         for (ULONG frame = 0; frame < frames; frame++)
         {
-            for (ULONG c = 0; c < 2; c++)
+            for (ULONG c = 0; c < MCI_MIXER_CHANNELS; c++)
             {
+                /* Mono buffers feed both output channels. */
                 ULONG off = (frame * d->channels + (d->channels == 1 ? 0 : c)) * (d->bits / 8);
-                p->samples[frame * 2 + c] =
-                    d->bits == 8 ? ((int)pcm[off] - 128) / 128.0f
-                                 : (int16_t)(pcm[off] | pcm[off + 1] << 8) / 32768.0f;
+                p->samples[frame * MCI_MIXER_CHANNELS + c] =
+                    d->bits == 8 ? ((int)pcm[off] - PCM8_MIDPOINT) / PCM8_FULL_SCALE
+                                 : (int16_t)(pcm[off] | pcm[off + 1] << 8) / PCM16_FULL_SCALE;
             }
         }
         free(pcm);
@@ -216,9 +225,9 @@ void lx_admc_render(LxMciDevice *d, float *samples, int count, int frequency)
         if (d->kind == LX_MCI_WAVEAUDIO && d->head)
         {
             LxMixPacket *p = d->head;
-            size_t source = (size_t)p->position * 2;
-            samples[2 * n] += p->samples[source] * d->volume;
-            samples[2 * n + 1] += p->samples[source + 1] * d->volume;
+            size_t source = (size_t)p->position * MCI_MIXER_CHANNELS;
+            samples[MCI_MIXER_CHANNELS * n] += p->samples[source] * d->volume;
+            samples[MCI_MIXER_CHANNELS * n + 1] += p->samples[source + 1] * d->volume;
             p->position += (double)d->rate / frequency;
             if (p->position >= p->count)
             {

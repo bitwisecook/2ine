@@ -82,4 +82,17 @@ enum
     MCI_MIX_BUFFER_BUFFER = 4,
     MCI_MIX_BUFFER_BUFFER_LENGTH = 8
 };
+
+/* Byte size and field offsets of MMIOINFO as the guest lays it out. */
+enum
+{
+    MMIOINFO_SIZE = 80,
+    MMIOINFO_FLAGS = 0,
+    MMIOINFO_IOPROC_FOURCC = 4,
+    MMIOINFO_IOPROC = 8,
+    MMIOINFO_ERROR_RET = 12,
+    MMIOINFO_BUFFER_SIZE = 16,
+    MMIOINFO_BUFFER = 20,
+    MMIOINFO_CHILD_IOPROC_FOURCC = 68
+};
 #endif

@@ -6,6 +6,12 @@
 #include "emulator/handles.h"
 #include "os2/ps/awe/dde/dde.h"
 
+enum
+{
+    /* MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US) */
+    ENGLISH_US_LANGID = 0x0409
+};
+
 static void destroy_conversation(void *resource)
 {
     DdeConversation *conversation = resource;
@@ -65,16 +71,16 @@ ULONG DdeConnect(ULONG id, ULONG service, ULONG topic, PVOID context)
         return 0;
     DdeInstance *instance = client.resource;
     ULONG server_handle = 0;
-    if (context && lx_guest_load_u32(context) != 40)
+    if (context && lx_guest_load_u32(context) != WIN32_CONVCONTEXT_SIZE)
     {
-        instance->error = 0x4006;
+        instance->error = WIN32_DMLERR_INVALIDPARAMETER;
         lx_handle_release(&client);
         return 0;
     }
     lx_host_monitor_lock(dde_lock);
     for (DdeInstance *peer = dde_instances; peer; peer = peer->next)
     {
-        if (peer == instance || (peer->flags & 0x10))
+        if (peer == instance || (peer->flags & WIN32_APPCMD_CLIENTONLY))
             continue;
         BOOL match = !peer->filter;
         for (DdeString *string = peer->strings; string; string = string->next)
@@ -95,20 +101,20 @@ ULONG DdeConnect(ULONG id, ULONG service, ULONG topic, PVOID context)
     {
         handle = dde_remote_connect(id, service, topic);
         if (!handle)
-            instance->error = 0x400A;
+            instance->error = WIN32_DMLERR_NO_CONV_ESTABLISHED;
         goto connect_done;
     }
-    if (!dde_invoke(server_handle, 10000, 0x1062, 0, 0, topic, service, 0, 0, id == server_handle,
-                    &accepted) ||
+    if (!dde_invoke(server_handle, CONNECT_TIMEOUT, WIN32_XTYP_CONNECT, 0, 0, topic, service, 0, 0,
+                    id == server_handle, &accepted) ||
         !accepted)
     {
-        instance->error = 0x400A;
+        instance->error = WIN32_DMLERR_NO_CONV_ESTABLISHED;
         goto connect_done;
     }
     DdeConversation *conversation = calloc(1, sizeof *conversation);
     if (!conversation)
     {
-        instance->error = 0x4007;
+        instance->error = WIN32_DMLERR_LOW_MEMORY;
         goto connect_done;
     }
     conversation->client = id;
@@ -120,7 +126,7 @@ ULONG DdeConnect(ULONG id, ULONG service, ULONG topic, PVOID context)
     if (!handle)
     {
         free(conversation);
-        instance->error = 0x4007;
+        instance->error = WIN32_DMLERR_LOW_MEMORY;
         goto connect_done;
     }
     conversation->handle = handle;
@@ -129,7 +135,8 @@ ULONG DdeConnect(ULONG id, ULONG service, ULONG topic, PVOID context)
     dde_conversations = conversation;
     lx_host_monitor_unlock(dde_lock);
     ULONG ignored;
-    dde_invoke(server_handle, 10000, 0x8072, 0, handle, topic, service, 0, 0, 0, &ignored);
+    dde_invoke(server_handle, CONNECT_TIMEOUT, WIN32_XTYP_CONNECT_CONFIRM, 0, handle, topic,
+               service, 0, 0, 0, &ignored);
 connect_done:
     lx_handle_release(&client);
     return handle;
@@ -144,7 +151,7 @@ BOOL DdeDisconnect(ULONG handle)
     ULONG ignored;
     conversation_invoke(conversation,
                         conversation->server ? conversation->server : conversation->client,
-                        REMOTE_TIMEOUT, 0x80C2, 0, 0, 0, 0, 0, 0, &ignored);
+                        REMOTE_TIMEOUT, WIN32_XTYP_DISCONNECT, 0, 0, 0, 0, 0, 0, &ignored);
     BOOL result = lx_handle_close(handle, LX_HANDLE_OPEN32_DDE_CONVERSATION);
     lx_handle_release(&borrow);
     return result;
@@ -152,18 +159,20 @@ BOOL DdeDisconnect(ULONG handle)
 
 static void note_transaction(DdeConversation *conversation, ULONG type, ULONG result)
 {
-    if ((type & ~0xCu) == 0x1030 && result)
+    if ((type & ~ADVISE_START_MODIFIERS) == WIN32_XTYP_ADVSTART && result)
         conversation->advise = TRUE;
-    if (type == 0x8040)
+    if (type == WIN32_XTYP_ADVSTOP)
         conversation->advise = FALSE;
 }
 
 /* Poke and execute answer with DDE_FACK or DDE_FBUSY; the others answer with a value. */
 static ULONG transaction_status(ULONG type, ULONG result)
 {
-    if (type == 0x4090 || type == 0x4050)
-        return result & 0x4000 ? 0x4000 : result & 0x8000 ? 0x8000 : 0;
-    return result ? 0x8000 : 0;
+    if (type == WIN32_XTYP_POKE || type == WIN32_XTYP_EXECUTE)
+        return result & WIN32_DDE_FBUSY  ? WIN32_DDE_FBUSY
+               : result & WIN32_DDE_FACK ? WIN32_DDE_FACK
+                                         : 0;
+    return result ? WIN32_DDE_FACK : 0;
 }
 
 void dde_complete_transaction(DdeRequest *request)
@@ -186,18 +195,19 @@ void dde_complete_transaction(DdeRequest *request)
     ULONG thread = ((DdeInstance *)client.resource)->thread;
     lx_handle_release(&client);
     ULONG status = transaction_status(request->type, request->result);
-    *reply = (DdeRequest){.thread = thread,
-                          .instance = request->client,
-                          .type = 0x8080, /* XTYP_XACT_COMPLETE */
-                          .format = request->format,
-                          .conversation = request->conversation,
-                          .first = request->first,
-                          .second = request->second,
-                          .data = request->type == 0x20B0 ? request->result : status != 0,
-                          .one = request->transaction,
-                          .two = status,
-                          .transaction = request->transaction,
-                          .user = request->user};
+    *reply =
+        (DdeRequest){.thread = thread,
+                     .instance = request->client,
+                     .type = WIN32_XTYP_XACT_COMPLETE,
+                     .format = request->format,
+                     .conversation = request->conversation,
+                     .first = request->first,
+                     .second = request->second,
+                     .data = request->type == WIN32_XTYP_REQUEST ? request->result : status != 0,
+                     .one = request->transaction,
+                     .two = status,
+                     .transaction = request->transaction,
+                     .user = request->user};
     lx_host_monitor_lock(dde_lock);
     dde_queue_request(reply);
     lx_host_monitor_unlock(dde_lock);
@@ -260,10 +270,10 @@ ULONG DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item, 
     BOOL temporary = FALSE;
     if (!dde_borrow_instance(conversation->client, &client))
         goto transaction_done;
-    if (type != 0x20B0 && type != 0x4090 && type != 0x4050 && (type & ~0xCu) != 0x1030 &&
-        type != 0x8040)
+    if (type != WIN32_XTYP_REQUEST && type != WIN32_XTYP_POKE && type != WIN32_XTYP_EXECUTE &&
+        (type & ~ADVISE_START_MODIFIERS) != WIN32_XTYP_ADVSTART && type != WIN32_XTYP_ADVSTOP)
     {
-        ((DdeInstance *)client.resource)->error = 0x4006;
+        ((DdeInstance *)client.resource)->error = WIN32_DMLERR_INVALIDPARAMETER;
         goto transaction_done;
     }
     if (size == UINT32_MAX)
@@ -273,7 +283,7 @@ ULONG DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item, 
         LxGuestBorrow input = {0};
         if (!lx_execution_borrow(GProcessState.execution, address, size, LX_GUEST_READ, &input))
         {
-            ((DdeInstance *)client.resource)->error = 0x4006;
+            ((DdeInstance *)client.resource)->error = WIN32_DMLERR_INVALIDPARAMETER;
             goto transaction_done;
         }
         data = DdeCreateDataHandle(conversation->client, input.host, size, 0, item, format, 0);
@@ -285,35 +295,36 @@ ULONG DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item, 
     conversation->item = item;
     conversation->format = format;
     conversation->type = type;
-    if (timeout == UINT32_MAX) /* TIMEOUT_ASYNC */
+    if (timeout == WIN32_TIMEOUT_ASYNC)
     {
         result =
             queue_transaction(conversation, type, format, item, data, temporary ? data : 0, status);
         if (result)
             temporary = FALSE;
         else
-            ((DdeInstance *)client.resource)->error = 0x400C;
+            ((DdeInstance *)client.resource)->error = WIN32_DMLERR_POSTMSG_FAILED;
         goto transaction_done;
     }
     ULONG answer = 0;
     if (!conversation_invoke(conversation, conversation->server, timeout, type, format,
                              conversation->topic, item, data, 0, 0, &answer))
     {
-        ((DdeInstance *)client.resource)->error = type == 0x20B0   ? 0x4002
-                                                  : type == 0x4090 ? 0x400B
-                                                  : type == 0x4050 ? 0x4005
-                                                                   : 0x4000;
+        ((DdeInstance *)client.resource)->error =
+            type == WIN32_XTYP_REQUEST   ? WIN32_DMLERR_DATAACKTIMEOUT
+            : type == WIN32_XTYP_POKE    ? WIN32_DMLERR_POKEACKTIMEOUT
+            : type == WIN32_XTYP_EXECUTE ? WIN32_DMLERR_EXECACKTIMEOUT
+                                         : WIN32_DMLERR_ADVACKTIMEOUT;
         goto transaction_done;
     }
     note_transaction(conversation, type, answer);
-    if (type == 0x8040)
+    if (type == WIN32_XTYP_ADVSTOP)
         answer = 1;
     ULONG acknowledged = transaction_status(type, answer);
     if (status)
         lx_guest_store_u32(status, acknowledged);
     if (!acknowledged)
-        ((DdeInstance *)client.resource)->error = 0x4009;
-    result = type == 0x20B0 ? answer : (acknowledged & 0x8000) != 0;
+        ((DdeInstance *)client.resource)->error = WIN32_DMLERR_NOTPROCESSED;
+    result = type == WIN32_XTYP_REQUEST ? answer : (acknowledged & WIN32_DDE_FACK) != 0;
 transaction_done:
     if (temporary && data)
         DdeFreeDataHandle(data);
@@ -351,7 +362,7 @@ BOOL DdeSetUserHandle(ULONG handle, ULONG transaction, ULONG user)
         valid = request != NULL;
         lx_host_monitor_unlock(dde_lock);
         if (!valid)
-            open32DdeSetError(conversation->client, 0x4006);
+            open32DdeSetError(conversation->client, WIN32_DMLERR_INVALIDPARAMETER);
     }
     lx_handle_release(&borrow);
     return valid;
@@ -360,7 +371,7 @@ BOOL DdeSetUserHandle(ULONG handle, ULONG transaction, ULONG user)
 ULONG DdeQueryConvInfo(ULONG handle, ULONG transaction, PVOID output)
 {
     LxHandleBorrow borrow = {0};
-    if (!output || lx_guest_load_u32(output) != 100 ||
+    if (!output || lx_guest_load_u32(output) != WIN32_CONVINFO_SIZE ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_DDE_CONVERSATION, &borrow))
         return 0;
     DdeConversation *conversation = borrow.resource;
@@ -375,13 +386,14 @@ ULONG DdeQueryConvInfo(ULONG handle, ULONG transaction, PVOID output)
         lx_host_monitor_unlock(dde_lock);
         if (!pending)
         {
-            open32DdeSetError(conversation->client, 0x4006);
+            open32DdeSetError(conversation->client, WIN32_DMLERR_INVALIDPARAMETER);
             lx_handle_release(&borrow);
             return 0;
         }
     }
-    memset(output, 0, 100);
-    ULONG fields[] = {100,
+    memset(output, 0, WIN32_CONVINFO_SIZE);
+    /* CONVINFO, field by field, with its embedded CONVCONTEXT from the tenth word on. */
+    ULONG fields[] = {WIN32_CONVINFO_SIZE,
                       user,
                       handle,
                       conversation->service,
@@ -390,15 +402,15 @@ ULONG DdeQueryConvInfo(ULONG handle, ULONG transaction, PVOID output)
                       conversation->item,
                       conversation->format,
                       conversation->type,
-                      0x10 | 0x1,
-                      2,
+                      WIN32_ST_CLIENT | WIN32_ST_CONNECTED,
+                      WIN32_XST_CONNECTED,
                       0,
                       0,
-                      40,
+                      WIN32_CONVCONTEXT_SIZE,
                       0,
                       0,
-                      1004,
-                      0x409,
+                      WIN32_CP_WINANSI,
+                      ENGLISH_US_LANGID,
                       0,
                       0,
                       0,
@@ -406,10 +418,10 @@ ULONG DdeQueryConvInfo(ULONG handle, ULONG transaction, PVOID output)
                       0,
                       0,
                       0};
-    for (unsigned i = 0; i < 25; i++)
+    for (unsigned i = 0; i < sizeof fields / sizeof *fields; i++)
         lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
     lx_handle_release(&borrow);
-    return 100;
+    return WIN32_CONVINFO_SIZE;
 }
 
 BOOL DdeAbandonTransaction(ULONG id, ULONG handle, ULONG transaction)
@@ -439,7 +451,7 @@ BOOL DdeAbandonTransaction(ULONG id, ULONG handle, ULONG transaction)
         }
     lx_host_monitor_unlock(dde_lock);
     if (!valid)
-        ((DdeInstance *)instance.resource)->error = 0x4006;
+        ((DdeInstance *)instance.resource)->error = WIN32_DMLERR_INVALIDPARAMETER;
     lx_handle_release(&instance);
     return valid;
 }
@@ -477,9 +489,9 @@ BOOL DdePostAdvise(ULONG id, ULONG topic, ULONG item)
         DdeConversation *conversation = borrow.resource;
         ULONG ignored;
         ULONG data =
-            dde_callback(server.resource, 0x2022, conversation->format, conversation->handle,
-                         conversation->topic, conversation->item, 0, 0, 0);
-        conversation_invoke(conversation, conversation->client, REMOTE_TIMEOUT, 0x4010,
+            dde_callback(server.resource, WIN32_XTYP_ADVREQ, conversation->format,
+                         conversation->handle, conversation->topic, conversation->item, 0, 0, 0);
+        conversation_invoke(conversation, conversation->client, REMOTE_TIMEOUT, WIN32_XTYP_ADVDATA,
                             conversation->format, conversation->topic, conversation->item, data, 0,
                             0, &ignored);
         if (data)

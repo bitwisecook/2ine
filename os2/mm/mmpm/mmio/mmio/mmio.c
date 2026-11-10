@@ -9,6 +9,17 @@
 #include "host/fs.h"
 #include <stdio.h>
 
+enum
+{
+    MMIO_ELEMENT_LIMIT = 64,
+    MMIO_IOPROC_LIMIT = 32,
+    /* A memory element's copy is taken whole at open; larger buffers are refused. */
+    MMIO_MEMORY_FILE_LIMIT = 32 * 1024 * 1024,
+    /* The guest page that holds an IOProc's MMIOINFO, with the file name after it. */
+    IOPROC_PAGE_SIZE = 4096,
+    IOPROC_PAGE_NAME = 256
+};
+
 static struct
 {
     ULONG handle;
@@ -20,7 +31,7 @@ static struct
     size_t size;
     size_t position;
     ULONG flags;
-} elements[64];
+} elements[MMIO_ELEMENT_LIMIT];
 
 static ULONG next_handle = 1;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
@@ -31,46 +42,34 @@ static void initialize(void)
     mutex = lx_host_mutex_create(0, 0);
 }
 
-enum
-{
-    MMIOM_CLOSE = 0xe03,
-    MMIOM_OPEN = 0xe04,
-    MMIOM_READ = 0xe05,
-    MMIOM_SEEK = 0xe06,
-    MMIOM_WRITE = 0xe07,
-    MMIOM_GETHEADER = 0xe09,
-    FOURCC_MEM = 0x204d454d,
-    FOURCC_DOS = 0x20534f44
-};
-
 static struct
 {
     uint32_t fourcc, procedure;
-} installed[32];
+} installed[MMIO_IOPROC_LIMIT];
 
 ULONG mmioInstallIOProc(ULONG fourcc, ULONG procedure, ULONG flags)
 {
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
     ULONG result = 0;
-    unsigned slot = 32;
-    for (unsigned i = 32; i-- > 0;)
+    unsigned slot = MMIO_IOPROC_LIMIT;
+    for (unsigned i = MMIO_IOPROC_LIMIT; i-- > 0;)
     {
-        if (installed[i].fourcc == fourcc && installed[i].procedure && slot == 32)
+        if (installed[i].fourcc == fourcc && installed[i].procedure && slot == MMIO_IOPROC_LIMIT)
             slot = i;
     }
-    if (slot < 32)
+    if (slot < MMIO_IOPROC_LIMIT)
         result = installed[slot].procedure;
-    if (flags & 1) /* MMIO_INSTALLPROC */
+    if (flags & MMIO_INSTALLPROC)
     {
-        if (slot == 32)
-            for (unsigned i = 0; i < 32 && slot == 32; i++)
+        if (slot == MMIO_IOPROC_LIMIT)
+            for (unsigned i = 0; i < MMIO_IOPROC_LIMIT && slot == MMIO_IOPROC_LIMIT; i++)
                 if (!installed[i].procedure)
                     slot = i;
-        if (slot < 32)
+        if (slot < MMIO_IOPROC_LIMIT)
             installed[slot].fourcc = fourcc, installed[slot].procedure = procedure;
     }
-    else if ((flags & 2) && slot < 32) /* MMIO_REMOVEPROC */
+    else if ((flags & MMIO_REMOVEPROC) && slot < MMIO_IOPROC_LIMIT)
         installed[slot].procedure = 0;
     lx_host_mutex_unlock(mutex);
     return result;
@@ -82,7 +81,7 @@ static ULONG add_element(unsigned char *copy, uint32_t address, size_t size, LxH
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
     ULONG result = 0;
-    for (unsigned i = 0; i < 64; i++)
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (!elements[i].handle && next_handle)
         {
             result = next_handle++;
@@ -101,8 +100,9 @@ static ULONG add_element(unsigned char *copy, uint32_t address, size_t size, LxH
 /* The DOS IOProc reads and writes a named file. Installed IOProcs are not available. */
 static ULONG open_file(PSZ name, const unsigned char *info, ULONG flags)
 {
-    if (info && (lx_guest_load_u32(info + 8) ||
-                 (lx_guest_load_u32(info + 4) && lx_guest_load_u32(info + 4) != 0x20534f44)))
+    if (info && (lx_guest_load_u32(info + MMIOINFO_IOPROC) ||
+                 (lx_guest_load_u32(info + MMIOINFO_IOPROC_FOURCC) &&
+                  lx_guest_load_u32(info + MMIOINFO_IOPROC_FOURCC) != FOURCC_DOS)))
         return 0;
     if (!GProcessState.makeUnixPath)
         return 0;
@@ -110,10 +110,10 @@ static ULONG open_file(PSZ name, const unsigned char *info, ULONG flags)
     char *path = GProcessState.makeUnixPath(name, &error);
     if (!path)
         return 0;
-    unsigned mode = flags & 8      ? LX_HOST_FILE_WRITE
-                    : flags & 0x10 ? LX_HOST_FILE_READ | LX_HOST_FILE_WRITE
-                                   : LX_HOST_FILE_READ;
-    if (flags & 1) /* MMIO_CREATE */
+    unsigned mode = flags & MMIO_WRITE       ? LX_HOST_FILE_WRITE
+                    : flags & MMIO_READWRITE ? LX_HOST_FILE_READ | LX_HOST_FILE_WRITE
+                                             : LX_HOST_FILE_READ;
+    if (flags & MMIO_CREATE)
         mode |= LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE | LX_HOST_FILE_TRUNCATE;
     LxHostFsError status;
     LxHostFile *file = lx_host_file_open(path, mode, 0, &status);
@@ -131,14 +131,14 @@ static uint32_t custom_procedure(const unsigned char *info)
 {
     if (!info)
         return 0;
-    if (lx_guest_load_u32(info + 8))
-        return lx_guest_load_u32(info + 8);
-    uint32_t fourcc = lx_guest_load_u32(info + 4), result = 0;
+    if (lx_guest_load_u32(info + MMIOINFO_IOPROC))
+        return lx_guest_load_u32(info + MMIOINFO_IOPROC);
+    uint32_t fourcc = lx_guest_load_u32(info + MMIOINFO_IOPROC_FOURCC), result = 0;
     if (!fourcc || fourcc == FOURCC_MEM || fourcc == FOURCC_DOS)
         return 0;
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
-    for (unsigned i = 0; i < 32; i++)
+    for (unsigned i = 0; i < MMIO_IOPROC_LIMIT; i++)
         if (installed[i].procedure && installed[i].fourcc == fourcc)
             result = installed[i].procedure;
     lx_host_mutex_unlock(mutex);
@@ -148,23 +148,24 @@ static uint32_t custom_procedure(const unsigned char *info)
 /* An IOProc receives guest MMIOINFO, which it may update across every later call. */
 static ULONG open_custom(PSZ name, unsigned char *info, ULONG flags, uint32_t procedure)
 {
-    LxGuestMapping *mapping =
-        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, IOPROC_PAGE_SIZE,
+                                               LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
         return 0;
     unsigned char *guest = lx_execution_mapping_host(mapping);
     uint32_t address = lx_execution_mapping_address(mapping);
-    memcpy(guest, info, 80);
-    lx_guest_store_u32(guest, flags);
-    lx_guest_store_u32(guest + 8, procedure);
+    memcpy(guest, info, MMIOINFO_SIZE);
+    lx_guest_store_u32(guest + MMIOINFO_FLAGS, flags);
+    lx_guest_store_u32(guest + MMIOINFO_IOPROC, procedure);
     if (name)
-        snprintf((char *)guest + 256, 4096 - 256, "%s", name);
-    uint32_t result = lx_execution_callback32_4(GProcessState.execution, procedure, address,
-                                                MMIOM_OPEN, name ? address + 256 : 0, 0);
-    memcpy(info, guest, 80);
+        snprintf((char *)guest + IOPROC_PAGE_NAME, IOPROC_PAGE_SIZE - IOPROC_PAGE_NAME, "%s", name);
+    uint32_t result =
+        lx_execution_callback32_4(GProcessState.execution, procedure, address, MMIOM_OPEN,
+                                  name ? address + IOPROC_PAGE_NAME : 0, 0);
+    memcpy(info, guest, MMIOINFO_SIZE);
     if (result)
     {
-        lx_guest_store_u32(info + 12, result); /* ulErrorRet */
+        lx_guest_store_u32(info + MMIOINFO_ERROR_RET, result);
         lx_execution_unmap(GProcessState.execution, mapping);
         return 0;
     }
@@ -176,7 +177,7 @@ static ULONG open_custom(PSZ name, unsigned char *info, ULONG flags, uint32_t pr
         return 0;
     }
     lx_host_mutex_lock(mutex, UINT32_MAX);
-    for (unsigned i = 0; i < 64; i++)
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (elements[i].handle == handle)
         {
             elements[i].procedure = procedure;
@@ -192,7 +193,7 @@ static BOOL custom_element(ULONG handle, uint32_t *procedure, uint32_t *address,
     BOOL found = FALSE;
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
-    for (unsigned i = 0; i < 64; i++)
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (handle && elements[i].handle == handle && elements[i].procedure)
         {
             *procedure = elements[i].procedure;
@@ -211,20 +212,22 @@ ULONG mmioOpen(PSZ name, PVOID info, ULONG flags)
     uint32_t procedure = custom_procedure(info);
     if (procedure)
         return open_custom(name, info, flags, procedure);
-    if (info && !name && lx_guest_load_u32((unsigned char *)info + 4) &&
-        lx_guest_load_u32((unsigned char *)info + 4) != FOURCC_MEM &&
-        lx_guest_load_u32((unsigned char *)info + 68) != FOURCC_MEM)
+    if (info && !name && lx_guest_load_u32((unsigned char *)info + MMIOINFO_IOPROC_FOURCC) &&
+        lx_guest_load_u32((unsigned char *)info + MMIOINFO_IOPROC_FOURCC) != FOURCC_MEM &&
+        lx_guest_load_u32((unsigned char *)info + MMIOINFO_CHILD_IOPROC_FOURCC) != FOURCC_MEM)
         return 0;
     if (name)
         return open_file(name, info, flags);
-    if (!info || !(flags & 0x1c)) /* MMIO_READ, MMIO_WRITE, MMIO_READWRITE */
+    if (!info || !(flags & (MMIO_READ | MMIO_WRITE | MMIO_READWRITE)))
         return 0;
     unsigned char *p = info;
     /* MMIOINFO is a 32-bit wire structure, including its buffer pointer. */
-    ULONG size = lx_guest_load_u32(p + 16), address = lx_guest_load_u32(p + 20);
+    ULONG size = lx_guest_load_u32(p + MMIOINFO_BUFFER_SIZE),
+          address = lx_guest_load_u32(p + MMIOINFO_BUFFER);
     /* FOURCC_MEM may name the IOProc directly or as the child IOProc. */
-    if (!size || size > 32 * 1024 * 1024 ||
-        (lx_guest_load_u32(p + 4) != 0x204d454d && lx_guest_load_u32(p + 68) != 0x204d454d))
+    if (!size || size > MMIO_MEMORY_FILE_LIMIT ||
+        (lx_guest_load_u32(p + MMIOINFO_IOPROC_FOURCC) != FOURCC_MEM &&
+         lx_guest_load_u32(p + MMIOINFO_CHILD_IOPROC_FOURCC) != FOURCC_MEM))
         return 0;
     unsigned char *copy = malloc(size);
     if (!copy || !lx_execution_read(GProcessState.execution, address, copy, size))
@@ -249,7 +252,7 @@ USHORT mmioClose(ULONG handle, USHORT flags)
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
     USHORT result = 1;
-    for (unsigned i = 0; i < 64; i++)
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (elements[i].handle == handle && handle)
         {
             if (elements[i].file)
@@ -273,7 +276,7 @@ static LONG transfer(ULONG handle, void *buffer, LONG count, int writing)
     ULONG mode = 0;
     if (custom_element(handle, &procedure, &address, &mode))
     {
-        if ((writing && (mode & 4)) || (!writing && (mode & 8)) ||
+        if ((writing && (mode & MMIO_READ)) || (!writing && (mode & MMIO_WRITE)) ||
             !lx_execution_address(GProcessState.execution, buffer, (size_t)count,
                                   writing ? LX_GUEST_READ : LX_GUEST_WRITE, &guest))
             return -1;
@@ -284,11 +287,12 @@ static LONG transfer(ULONG handle, void *buffer, LONG count, int writing)
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
     LONG result = -1;
-    for (unsigned i = 0; i < 64; i++)
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (handle && elements[i].handle == handle)
         {
             /* MEM IOProc accesses a fixed caller-supplied buffer. */
-            if ((writing && (elements[i].flags & 4)) || (!writing && (elements[i].flags & 8)))
+            if ((writing && (elements[i].flags & MMIO_READ)) ||
+                (!writing && (elements[i].flags & MMIO_WRITE)))
                 break;
             if (elements[i].file)
             {
@@ -344,22 +348,22 @@ LONG mmioSeek(ULONG handle, LONG offset, LONG origin)
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
     LONG result = -1;
-    for (unsigned i = 0; i < 64; i++)
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (handle && elements[i].handle == handle)
         {
             if (elements[i].file)
             {
                 uint64_t position = 0;
-                if (origin >= 0 && origin <= 2 &&
+                if (origin >= SEEK_SET && origin <= SEEK_END &&
                     !lx_host_file_seek(elements[i].file, offset, (unsigned)origin, &position) &&
                     position <= INT32_MAX)
                     result = (LONG)position;
                 break;
             }
-            int64_t base = origin == 0   ? 0
-                           : origin == 1 ? (int64_t)elements[i].position
-                           : origin == 2 ? (int64_t)elements[i].size
-                                         : -1;
+            int64_t base = origin == SEEK_SET   ? 0
+                           : origin == SEEK_CUR ? (int64_t)elements[i].position
+                           : origin == SEEK_END ? (int64_t)elements[i].size
+                                                : -1;
             int64_t position = base + offset;
             if (base >= 0 && position >= 0 && position <= (int64_t)elements[i].size)
                 result = (LONG)(elements[i].position = (size_t)position);
@@ -375,29 +379,29 @@ ULONG mmioGetHeader(ULONG handle, PVOID header, LONG capacity, PLONG bytes, ULON
     (void)reserved;
     (void)flags;
     if (!header || capacity < 1 || !bytes)
-        return 0x1969; /* MMIOERR_INVALID_PARAMETER */
+        return MMIOERR_INVALID_PARAMETER;
     uint32_t procedure = 0, address = 0, guest = 0;
     ULONG mode = 0;
     if (custom_element(handle, &procedure, &address, &mode))
     {
         if (!lx_execution_address(GProcessState.execution, header, (size_t)capacity, LX_GUEST_WRITE,
                                   &guest))
-            return 0x1969;
+            return MMIOERR_INVALID_PARAMETER;
         LONG read = (LONG)lx_execution_callback32_4(GProcessState.execution, procedure, address,
                                                     MMIOM_GETHEADER, guest, (uint32_t)capacity);
-        *bytes = read == -2 ? 0 : read;
-        return *bytes > 0 ? 0 : UINT32_MAX;
+        *bytes = (ULONG)read == MMIOERR_UNSUPPORTED_MESSAGE ? 0 : read;
+        return *bytes > 0 ? MMIO_SUCCESS : MMIO_ERROR;
     }
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
-    ULONG result = 0x1968; /* MMIOERR_INVALID_HANDLE */
-    for (unsigned i = 0; i < 64; i++)
+    ULONG result = MMIOERR_INVALID_HANDLE;
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (handle && elements[i].handle == handle)
         {
             /* The raw MEM IOProc has no translated media header. MMPM's
                dispatcher converts MMIOM_GETHEADER's -2 into zero bytes/-1. */
             *bytes = 0;
-            result = UINT32_MAX;
+            result = MMIO_ERROR;
             break;
         }
     lx_host_mutex_unlock(mutex);
@@ -409,7 +413,7 @@ unsigned char *lx_mmio_copy(ULONG handle, size_t *size)
     unsigned char *result = NULL;
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
-    for (unsigned i = 0; i < 64; i++)
+    for (unsigned i = 0; i < MMIO_ELEMENT_LIMIT; i++)
         if (elements[i].handle == handle && handle && !elements[i].file)
         {
             result = malloc(elements[i].size);

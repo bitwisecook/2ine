@@ -46,6 +46,18 @@ static void open32Shutdown(void)
     references = 0;
 }
 
+/* A PM QMSG as a 32-bit caller lays it out. */
+enum
+{
+    QMSG_MESSAGE = 4,
+    QMSG_MP1 = 8,
+    QMSG_MP2 = 12,
+    QMSG_TIME = 16,
+    QMSG_POINT_X = 20,
+    QMSG_POINT_Y = 24,
+    QMSG_RESERVED = 28
+};
+
 BOOL WinXProcessMsg(PVOID message)
 {
     const uint8 *wire = message;
@@ -53,12 +65,13 @@ BOOL WinXProcessMsg(PVOID message)
     if (!open32FindWindow(handle))
         return FALSE;
     QMSG native = {handle,
-                   lx_guest_load_u32(wire + 4),
-                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 8),
-                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 12),
-                   lx_guest_load_u32(wire + 16),
-                   {(LONG)lx_guest_load_u32(wire + 20), (LONG)lx_guest_load_u32(wire + 24)},
-                   lx_guest_load_u32(wire + 28)};
+                   lx_guest_load_u32(wire + QMSG_MESSAGE),
+                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + QMSG_MP1),
+                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + QMSG_MP2),
+                   lx_guest_load_u32(wire + QMSG_TIME),
+                   {(LONG)lx_guest_load_u32(wire + QMSG_POINT_X),
+                    (LONG)lx_guest_load_u32(wire + QMSG_POINT_Y)},
+                   lx_guest_load_u32(wire + QMSG_RESERVED)};
     if (native.msg == LX_PM_OPEN32_POST)
         SendMessage(native.hwnd, native.reserved, (ULONG)(uintptr_t)native.mp1,
                     (ULONG)(uintptr_t)native.mp2);

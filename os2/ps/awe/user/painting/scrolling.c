@@ -1,23 +1,23 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* ScrollDC, ScrollWindow and ScrollWindowEx: move pixels through the PM raster and
+   carry pending update rectangles and child windows with them. */
 #include "os2/ps/awe/gdi/dc.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 
-static void wire_rect(uint8 p[16], LONG l, LONG t, LONG r, LONG b)
+enum
 {
-    lx_guest_store_u32(p, (ULONG)l);
-    lx_guest_store_u32(p + 4, (ULONG)t);
-    lx_guest_store_u32(p + 8, (ULONG)r);
-    lx_guest_store_u32(p + 12, (ULONG)b);
-}
+    /* Largest area copied through a scratch pixel buffer: 16 megapixels. */
+    SCROLL_PIXELS_MAX = 16 * 1024 * 1024
+};
 
 BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update, PVOID box)
 {
     if (!open32FindDC(h))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32DC *mapping = open32FindDC(h);
@@ -27,8 +27,10 @@ BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
         if (inputs[i])
         {
             uint8 *p = inputs[i];
-            LONG a = (LONG)lx_guest_load_u32(p), c = (LONG)lx_guest_load_u32(p + 4),
-                 d = (LONG)lx_guest_load_u32(p + 8), e = (LONG)lx_guest_load_u32(p + 12);
+            LONG a = (LONG)lx_guest_load_u32(p + WIN32_RECT_LEFT),
+                 c = (LONG)lx_guest_load_u32(p + WIN32_RECT_TOP),
+                 d = (LONG)lx_guest_load_u32(p + WIN32_RECT_RIGHT),
+                 e = (LONG)lx_guest_load_u32(p + WIN32_RECT_BOTTOM);
             if (!open32MapPoint(mapping, &a, &c, TRUE) || !open32MapPoint(mapping, &d, &e, TRUE))
                 return FALSE;
             if (a > d)
@@ -67,7 +69,7 @@ BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
         if (il < ir && it < ib)
         {
             size_t area = (size_t)(ir - il) * (size_t)(ib - it);
-            uint32 *pixels = area <= 16777216 ? malloc(area * 4) : NULL;
+            uint32 *pixels = area <= SCROLL_PIXELS_MAX ? malloc(area * sizeof(uint32)) : NULL;
             ok = pixels &&
                  lx_pm_raster_read(h, il - dx, open32DCHeight(h) - (ib - dy), (unsigned)(ir - il),
                                    (unsigned)(ib - it), pixels) &&
@@ -77,7 +79,7 @@ BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
         }
         ULONG retained = CreateRectRgn(il, it, ir, ib);
         ok = ok && retained && SetRectRgn(region, l, t, r, b) &&
-             CombineRgn(region, region, retained, 4);
+             CombineRgn(region, region, retained, WIN32_RGN_DIFF);
         if (retained)
             DeleteObject(retained);
     }
@@ -86,7 +88,7 @@ BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
     if (!update)
         DeleteObject(region);
     if (!ok)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return ok;
 }
 
@@ -108,8 +110,10 @@ LONG ScrollWindowEx(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip, UL
             if (inputs[i])
             {
                 const uint8 *p = inputs[i];
-                LONG a = (LONG)lx_guest_load_u32(p), c = (LONG)lx_guest_load_u32(p + 4),
-                     d = (LONG)lx_guest_load_u32(p + 8), e = (LONG)lx_guest_load_u32(p + 12);
+                LONG a = (LONG)lx_guest_load_u32(p + WIN32_RECT_LEFT),
+                     c = (LONG)lx_guest_load_u32(p + WIN32_RECT_TOP),
+                     d = (LONG)lx_guest_load_u32(p + WIN32_RECT_RIGHT),
+                     e = (LONG)lx_guest_load_u32(p + WIN32_RECT_BOTTOM);
                 l = a > l ? a : l;
                 t = c > t ? c : t;
                 r = d < r ? d : r;
@@ -121,32 +125,34 @@ LONG ScrollWindowEx(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip, UL
     }
     if (ok)
     {
-        uint8 bounds[16];
+        uint8 bounds[WIN32_RECT_SIZE];
         result = GetRgnBox(region, bounds);
-        if (flags & 2)
-            ok = InvalidateRgn(window, region, (flags & 4) != 0);
+        if (flags & WIN32_SW_INVALIDATE)
+            ok = InvalidateRgn(window, region, (flags & WIN32_SW_ERASE) != 0);
     }
-    if (ok && (flags & 1))
+    if (ok && (flags & WIN32_SW_SCROLLCHILDREN))
     {
-        HWND child = GetWindow(window, 5);
+        HWND child = GetWindow(window, WIN32_GW_CHILD);
         while (child)
         {
-            uint8 rect[16];
+            uint8 rect[WIN32_RECT_SIZE];
             if (GetWindowRect(child, rect))
             {
-                LONG x = (LONG)lx_guest_load_u32(rect), y = (LONG)lx_guest_load_u32(rect + 4);
-                uint8 point[8];
-                lx_guest_store_u32(point, (ULONG)x);
-                lx_guest_store_u32(point + 4, (ULONG)y);
+                LONG x = (LONG)lx_guest_load_u32(rect + WIN32_RECT_LEFT),
+                     y = (LONG)lx_guest_load_u32(rect + WIN32_RECT_TOP);
+                uint8 point[WIN32_POINT_SIZE];
+                lx_guest_store_u32(point + WIN32_POINT_X, (ULONG)x);
+                lx_guest_store_u32(point + WIN32_POINT_Y, (ULONG)y);
                 if (ScreenToClient(window, point))
                 {
-                    int64_t nx = (int64_t)(LONG)lx_guest_load_u32(point) + dx,
-                            ny = (int64_t)(LONG)lx_guest_load_u32(point + 4) + dy;
+                    int64_t nx = (int64_t)(LONG)lx_guest_load_u32(point + WIN32_POINT_X) + dx,
+                            ny = (int64_t)(LONG)lx_guest_load_u32(point + WIN32_POINT_Y) + dy;
                     if (nx >= INT32_MIN && nx <= INT32_MAX && ny >= INT32_MIN && ny <= INT32_MAX)
-                        SetWindowPos(child, 0, (LONG)nx, (LONG)ny, 0, 0, 0x15);
+                        SetWindowPos(child, WIN32_HWND_TOP, (LONG)nx, (LONG)ny, 0, 0,
+                                     WIN32_SWP_NOSIZE | WIN32_SWP_NOZORDER | WIN32_SWP_NOACTIVATE);
                 }
             }
-            child = GetWindow(child, 2);
+            child = GetWindow(child, WIN32_GW_HWNDNEXT);
         }
     }
     if (region && !update)
@@ -158,5 +164,7 @@ LONG ScrollWindowEx(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip, UL
 BOOL ScrollWindow(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip)
 {
     /* Child windows move only when the whole client area scrolls. */
-    return ScrollWindowEx(window, dx, dy, scroll, clip, 0, NULL, scroll ? 2 : 3) != 0;
+    return ScrollWindowEx(window, dx, dy, scroll, clip, 0, NULL,
+                          scroll ? WIN32_SW_INVALIDATE
+                                 : WIN32_SW_INVALIDATE | WIN32_SW_SCROLLCHILDREN) != 0;
 }

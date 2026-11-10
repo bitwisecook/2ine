@@ -52,20 +52,21 @@ static void destroy_hook(void *data)
 ULONG SetWindowsHookEx(LONG type, ULONG procedure, ULONG module, ULONG thread)
 {
     TRACE_NATIVE("SetWindowsHookEx(%d, %X, %u, %u)", type, procedure, module, thread);
-    if (type != 2 || thread != GetCurrentThreadId())
+    /* Only thread-local keyboard hooks are supported. */
+    if (type != WIN32_WH_KEYBOARD || thread != GetCurrentThreadId())
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     if (!open32ValidProcedure(procedure))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Hook *hook = calloc(1, sizeof *hook);
     if (!hook)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     if (module)
@@ -73,7 +74,7 @@ ULONG SetWindowsHookEx(LONG type, ULONG procedure, ULONG module, ULONG thread)
         if (!lx_handle_borrow(module, LX_HANDLE_MODULE, &hook->module))
         {
             free(hook);
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return 0;
         }
         __atomic_add_fetch(&((LxModule *)hook->module.resource)->refcount, 1, __ATOMIC_ACQ_REL);
@@ -84,7 +85,7 @@ ULONG SetWindowsHookEx(LONG type, ULONG procedure, ULONG module, ULONG thread)
     if (!hook->handle)
     {
         destroy_hook(hook);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     lx_host_once(&once, initialize);
@@ -106,7 +107,7 @@ BOOL UnhookWindowsHookEx(ULONG handle)
     if (!hook)
     {
         lx_host_monitor_unlock(monitor);
-        open32SetError(1404);
+        open32SetError(ERROR_INVALID_HOOK_HANDLE);
         return FALSE;
     }
     *link = hook->next;
@@ -149,7 +150,7 @@ LONG open32RunKeyboardHooks(LONG code, ULONG key, ULONG parameter)
     if (!snapshot.entries)
     {
         lx_host_monitor_unlock(monitor);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     for (Hook *hook = hooks; hook; hook = hook->next)

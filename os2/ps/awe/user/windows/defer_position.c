@@ -6,6 +6,13 @@
 #include "os2/ps/awe/user/windows/windows.h"
 #include "emulator/handles.h"
 
+enum
+{
+    /* Most windows one batch may hold, and its size when the caller suggests none. */
+    BATCH_LIMIT = 65536,
+    BATCH_DEFAULT_CAPACITY = 8
+};
+
 typedef struct DeferredWindow
 {
     ULONG window, after, flags;
@@ -37,15 +44,15 @@ static void destroy_defer(void *resource)
 
 ULONG BeginDeferWindowPos(LONG count)
 {
-    if (count < 0 || count > 65536)
+    if (count < 0 || count > BATCH_LIMIT)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     DeferredBatch *batch = calloc(1, sizeof *batch);
     if (batch)
     {
-        batch->capacity = count ? (size_t)count : 8;
+        batch->capacity = count ? (size_t)count : BATCH_DEFAULT_CAPACITY;
         batch->items = calloc(batch->capacity, sizeof *batch->items);
     }
     ULONG handle =
@@ -54,7 +61,7 @@ ULONG BeginDeferWindowPos(LONG count)
     {
         if (batch)
             destroy_defer(batch);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     if (handle)
     {
@@ -72,14 +79,14 @@ ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LO
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_DEFER, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     DeferredBatch *batch = borrow.resource;
     if (batch->owner != lxHostThreadState())
     {
         lx_handle_release(&borrow);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     BOOL valid = IsWindow(window);
@@ -87,7 +94,7 @@ ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LO
     {
         size_t capacity = batch->capacity * 2;
         DeferredWindow *items =
-            capacity <= 65536 ? realloc(batch->items, capacity * sizeof *items) : NULL;
+            capacity <= BATCH_LIMIT ? realloc(batch->items, capacity * sizeof *items) : NULL;
         if (!items)
             valid = FALSE;
         else
@@ -102,7 +109,7 @@ ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LO
     if (!valid)
     {
         lx_handle_close(handle, LX_HANDLE_OPEN32_DEFER);
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     return handle;
@@ -113,14 +120,14 @@ BOOL EndDeferWindowPos(ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_DEFER, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     DeferredBatch *batch = borrow.resource;
     if (batch->owner != lxHostThreadState())
     {
         lx_handle_release(&borrow);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     BOOL valid = TRUE;

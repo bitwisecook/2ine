@@ -6,6 +6,25 @@
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 
+enum
+{
+    /* LOGPALETTE counts its entries in a WORD. */
+    PALETTE_ENTRIES_MAX = 65535,
+    STOCK_PALETTE_ENTRIES = 20,
+    /* The device colour table GPI reports, and the most colours an indexed bitmap has. */
+    SYSTEM_PALETTE_ENTRIES = 256,
+    INDEXED_DEPTH_MAX = 8,
+    INDEXED_COLORS_MAX = 256,
+    /* A COLORREF's high byte: 0 for RGB, 1 for PALETTEINDEX, 2 for PALETTERGB. */
+    COLORREF_KIND_SHIFT = 24,
+    COLORREF_PALETTE_INDEX = 1,
+    COLORREF_PALETTE_RGB = 2,
+    COLORREF_RGB_MASK = 0xFFFFFF,
+    /* PALETTEINDEX keeps the index in the low word; bits 16-23 must be clear. */
+    PALETTE_INDEX_MASK = 0xFFFF,
+    PALETTE_INDEX_RESERVED_MASK = 0xFF0000
+};
+
 typedef struct Open32Palette
 {
     ULONG count;
@@ -22,29 +41,32 @@ static void free_palette(void *resource)
 
 ULONG CreatePalette(PVOID input)
 {
-    if (!input || lx_guest_load_u16(input) != 0x300 || !lx_guest_load_u16((uint8 *)input + 2))
+    if (!input ||
+        lx_guest_load_u16((uint8 *)input + WIN32_LOGPALETTE_VERSION) != WIN32_PALETTE_VERSION ||
+        !lx_guest_load_u16((uint8 *)input + WIN32_LOGPALETTE_ENTRY_COUNT))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    ULONG count = lx_guest_load_u16((uint8 *)input + 2);
+    ULONG count = lx_guest_load_u16((uint8 *)input + WIN32_LOGPALETTE_ENTRY_COUNT);
     Open32Palette *palette = calloc(1, sizeof *palette);
     if (palette)
-        palette->entries = calloc(count, 4);
+        palette->entries = calloc(count, WIN32_PALETTEENTRY_SIZE);
     if (!palette || !palette->entries)
     {
         if (palette)
             free_palette(palette);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     palette->count = count;
-    memcpy(palette->entries, (uint8 *)input + 4, count * 4);
+    memcpy(palette->entries, (uint8 *)input + WIN32_LOGPALETTE_ENTRIES,
+           count * WIN32_PALETTEENTRY_SIZE);
     ULONG handle = lx_handle_create(LX_HANDLE_OPEN32_PALETTE, palette, free_palette);
     if (!handle)
     {
         free_palette(palette);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -55,16 +77,16 @@ ULONG open32StockPalette(void)
     if (!stock)
     {
         /* The twenty system palette entries, in PALETTEENTRY RGB order. */
-        static const uint8 colors[20][4] = {
+        static const uint8 colors[STOCK_PALETTE_ENTRIES][WIN32_PALETTEENTRY_SIZE] = {
             {0, 0, 0, 0},       {128, 0, 0, 0},     {0, 128, 0, 0},     {128, 128, 0, 0},
             {0, 0, 128, 0},     {128, 0, 128, 0},   {0, 128, 128, 0},   {192, 192, 192, 0},
             {192, 220, 192, 0}, {166, 202, 240, 0}, {255, 251, 240, 0}, {160, 160, 164, 0},
             {128, 128, 128, 0}, {255, 0, 0, 0},     {0, 255, 0, 0},     {255, 255, 0, 0},
             {0, 0, 255, 0},     {255, 0, 255, 0},   {0, 255, 255, 0},   {255, 255, 255, 0}};
-        uint8 wire[84];
-        lx_guest_store_u16(wire, 0x300);
-        lx_guest_store_u16(wire + 2, 20);
-        memcpy(wire + 4, colors, sizeof colors);
+        uint8 wire[WIN32_LOGPALETTE_ENTRIES + sizeof colors];
+        lx_guest_store_u16(wire + WIN32_LOGPALETTE_VERSION, WIN32_PALETTE_VERSION);
+        lx_guest_store_u16(wire + WIN32_LOGPALETTE_ENTRY_COUNT, STOCK_PALETTE_ENTRIES);
+        memcpy(wire + WIN32_LOGPALETTE_ENTRIES, colors, sizeof colors);
         ULONG handle = CreatePalette(wire);
         LxHandleBorrow borrow = {0};
         if (!handle || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
@@ -83,7 +105,7 @@ ULONG SelectPalette(ULONG handle, ULONG palette, BOOL background)
     LxHandleBorrow next = {0};
     if (!dc || !lx_handle_borrow(palette, LX_HANDLE_OPEN32_PALETTE, &next))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     ULONG previous = dc->palette_handle;
@@ -98,7 +120,7 @@ ULONG RealizePalette(ULONG handle)
 {
     if (!open32FindDC(handle))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     open32MetafileRealize(handle);
@@ -111,7 +133,7 @@ ULONG GetPaletteEntries(ULONG handle, ULONG start, ULONG count, PVOID output)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Palette *palette = borrow.resource;
@@ -120,7 +142,8 @@ ULONG GetPaletteEntries(ULONG handle, ULONG start, ULONG count, PVOID output)
                    : count < palette->count - start ? count
                                                     : palette->count - start;
     if (output && copied)
-        memcpy(output, palette->entries + 4 * start, copied * 4);
+        memcpy(output, palette->entries + WIN32_PALETTEENTRY_SIZE * start,
+               copied * WIN32_PALETTEENTRY_SIZE);
     lx_handle_release(&borrow);
     return copied;
 }
@@ -130,16 +153,17 @@ ULONG GetNearestPaletteIndex(ULONG handle, ULONG color)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     Open32Palette *palette = borrow.resource;
     ULONG nearest = 0, distance = UINT32_MAX;
     for (ULONG i = 0; i < palette->count; i++)
     {
-        LONG r = (LONG)(color & 255) - palette->entries[i * 4],
-             g = (LONG)((color >> 8) & 255) - palette->entries[i * 4 + 1],
-             b = (LONG)((color >> 16) & 255) - palette->entries[i * 4 + 2];
+        const uint8 *entry = palette->entries + i * WIN32_PALETTEENTRY_SIZE;
+        LONG r = (LONG)(color & 255) - entry[WIN32_PALETTEENTRY_RED],
+             g = (LONG)((color >> 8) & 255) - entry[WIN32_PALETTEENTRY_GREEN],
+             b = (LONG)((color >> 16) & 255) - entry[WIN32_PALETTEENTRY_BLUE];
         ULONG next = (ULONG)(r * r + g * g + b * b);
         if (next < distance)
         {
@@ -168,7 +192,8 @@ LONG open32PaletteObject(ULONG handle, LONG capacity, PVOID output)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
         return 0;
-    LONG result = !output || capacity >= 2 ? 2 : 0;
+    /* A palette's GetObject is its WORD entry count. */
+    LONG result = !output || capacity >= (LONG)sizeof(uint16) ? (LONG)sizeof(uint16) : 0;
     if (output && result)
         lx_guest_store_u16(output, (uint16)((Open32Palette *)borrow.resource)->count);
     lx_handle_release(&borrow);
@@ -181,14 +206,14 @@ ULONG SetPaletteEntries(ULONG handle, ULONG first, ULONG count, PVOID input)
     LxHandleBorrow borrow = {0};
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!count)
         return 1;
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Palette *palette = borrow.resource;
@@ -196,9 +221,10 @@ ULONG SetPaletteEntries(ULONG handle, ULONG first, ULONG count, PVOID input)
     if (copied > count)
         copied = count;
     if (copied)
-        memcpy(palette->entries + first * 4, input, copied * 4);
+        memcpy(palette->entries + first * WIN32_PALETTEENTRY_SIZE, input,
+               copied * WIN32_PALETTEENTRY_SIZE);
     lx_handle_release(&borrow);
-    open32MetafilePaletteChange(handle, 0x37, first, copied, input);
+    open32MetafilePaletteChange(handle, WIN32_META_SETPALENTRIES, first, copied, input);
     return copied;
 }
 
@@ -207,14 +233,14 @@ BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
     LxHandleBorrow borrow = {0};
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (!count)
         return TRUE;
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Palette *palette = borrow.resource;
@@ -223,32 +249,35 @@ BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
     if (valid && count > palette->count - first)
         count = palette->count - first;
     if (valid && count)
-        memcpy(palette->entries + first * 4, input, (size_t)count * 4);
+        memcpy(palette->entries + first * WIN32_PALETTEENTRY_SIZE, input,
+               (size_t)count * WIN32_PALETTEENTRY_SIZE);
     lx_handle_release(&borrow);
     if (!valid)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else
-        open32MetafilePaletteChange(handle, 0x436, first, count, input);
+        open32MetafilePaletteChange(handle, WIN32_META_ANIMATEPALETTE, first, count, input);
     return valid;
 }
 
 BOOL ResizePalette(ULONG handle, ULONG count)
 {
     LxHandleBorrow borrow = {0};
-    if (!count || count > 65535 || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
+    if (!count || count > PALETTE_ENTRIES_MAX ||
+        !lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(!count || count > 65535 ? 87 : 6);
+        open32SetError(!count || count > PALETTE_ENTRIES_MAX ? ERROR_INVALID_PARAMETER
+                                                             : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Palette *palette = borrow.resource;
     BOOL valid = !palette->stock;
     if (valid)
     {
-        uint8 *entries = realloc(palette->entries, (size_t)count * 4);
+        uint8 *entries = realloc(palette->entries, (size_t)count * WIN32_PALETTEENTRY_SIZE);
         if (!entries)
         {
             lx_handle_release(&borrow);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         palette->entries = entries;
@@ -256,14 +285,15 @@ BOOL ResizePalette(ULONG handle, ULONG count)
     if (valid)
     {
         if (count > palette->count)
-            memset(palette->entries + palette->count * 4, 0, (count - palette->count) * 4);
+            memset(palette->entries + palette->count * WIN32_PALETTEENTRY_SIZE, 0,
+                   (count - palette->count) * WIN32_PALETTEENTRY_SIZE);
         palette->count = count;
     }
     lx_handle_release(&borrow);
     if (!valid)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else
-        open32MetafilePaletteChange(handle, 0x139, count, 0, NULL);
+        open32MetafilePaletteChange(handle, WIN32_META_RESIZEPALETTE, count, 0, NULL);
     return valid;
 }
 
@@ -272,13 +302,13 @@ ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
 {
     if (!open32FindDC(dc))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
-    LONG colors[256];
-    if (first > 255)
+    LONG colors[SYSTEM_PALETTE_ENTRIES];
+    if (first > SYSTEM_PALETTE_ENTRIES - 1)
         return 0;
-    LONG available = GpiQueryRealColors(dc, 0, (LONG)first, 256, colors);
+    LONG available = GpiQueryRealColors(dc, 0, (LONG)first, SYSTEM_PALETTE_ENTRIES, colors);
     if (available < 0)
         return 0;
     if (!output)
@@ -286,12 +316,12 @@ ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
     ULONG copied = count < (ULONG)available ? count : (ULONG)available;
     for (ULONG i = 0; i < copied; i++)
     {
-        uint8 *entry = (uint8 *)output + i * 4;
+        uint8 *entry = (uint8 *)output + i * WIN32_PALETTEENTRY_SIZE;
         ULONG rgb = (ULONG)colors[i];
-        entry[0] = (uint8)(rgb >> 16);
-        entry[1] = (uint8)(rgb >> 8);
-        entry[2] = (uint8)rgb;
-        entry[3] = 0;
+        entry[WIN32_PALETTEENTRY_RED] = (uint8)(rgb >> 16);
+        entry[WIN32_PALETTEENTRY_GREEN] = (uint8)(rgb >> 8);
+        entry[WIN32_PALETTEENTRY_BLUE] = (uint8)rgb;
+        entry[WIN32_PALETTEENTRY_FLAGS] = 0;
     }
     return copied;
 }
@@ -309,32 +339,33 @@ ULONG GetNearestColor(ULONG handle, ULONG color)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
-    ULONG kind = color >> 24;
-    if (kind == 1)
+    ULONG kind = color >> COLORREF_KIND_SHIFT;
+    if (kind == COLORREF_PALETTE_INDEX)
     {
-        UCHAR entry[4];
-        if ((color & 0xFF0000) ||
-            GetPaletteEntries(dc->palette_handle, color & 0xFFFF, 1, entry) != 1)
+        UCHAR entry[WIN32_PALETTEENTRY_SIZE];
+        if ((color & PALETTE_INDEX_RESERVED_MASK) ||
+            GetPaletteEntries(dc->palette_handle, color & PALETTE_INDEX_MASK, 1, entry) != 1)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return UINT32_MAX;
         }
-        color = (ULONG)entry[0] | (ULONG)entry[1] << 8 | (ULONG)entry[2] << 16;
+        color = (ULONG)entry[WIN32_PALETTEENTRY_RED] | (ULONG)entry[WIN32_PALETTEENTRY_GREEN] << 8 |
+                (ULONG)entry[WIN32_PALETTEENTRY_BLUE] << 16;
     }
-    else if (kind && kind != 2)
+    else if (kind && kind != COLORREF_PALETTE_RGB)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
-    color &= 0xFFFFFF;
+    color &= COLORREF_RGB_MASK;
     PresentationSpace *ps = lx_pm_font_space(handle);
     PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
-    if (!bitmap || bitmap->depth > 8)
+    if (!bitmap || bitmap->depth > INDEXED_DEPTH_MAX)
         return color;
-    uint32 colors[256];
+    uint32 colors[INDEXED_COLORS_MAX];
     open32BitmapPalette(bitmap->depth, colors);
     unsigned count = bitmap->palette_count ? bitmap->palette_count : 1u << bitmap->depth;
     if (bitmap->palette_count)

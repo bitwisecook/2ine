@@ -13,7 +13,7 @@ ULONG GetWindowsDirectory(PSZ output, ULONG capacity)
     ULONG error = query ? query(QSV_BOOT_DRIVE, QSV_BOOT_DRIVE, &drive, sizeof drive) : 120;
     if (error || drive < 1 || drive > 26)
     {
-        open32SetError(error ? error : 15);
+        open32SetError(error ? error : ERROR_INVALID_DRIVE);
         return 0;
     }
     char directory[] = "C:\\OS2";
@@ -22,7 +22,7 @@ ULONG GetWindowsDirectory(PSZ output, ULONG capacity)
         return sizeof directory;
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     memcpy(output, directory, sizeof directory);
@@ -35,13 +35,13 @@ ULONG GetCurrentDirectory(ULONG capacity, PSZ output)
     const char *directory = drive >= 1 && drive <= 26 ? GProcessState.current_dir[drive - 1] : NULL;
     if (!directory)
     {
-        open32SetError(15);
+        open32SetError(ERROR_INVALID_DRIVE);
         return 0;
     }
     size_t length = strlen(directory);
     if (length > UINT32_MAX - 4)
     {
-        open32SetError(206);
+        open32SetError(ERROR_FILENAME_EXCED_RANGE);
         return 0;
     }
     ULONG required = (ULONG)length + 4;
@@ -49,7 +49,7 @@ ULONG GetCurrentDirectory(ULONG capacity, PSZ output)
         return required;
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     output[0] = (char)('A' + drive - 1);
@@ -63,13 +63,13 @@ BOOL SetCurrentDirectory(PSZ name)
 {
     if (!name || !*name)
     {
-        open32SetError(3);
+        open32SetError(ERROR_PATH_NOT_FOUND);
         return FALSE;
     }
     char *copy = strdup(name);
     if (!copy)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     size_t length = strlen(copy);
@@ -98,7 +98,7 @@ ULONG GetFileAttributes(PSZ name)
     TRACE_NATIVE("GetFileAttributes('%s')", name);
     if (!name || !*name)
     {
-        open32SetError(name ? 3 : 87);
+        open32SetError(name ? ERROR_PATH_NOT_FOUND : ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     typedef APIRET(OS2API * QueryFn)(PSZ, ULONG, PVOID, ULONG);
@@ -120,7 +120,7 @@ ULONG GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
                  filepart);
     if (!name || !*name)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     typedef APIRET(OS2API * QueryFn)(PSZ, ULONG, PVOID, ULONG);
@@ -137,7 +137,7 @@ ULONG GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
         return length + 1;
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     memcpy(output, path, length + 1);
@@ -191,7 +191,7 @@ ULONG GetLogicalDriveStrings(ULONG capacity, PSZ output)
         return size + 1;
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     memcpy(output, roots, size + 1);
@@ -207,7 +207,7 @@ BOOL GetVolumeInformation(PSZ root, PSZ label, ULONG label_capacity, PULONG seri
                  (uint)filesystem_capacity);
     if (GetDriveType(root) == 1)
     {
-        open32SetError(3);
+        open32SetError(ERROR_PATH_NOT_FOUND);
         return FALSE;
     }
     ULONG drive =
@@ -233,12 +233,12 @@ BOOL GetVolumeInformation(PSZ root, PSZ label, ULONG label_capacity, PULONG seri
     size_t fs_length = lx_guest_load_u16(attachment + 4);
     if (length > 11 || fs_offset >= bytes || fs_length >= bytes - fs_offset)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     if ((label && label_capacity <= length) || (filesystem && filesystem_capacity <= fs_length))
     {
-        open32SetError(234);
+        open32SetError(ERROR_MORE_DATA);
         return FALSE;
     }
     if (label)
@@ -284,7 +284,7 @@ ULONG GetTempPath(ULONG capacity, PSZ output)
         n = GetCurrentDirectory(sizeof path, path);
     if (!n || n >= sizeof path - 1)
     {
-        open32SetError(206);
+        open32SetError(ERROR_FILENAME_EXCED_RANGE);
         return 0;
     }
     if (path[n - 1] != '\\' && path[n - 1] != '/')
@@ -294,7 +294,7 @@ ULONG GetTempPath(ULONG capacity, PSZ output)
         return n + 1;
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     memcpy(output, path, n + 1);
@@ -305,7 +305,7 @@ ULONG GetTempFileName(PSZ path, PSZ prefix, ULONG unique, PSZ output)
 {
     if (!path || !prefix || !output || strlen(path) > 240)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     typedef APIRET(OS2API * Open)(PSZ, PULONG, PULONG, ULONG, ULONG, ULONG, ULONG, PVOID);
@@ -337,7 +337,7 @@ ULONG GetTempFileName(PSZ path, PSZ prefix, ULONG unique, PSZ output)
             return 0;
         }
     }
-    open32SetError(80);
+    open32SetError(ERROR_FILE_EXISTS);
     return 0;
 }
 
@@ -354,7 +354,7 @@ BOOL GetDiskFreeSpace(PSZ root, PVOID sectors, PVOID bytes, PVOID free_clusters,
             c -= 'a' - 'A';
         if (c < 'A' || c > 'Z')
         {
-            open32SetError(3);
+            open32SetError(ERROR_PATH_NOT_FOUND);
             return FALSE;
         }
         drive = c - 'A' + 1;
@@ -381,14 +381,14 @@ ULONG SearchPath(PSZ path, PSZ file, PSZ extension, ULONG capacity, PSZ output, 
 {
     if (!file || !*file || (capacity && !output))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     char name[260], found[260];
     size_t length = strlen(file);
     if (length >= sizeof name)
     {
-        open32SetError(206);
+        open32SetError(ERROR_FILENAME_EXCED_RANGE);
         return 0;
     }
     strcpy(name, file);
@@ -399,7 +399,7 @@ ULONG SearchPath(PSZ path, PSZ file, PSZ extension, ULONG capacity, PSZ output, 
     {
         if (length + strlen(extension) >= sizeof name)
         {
-            open32SetError(206);
+            open32SetError(ERROR_FILENAME_EXCED_RANGE);
             return 0;
         }
         strcat(name, extension);

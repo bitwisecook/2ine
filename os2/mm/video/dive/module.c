@@ -12,6 +12,50 @@
 #define DIVE_FIRST_BUFFER 16
 #define DIVE_MAX_DIMENSION 16384
 
+enum
+{
+    /* LUT8 and VGA sources index 256 entries; LT12 indexes 4096. */
+    DIVE_LUT8_PALETTE_SIZE = 256,
+    DIVE_LT12_PALETTE_SIZE = 4096,
+    /* Index masks for DIVE_TBM_EXCLUDE_SOURCE_VALUE, by source format. */
+    DIVE_LUT8_VALUE_MASK = 0xff,
+    DIVE_LT12_VALUE_MASK = 0xfff,
+    DIVE_MONO_VALUE_MASK = 0x1,
+    DIVE_VGA_VALUE_MASK = 0xf,
+    /* 0x00RRGGBB; each 8-bit component is compared separately in range modes. */
+    RGB_MASK = 0xffffff,
+    RGB_COMPONENT_MASK = 0xff,
+    RGB_LAST_COMPONENT_SHIFT = 16,
+    /* Multiplying a 4-bit component by 0x11 repeats it into 8 bits. */
+    NIBBLE_TO_BYTE = 0x11,
+    /* The screen is BGR4: 32 bits per pixel. */
+    SCREEN_BITS_PER_PIXEL = 32,
+    SCREEN_BYTES_PER_PIXEL = 4,
+    /* An RGB2 palette entry is blue, green, red and an unused byte. */
+    RGB2_SIZE = 4,
+    RGB2_BLUE = 0,
+    RGB2_GREEN = 1,
+    RGB2_RED = 2,
+    GUEST_PAGE_SIZE = 4096,
+    DIVE_MAX_VISIBLE_RECTS = 65536,
+    DIVE_MAX_BLIT_PIXELS = 16 * 1024 * 1024,
+    /* ulStructLen may cover SETUP_BLITTER up to fInvert, ulSrcPosY, ulDitherType,
+       lDstPosY, lScreenPosY or pVisDstRects. */
+    SETUP_BLITTER_THROUGH_INVERT = 8,
+    SETUP_BLITTER_THROUGH_SOURCE = 28,
+    SETUP_BLITTER_THROUGH_DITHER = 32,
+    SETUP_BLITTER_THROUGH_DESTINATION = 52,
+    SETUP_BLITTER_THROUGH_SCREEN = 60,
+    SETUP_BLITTER_THROUGH_VISIBLE_RECTS = 68,
+    /* fInvert: without bit 0 rows are reversed (DIVE images are top-down, the
+       screen bottom-up); bit 1 reverses columns. */
+    INVERT_KEEP_ROWS = 0x1,
+    INVERT_COLUMNS = 0x2,
+    DITHER_2X2 = 1,
+    /* Marks a blit pixel that is not written: above the 24 RGB bits. */
+    SKIPPED_PIXEL = 0x01000000u
+};
+
 typedef struct DiveBuffer
 {
     ULONG number, width, height, stride;
@@ -29,7 +73,7 @@ typedef struct DiveInstance
     void *target;
     SETUP_BLITTER blitter;
     RECTL *rectangles;
-    uint32_t source_palette[4096], destination_palette[4096];
+    uint32_t source_palette[DIVE_LT12_PALETTE_SIZE], destination_palette[DIVE_LT12_PALETTE_SIZE];
     BOOL non_screen, acquired;
     ULONG transparent, transparent_first, transparent_last;
     DiveBuffer framebuffer;
@@ -96,15 +140,17 @@ static BOOL supports_format(const uint32_t *formats, size_t count, ULONG format)
 
 static void default_palette(uint32_t *palette, BOOL physical)
 {
-    for (unsigned i = 0; i < 4096; i++)
-        palette[i] = ((i >> 8) & 15) * 17 << 16 | ((i >> 4) & 15) * 17 << 8 | (i & 15) * 17;
+    /* LT12 entries default to the 4:4:4 RGB colour their index encodes. */
+    for (unsigned i = 0; i < DIVE_LT12_PALETTE_SIZE; i++)
+        palette[i] = ((i >> 8) & 15) * NIBBLE_TO_BYTE << 16 |
+                     ((i >> 4) & 15) * NIBBLE_TO_BYTE << 8 | (i & 15) * NIBBLE_TO_BYTE;
     memcpy(palette, DiveDefaultPalette, sizeof DiveDefaultPalette);
     if (physical)
     {
         HPS ps = WinGetScreenPS(HWND_DESKTOP);
         if (ps)
         {
-            for (unsigned i = 0; i < 256; i++)
+            for (unsigned i = 0; i < DIVE_LUT8_PALETTE_SIZE; i++)
             {
                 LONG color = lx_pm_resolve_color(ps, i);
                 if (color >= 0)
@@ -130,21 +176,22 @@ static ULONG impl_DiveQueryCaps(PDIVE_CAPS caps, ULONG plane)
     caps->ulPlaneCount = 1;
     caps->fScreenDirect = TRUE;
     caps->fBankSwitched = FALSE;
-    caps->ulDepth = 32;
+    caps->ulDepth = SCREEN_BITS_PER_PIXEL;
     caps->ulHorizontalResolution = width;
     caps->ulVerticalResolution = height;
-    caps->ulScanLineBytes = (ULONG)width * 4;
+    caps->ulScanLineBytes = (ULONG)width * SCREEN_BYTES_PER_PIXEL;
     caps->fccColorEncoding = DIVE_FOURCC_BGR4;
-    caps->ulApertureSize = (ULONG)width * height * 4;
+    caps->ulApertureSize = (ULONG)width * height * SCREEN_BYTES_PER_PIXEL;
     caps->ulInputFormats = DiveInputFormatCount;
     caps->ulOutputFormats = DiveOutputFormatCount;
-    caps->ulFormatLength = (DiveInputFormatCount + DiveOutputFormatCount) * 4;
+    caps->ulFormatLength =
+        (DiveInputFormatCount + DiveOutputFormatCount) * sizeof *DiveInputFormats;
     lx_host_video_quit();
     if (length < caps->ulFormatLength || !formats)
         return DIVE_ERR_INSUFFICIENT_LENGTH;
-    memcpy(formats, DiveInputFormats, DiveInputFormatCount * 4);
-    memcpy((uint8_t *)formats + DiveInputFormatCount * 4, DiveOutputFormats,
-           DiveOutputFormatCount * 4);
+    memcpy(formats, DiveInputFormats, DiveInputFormatCount * sizeof *DiveInputFormats);
+    memcpy((uint8_t *)formats + DiveInputFormatCount * sizeof *DiveInputFormats, DiveOutputFormats,
+           DiveOutputFormatCount * sizeof *DiveInputFormats);
     return DIVE_SUCCESS;
 }
 
@@ -189,7 +236,8 @@ static ULONG impl_DiveOpen(PULONG handle, ULONG non_screen, PVOID framebuffer)
                 if (GProcessState.execution)
                 {
                     fb->mapping = lx_execution_map(GProcessState.execution, 0,
-                                                   (fb->image.bytes + 4095) & ~(size_t)4095,
+                                                   (fb->image.bytes + GUEST_PAGE_SIZE - 1) &
+                                                       ~(size_t)(GUEST_PAGE_SIZE - 1),
                                                    LX_GUEST_READ | LX_GUEST_WRITE, 0);
                     fb->pixels = fb->mapping ? lx_execution_mapping_host(fb->mapping) : NULL;
                 }
@@ -257,8 +305,10 @@ static ULONG impl_DiveSetupBlitter(ULONG handle, PSETUP_BLITTER setup)
         return DIVE_SUCCESS;
     }
     ULONG length = setup->ulStructLen;
-    if (length != 8 && length != 28 && length != 32 && length != 52 && length != 60 &&
-        length != 68 && length != sizeof *setup)
+    if (length != SETUP_BLITTER_THROUGH_INVERT && length != SETUP_BLITTER_THROUGH_SOURCE &&
+        length != SETUP_BLITTER_THROUGH_DITHER && length != SETUP_BLITTER_THROUGH_DESTINATION &&
+        length != SETUP_BLITTER_THROUGH_SCREEN && length != SETUP_BLITTER_THROUGH_VISIBLE_RECTS &&
+        length != sizeof *setup)
         return DIVE_ERR_INSUFFICIENT_LENGTH;
     SETUP_BLITTER next = instance->setup ? instance->blitter : (SETUP_BLITTER){0};
     next.pVisDstRects = NULL;
@@ -267,12 +317,12 @@ static ULONG impl_DiveSetupBlitter(ULONG handle, PSETUP_BLITTER setup)
     setup = &next;
     if (!setup->fccSrcColorFormat)
         setup->fccSrcColorFormat = DIVE_FOURCC_BGR4;
-    if (length < 52 && !instance->setup)
+    if (length < SETUP_BLITTER_THROUGH_DESTINATION && !instance->setup)
     {
         setup->ulDstWidth = setup->ulSrcWidth;
         setup->ulDstHeight = setup->ulSrcHeight;
     }
-    if (length < 68)
+    if (length < SETUP_BLITTER_THROUGH_VISIBLE_RECTS)
     {
         setup->ulNumDstRects = DIVE_FULLY_VISIBLE;
         setup->pVisDstRects = NULL;
@@ -288,7 +338,7 @@ static ULONG impl_DiveSetupBlitter(ULONG handle, PSETUP_BLITTER setup)
     RECTL *rects = NULL;
     if (setup->ulNumDstRects && setup->ulNumDstRects != DIVE_FULLY_VISIBLE)
     {
-        if (setup->ulNumDstRects > 65536 || !setup->pVisDstRects)
+        if (setup->ulNumDstRects > DIVE_MAX_VISIBLE_RECTS || !setup->pVisDstRects)
             return DIVE_ERR_INVALID_DESTINATION_RECTL;
         rects = malloc((size_t)setup->ulNumDstRects * sizeof *rects);
         if (!rects)
@@ -350,8 +400,10 @@ static ULONG impl_DiveAllocImageBuffer(ULONG handle, PULONG number, ULONG format
     LxGuestMapping *mapping = NULL;
     if (!pixels && GProcessState.execution)
     {
-        mapping = lx_execution_map(GProcessState.execution, 0, (image.bytes + 4095) & ~(size_t)4095,
-                                   LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        mapping =
+            lx_execution_map(GProcessState.execution, 0,
+                             (image.bytes + GUEST_PAGE_SIZE - 1) & ~(size_t)(GUEST_PAGE_SIZE - 1),
+                             LX_GUEST_READ | LX_GUEST_WRITE, 0);
         pixels = mapping ? lx_execution_mapping_host(mapping) : NULL;
     }
     else if (!pixels)
@@ -424,24 +476,25 @@ static ULONG set_palette(ULONG handle, ULONG start, ULONG count, PBYTE entries, 
     DiveInstance *instance = dive_instance(handle);
     if (!instance)
         return DIVE_ERR_INVALID_INSTANCE;
-    unsigned limit = 256;
+    unsigned limit = DIVE_LUT8_PALETTE_SIZE;
     if (instance->setup && (source ? instance->blitter.fccSrcColorFormat
                                    : instance->blitter.fccDstColorFormat) == DIVE_FOURCC_LT12)
-        limit = 4096;
+        limit = DIVE_LT12_PALETTE_SIZE;
     if (start >= limit || count > limit - start)
         return DIVE_ERR_INVALID_PALETTE;
     if (!count)
         count = limit - start;
     uint32_t *palette = source ? instance->source_palette : instance->destination_palette;
-    if (entries && entries != (PBYTE)(uintptr_t)UINT32_MAX)
+    if (entries != DIVE_PALETTE_PHYSICAL && entries != DIVE_PALETTE_DEFAULT)
         for (ULONG i = 0; i < count; i++)
-            palette[start + i] =
-                (ULONG)entries[4 * i + 2] << 16 | (ULONG)entries[4 * i + 1] << 8 | entries[4 * i];
+            palette[start + i] = (ULONG)entries[RGB2_SIZE * i + RGB2_RED] << 16 |
+                                 (ULONG)entries[RGB2_SIZE * i + RGB2_GREEN] << 8 |
+                                 entries[RGB2_SIZE * i + RGB2_BLUE];
     else
     {
-        uint32_t defaults[4096];
-        default_palette(defaults, entries == NULL);
-        memcpy(palette + start, defaults + start, (size_t)count * 4);
+        uint32_t defaults[DIVE_LT12_PALETTE_SIZE];
+        default_palette(defaults, entries == DIVE_PALETTE_PHYSICAL);
+        memcpy(palette + start, defaults + start, (size_t)count * sizeof *palette);
     }
     return DIVE_SUCCESS;
 }
@@ -464,21 +517,21 @@ static BOOL transparent_pixel(DiveInstance *instance, const DiveImage *image, UL
         return FALSE;
     if (mode == DIVE_TBM_EXCLUDE_SOURCE_VALUE)
     {
-        ULONG value_mask = image->format == DIVE_FOURCC_LUT8   ? 255
-                           : image->format == DIVE_FOURCC_LT12 ? 4095
-                           : image->format == DIVE_FOURCC_MONO ? 1
-                           : image->format == DIVE_FOURCC_VGA  ? 15
-                                                               : 0xffffff;
+        ULONG value_mask = image->format == DIVE_FOURCC_LUT8   ? DIVE_LUT8_VALUE_MASK
+                           : image->format == DIVE_FOURCC_LT12 ? DIVE_LT12_VALUE_MASK
+                           : image->format == DIVE_FOURCC_MONO ? DIVE_MONO_VALUE_MASK
+                           : image->format == DIVE_FOURCC_VGA  ? DIVE_VGA_VALUE_MASK
+                                                               : RGB_MASK;
         return dive_image_value(image, x, y) == (instance->transparent_first & value_mask);
     }
     ULONG value =
         mode >= DIVE_TBM_EXCLUDE_SOURCE_YUV_RANGE ? dive_image_yuv(image, x, y, rgb) : rgb;
     BOOL inside = TRUE;
-    for (unsigned shift = 0; shift <= 16; shift += 8)
+    for (unsigned shift = 0; shift <= RGB_LAST_COMPONENT_SHIFT; shift += 8)
     {
-        ULONG c = (value >> shift) & 255;
-        inside = inside && c >= ((instance->transparent_first >> shift) & 255) &&
-                 c <= ((instance->transparent_last >> shift) & 255);
+        ULONG c = (value >> shift) & RGB_COMPONENT_MASK;
+        inside = inside && c >= ((instance->transparent_first >> shift) & RGB_COMPONENT_MASK) &&
+                 c <= ((instance->transparent_last >> shift) & RGB_COMPONENT_MASK);
     }
     return mode == DIVE_TBM_EXCLUDE_SOURCE_RGB_RANGE || mode == DIVE_TBM_EXCLUDE_SOURCE_YUV_RANGE
                ? inside
@@ -525,28 +578,28 @@ static ULONG impl_DiveBlitImageLines(ULONG handle, ULONG source, ULONG destinati
                    (uint64_t)setup->lDstPosY + setup->ulDstHeight > output->height))
         return DIVE_ERR_OUT_OF_RANGE;
     ULONG width = setup->ulDstWidth, height = setup->ulDstHeight;
-    if ((uint64_t)width * height > 16777216)
+    if ((uint64_t)width * height > DIVE_MAX_BLIT_PIXELS)
         return DIVE_ERR_OUT_OF_RANGE;
-    uint32_t *pixels = malloc((size_t)width * height * 4);
+    uint32_t *pixels = malloc((size_t)width * height * sizeof *pixels);
     if (!pixels)
         return DIVE_ERR_ALLOCATION_ERROR;
     /* Read all input before writing, including self-blits with overlapping rectangles. */
     for (ULONG y = 0; y < height; y++)
     {
         ULONG sy = (ULONG)((uint64_t)y * setup->ulSrcHeight / height);
-        if (!(setup->fInvert & 1))
+        if (!(setup->fInvert & INVERT_KEEP_ROWS))
             sy = setup->ulSrcHeight - 1 - sy;
         sy += setup->ulSrcPosY;
         for (ULONG x = 0; x < width; x++)
         {
             ULONG sx = (ULONG)((uint64_t)x * setup->ulSrcWidth / width);
-            if (setup->fInvert & 2)
+            if (setup->fInvert & INVERT_COLUMNS)
                 sx = setup->ulSrcWidth - 1 - sx;
             sx += setup->ulSrcPosX;
             uint32_t rgb = dive_image_rgb(&buffer->image, sx, sy, instance->source_palette);
             pixels[(size_t)y * width + x] =
                 (lines && !lines[sy]) || transparent_pixel(instance, &buffer->image, sx, sy, rgb)
-                    ? 0x01000000u
+                    ? SKIPPED_PIXEL
                     : rgb;
         }
     }
@@ -568,10 +621,10 @@ static ULONG impl_DiveBlitImageLines(ULONG handle, ULONG source, ULONG destinati
     else
         for (ULONG y = 0; y < height; y++)
             for (ULONG x = 0; x < width; x++)
-                if (!(pixels[(size_t)y * width + x] & 0x01000000u))
+                if (!(pixels[(size_t)y * width + x] & SKIPPED_PIXEL))
                     dive_image_store(&output->image, x + setup->lDstPosX, y + setup->lDstPosY,
                                      pixels[(size_t)y * width + x], instance->destination_palette,
-                                     setup->ulDitherType == 1);
+                                     setup->ulDitherType == DITHER_2X2);
     free(pixels);
     return ok ? DIVE_SUCCESS : DIVE_ERR_INVALID_DESTINATION_RECTL;
 }
@@ -589,12 +642,12 @@ static ULONG impl_DiveSetTransparentBlitMode(ULONG handle, ULONG mode, ULONG fir
     if (mode > DIVE_TBM_INCLUDE_SOURCE_YUV_RANGE)
         return DIVE_ERR_OUT_OF_RANGE;
     if (mode >= DIVE_TBM_EXCLUDE_SOURCE_RGB_RANGE)
-        for (unsigned shift = 0; shift <= 16; shift += 8)
-            if (((first >> shift) & 255) > ((last >> shift) & 255))
+        for (unsigned shift = 0; shift <= RGB_LAST_COMPONENT_SHIFT; shift += 8)
+            if (((first >> shift) & RGB_COMPONENT_MASK) > ((last >> shift) & RGB_COMPONENT_MASK))
                 return DIVE_ERR_OUT_OF_RANGE;
     instance->transparent = mode;
-    instance->transparent_first = first & 0xffffff;
-    instance->transparent_last = last & 0xffffff;
+    instance->transparent_first = first & RGB_MASK;
+    instance->transparent_last = last & RGB_MASK;
     return DIVE_SUCCESS;
 }
 
@@ -630,7 +683,7 @@ static ULONG impl_DiveAcquireFrameBuffer(ULONG handle, PRECTL rect)
     }
     unsigned width = rect->xRight - rect->xLeft, height = rect->yTop - rect->yBottom;
     void *target = lx_pm_dive_target(rect->xLeft, rect->yBottom, width, height);
-    uint32_t *pixels = target ? malloc((size_t)width * height * 4) : NULL;
+    uint32_t *pixels = target ? malloc((size_t)width * height * sizeof *pixels) : NULL;
     if (!pixels || !lx_pm_dive_read(target, rect->xLeft, rect->yBottom, width, height, pixels))
     {
         free(pixels);
@@ -659,7 +712,7 @@ static ULONG impl_DiveDeacquireFrameBuffer(ULONG handle)
         return DIVE_ERR_FB_NOT_ACQUIRED;
     RECTL rect = instance->acquired_rect;
     unsigned width = rect.xRight - rect.xLeft, height = rect.yTop - rect.yBottom;
-    uint32_t *pixels = malloc((size_t)width * height * 4);
+    uint32_t *pixels = malloc((size_t)width * height * sizeof *pixels);
     if (!pixels)
         return DIVE_ERR_ALLOCATION_ERROR;
     DiveImage *fb = &instance->framebuffer.image;
@@ -690,8 +743,8 @@ static ULONG impl_DiveCalcFrameBufferAddress(ULONG handle, PRECTL rect, PVOID ou
     if (!output || !bank || !lines)
         return DIVE_ERR_OUT_OF_RANGE;
     DiveBuffer *fb = &instance->framebuffer;
-    *(PBYTE *)output =
-        fb->pixels + (size_t)(fb->height - rect->yTop) * fb->stride + rect->xLeft * 4;
+    *(PBYTE *)output = fb->pixels + (size_t)(fb->height - rect->yTop) * fb->stride +
+                       rect->xLeft * SCREEN_BYTES_PER_PIXEL;
     *bank = 0;
     *lines = rect->yTop - rect->yBottom;
     return DIVE_SUCCESS;
