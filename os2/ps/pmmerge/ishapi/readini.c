@@ -236,6 +236,12 @@ static LxHostFile *profile_lock(Profile *p)
     return lock;
 }
 
+/* Room for ".tmp-", a pointer in hexadecimal and the terminator. */
+enum
+{
+    TEMPORARY_SUFFIX_SIZE = 40
+};
+
 static int write_all(LxHostFile *file, const void *data, size_t size)
 {
     size_t written = 0;
@@ -254,7 +260,7 @@ static int profile_save(Profile *p, ProfileEntry *entries)
         count++;
     }
     uint8 *bytes = malloc(total);
-    char *temporary = malloc(strlen(p->path) + 40);
+    char *temporary = malloc(strlen(p->path) + TEMPORARY_SUFFIX_SIZE);
     if (!bytes || !temporary)
     {
         free(bytes);
@@ -266,7 +272,7 @@ static int profile_save(Profile *p, ProfileEntry *entries)
     for (ProfileEntry *e = entries; e; e = e->next)
         at += tb_profile_put_entry(bytes + at, e->app, strlen(e->app), e->key, strlen(e->key),
                                    e->data, e->size);
-    snprintf(temporary, strlen(p->path) + 40, "%s.tmp-%p", p->path, (void *)p);
+    snprintf(temporary, strlen(p->path) + TEMPORARY_SUFFIX_SIZE, "%s.tmp-%p", p->path, (void *)p);
     /* Only the sidecar lock owner publishes; discard a previous interrupted save. */
     lx_host_path_remove(temporary, 0);
     LxHostFile *file = lx_host_file_open(
@@ -463,10 +469,20 @@ static const PrinterProfileDefault printer_profile_defaults[] = {
 
 enum
 {
-    NATIONAL_DEFAULT_COUNT = 11
+    NATIONAL_DEFAULT_COUNT = 11,
+    NATIONAL_TEXT_SIZE = 16
 };
 
-static BOOL national_profile_defaults(ProfileEntry *entries, char text[NATIONAL_DEFAULT_COUNT][16])
+/* COUNTRYINFO format fields hold more than the PM_National value: only the low bits are the
+   currency placement and the 12/24-hour flag. */
+enum
+{
+    CURRENCY_FORMAT_PLACEMENT_MASK = 3,
+    TIME_FORMAT_24_HOUR_MASK = 1
+};
+
+static BOOL national_profile_defaults(ProfileEntry *entries,
+                                      char text[NATIONAL_DEFAULT_COUNT][NATIONAL_TEXT_SIZE])
 {
     COUNTRYCODE code = {0};
     COUNTRYINFO info;
@@ -475,17 +491,19 @@ static BOOL national_profile_defaults(ProfileEntry *entries, char text[NATIONAL_
     static const char *keys[NATIONAL_DEFAULT_COUNT] = {
         "iCountry",  "iDate",    "iCurrency", "iDigits", "iTime", "sCurrency",
         "sThousand", "sDecimal", "sDate",     "sTime",   "sList"};
-    snprintf(text[0], 16, "%u", info.country);
-    snprintf(text[1], 16, "%u", info.fsDateFmt);
-    snprintf(text[2], 16, "%u", info.fsCurrencyFmt & 3u);
-    snprintf(text[3], 16, "%u", info.cDecimalPlace);
-    snprintf(text[4], 16, "%u", info.fsTimeFmt & 1u);
-    snprintf(text[5], 16, "%.3s", info.szCurrency);
-    snprintf(text[6], 16, "%.1s", info.szThousandsSeparator);
-    snprintf(text[7], 16, "%.1s", info.szDecimal);
-    snprintf(text[8], 16, "%.1s", info.szDateSeparator);
-    snprintf(text[9], 16, "%.1s", info.szTimeSeparator);
-    snprintf(text[10], 16, "%.1s", info.szDataSeparator);
+    snprintf(text[0], NATIONAL_TEXT_SIZE, "%u", info.country);
+    snprintf(text[1], NATIONAL_TEXT_SIZE, "%u", info.fsDateFmt);
+    snprintf(text[2], NATIONAL_TEXT_SIZE, "%u",
+             info.fsCurrencyFmt & (unsigned)CURRENCY_FORMAT_PLACEMENT_MASK);
+    snprintf(text[3], NATIONAL_TEXT_SIZE, "%u", info.cDecimalPlace);
+    snprintf(text[4], NATIONAL_TEXT_SIZE, "%u",
+             info.fsTimeFmt & (unsigned)TIME_FORMAT_24_HOUR_MASK);
+    snprintf(text[5], NATIONAL_TEXT_SIZE, "%.3s", info.szCurrency);
+    snprintf(text[6], NATIONAL_TEXT_SIZE, "%.1s", info.szThousandsSeparator);
+    snprintf(text[7], NATIONAL_TEXT_SIZE, "%.1s", info.szDecimal);
+    snprintf(text[8], NATIONAL_TEXT_SIZE, "%.1s", info.szDateSeparator);
+    snprintf(text[9], NATIONAL_TEXT_SIZE, "%.1s", info.szTimeSeparator);
+    snprintf(text[10], NATIONAL_TEXT_SIZE, "%.1s", info.szDataSeparator);
     for (unsigned i = 0; i < NATIONAL_DEFAULT_COUNT; i++)
         entries[i] =
             (ProfileEntry){.app = "PM_National",
@@ -518,16 +536,15 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     {
         lx_host_monitor_unlock(mutex);
         lx_handle_release(&borrow);
-        lxHostThreadState()->pm_error = 0x1115; /* PMERR_INVALID_INI_FILE_HANDLE */
+        lxHostThreadState()->pm_error = PMERR_INVALID_INI_FILE_HANDLE;
         return NULL;
     }
-    /* Reserved profiles expose native national settings and printer services.
-       Virtual service defaults remain reads,
-       never stored INI entries, and explicit/private profile handles do not
+    /* Reserved profiles expose native national settings and printer services. These defaults
+       are only read, never stored as INI entries, and explicit or private profile handles do not
        gain them even when they refer to the same backing file. */
     ProfileEntry defaults[sizeof printer_profile_defaults / sizeof printer_profile_defaults[0]];
     ProfileEntry national_defaults[NATIONAL_DEFAULT_COUNT];
-    char national_text[NATIONAL_DEFAULT_COUNT][16];
+    char national_text[NATIONAL_DEFAULT_COUNT][NATIONAL_TEXT_SIZE];
     Profile printer_profile = {0};
     if (p && (handle == HINI_PROFILE || handle == HINI_USERPROFILE || handle == HINI_SYSTEMPROFILE))
     {
@@ -601,9 +618,9 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     lx_host_monitor_unlock(mutex);
     lx_handle_release(&borrow);
     if (!data)
-        lxHostThreadState()->pm_error = !p      ? 0x1115  /* PMERR_INVALID_INI_FILE_HANDLE */
-                                        : entry ? 0x1309  /* PMERR_MEMORY_ALLOC */
-                                                : 0x1304; /* PMERR_NOT_IN_IDX */
+        lxHostThreadState()->pm_error = !p      ? PMERR_INVALID_INI_FILE_HANDLE
+                                        : entry ? PMERR_MEMORY_ALLOC
+                                                : PMERR_NOT_IN_IDX;
     return data;
 }
 
@@ -691,8 +708,10 @@ LONG PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback)
 
 BOOL PrfWriteProfileData(HINI handle, PSZ app, PSZ key, PVOID data, ULONG size)
 {
-    if ((!app && (key || data || size)) || (app && (!*app || strlen(app) >= 65536)) ||
-        (key && strlen(key) >= 65536) || size > TB_PROFILE_SIZE_LIMIT || (data && !key))
+    if ((!app && (key || data || size)) ||
+        (app && (!*app || strlen(app) >= TB_PROFILE_NAME_LIMIT)) ||
+        (key && strlen(key) >= TB_PROFILE_NAME_LIMIT) || size > TB_PROFILE_SIZE_LIMIT ||
+        (data && !key))
         return FALSE;
     LxHandleBorrow borrow = {0};
     Profile *p = profile_get(handle, &borrow);

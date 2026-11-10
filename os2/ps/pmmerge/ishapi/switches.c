@@ -43,8 +43,9 @@ static BOOL valid(const SWCNTRL *entry)
     uint32 process, parent;
     lx_host_process_ids(&process, &parent);
     return entry && entry->hwnd && (!entry->idProcess || entry->idProcess == process) &&
-           (entry->uchVisibility == 1 || entry->uchVisibility == 2 || entry->uchVisibility == 4) &&
-           (entry->fbJump == 1 || entry->fbJump == 2) &&
+           (entry->uchVisibility == SWL_INVISIBLE || entry->uchVisibility == SWL_GRAYED ||
+            entry->uchVisibility == SWL_VISIBLE) &&
+           (entry->fbJump == SWL_NOTJUMPABLE || entry->fbJump == SWL_JUMPABLE) &&
            memchr(entry->szSwtitle, 0, sizeof entry->szSwtitle);
 }
 
@@ -178,7 +179,7 @@ ULONG WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
 {
     if (!title || !capacity)
         return ERROR_INVALID_PARAMETER;
-    char session_name[64] = {0};
+    char session_name[MAXNAMEL + 4] = {0};
     if (!session)
         lx_session_title(session_name, sizeof session_name);
     if (*session_name)

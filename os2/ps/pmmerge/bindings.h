@@ -1,6 +1,83 @@
 #include "os2/include/private/pmp.h"
 
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* PMMERGE guest bridges: they copy 32-bit guest records into host structures and back. */
+
+enum
+{
+    /* Longest guest string copied in, including its terminator. */
+    PM_STRING_LIMIT = 65536,
+    /* Largest guest buffer borrowed for one call. */
+    PM_BUFFER_LIMIT = 64 * 1024 * 1024,
+    /* Longest point array mapped in one call. */
+    PM_POINT_LIMIT = 65536,
+    PM_MESSAGE_BOX_TEXT_LIMIT = 8193,
+    PM_MESSAGE_BOX_CAPTION_LIMIT = 1025,
+    PM_MENU_TEMPLATE_MIN_SIZE = 10,
+    PM_MENU_TEMPLATE_MAX_SIZE = 1048576
+};
+
+/* Guest record sizes and field offsets. */
+enum
+{
+    GUEST_POINTL_SIZE = 8,
+    GUEST_RECTL_SIZE = 16,
+    GUEST_SWP_SIZE = 36,
+    SWP_FL_OFFSET = 0,
+    SWP_CY_OFFSET = 4,
+    SWP_CX_OFFSET = 8,
+    SWP_Y_OFFSET = 12,
+    SWP_X_OFFSET = 16,
+    GUEST_QMSG_SIZE = 32,
+    QMSG_HWND_OFFSET = 0,
+    QMSG_MSG_OFFSET = 4,
+    QMSG_MP1_OFFSET = 8,
+    QMSG_MP2_OFFSET = 12,
+    QMSG_TIME_OFFSET = 16,
+    QMSG_PTL_X_OFFSET = 20,
+    QMSG_PTL_Y_OFFSET = 24,
+    QMSG_RESERVED_OFFSET = 28,
+    GUEST_PRFPROFILE_SIZE = 16,
+    PRFPROFILE_CCHUSERNAME_OFFSET = 0,
+    PRFPROFILE_PSZUSERNAME_OFFSET = 4,
+    PRFPROFILE_CCHSYSNAME_OFFSET = 8,
+    PRFPROFILE_PSZSYSNAME_OFFSET = 12,
+    GUEST_PROGDETAILS_SIZE = 72,
+    PROGDETAILS_LENGTH_OFFSET = 0,
+    PROGDETAILS_PROGC_OFFSET = 4,
+    PROGDETAILS_FBVISIBLE_OFFSET = 8,
+    /* pszTitle, pszExecutable, pszParameters and pszStartupDir follow one another. */
+    PROGDETAILS_PSZTITLE_OFFSET = 12,
+    PROGDETAILS_STRING_COUNT = 4,
+    PROGDETAILS_PSZENVIRONMENT_OFFSET = 32,
+    PROGDETAILS_SWPINITIAL_OFFSET = 36,
+    GUEST_CLASSINFO_SIZE = 12,
+    CLASSINFO_FLCLASSSTYLE_OFFSET = 0,
+    CLASSINFO_PFNWINDOWPROC_OFFSET = 4,
+    CLASSINFO_CBWINDOWDATA_OFFSET = 8,
+    GUEST_FRAMECDATA_SIZE = 10,
+    FRAMECDATA_CB_OFFSET = 0,
+    FRAMECDATA_FLCREATEFLAGS_OFFSET = 2,
+    FRAMECDATA_HMODRESOURCES_OFFSET = 6,
+    FRAMECDATA_IDRESOURCES_OFFSET = 8,
+    /* DLGTEMPLATE up to its first DLGTITEM; cbTemplate is its first USHORT. */
+    DLGTEMPLATE_HEADER_SIZE = 14,
+    /* ACCELTABLE: cAccel and codepage, then 6-byte ACCEL entries. */
+    ACCELTABLE_HEADER_SIZE = 4,
+    GUEST_ACCEL_SIZE = 6,
+    GUEST_POINTERINFO_SIZE = 28,
+    GUEST_MQINFO_SIZE = 20,
+    GUEST_TRACKINFO_SIZE = 76,
+    KEYBOARD_STATE_TABLE_SIZE = 256
+};
+
+/* Class names WC_FRAME onward are preregistered class atoms, not guest strings. */
+#define PM_PREDEFINED_CLASS_LAST 0xffff0070u
+
+/* Atom names below 64 KiB, or MAKEINTATOM values, are not guest strings. */
+#define PM_ATOM_STRING_FIRST 0x10000u
+#define PM_INTEGER_ATOM_FIRST 0xffff0000u
+
 static uint32 bridge32_WinQueryCpType(uint8 *arguments)
 {
     return WinQueryCpType(lx_guest_load_u32(arguments));
@@ -64,7 +141,8 @@ static int profile_strings(uint8 *arguments, char **strings, unsigned count)
     {
         uint32 pointer = lx_guest_load_u32(arguments + 4 + i * 4);
         strings[i] =
-            pointer ? lx_execution_copy_string(GProcessState.execution, pointer, 65536) : NULL;
+            pointer ? lx_execution_copy_string(GProcessState.execution, pointer, PM_STRING_LIMIT)
+                    : NULL;
         if (pointer && !strings[i])
         {
             for (unsigned j = 0; j < i; j++)
@@ -100,13 +178,14 @@ static uint32 bridge32_PrfQueryProfile(uint8 *a)
 {
     LxGuestBorrow record = {0}, user = {0}, system = {0};
     uint32 result = FALSE;
-    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16,
-                             LX_GUEST_READ | LX_GUEST_WRITE, &record))
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
+                             GUEST_PRFPROFILE_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, &record))
         return FALSE;
     uint8 *wire = record.host;
-    ULONG user_capacity = lx_guest_load_u32(wire), system_capacity = lx_guest_load_u32(wire + 8);
-    uint32 user_pointer = lx_guest_load_u32(wire + 4),
-           system_pointer = lx_guest_load_u32(wire + 12);
+    ULONG user_capacity = lx_guest_load_u32(wire + PRFPROFILE_CCHUSERNAME_OFFSET),
+          system_capacity = lx_guest_load_u32(wire + PRFPROFILE_CCHSYSNAME_OFFSET);
+    uint32 user_pointer = lx_guest_load_u32(wire + PRFPROFILE_PSZUSERNAME_OFFSET),
+           system_pointer = lx_guest_load_u32(wire + PRFPROFILE_PSZSYSNAME_OFFSET);
     if ((user_capacity && !lx_execution_borrow(GProcessState.execution, user_pointer, user_capacity,
                                                LX_GUEST_WRITE, &user)) ||
         (system_capacity && !lx_execution_borrow(GProcessState.execution, system_pointer,
@@ -114,8 +193,8 @@ static uint32 bridge32_PrfQueryProfile(uint8 *a)
         goto done;
     PRFPROFILE profile = {user_capacity, user.host, system_capacity, system.host};
     result = PrfQueryProfile(lx_guest_load_u32(a), &profile);
-    lx_guest_store_u32(wire, profile.cchUserName);
-    lx_guest_store_u32(wire + 8, profile.cchSysName);
+    lx_guest_store_u32(wire + PRFPROFILE_CCHUSERNAME_OFFSET, profile.cchUserName);
+    lx_guest_store_u32(wire + PRFPROFILE_CCHSYSNAME_OFFSET, profile.cchSysName);
 done:
     lx_execution_release(&system);
     lx_execution_release(&user);
@@ -186,7 +265,8 @@ static uint32 bridge32_PrfQueryProfileData(uint8 *a)
         return 0;
     uint32 result = 0;
     LxGuestBorrow output = {0}, size = {0};
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), 4, 3, &size))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), 4,
+                            LX_GUEST_READ | LX_GUEST_WRITE, &size))
     {
         ULONG capacity = lx_guest_load_u32(size.host);
         if (!capacity || lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12),
@@ -224,8 +304,8 @@ static uint32 bridge32_WinQueryTaskSizePos(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 36, LX_GUEST_WRITE,
-                            &output))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), GUEST_SWP_SIZE,
+                            LX_GUEST_WRITE, &output))
     {
         SWP position;
         result = WinQueryTaskSizePos(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), &position);
@@ -256,48 +336,49 @@ static uint32 bridge32_WinQueryTaskTitle(uint8 *a)
     return result;
 }
 
-/* PROGDETAILS guest offsets: 4 progc, 8 fbVisible, 12-32 pointers, 36 SWP, 72 total. */
 static uint32 bridge32_WinStartApp(uint8 *a)
 {
-    uint8 wire[72];
+    uint8 wire[GUEST_PROGDETAILS_SIZE];
     uint32 address = lx_guest_load_u32(a + 4), parameters = lx_guest_load_u32(a + 8);
-    char *strings[4] = {NULL}, *inputs = NULL;
+    char *strings[PROGDETAILS_STRING_COUNT] = {NULL}, *inputs = NULL;
     LxGuestArgument environment = {0};
     uint32 result = 0;
     if (!address || !lx_execution_read(GProcessState.execution, address, wire, sizeof wire))
         goto done;
-    for (unsigned i = 0; i < 4; i++)
+    for (unsigned i = 0; i < PROGDETAILS_STRING_COUNT; i++)
     {
-        uint32 pointer = lx_guest_load_u32(wire + 12 + i * 4);
-        if (pointer &&
-            !(strings[i] = lx_execution_copy_string(GProcessState.execution, pointer, 65536)))
+        uint32 pointer = lx_guest_load_u32(wire + PROGDETAILS_PSZTITLE_OFFSET + i * 4);
+        if (pointer && !(strings[i] = lx_execution_copy_string(GProcessState.execution, pointer,
+                                                               PM_STRING_LIMIT)))
             goto done;
     }
     if (parameters &&
-        !(inputs = lx_execution_copy_string(GProcessState.execution, parameters, 65536)))
+        !(inputs = lx_execution_copy_string(GProcessState.execution, parameters, PM_STRING_LIMIT)))
         goto done;
-    if (!lx_guest_argument_strings(GProcessState.execution, lx_guest_load_u32(wire + 32), 0, 65536,
-                                   1, &environment))
+    if (!lx_guest_argument_strings(GProcessState.execution,
+                                   lx_guest_load_u32(wire + PROGDETAILS_PSZENVIRONMENT_OFFSET), 0,
+                                   PM_STRING_LIMIT, 1, &environment))
         goto done;
-    PROGDETAILS details = {.Length = lx_guest_load_u32(wire),
-                           .progc = lx_guest_load_u32(wire + 4),
-                           .fbVisible = lx_guest_load_u32(wire + 8),
+    PROGDETAILS details = {.Length = lx_guest_load_u32(wire + PROGDETAILS_LENGTH_OFFSET),
+                           .progc = lx_guest_load_u32(wire + PROGDETAILS_PROGC_OFFSET),
+                           .fbVisible = lx_guest_load_u32(wire + PROGDETAILS_FBVISIBLE_OFFSET),
                            .pszTitle = strings[0],
                            .pszExecutable = strings[1],
                            .pszParameters = strings[2],
                            .pszStartupDir = strings[3],
                            .pszEnvironment = environment.host};
-    details.swpInitial.fl = lx_guest_load_u32(wire + 36);
-    details.swpInitial.cy = (LONG)lx_guest_load_u32(wire + 40);
-    details.swpInitial.cx = (LONG)lx_guest_load_u32(wire + 44);
-    details.swpInitial.y = (LONG)lx_guest_load_u32(wire + 48);
-    details.swpInitial.x = (LONG)lx_guest_load_u32(wire + 52);
+    const uint8 *swp = wire + PROGDETAILS_SWPINITIAL_OFFSET;
+    details.swpInitial.fl = lx_guest_load_u32(swp + SWP_FL_OFFSET);
+    details.swpInitial.cy = (LONG)lx_guest_load_u32(swp + SWP_CY_OFFSET);
+    details.swpInitial.cx = (LONG)lx_guest_load_u32(swp + SWP_CX_OFFSET);
+    details.swpInitial.y = (LONG)lx_guest_load_u32(swp + SWP_Y_OFFSET);
+    details.swpInitial.x = (LONG)lx_guest_load_u32(swp + SWP_X_OFFSET);
     result = WinStartApp(lx_guest_load_u32(a), &details, inputs,
                          (PVOID)(uintptr_t)lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
 done:
     lx_guest_argument_finish(&environment, 0);
     free(inputs);
-    for (unsigned i = 0; i < 4; i++)
+    for (unsigned i = 0; i < PROGDETAILS_STRING_COUNT; i++)
         free(strings[i]);
     return result;
 }
@@ -315,21 +396,23 @@ static MPARAM pm_param(const uint8 *a, unsigned index)
 
 static char *pm_string(uint32 address)
 {
-    return address ? lx_execution_copy_string(GProcessState.execution, address, 65536) : NULL;
+    return address ? lx_execution_copy_string(GProcessState.execution, address, PM_STRING_LIMIT)
+                   : NULL;
 }
 
 static void pm_message_in(QMSG *q, const uint8 *p)
 {
-    q->hwnd = lx_guest_load_u32(p);
-    q->msg = lx_guest_load_u32(p + 4);
-    q->mp1 = (MPARAM)(uintptr_t)lx_guest_load_u32(p + 8);
-    q->mp2 = (MPARAM)(uintptr_t)lx_guest_load_u32(p + 12);
-    q->time = lx_guest_load_u32(p + 16);
-    q->ptl.x = (LONG)lx_guest_load_u32(p + 20);
-    q->ptl.y = (LONG)lx_guest_load_u32(p + 24);
-    q->reserved = lx_guest_load_u32(p + 28);
+    q->hwnd = lx_guest_load_u32(p + QMSG_HWND_OFFSET);
+    q->msg = lx_guest_load_u32(p + QMSG_MSG_OFFSET);
+    q->mp1 = (MPARAM)(uintptr_t)lx_guest_load_u32(p + QMSG_MP1_OFFSET);
+    q->mp2 = (MPARAM)(uintptr_t)lx_guest_load_u32(p + QMSG_MP2_OFFSET);
+    q->time = lx_guest_load_u32(p + QMSG_TIME_OFFSET);
+    q->ptl.x = (LONG)lx_guest_load_u32(p + QMSG_PTL_X_OFFSET);
+    q->ptl.y = (LONG)lx_guest_load_u32(p + QMSG_PTL_Y_OFFSET);
+    q->reserved = lx_guest_load_u32(p + QMSG_RESERVED_OFFSET);
 }
 
+/* The guest QMSG is eight consecutive 32-bit words in field order. */
 static void pm_message_out(uint8 *p, const QMSG *q)
 {
     uint32 values[8] = {
@@ -346,7 +429,7 @@ static uint32 bridge32_WinInitialize(uint8 *a)
 
 static uint32 bridge32_WinWindowFromPoint(uint8 *a)
 {
-    uint8 bytes[8];
+    uint8 bytes[GUEST_POINTL_SIZE];
     if (!lx_execution_read(GProcessState.execution, pm_word(a, 1), bytes, sizeof bytes))
         return 0;
     POINTL point = {(LONG)lx_guest_load_u32(bytes), (LONG)lx_guest_load_u32(bytes + 4)};
@@ -495,7 +578,8 @@ static uint32 bridge32_WinCreateStdWindow(uint8 *a)
 static uint32 bridge32_WinGetMsg(uint8 *a)
 {
     LxGuestBorrow output;
-    if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 1), 32, LX_GUEST_WRITE, &output))
+    if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 1), GUEST_QMSG_SIZE,
+                             LX_GUEST_WRITE, &output))
         return 0;
     QMSG q = {0};
     uint32 result = WinGetMsg(pm_word(a, 0), &q, pm_word(a, 2), pm_word(a, 3), pm_word(a, 4));
@@ -506,7 +590,7 @@ static uint32 bridge32_WinGetMsg(uint8 *a)
 
 static uint32 bridge32_WinDispatchMsg(uint8 *a)
 {
-    uint8 wire[32];
+    uint8 wire[GUEST_QMSG_SIZE];
     QMSG q;
     if (!lx_execution_read(GProcessState.execution, pm_word(a, 1), wire, sizeof wire))
         return 0;
@@ -535,12 +619,12 @@ static uint32 bridge32_WinBeginPaint(uint8 *a)
 {
     LxGuestBorrow output = {0};
     RECTL rect;
-    if (pm_word(a, 2) &&
-        !lx_execution_borrow(GProcessState.execution, pm_word(a, 2), 16, LX_GUEST_WRITE, &output))
+    if (pm_word(a, 2) && !lx_execution_borrow(GProcessState.execution, pm_word(a, 2),
+                                              GUEST_RECTL_SIZE, LX_GUEST_WRITE, &output))
         return 0;
     uint32 result = WinBeginPaint(pm_word(a, 0), pm_word(a, 1), output.host ? &rect : NULL);
     if (result && output.host)
-        memcpy(output.host, &rect, 16);
+        memcpy(output.host, &rect, GUEST_RECTL_SIZE);
     lx_execution_release(&output);
     return result;
 }
@@ -726,7 +810,7 @@ static uint32 bridge32_WinQueryClassName(uint8 *a)
 static uint32 bridge32_WinSetPresParam(uint8 *a)
 {
     uint32 size = pm_word(a, 2);
-    if (!size || size > 65536)
+    if (!size || size > PM_STRING_LIMIT)
         return 0;
     LxGuestBorrow data = {0};
     if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 3), size, LX_GUEST_READ, &data))
@@ -775,7 +859,7 @@ static uint32 bridge32_WinEnableWindow(uint8 *a)
 static uint32 bridge32_WinCreateWindow(uint8 *a)
 {
     uint32 class_pointer = pm_word(a, 1), title_pointer = pm_word(a, 2);
-    BOOL predefined = class_pointer >= 0xffff0001 && class_pointer <= 0xffff0070;
+    BOOL predefined = class_pointer >= WC_FRAME && class_pointer <= PM_PREDEFINED_CLASS_LAST;
     char *class_name = predefined ? NULL : pm_string(class_pointer);
     char *title = pm_string(title_pointer);
     uint32 result = 0;
@@ -803,7 +887,7 @@ static uint32 bridge32_WinCreateDlg(uint8 *a)
         !lx_execution_read(GProcessState.execution, pm_word(a, 3), prefix, 2))
         return 0;
     uint32 size = lx_guest_load_u16(prefix);
-    if (size < 14 ||
+    if (size < DLGTEMPLATE_HEADER_SIZE ||
         !lx_execution_borrow(GProcessState.execution, pm_word(a, 3), size, LX_GUEST_READ, &data))
         return 0;
     uint32 result = WinCreateDlg(pm_word(a, 0), pm_word(a, 1), (PFNWP)(uintptr_t)pm_word(a, 2),
@@ -828,7 +912,7 @@ static uint32 bridge32_WinLoadDlg(uint8 *a)
 static uint32 bridge32_WinDlgBox(uint8 *a)
 {
     if (!pm_procedure(pm_word(a, 2)))
-        return 0xffff;
+        return DID_ERROR;
     return WinDlgBox(pm_word(a, 0), pm_word(a, 1), (PFNWP)(uintptr_t)pm_word(a, 2), pm_word(a, 3),
                      pm_word(a, 4), pm_param(a, 5));
 }
@@ -863,10 +947,11 @@ static uint32 bridge32_WinSendDlgItemMsg(uint8 *a)
 static uint32 bridge32_WinMapDlgPoints(uint8 *a)
 {
     uint32 count = pm_word(a, 2);
-    if (count > 65536)
+    if (count > PM_POINT_LIMIT)
         return 0;
     LxGuestBorrow points = {0};
-    if (count && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1), (size_t)count * 8,
+    if (count && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
+                                      (size_t)count * GUEST_POINTL_SIZE,
                                       LX_GUEST_READ | LX_GUEST_WRITE, &points))
         return 0;
     uint32 result = WinMapDlgPoints(pm_word(a, 0), points.host, count, pm_word(a, 3));
@@ -1062,7 +1147,7 @@ static uint32 bridge32_WinPtInRect(uint8 *a)
 static uint32 bridge32_WinMapWindowPoints(uint8 *a)
 {
     LONG count = (LONG)pm_word(a, 3);
-    if (count < 0 || count > 65536)
+    if (count < 0 || count > PM_POINT_LIMIT)
         return 0;
     LxGuestBorrow p = {0};
     if (count &&
@@ -1077,7 +1162,7 @@ static uint32 bridge32_WinMapWindowPoints(uint8 *a)
 static uint32 bridge32_WinDrawText(uint8 *a)
 {
     LONG count = (LONG)pm_word(a, 1);
-    if (count < -1 || count > 65536)
+    if (count < -1 || count > PM_STRING_LIMIT)
         return 0;
     char *text = count == -1 ? pm_string(pm_word(a, 2)) : malloc((size_t)count + 1);
     if (!text)
@@ -1094,7 +1179,7 @@ static uint32 bridge32_WinDrawText(uint8 *a)
     {
         result = WinDrawText(pm_word(a, 0), count, text, &rect, (LONG)pm_word(a, 4),
                              (LONG)pm_word(a, 5), pm_word(a, 6));
-        if ((pm_word(a, 6) & 2) &&
+        if ((pm_word(a, 6) & DT_QUERYEXTENT) &&
             !lx_execution_write(GProcessState.execution, pm_word(a, 3), &rect, sizeof rect))
             result = 0;
     }
@@ -1110,7 +1195,7 @@ static uint32 bridge32_WinGetSysBitmap(uint8 *a)
 static uint32 bridge32_WinUpper(uint8 *a)
 {
     uint32 pointer = pm_word(a, 3);
-    char *text = lx_execution_copy_string(GProcessState.execution, pointer, 65536);
+    char *text = lx_execution_copy_string(GProcessState.execution, pointer, PM_STRING_LIMIT);
     if (!text)
         return 0;
     size_t length = strlen(text) + 1;
@@ -1169,7 +1254,7 @@ static uint32 bridge32_WinDrawBitmap(uint8 *a)
     if ((pm_word(a, 2) &&
          !lx_execution_read(GProcessState.execution, pm_word(a, 2), &source, sizeof source)) ||
         !lx_execution_read(GProcessState.execution, pm_word(a, 3), point,
-                           (flags & 4) ? sizeof point : sizeof *point))
+                           (flags & DBM_STRETCH) ? sizeof point : sizeof *point))
         return 0;
     return WinDrawBitmap(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2) ? &source : NULL, point,
                          (LONG)pm_word(a, 4), (LONG)pm_word(a, 5), flags);
@@ -1197,10 +1282,10 @@ static uint32 bridge32_WinQueryAccelTable(uint8 *a)
 
 static uint32 bridge32_WinCreateAccelTable(uint8 *a)
 {
-    uint8 header[4];
-    if (!lx_execution_read(GProcessState.execution, pm_word(a, 1), header, 4))
+    uint8 header[ACCELTABLE_HEADER_SIZE];
+    if (!lx_execution_read(GProcessState.execution, pm_word(a, 1), header, ACCELTABLE_HEADER_SIZE))
         return 0;
-    size_t bytes = 4 + (size_t)lx_guest_load_u16(header) * 6;
+    size_t bytes = ACCELTABLE_HEADER_SIZE + (size_t)lx_guest_load_u16(header) * GUEST_ACCEL_SIZE;
     LxGuestBorrow data = {0};
     if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 1), bytes, LX_GUEST_READ, &data))
         return 0;
@@ -1225,7 +1310,7 @@ static uint32 bridge32_WinCopyAccelTable(uint8 *a)
 
 static uint32 bridge32_WinTranslateAccel(uint8 *a)
 {
-    uint8 wire[32];
+    uint8 wire[GUEST_QMSG_SIZE];
     if (!lx_execution_read(GProcessState.execution, pm_word(a, 3), wire, sizeof wire))
         return 0;
     QMSG q;
@@ -1244,7 +1329,8 @@ static uint32 bridge32_WinPeekMsg(uint8 *a)
 {
     QMSG q;
     LxGuestBorrow out = {0};
-    if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 1), 32, LX_GUEST_WRITE, &out))
+    if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 1), GUEST_QMSG_SIZE,
+                             LX_GUEST_WRITE, &out))
         return 0;
     uint32 result =
         WinPeekMsg(pm_word(a, 0), &q, pm_word(a, 2), pm_word(a, 3), pm_word(a, 4), pm_word(a, 5));
@@ -1282,16 +1368,17 @@ static uint32 bridge32_WinWindowFromDC(uint8 *a)
 static uint32 bridge32_WinQueryClassInfo(uint8 *a)
 {
     uint32 address = pm_word(a, 1);
-    BOOL predefined = address >= 0xffff0001 && address <= 0xffff0070;
+    BOOL predefined = address >= WC_FRAME && address <= PM_PREDEFINED_CLASS_LAST;
     char *name = predefined ? (char *)(uintptr_t)address : pm_string(address);
     CLASSINFO info;
-    uint8 wire[12];
+    uint8 wire[GUEST_CLASSINFO_SIZE];
     uint32 result = 0;
     if (name && WinQueryClassInfo(pm_word(a, 0), name, &info))
     {
-        lx_guest_store_u32(wire, info.flClassStyle);
-        lx_guest_store_u32(wire + 4, (uint32)(uintptr_t)info.pfnWindowProc);
-        lx_guest_store_u32(wire + 8, info.cbWindowData);
+        lx_guest_store_u32(wire + CLASSINFO_FLCLASSSTYLE_OFFSET, info.flClassStyle);
+        lx_guest_store_u32(wire + CLASSINFO_PFNWINDOWPROC_OFFSET,
+                           (uint32)(uintptr_t)info.pfnWindowProc);
+        lx_guest_store_u32(wire + CLASSINFO_CBWINDOWDATA_OFFSET, info.cbWindowData);
         result = lx_execution_write(GProcessState.execution, pm_word(a, 2), wire, sizeof wire);
     }
     if (!predefined)
@@ -1315,7 +1402,7 @@ static uint32 bridge32_WinCreateMenu(uint8 *a)
     if (!lx_execution_read(GProcessState.execution, pm_word(a, 1), header, 4))
         return 0;
     uint32 size = lx_guest_load_u32(header);
-    if (size < 10 || size > 1048576)
+    if (size < PM_MENU_TEMPLATE_MIN_SIZE || size > PM_MENU_TEMPLATE_MAX_SIZE)
         return 0;
     LxGuestBorrow data = {0};
     if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 1), size, LX_GUEST_READ, &data))
@@ -1371,17 +1458,19 @@ static uint32 bridge32_WinSetVisibleRegionNotify(uint8 *a)
 
 static uint32 bridge32_WinMessageBox(uint8 *a)
 {
-    char *text = lx_guest_load_u32(a + 8) ? lx_execution_copy_string(GProcessState.execution,
-                                                                     lx_guest_load_u32(a + 8), 8193)
-                                          : strdup("");
+    char *text = lx_guest_load_u32(a + 8)
+                     ? lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 8),
+                                                PM_MESSAGE_BOX_TEXT_LIMIT)
+                     : strdup("");
     char *caption =
         lx_guest_load_u32(a + 12)
-            ? lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 12), 1025)
+            ? lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 12),
+                                       PM_MESSAGE_BOX_CAPTION_LIMIT)
             : strdup("");
     uint32 result = text && caption ? WinMessageBox(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
                                                     text, caption, lx_guest_load_u32(a + 16),
                                                     lx_guest_load_u32(a + 20))
-                                    : 0xffff;
+                                    : MBID_ERROR;
     free(text);
     free(caption);
     return result;
@@ -1401,8 +1490,10 @@ static uint32 bridge32_WinQuerySystemAtomTable(uint8 *a)
 static uint32 bridge32_WinAddAtom(uint8 *a)
 {
     uint32 address = pm_word(a, 1);
-    char *name = address < 0x10000 || address >= 0xffff0000 ? NULL : pm_string(address);
-    if (address >= 0x10000 && address < 0xffff0000 && !name)
+    char *name = address < PM_ATOM_STRING_FIRST || address >= PM_INTEGER_ATOM_FIRST
+                     ? NULL
+                     : pm_string(address);
+    if (address >= PM_ATOM_STRING_FIRST && address < PM_INTEGER_ATOM_FIRST && !name)
         return 0;
     uint32 result = WinAddAtom(pm_word(a, 0), name ? name : (PSZ)(uintptr_t)address);
     free(name);
@@ -1412,8 +1503,10 @@ static uint32 bridge32_WinAddAtom(uint8 *a)
 static uint32 bridge32_WinFindAtom(uint8 *a)
 {
     uint32 address = pm_word(a, 1);
-    char *name = address < 0x10000 || address >= 0xffff0000 ? NULL : pm_string(address);
-    if (address >= 0x10000 && address < 0xffff0000 && !name)
+    char *name = address < PM_ATOM_STRING_FIRST || address >= PM_INTEGER_ATOM_FIRST
+                     ? NULL
+                     : pm_string(address);
+    if (address >= PM_ATOM_STRING_FIRST && address < PM_INTEGER_ATOM_FIRST && !name)
         return 0;
     uint32 result = WinFindAtom(pm_word(a, 0), name ? name : (PSZ)(uintptr_t)address);
     free(name);
@@ -1512,7 +1605,7 @@ static uint32 pm_mux_operation(void *argument)
     WirePmMuxWait *call = argument;
     ULONG user = 0;
     uint32 result = WinWaitMuxWaitSem(call->handle, call->timeout, &user);
-    if (!result || result == 105)
+    if (!result || result == ERROR_SEM_OWNER_DIED)
         lx_guest_store_u32(call->output.host, user);
     return result;
 }
@@ -1524,17 +1617,19 @@ static uint32 bridge32_WinWaitMuxWaitSem(uint8 *a)
     call.timeout = pm_word(a, 1);
     if (!lx_execution_borrow(GProcessState.execution, pm_word(a, 2), 4, LX_GUEST_WRITE,
                              &call.output))
-        return 87;
+        return ERROR_INVALID_PARAMETER;
     return lx_host_guarded_call(pm_mux_operation, &call, pm_mux_cleanup, &call);
 }
 
 static uint32 bridge32_WinCreateFrameControls(uint8 *a)
 {
-    uint8 bytes[10];
+    uint8 bytes[GUEST_FRAMECDATA_SIZE];
     if (!lx_execution_read(GProcessState.execution, pm_word(a, 1), bytes, sizeof bytes))
         return 0;
-    FRAMECDATA data = {lx_guest_load_u16(bytes), lx_guest_load_u32(bytes + 2),
-                       lx_guest_load_u16(bytes + 6), lx_guest_load_u16(bytes + 8)};
+    FRAMECDATA data = {lx_guest_load_u16(bytes + FRAMECDATA_CB_OFFSET),
+                       lx_guest_load_u32(bytes + FRAMECDATA_FLCREATEFLAGS_OFFSET),
+                       lx_guest_load_u16(bytes + FRAMECDATA_HMODRESOURCES_OFFSET),
+                       lx_guest_load_u16(bytes + FRAMECDATA_IDRESOURCES_OFFSET)};
     char *title = pm_string(pm_word(a, 2));
     if (pm_word(a, 2) && !title)
         return 0;
@@ -1604,8 +1699,8 @@ static uint32 bridge32_WinScrollWindow(uint8 *a)
          lx_execution_read(GProcessState.execution, pm_word(a, 3), &scroll, sizeof scroll)) &&
         (!pm_word(a, 4) ||
          lx_execution_read(GProcessState.execution, pm_word(a, 4), &clip, sizeof clip)) &&
-        (!pm_word(a, 6) ||
-         lx_execution_borrow(GProcessState.execution, pm_word(a, 6), 16, LX_GUEST_WRITE, &output)))
+        (!pm_word(a, 6) || lx_execution_borrow(GProcessState.execution, pm_word(a, 6),
+                                               GUEST_RECTL_SIZE, LX_GUEST_WRITE, &output)))
     {
         result = WinScrollWindow(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2),
                                  pm_word(a, 3) ? &scroll : NULL, pm_word(a, 4) ? &clip : NULL,
@@ -1627,11 +1722,11 @@ static uint32 bridge32_WinCancelShutdown(uint8 *a)
 
 static uint32 bridge32_WinCpTranslateString(uint8 *a)
 {
-    char *s2 = lx_execution_copy_string(GProcessState.execution, pm_word(a, 2), 65536);
+    char *s2 = lx_execution_copy_string(GProcessState.execution, pm_word(a, 2), PM_STRING_LIMIT);
     LxGuestBorrow p5 = {0};
     uint64_t n5 = (uint64_t)pm_word(a, 4);
     uint32 result = 0;
-    if (!s2 || n5 > 64 * 1024 * 1024 ||
+    if (!s2 || n5 > PM_BUFFER_LIMIT ||
         (n5 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 5), (size_t)n5,
                                     LX_GUEST_WRITE, &p5)))
         goto done;
@@ -1688,9 +1783,9 @@ static uint32 bridge32_WinGetErrorInfo(uint8 *a)
 static uint32 bridge32_WinGetMaxPosition(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 36;
+    uint64_t n1 = GUEST_SWP_SIZE;
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > PM_BUFFER_LIMIT ||
         (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ | LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1703,12 +1798,12 @@ done:
 static uint32 bridge32_WinGetMinPosition(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 36;
+    uint64_t n1 = GUEST_SWP_SIZE;
     LxGuestBorrow p2 = {0};
     /* The preferred position is an optional input. */
-    uint64_t n2 = pm_word(a, 2) ? 8 : 0;
+    uint64_t n2 = pm_word(a, 2) ? GUEST_POINTL_SIZE : 0;
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > PM_BUFFER_LIMIT ||
         (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ | LX_GUEST_WRITE, &p1)) ||
         (n2 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 2), (size_t)n2,
@@ -1741,7 +1836,7 @@ static uint32 bridge32_WinIsWindowShowing(uint8 *a)
 
 static uint32 bridge32_WinLoadLibrary(uint8 *a)
 {
-    char *s1 = lx_execution_copy_string(GProcessState.execution, pm_word(a, 1), 65536);
+    char *s1 = lx_execution_copy_string(GProcessState.execution, pm_word(a, 1), PM_STRING_LIMIT);
     uint32 result = 0;
     if (!s1)
         goto done;
@@ -1756,8 +1851,8 @@ static uint32 bridge32_WinLoadMessage(uint8 *a)
     LxGuestBorrow p4 = {0};
     uint64_t n4 = (uint64_t)pm_word(a, 3);
     uint32 result = 0;
-    if (n4 > 64 * 1024 * 1024 || (n4 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 4),
-                                                             (size_t)n4, LX_GUEST_WRITE, &p4)))
+    if (n4 > PM_BUFFER_LIMIT || (n4 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 4),
+                                                            (size_t)n4, LX_GUEST_WRITE, &p4)))
         goto done;
     result =
         (uint32)(uintptr_t)WinLoadMessage((HAB)pm_word(a, 0), (HMODULE)pm_word(a, 1),
@@ -1772,8 +1867,8 @@ static uint32 bridge32_WinQueryAtomName(uint8 *a)
     LxGuestBorrow p2 = {0};
     uint64_t n2 = (uint64_t)pm_word(a, 3);
     uint32 result = 0;
-    if (n2 > 64 * 1024 * 1024 || (n2 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 2),
-                                                             (size_t)n2, LX_GUEST_WRITE, &p2)))
+    if (n2 > PM_BUFFER_LIMIT || (n2 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 2),
+                                                            (size_t)n2, LX_GUEST_WRITE, &p2)))
         goto done;
     result = (uint32)(uintptr_t)WinQueryAtomName((ULONG)pm_word(a, 0), (ULONG)pm_word(a, 1),
                                                  (PSZ)p2.host, (ULONG)pm_word(a, 3));
@@ -1801,10 +1896,10 @@ done:
 static uint32 bridge32_WinQueryMsgPos(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 8;
+    uint64_t n1 = GUEST_POINTL_SIZE;
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
-                                                             (size_t)n1, LX_GUEST_WRITE, &p1)))
+    if (n1 > PM_BUFFER_LIMIT || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
+                                                            (size_t)n1, LX_GUEST_WRITE, &p1)))
         goto done;
     result = (uint32)(uintptr_t)WinQueryMsgPos((HAB)pm_word(a, 0), (PPOINTL)p1.host);
 done:
@@ -1823,10 +1918,10 @@ static uint32 bridge32_WinQueryObjectWindow(uint8 *a)
 static uint32 bridge32_WinQueryPointerInfo(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 28;
+    uint64_t n1 = GUEST_POINTERINFO_SIZE;
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
-                                                             (size_t)n1, LX_GUEST_WRITE, &p1)))
+    if (n1 > PM_BUFFER_LIMIT || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
+                                                            (size_t)n1, LX_GUEST_WRITE, &p1)))
         goto done;
     result =
         (uint32)(uintptr_t)WinQueryPointerInfo((HPOINTER)pm_word(a, 0), (LXPOINTERINFO *)p1.host);
@@ -1839,11 +1934,13 @@ static uint32 bridge32_WinQueryQueueInfo(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
     /* A NULL buffer succeeds without copying. */
-    uint64_t n1 =
-        !pm_word(a, 1) ? 0 : ((uint64_t)pm_word(a, 2) < 20 ? (uint64_t)pm_word(a, 2) : 20);
+    uint64_t n1 = !pm_word(a, 1)
+                      ? 0
+                      : ((uint64_t)pm_word(a, 2) < GUEST_MQINFO_SIZE ? (uint64_t)pm_word(a, 2)
+                                                                     : GUEST_MQINFO_SIZE);
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
-                                                             (size_t)n1, LX_GUEST_WRITE, &p1)))
+    if (n1 > PM_BUFFER_LIMIT || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
+                                                            (size_t)n1, LX_GUEST_WRITE, &p1)))
         goto done;
     result = (uint32)(uintptr_t)WinQueryQueueInfo((HMQ)pm_word(a, 0), (PVOID)p1.host,
                                                   (ULONG)pm_word(a, 2));
@@ -1880,10 +1977,10 @@ static uint32 bridge32_WinSetDlgItemShort(uint8 *a)
 static uint32 bridge32_WinSetMultWindowPos(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = (uint64_t)pm_word(a, 2) * 36;
+    uint64_t n1 = (uint64_t)pm_word(a, 2) * GUEST_SWP_SIZE;
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
-                                                             (size_t)n1, LX_GUEST_READ, &p1)))
+    if (n1 > PM_BUFFER_LIMIT || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
+                                                            (size_t)n1, LX_GUEST_READ, &p1)))
         goto done;
     result = (uint32)(uintptr_t)WinSetMultWindowPos((HAB)pm_word(a, 0), (PSWP)p1.host,
                                                     (ULONG)pm_word(a, 2));
@@ -1897,8 +1994,8 @@ static uint32 bridge32_WinSetSysColors(uint8 *a)
     LxGuestBorrow p5 = {0};
     uint64_t n5 = (uint64_t)pm_word(a, 4) * 4;
     uint32 result = 0;
-    if (n5 > 64 * 1024 * 1024 || (n5 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 5),
-                                                             (size_t)n5, LX_GUEST_READ, &p5)))
+    if (n5 > PM_BUFFER_LIMIT || (n5 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 5),
+                                                            (size_t)n5, LX_GUEST_READ, &p5)))
         goto done;
     result = (uint32)(uintptr_t)WinSetSysColors((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1),
                                                 (ULONG)pm_word(a, 2), (LONG)pm_word(a, 3),
@@ -1929,9 +2026,9 @@ static uint32 bridge32_WinSetWindowBits(uint8 *a)
 static uint32 bridge32_WinTrackRect(uint8 *a)
 {
     LxGuestBorrow p2 = {0};
-    uint64_t n2 = 76;
+    uint64_t n2 = GUEST_TRACKINFO_SIZE;
     uint32 result = 0;
-    if (n2 > 64 * 1024 * 1024 ||
+    if (n2 > PM_BUFFER_LIMIT ||
         (n2 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 2), (size_t)n2,
                                     LX_GUEST_READ | LX_GUEST_WRITE, &p2)))
         goto done;
@@ -1945,9 +2042,9 @@ done:
 static uint32 bridge32_WinValidateRect(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 16;
+    uint64_t n1 = GUEST_RECTL_SIZE;
     uint32 result = 0;
-    if ((pm_word(a, 1) && (n1 > 64 * 1024 * 1024 ||
+    if ((pm_word(a, 1) && (n1 > PM_BUFFER_LIMIT ||
                            (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
                                                        (size_t)n1, LX_GUEST_READ, &p1)))))
         goto done;
@@ -1980,9 +2077,9 @@ static uint32 bridge32_WinBroadcastMsg(uint8 *a)
 static uint32 bridge32_WinSetKeyboardStateTable(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 256;
+    uint64_t n1 = KEYBOARD_STATE_TABLE_SIZE;
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 ||
+    if (n1 > PM_BUFFER_LIMIT ||
         (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1), (size_t)n1,
                                     LX_GUEST_READ | LX_GUEST_WRITE, &p1)))
         goto done;
@@ -1998,7 +2095,7 @@ static uint32 bridge32_WinRealizePalette(uint8 *a)
     LxGuestBorrow p2 = {0};
     uint64_t n2 = 4;
     uint32 result = 0;
-    if ((pm_word(a, 2) && (n2 > 64 * 1024 * 1024 ||
+    if ((pm_word(a, 2) && (n2 > PM_BUFFER_LIMIT ||
                            (n2 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 2),
                                                        (size_t)n2, LX_GUEST_WRITE, &p2)))))
         goto done;
@@ -2012,10 +2109,10 @@ done:
 static uint32 bridge32_WinCreatePointerIndirect(uint8 *a)
 {
     LxGuestBorrow p1 = {0};
-    uint64_t n1 = 28;
+    uint64_t n1 = GUEST_POINTERINFO_SIZE;
     uint32 result = 0;
-    if (n1 > 64 * 1024 * 1024 || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
-                                                             (size_t)n1, LX_GUEST_READ, &p1)))
+    if (n1 > PM_BUFFER_LIMIT || (n1 && !lx_execution_borrow(GProcessState.execution, pm_word(a, 1),
+                                                            (size_t)n1, LX_GUEST_READ, &p1)))
         goto done;
     result =
         (uint32)(uintptr_t)WinCreatePointerIndirect((HWND)pm_word(a, 0), (LXPOINTERINFO *)p1.host);

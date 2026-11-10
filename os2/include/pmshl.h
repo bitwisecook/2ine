@@ -26,6 +26,45 @@ extern "C"
 
 #define HINI_SYSTEMPROFILE ((HINI)0xfffffffeu)
 
+    enum
+    {
+        MAXNAMEL = 60
+    };
+
+    /* PROGCATEGORY values */
+    enum
+    {
+        PROG_DEFAULT = 0,
+        PROG_FULLSCREEN = 1,
+        PROG_WINDOWABLEVIO = 2,
+        PROG_PM = 3,
+        PROG_GROUP = 5,
+        PROG_REAL = 4,
+        PROG_VDM = 4,
+        PROG_WINDOWEDVDM = 7,
+        PROG_DLL = 6,
+        PROG_PDD = 8,
+        PROG_VDD = 9,
+        PROG_WINDOW_REAL = 10,
+        PROG_WINDOW_PROT = 11,
+        PROG_30_STD = 11,
+        PROG_WINDOW_AUTO = 12,
+        PROG_SEAMLESSVDM = 13,
+        PROG_30_STDSEAMLESSVDM = 13,
+        PROG_SEAMLESSCOMMON = 14,
+        PROG_30_STDSEAMLESSCOMMON = 14,
+        PROG_31_STDSEAMLESSVDM = 15,
+        PROG_31_STDSEAMLESSCOMMON = 16,
+        PROG_31_ENHSEAMLESSVDM = 17,
+        PROG_31_ENHSEAMLESSCOMMON = 18,
+        PROG_31_ENH = 19,
+        PROG_31_STD = 20,
+        PROG_DOS_GAME = 21,
+        PROG_WIN_GAME = 22,
+        PROG_DOS_MODE = 23,
+        PROG_RESERVED = 255
+    };
+
     typedef struct
     {
         ULONG cchUserName;
@@ -35,6 +74,26 @@ extern "C"
     } PRFPROFILE, *PPRFPROFILE;
 
     /* INCL_WINPROGRAMLIST */
+
+    enum
+    {
+        SHE_VISIBLE = 0x00,
+        SHE_INVISIBLE = 0x01,
+        SHE_RESERVED = 0xFF,
+        SHE_UNPROTECTED = 0x00,
+        SHE_PROTECTED = 0x02
+    };
+
+    /* WinStartApp options */
+    enum
+    {
+        SAF_VALIDFLAGS = 0x001F,
+        SAF_INSTALLEDCMDLINE = 0x0001,
+        SAF_STARTCHILDAPP = 0x0002,
+        SAF_MAXIMIZED = 0x0004,
+        SAF_MINIMIZED = 0x0008,
+        SAF_BACKGROUND = 0x0010
+    };
 
     /* Host form of PROGDETAILS; bindings decode the 72-byte guest record into it. */
     typedef struct
@@ -53,9 +112,18 @@ extern "C"
     typedef struct
     {
         ULONG hwnd, hwndIcon, hprog, idProcess, idSession, uchVisibility, fbJump;
-        CHAR szSwtitle[64];
+        CHAR szSwtitle[MAXNAMEL + 4];
         ULONG bProgType;
     } SWCNTRL, *PSWCNTRL;
+
+    enum
+    {
+        SWL_VISIBLE = 0x04,
+        SWL_INVISIBLE = 0x01,
+        SWL_GRAYED = 0x02,
+        SWL_JUMPABLE = 0x02,
+        SWL_NOTJUMPABLE = 0x01
+    };
 
     OS2EXPORT ULONG OS2API WinCreateSwitchEntry(HAB hab, PSWCNTRL entry);
 
