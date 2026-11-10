@@ -5,12 +5,44 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Per-thread PM state: WinInitialize, its teardown at thread exit, and the PM error state. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "host/clipboard.h"
 #include "emulator/abi.h"
 #include <ctype.h>
+
+/* Resource types (the Toolkit's bsedos.h). */
+enum
+{
+    RT_STRING = 5,
+    RT_MESSAGE = 10
+};
+
+/* Initial capacity of an anchor block's window and presentation space tables. */
+enum
+{
+    INITIAL_HANDLE_SLOTS = 16
+};
+
+/* Error severities (the Toolkit's os2def.h). */
+enum
+{
+    SEVERITY_WARNING = 0x0004,
+    SEVERITY_ERROR = 0x0008,
+    SEVERITY_SEVERE = 0x000C,
+    SEVERITY_UNRECOVERABLE = 0x0010
+};
+
+/* WinGetErrorInfo's block: an ERRINFO, its one-entry message offset table and the message. */
+enum
+{
+    ERROR_BINARY_DATA_OFFSET = sizeof(ERRINFO),
+    ERROR_MESSAGE_TABLE_OFFSET = 24,
+    ERROR_MESSAGE_OFFSET = 40
+};
+
 static void cleanupThreadPM(void);
 static void (*open32_thread_exit)(void);
 
@@ -66,7 +98,7 @@ HAB WinInitialize(ULONG flOptions)
         return NULLHANDLE;
     }
 
-    anchor->windows_array_len = 16;
+    anchor->windows_array_len = INITIAL_HANDLE_SLOTS;
     anchor->windows = calloc(anchor->windows_array_len, sizeof *anchor->windows);
     if (!anchor->windows)
     {
@@ -75,7 +107,7 @@ HAB WinInitialize(ULONG flOptions)
         return NULLHANDLE;
     }
 
-    anchor->pres_spaces_array_len = 16;
+    anchor->pres_spaces_array_len = INITIAL_HANDLE_SLOTS;
     anchor->pres_spaces =
         (PresentationSpace *)malloc(sizeof(PresentationSpace) * anchor->pres_spaces_array_len);
     if (!anchor->pres_spaces)
@@ -220,37 +252,38 @@ PVOID WinGetErrorInfo(HAB hab)
     ErrorAllocation *p = calloc(1, sizeof *p);
     if (!p)
         return NULL;
-    p->mapping =
-        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    p->mapping = lx_execution_map(GProcessState.execution, 0, PM_GUEST_PAGE_SIZE,
+                                  LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!p->mapping)
     {
         free(p);
         return NULL;
     }
     uint8 *out = lx_execution_mapping_host(p->mapping);
-    /* ERRINFO, one message offset at 24, no binary data at 20, and the message at 40. The
-       severity is the id's high word; PM sites that record a bare code are errors. */
-    memset(out, 0, 40);
+    /* The severity is the id's high word; PM sites that record a bare code are errors. */
+    memset(out, 0, ERROR_MESSAGE_OFFSET);
     ULONG error = WinGetLastError(hab), code = error & 0xffff;
-    ULONG severity = error >> 16 ? error >> 16 : 8; /* SEVERITY_ERROR */
+    ULONG severity = error >> 16 ? error >> 16 : SEVERITY_ERROR;
     char prefix[16], letters[32], text[256] = {0};
-    if (!loadStringTable((HMODULE)-1, 5, 0, sizeof prefix, prefix))
+    if (!loadStringTable(PM_RESOURCE_MODULE, RT_STRING, 0, sizeof prefix, prefix))
         snprintf(prefix, sizeof prefix, "PMWIN");
-    size_t known = (size_t)loadStringTable((HMODULE)-1, 5, 0x1021, sizeof letters, letters);
-    char letter = known            ? letters[severity < known ? severity : known - 1]
-                  : severity == 4  ? 'W'
-                  : severity == 12 ? 'S'
-                  : severity == 16 ? 'U'
-                                   : 'E';
-    if (!loadStringTable((HMODULE)-1, 10, code, sizeof text, text))
-        loadStringTable((HMODULE)-1, 5, code, sizeof text, text);
-    lx_guest_store_u32(out, 20);
-    lx_guest_store_u32(out + 4, severity << 16 | code);
-    lx_guest_store_u32(out + 8, 1);
-    lx_guest_store_u32(out + 12, 24);
-    lx_guest_store_u32(out + 16, 20);
-    lx_guest_store_u32(out + 24, 40);
-    snprintf((char *)out + 40, 4096 - 40, "%s%06X%c %s\r\n", prefix, (unsigned)code, letter, text);
+    size_t known = (size_t)loadStringTable(PM_RESOURCE_MODULE, RT_STRING, PMERR_SEVERITY_LEVELS,
+                                           sizeof letters, letters);
+    char letter = known                          ? letters[severity < known ? severity : known - 1]
+                  : severity == SEVERITY_WARNING ? 'W'
+                  : severity == SEVERITY_SEVERE  ? 'S'
+                  : severity == SEVERITY_UNRECOVERABLE ? 'U'
+                                                       : 'E';
+    if (!loadStringTable(PM_RESOURCE_MODULE, RT_MESSAGE, code, sizeof text, text))
+        loadStringTable(PM_RESOURCE_MODULE, RT_STRING, code, sizeof text, text);
+    lx_guest_store_u32(out + offsetof(ERRINFO, cbFixedErrInfo), sizeof(ERRINFO));
+    lx_guest_store_u32(out + offsetof(ERRINFO, idError), severity << 16 | code);
+    lx_guest_store_u32(out + offsetof(ERRINFO, cDetailLevel), 1);
+    lx_guest_store_u32(out + offsetof(ERRINFO, offaoffszMsg), ERROR_MESSAGE_TABLE_OFFSET);
+    lx_guest_store_u32(out + offsetof(ERRINFO, offBinaryData), ERROR_BINARY_DATA_OFFSET);
+    lx_guest_store_u32(out + ERROR_MESSAGE_TABLE_OFFSET, ERROR_MESSAGE_OFFSET);
+    snprintf((char *)out + ERROR_MESSAGE_OFFSET, PM_GUEST_PAGE_SIZE - ERROR_MESSAGE_OFFSET,
+             "%s%06X%c %s\r\n", prefix, (unsigned)code, letter, text);
     p->next = error_allocations;
     error_allocations = p;
     return (PVOID)(uintptr_t)lx_execution_mapping_address(p->mapping);

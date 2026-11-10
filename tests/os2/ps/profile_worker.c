@@ -7,6 +7,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Exit statuses the driving test distinguishes. */
+enum
+{
+    EXIT_USAGE = 2,
+    EXIT_OPEN_FAILED = 3,
+    EXIT_BAD_COMMAND = 4,
+    EXIT_CLOSE_FAILED = 5
+};
+
 static HINI profile;
 
 static HINI scope(const char *name)
@@ -20,14 +29,14 @@ static HINI scope(const char *name)
 int main(int argc, char **argv)
 {
     if (argc != 3)
-        return 2;
+        return EXIT_USAGE;
     setvbuf(stdout, NULL, _IONBF, 0);
     if (!strcmp(argv[1], "lock"))
     {
         LxHostFile *lock = lx_host_file_open(
             argv[2], LX_HOST_FILE_READ | LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE, 0, NULL);
         if (!lock || lx_host_file_lock(lock, 1) != LX_HOST_FS_OK)
-            return 3;
+            return EXIT_OPEN_FAILED;
         puts("ready");
         getchar();
         lx_host_file_close(lock);
@@ -35,7 +44,7 @@ int main(int argc, char **argv)
     }
     profile = lx_profile_open_host(argv[2]);
     if (!profile)
-        return 3;
+        return EXIT_OPEN_FAILED;
     puts("ready");
     char line[9000];
     while (fgets(line, sizeof line, stdin))
@@ -43,7 +52,7 @@ int main(int argc, char **argv)
         char command[16], name[16], app[128], key[128], value[8193];
         int fields = sscanf(line, "%15s %15s %127s %127s %8192s", command, name, app, key, value);
         if (fields < 2)
-            return 4;
+            return EXIT_BAD_COMMAND;
         HINI h = scope(name);
         int ok = 0;
         if (!strcmp(command, "get") && fields == 4)
@@ -66,12 +75,12 @@ int main(int argc, char **argv)
             size_t length = strlen(value);
             unsigned char bytes[4096];
             if (length % 2)
-                return 4;
+                return EXIT_BAD_COMMAND;
             for (size_t i = 0; i < length / 2; i++)
             {
                 unsigned byte;
                 if (sscanf(value + i * 2, "%2x", &byte) != 1)
-                    return 4;
+                    return EXIT_BAD_COMMAND;
                 bytes[i] = byte;
             }
             ok = PrfWriteProfileData(h, app, key, bytes, (ULONG)(length / 2));
@@ -94,5 +103,5 @@ int main(int argc, char **argv)
             ok = PrfWriteProfileData(h, NULL, NULL, NULL, 0);
         puts(ok ? "ok" : "error");
     }
-    return PrfCloseProfile(profile) ? 0 : 5;
+    return PrfCloseProfile(profile) ? 0 : EXIT_CLOSE_FAILED;
 }

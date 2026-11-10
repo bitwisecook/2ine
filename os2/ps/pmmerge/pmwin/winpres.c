@@ -26,8 +26,9 @@ static void notify(AnchorBlock *anchor, Window *window, ULONG id)
 LONG windowPresentationColor(Window *window, BOOL foreground, LONG fallback)
 {
     ULONG color = 0;
-    if (WinQueryPresParam(window->hwnd, foreground ? 1 : 3, foreground ? 2 : 4, NULL, sizeof color,
-                          &color, 4) == sizeof color)
+    if (WinQueryPresParam(window->hwnd, foreground ? PP_FOREGROUNDCOLOR : PP_BACKGROUNDCOLOR,
+                          foreground ? PP_FOREGROUNDCOLORINDEX : PP_BACKGROUNDCOLORINDEX, NULL,
+                          sizeof color, &color, QPF_ID2COLORINDEX) == sizeof color)
         return color <= 0xffffff ? (LONG)color : fallback;
     return fallback;
 }
@@ -89,9 +90,9 @@ ULONG WinQueryPresParam(HWND window, ULONG first, ULONG second, PULONG found, UL
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
-    if (!w || (flags & ~15u) || (capacity && !output))
+    if (!w || (flags & ~(ULONG)QPF_VALIDFLAGS) || (capacity && !output))
         return 0;
-    for (; w; w = flags & 1 ? NULL : w->owner)
+    for (; w; w = flags & QPF_NOINHERIT ? NULL : w->owner)
     {
         PmPresentationParameter *p = NULL;
         for (PmPresentationParameter *entry = w->parameters; entry; entry = entry->next)
@@ -106,9 +107,10 @@ ULONG WinQueryPresParam(HWND window, ULONG first, ULONG second, PULONG found, UL
         uint8 color[4];
         const void *data = p->data;
         ULONG size = p->size;
-        if ((p->id == first && (flags & 2)) || (p->id == second && (flags & 4)))
+        if ((p->id == first && (flags & QPF_ID1COLORINDEX)) ||
+            (p->id == second && (flags & QPF_ID2COLORINDEX)))
         {
-            if (size != 4)
+            if (size != sizeof(LONG))
                 return 0;
             LONG index = (LONG)lx_guest_load_u32(p->data);
             if (index < CLR_FALSE || index > CLR_PALEGRAY)

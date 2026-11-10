@@ -97,7 +97,7 @@ BOOL WinInvalidateRect(HWND handle, PRECTL rectangle, BOOL children)
         prior.count = 1;
     }
     PmRegion input = {.rects = &damaged, .count = 1}, combined = {0};
-    if (!regionBoolean(&combined, &prior, &input, 1))
+    if (!regionBoolean(&combined, &prior, &input, CRGN_OR))
         return FALSE;
     free(window->damage_rects);
     window->damage_rects = combined.rects;
@@ -205,7 +205,7 @@ static BOOL validate_region_window(HWND handle, const PmRegion *region, BOOL chi
     }
     else
     {
-        if (!regionBoolean(&after, &before, region, 7))
+        if (!regionBoolean(&after, &before, region, CRGN_DIFF))
             return FALSE;
         free(w->damage_rects);
         w->damage_rects = after.rects;
@@ -313,11 +313,12 @@ BOOL lx_pm_window_scroll_damage(HWND window, const RECTL *area, LONG dx, LONG dy
     RECTL box = *area;
     PmRegion clip = {.rects = &box, .count = 1}, inside = {0}, outside = {0}, kept = {0},
              moved = {0};
-    BOOL ok =
-        regionBoolean(&inside, &before, &clip, 6) && regionBoolean(&outside, &before, &clip, 7);
+    BOOL ok = regionBoolean(&inside, &before, &clip, CRGN_AND) &&
+              regionBoolean(&outside, &before, &clip, CRGN_DIFF);
     for (size_t i = 0; ok && i < inside.count; i++)
         WinOffsetRect(0, &inside.rects[i], dx, dy);
-    ok = ok && regionBoolean(&kept, &inside, &clip, 6) && regionBoolean(&moved, &outside, &kept, 1);
+    ok = ok && regionBoolean(&kept, &inside, &clip, CRGN_AND) &&
+         regionBoolean(&moved, &outside, &kept, CRGN_OR);
     free(inside.rects);
     free(outside.rects);
     free(kept.rects);
@@ -349,14 +350,14 @@ LONG WinQueryUpdateRegion(HWND handle, ULONG region)
         before.rects = &w->invalid;
         before.count = 1;
     }
-    BOOL ok = r->anchor == a && !r->selected && regionBoolean(&out, &before, NULL, 2);
+    BOOL ok = r->anchor == a && !r->selected && regionBoolean(&out, &before, NULL, CRGN_COPY);
     if (ok)
     {
         free(r->rects);
         r->rects = out.rects;
         r->count = out.count;
     }
-    LONG n = ok ? (r->count > 1 ? 3 : r->count ? 2 : 1) : 0;
+    LONG n = ok ? (r->count > 1 ? RGN_COMPLEX : r->count ? RGN_RECT : RGN_NULL) : RGN_ERROR;
     lx_handle_release(&b);
     return n;
 }

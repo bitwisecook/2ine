@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Window creation and destruction, handle lookup and the enabled and visible state queries. */
 #include "emulator/launch_record.h"
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
@@ -271,7 +272,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     }
     win->visible_region_notify = FALSE;
     win->enabled = (flStyle & WS_DISABLED) == 0;
-    win->window_class_name = winclass->name; // this pointer lives until Anchor Block terminates.
+    win->window_class_name = winclass->name; /* Class names live as long as the anchor block. */
     win->data = data;
     win->text = text;
     win->data_len = winclass->data_len;

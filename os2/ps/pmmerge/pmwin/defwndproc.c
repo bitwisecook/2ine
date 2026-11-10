@@ -58,7 +58,7 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
             return frameSystemCommand(win, (USHORT)(uintptr_t)mp1);
         case WM_BUTTON1DBLCLK:
             if (isFrameWindow(win) && (win->style & WS_MINIMIZED))
-                return frameSystemCommand(win, 0x8008); /* SC_RESTORE */
+                return frameSystemCommand(win, SC_RESTORE);
             return 0;
         case WM_CREATE:
             if (mp1 && win->window_class_name && !strcmp(win->window_class_name, "#1"))
@@ -188,13 +188,13 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
                     WinEndPaint(space);
                 }
                 /* WM_ERASEBACKGROUND: TRUE asks the frame to fill its client. */
-                Window *client = getWindowFromHWND(anchor, WinWindowFromID(hwnd, 0x8008));
+                Window *client = getWindowFromHWND(anchor, WinWindowFromID(hwnd, FID_CLIENT));
                 HPS client_space = client ? WinGetPS(client->hwnd) : 0;
                 if (client_space)
                 {
                     RECTL area = {0, 0, client->w, client->h};
                     if (sendEraseBackground(client, client_space, &area))
-                        WinFillRect(client_space, &area, -20); /* SYSCLR_WINDOW */
+                        WinFillRect(client_space, &area, SYSCLR_WINDOW);
                     WinReleasePS(client_space);
                 }
                 return 0;
@@ -209,7 +209,7 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
                                         controlWrite(mp1, &border, sizeof border));
         }
         case WM_QUERYFRAMEINFO:
-            return (MRESULT)(uintptr_t)(isFrameWindow(win) ? 1u | 4u : 0u);
+            return (MRESULT)(uintptr_t)(isFrameWindow(win) ? FI_FRAME | FI_ACTIVATEOK : 0u);
         case WM_CALCFRAMERECT:
         {
             RECTL rect;
@@ -242,8 +242,8 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         {
             LONG shape = win->control && (win->control->kind == (USHORT)WC_ENTRYFIELD ||
                                           win->control->kind == (USHORT)WC_MLE)
-                             ? 2  /* SPTR_TEXT */
-                             : 1; /* SPTR_ARROW */
+                             ? SPTR_TEXT
+                             : SPTR_ARROW;
             HPOINTER pointer = WinQuerySysPointer(HWND_DESKTOP, shape, FALSE);
             if (!pointer)
                 return 0;

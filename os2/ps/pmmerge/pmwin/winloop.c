@@ -14,6 +14,13 @@
 #include "emulator/abi.h"
 #include <ctype.h>
 
+/* Cross-process posts arrive through a mailbox that is polled, not waited on, so an idle queue
+   wakes at least this often to collect them. */
+enum
+{
+    MAILBOX_POLL_MS = 10
+};
+
 /* Paint parents before children and lower siblings before overlapping upper siblings.
    Retrieving WM_PAINT never validates damage: an application may defer its drawing. */
 static Window *nextPaintSibling(AnchorBlock *anchor, Window *window, HWND filter, ULONG first,
@@ -86,8 +93,8 @@ static void pumpFilteredEvents(AnchorBlock *anchor, LxPmPaintFilter paint_filter
         while (lx_host_video_poll(&event))
             lx_pm_host_event(&event);
         int wait = pumpTimers(anchor);
-        if (wait < 0 || wait > 10)
-            wait = 10; /* Cross-process posts arrive through the ball's mailbox. */
+        if (wait < 0 || wait > MAILBOX_POLL_MS)
+            wait = MAILBOX_POLL_MS;
         QMSG paint;
         if (anchor->message_queue.head ||
             filteredPaintMessage(anchor, &paint, 0, 0, 0, paint_filter, context))
@@ -186,7 +193,7 @@ static BOOL getMessage(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFir
 
             anchor->message_queue.last_position = pqmsg->ptl;
             synchronizeInputState(anchor, pqmsg);
-            if (filterInputMessage(anchor, pqmsg, 1))
+            if (filterInputMessage(anchor, pqmsg, PM_REMOVE))
                 continue;
             return (pqmsg->msg != WM_QUIT) ? TRUE : FALSE;
         }
@@ -229,7 +236,7 @@ static BOOL peekMessage(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG l
                         LxPmPaintFilter paint_filter, void *context)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !output || flags > 1 || (filter && !getWindowFromHWND(anchor, filter)))
+    if (!anchor || !output || flags > PM_REMOVE || (filter && !getWindowFromHWND(anchor, filter)))
         return FALSE;
     drainForeignMessages(anchor);
     lx_pm_dive_pump(anchor);
@@ -253,7 +260,7 @@ retry:;
     *output = item->qmsg;
     anchor->message_queue.last_position = output->ptl;
     QMSG original = item->qmsg;
-    if (flags & 1)
+    if (flags & PM_REMOVE)
     {
         if (previous)
             previous->next = item->next;
@@ -267,7 +274,7 @@ retry:;
     synchronizeInputState(anchor, output);
     if (filterInputMessage(anchor, output, flags))
     {
-        if (!(flags & 1))
+        if (!(flags & PM_REMOVE))
         {
             MessageQueueItem **link = &anchor->message_queue.head;
             previous = NULL;
@@ -297,5 +304,5 @@ BOOL WinPeekMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULO
 
 BOOL lx_pm_peek_open32_message(HAB hab, PQMSG output, LxPmPaintFilter paint_filter, void *context)
 {
-    return peekMessage(hab, output, 0, 0, 0, 1, paint_filter, context);
+    return peekMessage(hab, output, 0, 0, 0, PM_REMOVE, paint_filter, context);
 }

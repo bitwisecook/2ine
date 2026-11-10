@@ -52,7 +52,7 @@ void destroyPresentationSpace(AnchorBlock *anchor, PresentationSpace *ps)
     if (ps->bitmap_lease.resource)
         ((PmBitmap *)ps->bitmap_lease.resource)->selected--;
     lx_handle_release(&ps->bitmap_lease);
-    for (unsigned i = 0; i < 255; i++)
+    for (unsigned i = 0; i < sizeof ps->bitmap_ids / sizeof *ps->bitmap_ids; i++)
         lx_handle_release(&ps->bitmap_ids[i]);
     lx_host_font_close(ps->font);
     if (ps->dc_lease.resource)
@@ -139,7 +139,7 @@ HPS acquirePresentationSpace(HWND hwnd, HPS hps, PRECTL prclPaint, BOOL paint)
         ps->back_color = CLR_WHITE;
         ps->mix = FM_OVERPAINT;
         ps->back_mix = BM_LEAVEALONE;
-        for (unsigned i = 0; i < 5; i++)
+        for (unsigned i = 0; i < sizeof ps->primitive_color / sizeof *ps->primitive_color; i++)
         {
             ps->primitive_color[i] = CLR_BLACK;
             ps->primitive_back[i] = CLR_WHITE;

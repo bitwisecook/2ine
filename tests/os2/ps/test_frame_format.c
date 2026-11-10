@@ -12,6 +12,14 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
+/* A control the subclass adds above the client */
+enum
+{
+    EXTENSION_ID = 0x9001,
+    EXTENSION_HEIGHT = 20
+};
+
 static PFNWP original;
 static HWND extension, client;
 static ULONG formatted, queries;
@@ -31,11 +39,11 @@ static MRESULT OS2API frame_proc(HWND window, ULONG message, MPARAM first, MPARA
         last_client = *(PRECTL)second;
         for (ULONG i = 0; i < count; i++)
             if (positions[i].hwnd == client)
-                positions[i].cy -= 20;
+                positions[i].cy -= EXTENSION_HEIGHT;
         positions[count] = (SWP){SWP_MOVE | SWP_SIZE | SWP_SHOW,
-                                 20,
+                                 EXTENSION_HEIGHT,
                                  last_client.xRight - last_client.xLeft,
-                                 last_client.yTop - 20,
+                                 last_client.yTop - EXTENSION_HEIGHT,
                                  last_client.xLeft,
                                  HWND_TOP,
                                  extension,
@@ -56,25 +64,26 @@ int main(void)
     HMQ queue = WinCreateMsgQueue(anchor, 0);
     CHECK(queue);
     CHECK(WinRegisterClass(anchor, "FrameProtocolClient", WinDefWindowProc, 0, 0));
-    ULONG flags = 1 | 2 | 8;
+    ULONG flags = FCF_TITLEBAR | FCF_SYSMENU | FCF_SIZEBORDER;
     HWND frame = WinCreateStdWindow(HWND_DESKTOP, WS_VISIBLE, &flags, "FrameProtocolClient",
                                     "Frame protocol", 0, 0, 0, &client);
     CHECK(frame && client);
     CHECK(WinSetWindowPos(frame, HWND_TOP, 0, 0, 300, 200, SWP_MOVE | SWP_SIZE));
-    CHECK(WinCreateWindow(frame, (PSZ)(uintptr_t)WC_SCROLLBAR, NULL, WS_VISIBLE | 1, 0, 0, 1, 1,
-                          frame, HWND_TOP, FID_VERTSCROLL, NULL, NULL));
+    CHECK(WinCreateWindow(frame, (PSZ)(uintptr_t)WC_SCROLLBAR, NULL, WS_VISIBLE | SBS_VERT, 0, 0, 1,
+                          1, frame, HWND_TOP, FID_VERTSCROLL, NULL, NULL));
     CHECK(WinCreateWindow(frame, (PSZ)(uintptr_t)WC_SCROLLBAR, NULL, WS_VISIBLE, 0, 0, 1, 1, frame,
                           HWND_TOP, FID_HORZSCROLL, NULL, NULL));
-    extension = WinCreateWindow(frame, (PSZ)(uintptr_t)0xffff0001, "extension", WS_VISIBLE, 0, 0, 1,
-                                1, frame, HWND_TOP, 0x9001, NULL, NULL);
+    extension = WinCreateWindow(frame, (PSZ)(uintptr_t)WC_FRAME, "extension", WS_VISIBLE, 0, 0, 1,
+                                1, frame, HWND_TOP, EXTENSION_ID, NULL, NULL);
     CHECK(extension);
     original = WinSubclassWindow(frame, frame_proc);
     CHECK(original);
     HWND title = WinWindowFromID(frame, FID_TITLEBAR);
     CLASSINFO title_class;
     CHECK(title && WinQueryClassInfo(anchor, (PSZ)(uintptr_t)WC_TITLEBAR, &title_class) &&
-          title_class.cbWindowData >= 4);
-    CHECK(WinSetWindowULong(title, 0, 0x12345678) && WinQueryWindowULong(title, 0) == 0x12345678);
+          title_class.cbWindowData >= sizeof(ULONG));
+    CHECK(WinSetWindowULong(title, QWL_USER, 0x12345678) &&
+          WinQueryWindowULong(title, QWL_USER) == 0x12345678);
     ULONG standard_count = (ULONG)(uintptr_t)original(frame, WM_QUERYFRAMECTLCOUNT, 0, 0);
     CHECK(standard_count == 5);
     CHECK((ULONG)(uintptr_t)WinSendMsg(frame, WM_QUERYFRAMECTLCOUNT, 0, 0) == standard_count + 1);
@@ -88,12 +97,12 @@ int main(void)
     CHECK(formatted == 1 && queries >= 2);
     CHECK(WinQueryWindowPos(client, &after));
     CHECK(after.cx == last_client.xRight - last_client.xLeft &&
-          after.cy == last_client.yTop - last_client.yBottom - 20);
-    CHECK(WinQueryWindowPos(extension, &after) && after.cy == 20 &&
-          after.y == last_client.yTop - 20);
+          after.cy == last_client.yTop - last_client.yBottom - EXTENSION_HEIGHT);
+    CHECK(WinQueryWindowPos(extension, &after) && after.cy == EXTENSION_HEIGHT &&
+          after.y == last_client.yTop - EXTENSION_HEIGHT);
     CHECK(WinSetWindowPos(frame, HWND_TOP, 0, 0, 400, 300, SWP_SIZE));
     CHECK(formatted == 2 && WinQueryWindowPos(client, &after) &&
-          after.cy == last_client.yTop - last_client.yBottom - 20);
+          after.cy == last_client.yTop - last_client.yBottom - EXTENSION_HEIGHT);
     CHECK(WinDestroyWindow(frame) && WinDestroyMsgQueue(queue) && WinTerminate(anchor));
     return 0;
 }

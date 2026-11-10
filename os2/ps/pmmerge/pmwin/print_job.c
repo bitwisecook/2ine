@@ -13,6 +13,32 @@
 #define PRINT_PAGE_LIMIT 1000u
 #define PRINT_BYTE_LIMIT (UINT64_C(1024) * 1024 * 1024)
 
+enum
+{
+    PRINT_MAX_DIMENSION = 10000, /* pels */
+    PRINT_MAX_PIXELS = 16000000,
+    PRINT_MAX_DPI = 2400,
+    /* PDF object numbers: the catalog, the page tree, then an image, a content stream
+       and a page object for each page. Object 0 is the free-list head. */
+    PDF_CATALOG_OBJECT = 1,
+    PDF_PAGES_OBJECT = 2,
+    PDF_FIRST_PAGE_OBJECT = 3,
+    PDF_OBJECTS_PER_PAGE = 3,
+    PDF_MILLIPOINTS_PER_INCH = 72000,
+    /* PCL page size codes and the long edges, in 300 dpi pels, that select them. */
+    PCL_PAPER_LETTER = 2,
+    PCL_PAPER_LEGAL = 3,
+    PCL_PAPER_A4 = 26,
+    LETTER_LONG_EDGE_300DPI = 3300,
+    LEGAL_LONG_EDGE_300DPI = 4200,
+    /* ITU-R BT.601 luma weights scaled by 256. */
+    LUMA_RED = 77,
+    LUMA_GREEN = 150,
+    LUMA_BLUE = 29,
+    TEMPORARY_SUFFIX_CAPACITY = 80,
+    TEMPORARY_NAME_ATTEMPTS = 16
+};
+
 struct LxPrintJob
 {
     FILE *spool;
@@ -20,7 +46,7 @@ struct LxPrintJob
     char *title;
     unsigned kind, pages, copies, duplex;
     int draft;
-    long offsets[3 * PRINT_PAGE_LIMIT + 3];
+    long offsets[PDF_OBJECTS_PER_PAGE * PRINT_PAGE_LIMIT + PDF_FIRST_PAGE_OBJECT];
     int failed;
 };
 
@@ -63,7 +89,8 @@ LxPrintJob *lx_print_begin(unsigned kind, const char *title, int *cancelled)
     job->destination = destination;
     job->title = strdup(title && *title ? title : "2ine Print Job");
     job->kind = kind;
-    job->copies = job->duplex = 1;
+    job->duplex = LX_PRINT_SIMPLEX;
+    job->copies = 1;
     job->spool = tmpfile();
     if (!job->spool || !job->title)
     {
@@ -108,7 +135,8 @@ static int pdf_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
         free(packed);
         return 0;
     }
-    unsigned image = 3 + job->pages * 3, content = image + 1, page = image + 2;
+    unsigned image = PDF_FIRST_PAGE_OBJECT + job->pages * PDF_OBJECTS_PER_PAGE, content = image + 1,
+             page = image + 2;
     pdf_object(job, image);
     fprintf(job->spool,
             "<< /Type /XObject /Subtype /Image /Width %u /Height %u /ColorSpace /DeviceRGB "
@@ -119,8 +147,9 @@ static int pdf_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
     fputs("\nendstream\nendobj\n", job->spool);
     char commands[160];
     /* Integer thousandths avoid locale-dependent decimal formatting. */
-    unsigned page_width = (unsigned)(((uint64_t)width * 72000 + dpi / 2) / dpi),
-             page_height = (unsigned)(((uint64_t)height * 72000 + dpi / 2) / dpi);
+    unsigned page_width = (unsigned)(((uint64_t)width * PDF_MILLIPOINTS_PER_INCH + dpi / 2) / dpi),
+             page_height =
+                 (unsigned)(((uint64_t)height * PDF_MILLIPOINTS_PER_INCH + dpi / 2) / dpi);
     int bytes =
         snprintf(commands, sizeof commands, "q\n%u.%03u 0 0 %u.%03u 0 0 cm\n/Im0 Do\nQ\n",
                  page_width / 1000, page_width % 1000, page_height / 1000, page_height % 1000);
@@ -138,12 +167,15 @@ static int pdf_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
 static unsigned pcl_paper(unsigned width, unsigned height)
 {
     unsigned length = width > height ? width : height;
-    return length == 3300 ? 2 : length == 4200 ? 3 : 26;
+    return length == LETTER_LONG_EDGE_300DPI  ? PCL_PAPER_LETTER
+           : length == LEGAL_LONG_EDGE_300DPI ? PCL_PAPER_LEGAL
+                                              : PCL_PAPER_A4;
 }
 
 static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsigned height,
                     unsigned dpi)
 {
+    /* A 4x4 Bayer matrix, scaled below to 16 luminance steps. */
     static const unsigned threshold[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
     size_t bytes = (width + 7u) / 8u;
     unsigned char *row = malloc(bytes);
@@ -162,8 +194,9 @@ static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
         for (unsigned x = 0; x < width; x++)
         {
             uint32_t pixel = pixels[(size_t)(height - y - 1) * width + x];
-            unsigned luminance =
-                (77 * ((pixel >> 16) & 255) + 150 * ((pixel >> 8) & 255) + 29 * (pixel & 255)) >> 8;
+            unsigned luminance = (LUMA_RED * ((pixel >> 16) & 255) +
+                                  LUMA_GREEN * ((pixel >> 8) & 255) + LUMA_BLUE * (pixel & 255)) >>
+                                 8;
             if (luminance < threshold[(y & 3) * 4 + (x & 3)] * 16 + 8)
                 row[x / 8] |= (unsigned char)(0x80u >> (x & 7));
         }
@@ -182,8 +215,9 @@ static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
 int lx_print_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsigned height,
                   unsigned dpi)
 {
-    if (!job || job->failed || !pixels || !width || !height || width > 10000 || height > 10000 ||
-        (uint64_t)width * height > 16000000 || !dpi || dpi > 2400 || job->pages >= PRINT_PAGE_LIMIT)
+    if (!job || job->failed || !pixels || !width || !height || width > PRINT_MAX_DIMENSION ||
+        height > PRINT_MAX_DIMENSION || (uint64_t)width * height > PRINT_MAX_PIXELS || !dpi ||
+        dpi > PRINT_MAX_DPI || job->pages >= PRINT_PAGE_LIMIT)
         return 0;
     if (job->kind != LX_PRINT_PDF)
     {
@@ -236,7 +270,9 @@ void lx_print_options(LxPrintJob *job, unsigned copies, unsigned duplex, int dra
     if (!job)
         return;
     job->copies = copies ? copies : 1;
-    job->duplex = duplex >= 1 && duplex <= 3 ? duplex : 1;
+    job->duplex = duplex >= LX_PRINT_SIMPLEX && duplex <= LX_PRINT_DUPLEX_SHORT_EDGE
+                      ? duplex
+                      : LX_PRINT_SIMPLEX;
     job->draft = draft;
     if (job->destination.printer)
         job->destination.copies = job->copies;
@@ -254,13 +290,13 @@ static int commit_output(LxPrintJob *job)
 {
     uint32_t pid, parent;
     lx_host_process_ids(&pid, &parent);
-    size_t length = strlen(job->destination.path) + 80;
+    size_t length = strlen(job->destination.path) + TEMPORARY_SUFFIX_CAPACITY;
     char *temporary = malloc(length);
     if (!temporary)
         return 0;
     LxHostFile *file = NULL;
     LxHostFsError error = LX_HOST_FS_IO;
-    for (unsigned attempt = 0; attempt < 16 && !file; attempt++)
+    for (unsigned attempt = 0; attempt < TEMPORARY_NAME_ATTEMPTS && !file; attempt++)
     {
         snprintf(temporary, length, "%s.2ine-%u-%llu-%u.tmp", job->destination.path, pid,
                  (unsigned long long)lx_host_monotonic_us(), attempt);
@@ -299,18 +335,20 @@ int lx_print_finish(LxPrintJob *job)
     int ok = !job->failed && job->pages;
     if (ok && job->kind == LX_PRINT_PDF)
     {
-        pdf_object(job, 1);
+        pdf_object(job, PDF_CATALOG_OBJECT);
         fprintf(job->spool, "<< /Type /Catalog /Pages 2 0 R%s >>\nendobj\n",
-                job->duplex == 2   ? " /ViewerPreferences << /Duplex /DuplexFlipLongEdge >>"
-                : job->duplex == 3 ? " /ViewerPreferences << /Duplex /DuplexFlipShortEdge >>"
-                                   : "");
-        pdf_object(job, 2);
+                job->duplex == LX_PRINT_DUPLEX_LONG_EDGE
+                    ? " /ViewerPreferences << /Duplex /DuplexFlipLongEdge >>"
+                : job->duplex == LX_PRINT_DUPLEX_SHORT_EDGE
+                    ? " /ViewerPreferences << /Duplex /DuplexFlipShortEdge >>"
+                    : "");
+        pdf_object(job, PDF_PAGES_OBJECT);
         fprintf(job->spool, "<< /Type /Pages /Count %u /Kids [", job->pages);
         for (unsigned page = 0; page < job->pages; page++)
-            fprintf(job->spool, "%u 0 R ", 5 + page * 3);
+            fprintf(job->spool, "%u 0 R ", PDF_FIRST_PAGE_OBJECT + 2 + page * PDF_OBJECTS_PER_PAGE);
         fputs("] >>\nendobj\n", job->spool);
         long start = ftell(job->spool);
-        unsigned objects = 3 + job->pages * 3;
+        unsigned objects = PDF_FIRST_PAGE_OBJECT + job->pages * PDF_OBJECTS_PER_PAGE;
         fprintf(job->spool, "xref\n0 %u\n0000000000 65535 f \n", objects);
         for (unsigned i = 1; i < objects; i++)
             fprintf(job->spool, "%010ld 00000 n \n", job->offsets[i]);

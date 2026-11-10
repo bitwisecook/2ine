@@ -7,6 +7,13 @@
 #include <ctype.h>
 
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
+/* Each built-in procedure gets a one-page guest bridge taking a window procedure's four ULONGs. */
+enum
+{
+    BRIDGE_SIZE = 4096,
+    WINDOW_PROC_ARG_BYTES = 16
+};
+
 static uint32 control_callback(uint8 *args)
 {
     return (uint32)(uintptr_t)controlProcedure(lx_guest_load_u32(args), lx_guest_load_u32(args + 4),
@@ -18,13 +25,13 @@ static PFNWP previous_control_procedure(AnchorBlock *anchor)
 {
     if (!anchor->control_bridge)
     {
-        LxGuestMapping *mapping =
-            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
-        const LxExecutionApi32 api = {control_callback, 16, 0, LX_ABI_STACK32};
+        LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, BRIDGE_SIZE,
+                                                   LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        const LxExecutionApi32 api = {control_callback, WINDOW_PROC_ARG_BYTES, 0, LX_ABI_STACK32};
         if (!mapping)
             return NULL;
         if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
-                                        4096, &api) ||
+                                        BRIDGE_SIZE, &api) ||
             !lx_execution_protect(GProcessState.execution, mapping,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
@@ -48,13 +55,14 @@ static PFNWP previous_frame_control_procedure(AnchorBlock *anchor)
 {
     if (!anchor->frame_control_bridge)
     {
-        LxGuestMapping *mapping =
-            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
-        const LxExecutionApi32 api = {frame_control_callback, 16, 0, LX_ABI_STACK32};
+        LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, BRIDGE_SIZE,
+                                                   LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        const LxExecutionApi32 api = {frame_control_callback, WINDOW_PROC_ARG_BYTES, 0,
+                                      LX_ABI_STACK32};
         if (!mapping)
             return NULL;
         if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
-                                        4096, &api) ||
+                                        BRIDGE_SIZE, &api) ||
             !lx_execution_protect(GProcessState.execution, mapping,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
@@ -77,13 +85,13 @@ static PFNWP previous_menu_procedure(AnchorBlock *anchor)
 {
     if (!anchor->menu_bridge)
     {
-        LxGuestMapping *mapping =
-            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
-        const LxExecutionApi32 api = {menu_callback, 16, 0, LX_ABI_STACK32};
+        LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, BRIDGE_SIZE,
+                                                   LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        const LxExecutionApi32 api = {menu_callback, WINDOW_PROC_ARG_BYTES, 0, LX_ABI_STACK32};
         if (!mapping)
             return NULL;
         if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
-                                        4096, &api) ||
+                                        BRIDGE_SIZE, &api) ||
             !lx_execution_protect(GProcessState.execution, mapping,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
@@ -112,7 +120,7 @@ USHORT WinQueryWindowUShort(HWND window, LONG index)
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
     if (!w)
         return 0;
-    if (index == -1) /* QWS_ID */
+    if (index == QWS_ID)
         return (USHORT)w->id;
     if (index < 0 || (size_t)index > w->data_len || w->data_len - index < 2)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
@@ -125,7 +133,7 @@ BOOL WinSetWindowUShort(HWND window, LONG index, USHORT value)
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
     if (!w)
         return FALSE;
-    if (index == -1)
+    if (index == QWS_ID)
         w->id = value;
     else
     {
@@ -146,11 +154,11 @@ ULONG WinQueryWindowULong(HWND window, LONG index)
         return 0;
     if (!w)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
-    if (index == -3) /* QWP_PFNWP */
+    if (index == QWP_PFNWP)
         return (ULONG)(uintptr_t)callableWindowProcedure(anchor, w->window_proc);
-    if (index == -2) /* QWL_STYLE */
+    if (index == QWL_STYLE)
         return w->style;
-    if (index == -4) /* QWL_HMQ */
+    if (index == QWL_HMQ)
         return anchor->message_queue.hmq;
     if (index < 0 || (size_t)index > w->data_len || w->data_len - index < 4)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
@@ -177,14 +185,14 @@ BOOL WinSetWindowULong(HWND window, LONG index, ULONG value)
         return FALSE;
     if (!w)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
-    if (index == -3)
+    if (index == QWP_PFNWP)
         return WinSubclassWindow(window, (PFNWP)(uintptr_t)value) != NULL;
-    if (index == -2)
+    if (index == QWL_STYLE)
     {
         BOOL was_visible = (w->style & WS_VISIBLE) != 0;
         ULONG previous_style = w->style;
         w->style = value;
-        if (isFrameWindow(w) && ((previous_style ^ value) & 0x800)) /* FS_SIZEBORDER */
+        if (isFrameWindow(w) && ((previous_style ^ value) & FS_SIZEBORDER))
             applyHostWindowChrome(w);
         /* Applications can hide an ancestor through QWL_STYLE while changing
            several controls, then restore its style. Damage recorded while the

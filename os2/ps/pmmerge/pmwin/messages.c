@@ -5,12 +5,27 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Message queues, sent and posted messages, broadcasts and message-name tracing. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/private/pmgrep.h"
 #include "emulator/launch_record.h"
 #include "emulator/abi.h"
 #include <ctype.h>
+
+enum
+{
+    GUEST_PAGE_SIZE = 4096,
+    /* MQINFO: cb, pid, tid, cmsgs and pReserved, as 32-bit guest fields. */
+    MQINFO_PID_OFFSET = 4,
+    MQINFO_TID_OFFSET = 8,
+    MQINFO_CMSGS_OFFSET = 12,
+    MQINFO_SIZE = 20,
+    /* Undocumented WinBroadcastMsg flag: like BMSG_POSTQUEUE it addresses message
+       queues, but it sends. */
+    BMSG_SENDQUEUE = 0x0010,
+    BMSG_VALID = BMSG_SEND | BMSG_POSTQUEUE | BMSG_DESCENDANTS | BMSG_FRAMEONLY | BMSG_SENDQUEUE
+};
 
 const char *messageName(const ULONG msg)
 {
@@ -450,7 +465,8 @@ MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position)
 {
     if (!TWOINE_PORTABLE_LOADER || !GProcessState.execution)
         return sendMessage(win, msg, position, 0);
-    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, GUEST_PAGE_SIZE,
+                                               LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
         return 0;
     memcpy(lx_execution_mapping_host(mapping), position, sizeof *position);
@@ -467,7 +483,8 @@ BOOL sendEraseBackground(Window *client, HPS space, const RECTL *rectangle)
     if (!TWOINE_PORTABLE_LOADER || !GProcessState.execution)
         return sendMessage(client, WM_ERASEBACKGROUND, (MPARAM)(uintptr_t)space,
                            (MPARAM)rectangle) != 0;
-    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, GUEST_PAGE_SIZE,
+                                               LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
         return FALSE;
     memcpy(lx_execution_mapping_host(mapping), rectangle, sizeof *rectangle);
@@ -489,13 +506,13 @@ BOOL WinQueryMsgPos(HAB hab, PPOINTL out)
 BOOL WinQueryQueueInfo(HMQ queue, PVOID out, ULONG bytes)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
-    if (!a || (a->message_queue.hmq != queue && queue != 1)) /* HMQ_CURRENT */
+    if (!a || (a->message_queue.hmq != queue && queue != HMQ_CURRENT))
         return FALSE;
     /* Whole fields are copied, and a missing or short buffer is not an error. */
     bytes &= ~3u;
     if (!out || !bytes)
         return TRUE;
-    uint8 data[20] = {0};
+    uint8 data[MQINFO_SIZE] = {0};
     ULONG count = 0;
     for (MessageQueueItem *i = a->message_queue.head; i; i = i->next)
         count++;
@@ -507,11 +524,11 @@ BOOL WinQueryQueueInfo(HMQ queue, PVOID out, ULONG bytes)
         if (lx_execution_read(GProcessState.execution, lx_guest_load_u32(&t->tib2), b, 4))
             tid = lx_guest_load_u32(b);
     }
-    lx_guest_store_u32(data, 20);
-    lx_guest_store_u32(data + 4, GProcessState.pib.process_id);
-    lx_guest_store_u32(data + 8, tid);
-    lx_guest_store_u32(data + 12, count);
-    memcpy(out, data, bytes < 20 ? bytes : 20);
+    lx_guest_store_u32(data, MQINFO_SIZE);
+    lx_guest_store_u32(data + MQINFO_PID_OFFSET, GProcessState.pib.process_id);
+    lx_guest_store_u32(data + MQINFO_TID_OFFSET, tid);
+    lx_guest_store_u32(data + MQINFO_CMSGS_OFFSET, count);
+    memcpy(out, data, bytes < MQINFO_SIZE ? bytes : MQINFO_SIZE);
     return TRUE;
 }
 
@@ -521,7 +538,7 @@ static BOOL collect_targets(const Window *parent, ULONG flags, HWND **list, size
 {
     for (Window *child = parent->children; child; child = child->sibling)
     {
-        if (!(flags & 8) || isFrameWindow(child)) /* BMSG_FRAMEONLY */
+        if (!(flags & BMSG_FRAMEONLY) || isFrameWindow(child))
         {
             if (*count == *capacity)
             {
@@ -534,7 +551,7 @@ static BOOL collect_targets(const Window *parent, ULONG flags, HWND **list, size
             }
             (*list)[(*count)++] = child->hwnd;
         }
-        if ((flags & 4) && !collect_targets(child, flags, list, count, capacity)) /* DESCENDANTS */
+        if ((flags & BMSG_DESCENDANTS) && !collect_targets(child, flags, list, count, capacity))
             return FALSE;
     }
     return TRUE;
@@ -542,7 +559,7 @@ static BOOL collect_targets(const Window *parent, ULONG flags, HWND **list, size
 
 BOOL WinBroadcastMsg(HWND parent, ULONG message, MPARAM first, MPARAM second, ULONG flags)
 {
-    if (flags & ~0x1fu)
+    if (flags & ~(ULONG)BMSG_VALID)
     {
         WinSetErrorInfo(PMERR_INVALID_FLAG, 0);
         return FALSE;
@@ -551,9 +568,8 @@ BOOL WinBroadcastMsg(HWND parent, ULONG message, MPARAM first, MPARAM second, UL
     Window *w = !a ? NULL : parent == HWND_DESKTOP ? &desktop_window : getWindowFromHWND(a, parent);
     if (!w)
         return FALSE;
-    /* BMSG_POSTQUEUE and 0x10 address message queues rather than windows. */
-    if (flags & 0x12)
-        return broadcastQueues(a, message, first, second, !(flags & 2));
+    if (flags & (BMSG_POSTQUEUE | BMSG_SENDQUEUE))
+        return broadcastQueues(a, message, first, second, !(flags & BMSG_POSTQUEUE));
     if (!w->children)
         return FALSE;
     HWND *targets = NULL;
@@ -561,7 +577,7 @@ BOOL WinBroadcastMsg(HWND parent, ULONG message, MPARAM first, MPARAM second, UL
     BOOL ok = collect_targets(w, flags, &targets, &count, &capacity);
     for (size_t i = 0; i < count; i++)
     {
-        if (flags & 1) /* BMSG_SEND */
+        if (flags & BMSG_SEND)
         {
             if (!WinSendMsg(targets[i], message, first, second))
                 ok = FALSE;

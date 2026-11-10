@@ -3,7 +3,17 @@
    A context cannot close while associated. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
+#include "os2/include/pmdev.h"
 #include "os2/ps/pmmerge/pmwin/print_job.h"
+
+/* Display resolution: the configured DPI within a sane range, else 96. Printers use 300. */
+enum
+{
+    DEFAULT_DISPLAY_DPI = 96,
+    MIN_DISPLAY_DPI = 72,
+    MAX_DISPLAY_DPI = 384,
+    PRINTER_DPI = 300
+};
 
 static void destroy_dc(void *resource)
 {
@@ -23,7 +33,7 @@ static void destroy_dc(void *resource)
 HDC lx_pm_open_dc(HAB hab, LONG type, HDC compatible)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || (type != 0 && type != 6 && type != 8) ||
+    if (!anchor || (type != OD_SCREEN && type != OD_INFO && type != OD_MEMORY) ||
         (compatible && !lx_pm_dc_valid(compatible)))
         return 0;
     PmDeviceContext *dc = calloc(1, sizeof *dc);
@@ -45,12 +55,16 @@ HDC lx_pm_open_dc(HAB hab, LONG type, HDC compatible)
 unsigned lx_pm_dc_dpi(HDC handle)
 {
     unsigned dpi = GProcessState.display_dpi;
-    return lx_pm_printer_kind(handle) ? 300 : dpi >= 72 && dpi <= 384 ? dpi : 96;
+    return lx_pm_printer_kind(handle)                         ? PRINTER_DPI
+           : dpi >= MIN_DISPLAY_DPI && dpi <= MAX_DISPLAY_DPI ? dpi
+                                                              : DEFAULT_DISPLAY_DPI;
 }
 
+/* Scales a 96-DPI measurement to the display, rounding to the nearest pel. */
 LONG lx_pm_display_scale(LONG pixels)
 {
-    return (LONG)(((int64_t)pixels * lx_pm_dc_dpi(0) + 48) / 96);
+    return (LONG)(((int64_t)pixels * lx_pm_dc_dpi(0) + DEFAULT_DISPLAY_DPI / 2) /
+                  DEFAULT_DISPLAY_DPI);
 }
 
 BOOL lx_pm_dc_valid(HDC handle)

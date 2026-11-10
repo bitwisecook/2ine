@@ -4,6 +4,29 @@
 #include "emulator/abi.h"
 #include <ctype.h>
 
+/* Resource type (the Toolkit's bsedos.h). */
+enum
+{
+    RT_ACCELTABLE = 8
+};
+
+/* ACCELTABLE: a USHORT count and code page, then 6-byte ACCEL entries of fs, key and cmd. */
+enum
+{
+    ACCELTABLE_CODEPAGE_OFFSET = 2,
+    ACCELTABLE_HEADER_SIZE = 4,
+    ACCEL_SIZE = 6,
+    ACCEL_KEY_OFFSET = 2,
+    ACCEL_CMD_OFFSET = 4
+};
+
+enum
+{
+    ACCEL_KIND_MASK = AF_CHAR | AF_VIRTUALKEY | AF_SCANCODE,
+    ACCEL_SHIFT_MASK = AF_SHIFT | AF_CONTROL | AF_ALT,
+    ACCEL_VALID_FLAGS = ACCEL_KIND_MASK | ACCEL_SHIFT_MASK | AF_LONEKEY | AF_SYSCOMMAND | AF_HELP
+};
+
 typedef struct PmAccelerator
 {
     struct PmAccelerator *next;
@@ -45,15 +68,16 @@ ULONG WinCreateAccelTable(HAB hab, PVOID data)
     if (!anchor || !data)
         return 0;
     const uint8 *p = data;
-    unsigned count = lx_guest_load_u16(p), cp = lx_guest_load_u16(p + 2);
+    unsigned count = lx_guest_load_u16(p), cp = lx_guest_load_u16(p + ACCELTABLE_CODEPAGE_OFFSET);
     if (cp && cp != 437 && cp != 850)
         return 0;
-    size_t size = 4 + (size_t)count * 6;
+    size_t size = ACCELTABLE_HEADER_SIZE + (size_t)count * ACCEL_SIZE;
     for (unsigned i = 0; i < count; i++)
     {
-        unsigned flags = lx_guest_load_u16(p + 4 + i * 6);
-        unsigned kind = flags & 7;
-        if ((flags & ~0x37fu) || (kind != 1 && kind != 2 && kind != 4))
+        unsigned flags = lx_guest_load_u16(p + ACCELTABLE_HEADER_SIZE + i * ACCEL_SIZE);
+        unsigned kind = flags & ACCEL_KIND_MASK;
+        if ((flags & ~(unsigned)ACCEL_VALID_FLAGS) ||
+            (kind != AF_CHAR && kind != AF_VIRTUALKEY && kind != AF_SCANCODE))
             return 0;
     }
     PmAccelerator *table = calloc(1, sizeof *table + size);
@@ -80,11 +104,14 @@ ULONG WinLoadAccelTable(HAB hab, HMODULE module, ULONG id)
         return 0;
     uint32 size = 0;
     void *resource = NULL;
-    if (GProcessState.queryResourceSize(module, 8, id, &size) || size < 4 ||
-        GProcessState.getResource(module, 8, id, &resource))
+    if (GProcessState.queryResourceSize(module, RT_ACCELTABLE, id, &size) ||
+        size < ACCELTABLE_HEADER_SIZE ||
+        GProcessState.getResource(module, RT_ACCELTABLE, id, &resource))
         return 0;
     unsigned count = lx_guest_load_u16(resource);
-    ULONG result = (size_t)count * 6 <= size - 4 ? WinCreateAccelTable(hab, resource) : 0;
+    ULONG result = (size_t)count * ACCEL_SIZE <= size - ACCELTABLE_HEADER_SIZE
+                       ? WinCreateAccelTable(hab, resource)
+                       : 0;
     if (GProcessState.freeResource)
         GProcessState.freeResource(resource);
     return result;
@@ -170,28 +197,33 @@ BOOL WinTranslateAccel(HAB hab, HWND frame, ULONG handle, PQMSG message)
     PmAccelerator *table = borrow_table(handle, &borrow);
     BOOL result = FALSE;
     ULONG key_flags = (ULONG)(uintptr_t)message->mp1, key = (ULONG)(uintptr_t)message->mp2;
-    if (!table || (key_flags & 0x40))
+    if (!table || (key_flags & KC_KEYUP))
         goto done;
     for (unsigned i = 0; i < table->count; i++)
     {
-        const uint8 *entry = table->data + 4 + i * 6;
-        unsigned flags = lx_guest_load_u16(entry), code = lx_guest_load_u16(entry + 2);
-        if ((flags & 0x38) != (key_flags & 0x38))
+        const uint8 *entry = table->data + ACCELTABLE_HEADER_SIZE + i * ACCEL_SIZE;
+        unsigned flags = lx_guest_load_u16(entry),
+                 code = lx_guest_load_u16(entry + ACCEL_KEY_OFFSET);
+        /* The AF_ shift-state bits have the KC_ values. */
+        if ((flags & ACCEL_SHIFT_MASK) != (key_flags & (KC_SHIFT | KC_CTRL | KC_ALT)))
             continue;
         BOOL match = FALSE;
-        if ((flags & 1) && (key_flags & 1))
+        /* Character keys match without regard to ASCII case. */
+        if ((flags & AF_CHAR) && (key_flags & KC_CHAR))
             match = code == (key & 0xffff) || (code < 128 && (key & 0xffff) < 128 &&
                                                toupper((int)code) == toupper((int)(key & 0xffff)));
-        else if ((flags & 2) && (key_flags & 2))
+        else if ((flags & AF_VIRTUALKEY) && (key_flags & KC_VIRTUALKEY))
             match = code == key >> 16;
-        else if ((flags & 4) && (key_flags & 4))
+        else if ((flags & AF_SCANCODE) && (key_flags & KC_SCANCODE))
             match = code == (key_flags >> 24);
         if (!match)
             continue;
         message->hwnd = frame;
-        message->msg = flags & 0x100 ? WM_SYSCOMMAND : flags & 0x200 ? WM_HELP : WM_COMMAND;
-        message->mp1 = (MPARAM)(uintptr_t)lx_guest_load_u16(entry + 4);
-        message->mp2 = (MPARAM)(uintptr_t)3; /* CMDSRC_ACCELERATOR */
+        message->msg = flags & AF_SYSCOMMAND ? WM_SYSCOMMAND
+                       : flags & AF_HELP     ? WM_HELP
+                                             : WM_COMMAND;
+        message->mp1 = (MPARAM)(uintptr_t)lx_guest_load_u16(entry + ACCEL_CMD_OFFSET);
+        message->mp2 = (MPARAM)(uintptr_t)CMDSRC_ACCELERATOR;
         result = TRUE;
         break;
     }

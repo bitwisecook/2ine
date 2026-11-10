@@ -13,6 +13,26 @@
 #include "emulator/launch_record.h"
 #include "os2/include/private/pmwctlp.h"
 
+/* Toolkit bsedos.h resource type. */
+enum
+{
+    RT_POINTER = 1
+};
+
+enum
+{
+    /* A pointer resource may start with a BITMAPARRAYFILEHEADER before its
+       BITMAPFILEHEADER, whose hot spot follows usType and cbSize. */
+    BITMAPARRAYFILEHEADER_SIZE = 14,
+    BFH_XHOTSPOT_OFFSET = 6,
+    BFH_YHOTSPOT_OFFSET = 8,
+    POINTER_RESOURCE_LIMIT = 16 * 1024 * 1024,
+    POINTER_FILE_LIMIT = 64 * 1024 * 1024,
+    POINTER_MAX_SIZE = 1024,
+    SYSTEM_ICON_SIZE = 32,
+    POINTER_SHAPE_SIZE = 16
+};
+
 typedef struct PmPointer
 {
     struct PmPointer *next;
@@ -30,7 +50,7 @@ typedef struct PmPointer
 static HPOINTER current_pointer;
 static LONG pointer_level;
 static BOOL pointer_selected = TRUE; /* The host starts with its default arrow. */
-static HPOINTER shared_system_pointers[23];
+static HPOINTER shared_system_pointers[SPTR_PROGRAM + 1];
 
 LONG queryPointerLevel(void)
 {
@@ -83,13 +103,16 @@ HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
         return 0;
     void *bytes = NULL;
     ULONG size;
-    if (GProcessState.queryResourceSize(module, 1, id, &size) || size > 16 * 1024 * 1024 ||
-        GProcessState.getResource(module, 1, id, &bytes))
+    if (GProcessState.queryResourceSize(module, RT_POINTER, id, &size) ||
+        size > POINTER_RESOURCE_LIMIT || GProcessState.getResource(module, RT_POINTER, id, &bytes))
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
     PmPointerImage *image = pmPointerImage(bytes, size);
-    size_t header = size >= 14 && lx_guest_load_u16(bytes) == 0x4142 ? 14 : 0;
-    unsigned hot_x = image ? lx_guest_load_u16((uint8 *)bytes + header + 6) : 0;
-    unsigned hot_y = image ? lx_guest_load_u16((uint8 *)bytes + header + 8) : 0;
+    size_t header =
+        size >= BITMAPARRAYFILEHEADER_SIZE && lx_guest_load_u16(bytes) == BFT_BITMAPARRAY
+            ? BITMAPARRAYFILEHEADER_SIZE
+            : 0;
+    unsigned hot_x = image ? lx_guest_load_u16((uint8 *)bytes + header + BFH_XHOTSPOT_OFFSET) : 0;
+    unsigned hot_y = image ? lx_guest_load_u16((uint8 *)bytes + header + BFH_YHOTSPOT_OFFSET) : 0;
     if (GProcessState.freeResource)
         GProcessState.freeResource(bytes);
     if (!image)
@@ -122,43 +145,48 @@ static PmPointerImage *system_icon(LONG id)
     PmPointerImage *image = calloc(1, sizeof *image);
     if (!image)
         return NULL;
-    image->width = image->height = 32;
-    image->pixels = calloc(32 * 32, sizeof *image->pixels);
-    image->mask = malloc(32 * 32);
+    image->width = image->height = SYSTEM_ICON_SIZE;
+    image->pixels = calloc(SYSTEM_ICON_SIZE * SYSTEM_ICON_SIZE, sizeof *image->pixels);
+    image->mask = malloc(SYSTEM_ICON_SIZE * SYSTEM_ICON_SIZE);
     if (!image->pixels || !image->mask)
     {
         pmPointerImageFree(image);
         return NULL;
     }
-    memset(image->mask, 1, 32 * 32);
+    memset(image->mask, 1, SYSTEM_ICON_SIZE * SYSTEM_ICON_SIZE);
     static const uint8 information[] = {0x18, 0x18, 0, 0x38, 0x18, 0x18, 0x18, 0x3c};
     static const uint8 question[] = {0x3c, 0x66, 0x06, 0x0c, 0x18, 0, 0x18, 0};
     static const uint8 warning[] = {0x18, 0x18, 0x18, 0x18, 0x18, 0, 0x18, 0};
-    for (int y = 0; y < 32; y++)
-        for (int x = 0; x < 32; x++)
+    for (int y = 0; y < SYSTEM_ICON_SIZE; y++)
+        for (int x = 0; x < SYSTEM_ICON_SIZE; x++)
         {
             int dx = x - 16, dy = y - 16, radius = dx * dx + dy * dy;
-            BOOL filled = id == 14   ? y >= 3 && y <= 29 && abs(dx) <= (30 - y) / 2
-                          : id <= 14 ? radius <= 196
-                                     : x >= 5 && x <= 26 && y >= 4 && y <= 27;
+            /* A warning triangle, round message icons, and a page for file-system icons. */
+            BOOL filled = id == SPTR_ICONWARNING   ? y >= 3 && y <= 29 && abs(dx) <= (30 - y) / 2
+                          : id <= SPTR_ICONWARNING ? radius <= 196
+                                                   : x >= 5 && x <= 26 && y >= 4 && y <= 27;
             if (!filled)
                 continue;
-            size_t at = (size_t)y * 32 + x;
+            size_t at = (size_t)y * SYSTEM_ICON_SIZE + x;
             image->mask[at] = 0;
-            uint32 color = id == 13               ? 0xc02020
-                           : id == 14 || id == 20 ? 0xffdc40
-                           : id > 14              ? 0xffffff
-                                                  : 0x2040b0;
-            if (id == 13 && y >= 8 && y <= 24 && (abs(dx - dy) <= 1 || abs(dx + dy) <= 1))
+            uint32 color = id == SPTR_ICONERROR                          ? 0xc02020
+                           : id == SPTR_ICONWARNING || id == SPTR_FOLDER ? 0xffdc40
+                           : id > SPTR_ICONWARNING                       ? 0xffffff
+                                                                         : 0x2040b0;
+            if (id == SPTR_ICONERROR && y >= 8 && y <= 24 &&
+                (abs(dx - dy) <= 1 || abs(dx + dy) <= 1))
                 color = 0xffffff;
-            if ((id == 11 || id == 12 || id == 14) && x >= 8 && x < 24 && y >= 8 && y < 24)
+            if ((id == SPTR_ICONINFORMATION || id == SPTR_ICONQUESTION || id == SPTR_ICONWARNING) &&
+                x >= 8 && x < 24 && y >= 8 && y < 24)
             {
-                const uint8 *glyph = id == 11 ? information : id == 12 ? question : warning;
+                const uint8 *glyph = id == SPTR_ICONINFORMATION ? information
+                                     : id == SPTR_ICONQUESTION  ? question
+                                                                : warning;
                 if (glyph[(23 - y) / 2] & (0x80 >> ((x - 8) / 2)))
-                    color = id == 14 ? 0 : 0xffffff;
+                    color = id == SPTR_ICONWARNING ? 0 : 0xffffff;
             }
-            if (id > 14 && (x == 5 || x == 26 || y == 4 || y == 27 ||
-                            (y >= 10 && y <= 22 && y % 4 == 2 && x >= 9 && x <= 22)))
+            if (id > SPTR_ICONWARNING && (x == 5 || x == 26 || y == 4 || y == 27 ||
+                                          (y >= 10 && y <= 22 && y % 4 == 2 && x >= 9 && x <= 22)))
                 color = 0x404040;
             image->pixels[at] = color;
         }
@@ -170,9 +198,9 @@ static HPOINTER system_pointer(AnchorBlock *anchor, LONG id, BOOL copy)
     PmPointer *p = calloc(1, sizeof *p);
     if (!p)
         return 0;
-    if ((id >= 10 && id <= 14) || id >= 19)
+    if ((id >= SPTR_APPICON && id <= SPTR_ICONWARNING) || id >= SPTR_FILE)
         p->image = system_icon(id);
-    if (((id >= 10 && id <= 14) || id >= 19) && !p->image)
+    if (((id >= SPTR_APPICON && id <= SPTR_ICONWARNING) || id >= SPTR_FILE) && !p->image)
     {
         free(p);
         return 0;
@@ -198,7 +226,8 @@ static HPOINTER system_pointer(AnchorBlock *anchor, LONG id, BOOL copy)
 
 HPOINTER lx_pm_system_pointer(LONG id)
 {
-    if (!((id >= 1 && id <= 14) || (id >= 18 && id <= 22)))
+    if (!((id >= SPTR_ARROW && id <= SPTR_ICONWARNING) ||
+          (id >= SPTR_ILLEGAL && id <= SPTR_PROGRAM)))
         return 0;
     HPOINTER shared = __atomic_load_n(&shared_system_pointers[id], __ATOMIC_ACQUIRE);
     if (shared)
@@ -216,7 +245,9 @@ HPOINTER lx_pm_system_pointer(LONG id)
 HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || desktop != HWND_DESKTOP || !((id >= 1 && id <= 14) || (id >= 18 && id <= 22)))
+    if (!anchor || desktop != HWND_DESKTOP ||
+        !((id >= SPTR_ARROW && id <= SPTR_ICONWARNING) ||
+          (id >= SPTR_ILLEGAL && id <= SPTR_PROGRAM)))
         return 0;
     return copy ? system_pointer(anchor, id, TRUE) : lx_pm_system_pointer(id);
 }
@@ -256,9 +287,10 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
         return FALSE;
     PmPointer *pointer = borrow.resource;
     LxHostPointer *host = __atomic_load_n(&pointer->host, __ATOMIC_ACQUIRE), *created = NULL;
+    /* Host pointer shapes follow the SPTR_ARROW..SPTR_SIZENS order. */
     if (!host && !pointer->image && pointer->id)
-        created =
-            lx_host_pointer_create(pointer->id == 18 ? LX_HOST_POINTER_ILLEGAL : pointer->id - 1);
+        created = lx_host_pointer_create(pointer->id == SPTR_ILLEGAL ? LX_HOST_POINTER_ILLEGAL
+                                                                     : pointer->id - SPTR_ARROW);
     if (!host && pointer->image)
     {
         PmPointerImage *image = pointer->image;
@@ -407,7 +439,7 @@ static BOOL draw_pointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags
     for (unsigned row = 0; result && row < image->height; row++)
         for (unsigned column = 0; result && column < image->width; column++)
         {
-            if ((flags & 1) && !((row + column) & 1))
+            if ((flags & DP_HALFTONED) && !((row + column) & 1))
                 continue;
             int64_t px = (int64_t)x + column, py = (int64_t)y + row;
             if (px < INT32_MIN || px > INT32_MAX || py < INT32_MIN || py > INT32_MAX)
@@ -420,7 +452,7 @@ static BOOL draw_pointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags
                 continue;
             size_t at = (size_t)row * image->width + column;
             uint32 pixel = (destination & (image->mask[at] ? 0xffffff : 0)) ^ image->pixels[at] ^
-                           (flags & 2 ? 0xffffff : 0);
+                           (flags & DP_INVERTED ? 0xffffff : 0);
             result = lx_pm_raster_write(space, (LONG)px, (LONG)py, 1, 1, &pixel);
         }
     lx_handle_release(&borrow);
@@ -434,7 +466,8 @@ BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
 
 BOOL WinDrawPointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags)
 {
-    return !(flags & ~3u) && draw_pointer(space, x, y, handle, flags);
+    return !(flags & ~(ULONG)(DP_HALFTONED | DP_INVERTED)) &&
+           draw_pointer(space, x, y, handle, flags);
 }
 
 HPOINTER WinQueryPointer(HWND desktop)
@@ -455,7 +488,7 @@ HPOINTER WinCreatePointerIndirect(HWND desktop, LXPOINTERINFO *info)
     unsigned width = mask ? mask->width : 0, height = color  ? color->height
                                                       : mask ? mask->height / 2
                                                              : 0;
-    if (!mask || !width || !height || width > 1024 || height > 1024 ||
+    if (!mask || !width || !height || width > POINTER_MAX_SIZE || height > POINTER_MAX_SIZE ||
         (color && color->width != width) || mask->height < height || (info->hbmColor && !color) ||
         info->xHotspot < 0 || info->yHotspot < 0 || (ULONG)info->xHotspot >= width ||
         (ULONG)info->yHotspot >= height)
@@ -517,72 +550,72 @@ static const struct
 {
     LONG id;
     unsigned hot_x, hot_y;
-    const char *rows[16];
+    const char *rows[POINTER_SHAPE_SIZE];
 } pointer_shapes[] = {
-    {1,
+    {SPTR_ARROW,
      0,
      0,
      {"X               ", "XX              ", "X.X             ", "X..X            ",
       "X...X           ", "X....X          ", "X.....X         ", "X......X        ",
       "X.......X       ", "X....XXXXX      ", "X..X..X         ", "X.X X..X        ",
       "XX  X..X        ", "X    X..X       ", "     X..X       ", "      XX        "}},
-    {2,
+    {SPTR_TEXT,
      4,
      8,
      {" XXX XXX        ", "    X           ", "    X           ", "    X           ",
       "    X           ", "    X           ", "    X           ", "    X           ",
       "    X           ", "    X           ", "    X           ", "    X           ",
       "    X           ", "    X           ", "    X           ", " XXX XXX        "}},
-    {3,
+    {SPTR_WAIT,
      7,
      7,
      {" XXXXXXXXXXXXX  ", " X...........X  ", "  X.........X   ", "   X.......X    ",
       "    X.....X     ", "     X...X      ", "      X.X       ", "       X        ",
       "      X.X       ", "     X...X      ", "    X.....X     ", "   X.......X    ",
       "  X.........X   ", " X...........X  ", " XXXXXXXXXXXXX  ", "                "}},
-    {4,
+    {SPTR_SIZE,
      7,
      7,
      {"       X        ", "      X.X       ", "     X...X      ", "    XX.XX       ",
       "      X         ", "  X   X   X     ", " X.X  X  X.X    ", "X...XXXXX...X   ",
       " X.X  X  X.X    ", "  X   X   X     ", "      X         ", "    XX.XX       ",
       "     X...X      ", "      X.X       ", "       X        ", "                "}},
-    {5,
+    {SPTR_MOVE,
      7,
      7,
      {"       X        ", "      X.X       ", "     X...X      ", "      X.X       ",
       "      X.X       ", "  X   X.X   X   ", " XX XXX.XXX XX  ", "X.............X ",
       " XX XXX.XXX XX  ", "  X   X.X   X   ", "      X.X       ", "      X.X       ",
       "     X...X      ", "      X.X       ", "       X        ", "                "}},
-    {6,
+    {SPTR_SIZENWSE,
      7,
      7,
      {"XXXXX           ", "X..X            ", "X.X             ", "X..X            ",
       "XX X.X          ", "    X.X         ", "     X.X        ", "      X.X       ",
       "       X.X      ", "        X.X XX  ", "         X..X   ", "          X.X   ",
       "         X..X   ", "        XXXXX   ", "                ", "                "}},
-    {7,
+    {SPTR_SIZENESW,
      7,
      7,
      {"        XXXXX   ", "         X..X   ", "          X.X   ", "         X..X   ",
       "       X.X XX   ", "      X.X       ", "     X.X        ", "    X.X         ",
       "   X.X          ", "XX X.X          ", " X..X           ", " X.X            ",
       " X..X           ", "XXXXX           ", "                ", "                "}},
-    {8,
+    {SPTR_SIZEWE,
      7,
      7,
      {"                ", "                ", "                ", "                ",
       "   X       X    ", "  XX       XX   ", " X.XXXXXXXXX.X  ", "X.............X ",
       " X.XXXXXXXXX.X  ", "  XX       XX   ", "   X       X    ", "                ",
       "                ", "                ", "                ", "                "}},
-    {18,
+    {SPTR_ILLEGAL,
      7,
      7,
      {"     XXXXX      ", "   XX.....XX    ", "  X..XXXXX.X    ", " X.X    X.X.X   ",
       " X.X   X.X.X    ", "X.X   X.X X.X   ", "X.X  X.X  X.X   ", "X.X X.X   X.X   ",
       "X.XX.X    X.X   ", " X.X.X   X.X    ", " X.X.X  X.X     ", "  X.XXXX..X     ",
       "   XX.....XX    ", "     XXXXX      ", "                ", "                "}},
-    {9,
+    {SPTR_SIZENS,
      7,
      7,
      {"       X        ", "      X.X       ", "     X...X      ", "    XX.XX       ",
@@ -602,18 +635,18 @@ static PmPointerImage *pointer_shape(PmPointer *p)
         PmPointerImage *image = calloc(1, sizeof *image);
         if (image)
         {
-            image->width = image->height = 16;
-            image->pixels = calloc(256, sizeof *image->pixels);
-            image->mask = malloc(256);
+            image->width = image->height = POINTER_SHAPE_SIZE;
+            image->pixels = calloc(POINTER_SHAPE_SIZE * POINTER_SHAPE_SIZE, sizeof *image->pixels);
+            image->mask = malloc(POINTER_SHAPE_SIZE * POINTER_SHAPE_SIZE);
         }
         if (!image || !image->pixels || !image->mask)
         {
             pmPointerImageFree(image);
             return NULL;
         }
-        for (unsigned i = 0; i < 256; i++)
+        for (unsigned i = 0; i < POINTER_SHAPE_SIZE * POINTER_SHAPE_SIZE; i++)
         {
-            char c = pointer_shapes[s].rows[i / 16][i % 16];
+            char c = pointer_shapes[s].rows[i / POINTER_SHAPE_SIZE][i % POINTER_SHAPE_SIZE];
             image->mask[i] = c == ' ';
             image->pixels[i] = c == '.' ? 0xffffff : 0;
         }
@@ -682,7 +715,7 @@ HPOINTER lx_pm_pointer_file(const char *filename)
         return 0;
     LxHostFsError status;
     size_t size = 0;
-    uint8 *bytes = lx_host_file_snapshot(path, 64 * 1024 * 1024, &size, &status);
+    uint8 *bytes = lx_host_file_snapshot(path, POINTER_FILE_LIMIT, &size, &status);
     free(path);
     if (!bytes)
         return 0;

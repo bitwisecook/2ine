@@ -3,17 +3,26 @@
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmp.h"
 
+enum
+{
+    FASTEST_TIMER_MS = 55, /* one PC timer tick */
+    FLASH_PHASE_MS = 500,
+    FLASH_ALARM_PHASES = 10, /* the alarm sounds for the first five on/off cycles */
+    /* Internal callback timers use identifiers above the 16-bit WM_TIMER range. */
+    FIRST_CALLBACK_TIMER = 0x10000
+};
+
 ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
     if (!anchor || !getWindowFromHWND(anchor, hwnd) || id > 0xffff)
         return 0;
-    /* OS/2 defines zero as the fastest timer (approximately one 55 ms tick). */
+    /* OS/2 defines zero as the fastest timer. */
     if (!milliseconds)
-        milliseconds = 55;
+        milliseconds = FASTEST_TIMER_MS;
     if (!id)
     {
-        for (id = 1; id < 0x8000; id++)
+        for (id = 1; id <= TID_USERMAX; id++)
         {
             PmTimer *t;
             for (t = anchor->timers; t && !(t->hwnd == hwnd && t->id == id); t = t->next)
@@ -22,7 +31,7 @@ ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
             if (!t)
                 break;
         }
-        if (id == 0x8000)
+        if (id == TID_USERMAX + 1)
             return 0;
     }
     PmTimer *timer;
@@ -71,16 +80,15 @@ int pumpTimers(AnchorBlock *anchor)
         Window *w = anchor->windows[i];
         if (!w || !w->hwnd || !w->flash)
             continue;
-        ULONG phase = (ULONG)(now / 500);
+        ULONG phase = (ULONG)(now / FLASH_PHASE_MS);
         if (w->flash_phase != phase)
         {
-            /* The alarm sounds for the first five flashes, one per on/off cycle. */
-            if (w->flash_count < 10 && !(w->flash_count++ & 1))
-                WinAlarm(HWND_DESKTOP, 0);
+            if (w->flash_count < FLASH_ALARM_PHASES && !(w->flash_count++ & 1))
+                WinAlarm(HWND_DESKTOP, WA_WARNING);
             w->flash_phase = phase;
             WinInvalidateRect(w->hwnd, NULL, TRUE);
         }
-        wait = (int)(500 - now % 500);
+        wait = (int)(FLASH_PHASE_MS - now % FLASH_PHASE_MS);
     }
     for (PmTimer *timer = anchor->timers; timer; timer = timer->next)
     {
@@ -111,7 +119,7 @@ int pumpTimers(AnchorBlock *anchor)
 
 ULONG lx_pm_timer_create(HWND owner, ULONG interval, void (*callback)(void))
 {
-    static _Thread_local ULONG next = 0x10000;
+    static _Thread_local ULONG next = FIRST_CALLBACK_TIMER;
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor || !getWindowFromHWND(anchor, owner) || !interval || !callback || !next)
         return 0;
@@ -131,7 +139,7 @@ ULONG lx_pm_timer_create(HWND owner, ULONG interval, void (*callback)(void))
 BOOL lx_pm_timer_stop(ULONG id)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || id < 0x10000)
+    if (!anchor || id < FIRST_CALLBACK_TIMER)
         return FALSE;
     for (PmTimer **slot = &anchor->timers; *slot; slot = &(*slot)->next)
         if ((*slot)->id == id && (*slot)->callback)

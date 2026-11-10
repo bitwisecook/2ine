@@ -15,6 +15,13 @@
 #include "emulator/launch_record.h"
 #include "os2/include/private/pmwctlp.h"
 
+enum
+{
+    /* A window records its icon position in the frame's minimize words when it has them. */
+    MINIMIZE_WORDS_END = QWS_YMINIMIZE + 2,
+    MENU_BAR_HEIGHT = 24 /* unscaled pixels */
+};
+
 BOOL WinFlashWindow(HWND handle, BOOL flash)
 {
     return (BOOL)(uintptr_t)WinSendMsg(handle, WM_FLASHWINDOW, (MPARAM)(uintptr_t)(flash != 0), 0);
@@ -42,10 +49,10 @@ static BOOL slot_taken(const Window *parent, const Window *self, const RECTL *sl
 {
     for (Window *s = parent->children; s; s = s->sibling)
     {
-        if (s == self || !(s->style & WS_MINIMIZED) || s->data_len < 0x18)
+        if (s == self || !(s->style & WS_MINIMIZED) || s->data_len < MINIMIZE_WORDS_END)
             continue;
-        LONG x = (SHORT)WinQueryWindowUShort(s->hwnd, 0x14),
-             y = (SHORT)WinQueryWindowUShort(s->hwnd, 0x16);
+        LONG x = (SHORT)WinQueryWindowUShort(s->hwnd, QWS_XMINIMIZE),
+             y = (SHORT)WinQueryWindowUShort(s->hwnd, QWS_YMINIMIZE);
         if (x < slot->xRight && slot->xLeft < x + cx && y < slot->yTop && slot->yBottom < y + cy)
             return TRUE;
     }
@@ -60,9 +67,12 @@ BOOL WinGetMinPosition(HWND handle, PSWP out, PPOINTL preferred)
         return FALSE;
     POINTL border = isFrameWindow(w) ? frameBorderSize(w) : (POINTL){0, 0};
     LONG width = w->parent->w, height = w->parent->h;
-    LONG icon_x = WinQuerySysValue(HWND_DESKTOP, 38), icon_y = WinQuerySysValue(HWND_DESKTOP, 39);
-    LONG text_x = WinQuerySysValue(HWND_DESKTOP, 68), text_y = WinQuerySysValue(HWND_DESKTOP, 30);
-    LONG pad_x = WinQuerySysValue(HWND_DESKTOP, 26), pad_y = WinQuerySysValue(HWND_DESKTOP, 27);
+    LONG icon_x = WinQuerySysValue(HWND_DESKTOP, SV_CXICON),
+         icon_y = WinQuerySysValue(HWND_DESKTOP, SV_CYICON);
+    LONG text_x = WinQuerySysValue(HWND_DESKTOP, SV_CXICONTEXTWIDTH),
+         text_y = WinQuerySysValue(HWND_DESKTOP, SV_CYTITLEBAR);
+    LONG pad_x = WinQuerySysValue(HWND_DESKTOP, SV_CXBORDER),
+         pad_y = WinQuerySysValue(HWND_DESKTOP, SV_CYBORDER);
     /* Icon cells leave room for the text beneath, and widen to fill each row evenly. */
     LONG cell_x = (text_x > icon_x + border.x * 2 ? text_x : icon_x + border.x * 2) + pad_x * 4;
     LONG cell_y = icon_y + border.y * 2 + text_y;
@@ -103,10 +113,10 @@ BOOL WinGetMinPosition(HWND handle, PSWP out, PPOINTL preferred)
         }
     LONG x = best_column * cell_x + (slot_width - icon_x) / 2, y = text_y + pad_y * 2 + bottom;
     w->style |= WS_MINIMIZED;
-    if (w->data_len >= 0x18)
+    if (w->data_len >= MINIMIZE_WORDS_END)
     {
-        WinSetWindowUShort(handle, 0x14, (USHORT)x);
-        WinSetWindowUShort(handle, 0x16, (USHORT)y);
+        WinSetWindowUShort(handle, QWS_XMINIMIZE, (USHORT)x);
+        WinSetWindowUShort(handle, QWS_YMINIMIZE, (USHORT)y);
     }
     out->hwnd = handle;
     out->x = x - border.x;
@@ -320,7 +330,7 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
         if (isFrameWindow(win))
             formatFrame(win);
         HWND menu = isFrameWindow(win) ? 0 : WinWindowFromID(win->hwnd, FID_MENU);
-        LONG menu_height = menu ? lx_pm_display_scale(24) : 0;
+        LONG menu_height = menu ? lx_pm_display_scale(MENU_BAR_HEIGHT) : 0;
         if (menu && win->h > menu_height)
             WinSetWindowPos(menu, HWND_TOP, 0, win->h - menu_height, win->w, menu_height,
                             SWP_MOVE | SWP_SIZE | SWP_SHOW);

@@ -14,15 +14,17 @@
 
 WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
 {
+    const uintptr_t last_predefined = PM_INTEGER_ATOM_BASE + PM_LAST_PREDEFINED_CLASS;
     uintptr_t intclass = (uintptr_t)classname;
-    if (classname && !(intclass >= 0xffff0001 && intclass <= 0xffff0070) && classname[0] == '#')
+    /* "#n" names the predefined class n. */
+    if (classname && !(intclass >= WC_FRAME && intclass <= last_predefined) && classname[0] == '#')
     {
         char *end;
         unsigned long number = strtoul(classname + 1, &end, 10);
-        if (*end == 0 && number >= 1 && number <= 0x70)
-            intclass = 0xffff0000u + number;
+        if (*end == 0 && number >= 1 && number <= PM_LAST_PREDEFINED_CLASS)
+            intclass = PM_INTEGER_ATOM_BASE + number;
     }
-    if ((intclass >= 0xffff0001) && (intclass <= 0xffff0070))
+    if ((intclass >= WC_FRAME) && (intclass <= last_predefined))
     {
 
         switch (intclass)
@@ -30,8 +32,9 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
 
             case WC_FRAME:
             {
-                /* Public WC_FRAME words extend through QWL_PSTATBLK (0x50). */
-                static WindowClass frame = {"#1", WinDefWindowProc, CS_SIZEREDRAW, 0x54, NULL};
+                /* Public WC_FRAME words extend through QWL_PSTATBLK. */
+                static WindowClass frame = {"#1", WinDefWindowProc, CS_SIZEREDRAW,
+                                            QWL_PSTATBLK + sizeof(ULONG), NULL};
                 return &frame;
             }
             case WC_COMBOBOX:

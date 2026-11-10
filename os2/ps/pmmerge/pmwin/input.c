@@ -46,7 +46,7 @@ HWND WinQueryActiveWindow(HWND desktop)
 /* FC_NOLOSEACTIVE keeps WM_ACTIVATE from the window being deactivated. */
 static void changeActive(AnchorBlock *anchor, HWND handle, ULONG flags)
 {
-    if (!(flags & 8))
+    if (!(flags & FC_NOLOSEACTIVE))
     {
         WinSetActiveWindow(HWND_DESKTOP, handle);
         return;
@@ -87,10 +87,10 @@ BOOL changeFocus(HWND desktop, HWND handle, ULONG flags)
     {
         sendMessage(old, WM_FOCUSCHANGE, (MPARAM)(uintptr_t)handle,
                     (MPARAM)(uintptr_t)((flags & 0xffff) << 16));
-        if (!(flags & 0x20)) /* FC_NOLOSESELECTION */
+        if (!(flags & FC_NOLOSESELECTION))
             sendMessage(old, WM_SETSELECTION, (MPARAM)(uintptr_t)FALSE, 0);
     }
-    if (old && !(flags & 2)) /* FC_NOLOSEFOCUS */
+    if (old && !(flags & FC_NOLOSEFOCUS))
         sendMessage(old, WM_SETFOCUS, (MPARAM)(uintptr_t)handle, 0);
     if (anchor->focus != handle)
         return TRUE; /* A focus notification may redirect focus. */
@@ -105,16 +105,16 @@ BOOL changeFocus(HWND desktop, HWND handle, ULONG flags)
         {
             sendMessage(window, WM_FOCUSCHANGE, (MPARAM)(uintptr_t)previous,
                         (MPARAM)(uintptr_t)(TRUE | (flags & 0xffff) << 16));
-            if (!(flags & 0x10)) /* FC_NOSETSELECTION */
+            if (!(flags & FC_NOSETSELECTION))
                 sendMessage(window, WM_SETSELECTION, (MPARAM)(uintptr_t)TRUE, 0);
         }
-        if (!(flags & 1)) /* FC_NOSETFOCUS */
+        if (!(flags & FC_NOSETFOCUS))
             sendMessage(window, WM_SETFOCUS, (MPARAM)(uintptr_t)previous, (MPARAM)(uintptr_t)TRUE);
         if (root && anchor->focus == handle)
         {
-            if (anchor->active != top && !(flags & 4)) /* FC_NOSETACTIVE */
+            if (anchor->active != top && !(flags & FC_NOSETACTIVE))
                 changeActive(anchor, top, flags);
-            if (!(flags & 3)) /* FC_NOBRINGTOTOP, FC_NOBRINGTOPFIRSTWINDOW */
+            if (!(flags & (FC_NOBRINGTOTOP | FC_NOBRINGTOPFIRSTWINDOW)))
                 if (!lxPmHostFocusReport)
                     lx_host_window_focus(root->heavy.window);
         }

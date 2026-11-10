@@ -1,12 +1,40 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Single-byte PM conversions use 0xFF for an unrepresentable character. */
+/* Code pages of message queues and presentation spaces, and translation among PM's single-byte
+   code pages. A translation yields 0xFF for an unrepresentable character. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include <ctype.h>
-static const ULONG codepages[] = {437, 850, 1004};
-static const UCHAR translations[6][256] = {
+
+/* WinQueryCpType results (the Toolkit's pmbidi.h). */
+enum
+{
+    CPTYPE_OTHER = 1,
+    CPTYPE_ARABIC = 2,
+    CPTYPE_BALTIC = 3,
+    CPTYPE_CYRILLIC = 4,
+    CPTYPE_GREEK = 5,
+    CPTYPE_HEBREW = 6,
+    CPTYPE_JAPANESE = 7,
+    CPTYPE_KOREAN = 8,
+    CPTYPE_LATIN2 = 9,
+    CPTYPE_SCHINESE = 10,
+    CPTYPE_TCHINESE = 11,
+    CPTYPE_THAI = 12,
+    CPTYPE_TURKISH = 13,
+    CPTYPE_UNICODE = 14
+};
+
+enum
+{
+    DEFAULT_CODEPAGE = 437,
+    CODEPAGE_COUNT = 3
+};
+
+/* translations[] holds one table per ordered pair of distinct codepages[]. */
+static const ULONG codepages[CODEPAGE_COUNT] = {437, 850, 1004};
+static const UCHAR translations[CODEPAGE_COUNT * (CODEPAGE_COUNT - 1)][256] = {
     {
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
         0x0f, 0x10, 0x11, 0x12, 0x13, 0xf4, 0xf5, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
@@ -133,7 +161,7 @@ UCHAR WinCpTranslateChar(HAB hab, ULONG source, UCHAR character, ULONG destinati
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
     int from = -1, to = -1;
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < CODEPAGE_COUNT; i++)
     {
         if (codepages[i] == source)
             from = i;
@@ -143,12 +171,13 @@ UCHAR WinCpTranslateChar(HAB hab, ULONG source, UCHAR character, ULONG destinati
     if (from < 0 || to < 0)
     {
         if (anchor)
-            lxHostThreadState()->pm_error = from < 0 ? 0x101D : 0x101E;
+            lxHostThreadState()->pm_error =
+                from < 0 ? PMERR_INVALID_SRC_CODEPAGE : PMERR_INVALID_DST_CODEPAGE;
         return 0;
     }
     if (from == to)
         return character;
-    int table = from * 2 + (to > from ? to - 1 : to);
+    int table = from * (CODEPAGE_COUNT - 1) + (to > from ? to - 1 : to);
     return translations[table][character];
 }
 
@@ -190,7 +219,7 @@ BOOL WinSetCp(HMQ queue, ULONG cp)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
     if (!cp)
-        cp = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+        cp = GProcessState.process_codepage ? GProcessState.process_codepage : DEFAULT_CODEPAGE;
     if (!a || a->message_queue.hmq != queue || (cp != 437 && cp != 850 && cp != 1004))
         return FALSE;
     a->message_queue.codepage = cp;
@@ -200,9 +229,9 @@ BOOL WinSetCp(HMQ queue, ULONG cp)
 BOOL lx_pm_set_cp(HPS handle, ULONG codepage)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || (codepage && codepage != 437))
+    if (!ps || (codepage && codepage != DEFAULT_CODEPAGE))
         return FALSE;
-    ps->codepage = codepage ? codepage : 437;
+    ps->codepage = codepage ? codepage : DEFAULT_CODEPAGE;
     return TRUE;
 }
 
@@ -220,7 +249,7 @@ ULONG WinQueryCp(HMQ queue)
         return 0;
     if (!queue || anchor->message_queue.hmq != queue)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HMQ, 0);
-    return anchor->message_queue.codepage ? anchor->message_queue.codepage : 437;
+    return anchor->message_queue.codepage ? anchor->message_queue.codepage : DEFAULT_CODEPAGE;
 }
 
 ULONG WinQueryCpType(HMQ queue)
@@ -232,48 +261,48 @@ ULONG WinQueryCpType(HMQ queue)
     {
         case 864:
         case 1046:
-            return 2;
+            return CPTYPE_ARABIC;
         case 775:
         case 921:
-            return 3;
+            return CPTYPE_BALTIC;
         case 855:
         case 866:
         case 915:
-            return 4;
+            return CPTYPE_CYRILLIC;
         case 737:
         case 869:
         case 813:
-            return 5;
+            return CPTYPE_GREEK;
         case 856:
         case 862:
         case 916:
-            return 6;
+            return CPTYPE_HEBREW;
         case 932:
         case 942:
         case 943:
-            return 7;
+            return CPTYPE_JAPANESE;
         case 949:
         case 970:
-            return 8;
+            return CPTYPE_KOREAN;
         case 852:
         case 912:
-            return 9;
+            return CPTYPE_LATIN2;
         case 936:
         case 1381:
         case 1386:
-            return 10;
+            return CPTYPE_SCHINESE;
         case 950:
         case 964:
-            return 11;
+            return CPTYPE_TCHINESE;
         case 874:
-            return 12;
+            return CPTYPE_THAI;
         case 857:
         case 920:
-            return 13;
+            return CPTYPE_TURKISH;
         case 1200:
         case 1208:
-            return 14;
+            return CPTYPE_UNICODE;
         default:
-            return 1;
+            return CPTYPE_OTHER;
     }
 }

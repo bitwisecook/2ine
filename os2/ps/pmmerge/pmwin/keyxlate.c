@@ -8,26 +8,54 @@
 #include "emulator/abi.h"
 #include <ctype.h>
 
+enum
+{
+    KEY_TABLE_SIZE = 256,
+    /* The WinGetKeyState and WinGetPhysKeyState bit for a key that is down. */
+    KEY_STATE_DOWN = 0x8000,
+    /* WinSetKeyboardStateTable bytes. */
+    KEY_TABLE_DOWN = 0x80,
+    KEY_TABLE_TOGGLED = 0x01,
+    /* physical_keys bits: pressed since the last WinGetPhysKeyState, and held now. */
+    PHYS_KEY_PRESSED = 1,
+    PHYS_KEY_HELD = 2,
+    /* WM_BUTTONnDOWN, WM_BUTTONnUP and WM_BUTTONnDBLCLK repeat for each button. */
+    BUTTON_MESSAGE_STRIDE = WM_BUTTON2DOWN - WM_BUTTON1DOWN,
+    /* A WM_CHAR character byte that marks an enhanced (E0-prefixed) key. */
+    EXTENDED_KEY_PREFIX = 0xe0,
+    /* PC scan codes, with OS/2's physical code for the keypad Enter key. */
+    SCAN_ENTER = 0x1c,
+    SCAN_CTRL = 0x1d,
+    SCAN_LEFT_SHIFT = 0x2a,
+    SCAN_RIGHT_SHIFT = 0x36,
+    SCAN_ALT = 0x38,
+    SCAN_F1 = 0x3b,
+    SCAN_F10 = 0x44,
+    SCAN_F11 = 0x57,
+    SCAN_F12 = 0x58,
+    SCAN_KP_ENTER = 0x5a
+};
+
 LONG WinGetKeyState(HWND desktop, LONG key)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || desktop != HWND_DESKTOP || key < 0 || key > 255)
+    if (!anchor || desktop != HWND_DESKTOP || key < 0 || key > KEY_TABLE_SIZE - 1)
         return 0;
-    BOOL down = key == 9    ? (anchor->modifiers & 8) != 0
-                : key == 10 ? (anchor->modifiers & 16) != 0
-                : key == 11 ? (anchor->modifiers & 32) != 0
-                            : anchor->key_down[key] != 0;
-    return (SHORT)((down ? 0x8000 : 0) | anchor->key_toggled[key]);
+    BOOL down = key == VK_SHIFT  ? (anchor->modifiers & KC_SHIFT) != 0
+                : key == VK_CTRL ? (anchor->modifiers & KC_CTRL) != 0
+                : key == VK_ALT  ? (anchor->modifiers & KC_ALT) != 0
+                                 : anchor->key_down[key] != 0;
+    return (SHORT)((down ? KEY_STATE_DOWN : 0) | anchor->key_toggled[key]);
 }
 
 LONG WinGetPhysKeyState(HWND desktop, LONG scan)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || desktop != HWND_DESKTOP || scan < 0 || scan > 255)
+    if (!anchor || desktop != HWND_DESKTOP || scan < 0 || scan > KEY_TABLE_SIZE - 1)
         return 0;
     unsigned state = anchor->physical_keys[scan];
-    anchor->physical_keys[scan] &= ~1u;
-    return (SHORT)((state & 2 ? 0x8000 : 0) | (state & 1));
+    anchor->physical_keys[scan] &= ~(unsigned)PHYS_KEY_PRESSED;
+    return (SHORT)((state & PHYS_KEY_HELD ? KEY_STATE_DOWN : 0) | (state & PHYS_KEY_PRESSED));
 }
 
 void synchronizeInputState(AnchorBlock *anchor, const QMSG *message)
@@ -36,22 +64,22 @@ void synchronizeInputState(AnchorBlock *anchor, const QMSG *message)
     {
         ULONG flags = (ULONG)(uintptr_t)message->mp1;
         unsigned key = (unsigned)((uintptr_t)message->mp2 >> 16) & 255;
-        if ((flags & 2) && key)
+        if ((flags & KC_VIRTUALKEY) && key)
         {
-            BOOL down = !(flags & 0x40);
-            if (down && !anchor->key_down[key] && !(flags & 0x80))
+            BOOL down = !(flags & KC_KEYUP);
+            if (down && !anchor->key_down[key] && !(flags & KC_PREVDOWN))
                 anchor->key_toggled[key] ^= 1;
             anchor->key_down[key] = down;
         }
-        anchor->modifiers = flags & (8 | 16 | 32);
+        anchor->modifiers = flags & (KC_SHIFT | KC_CTRL | KC_ALT);
     }
     else if (message->msg >= WM_BUTTON1DOWN && message->msg <= WM_BUTTON3UP)
     {
         ULONG index = message->msg - WM_BUTTON1DOWN;
-        if (index % 3 < 2)
+        if (index % BUTTON_MESSAGE_STRIDE < WM_BUTTON1DBLCLK - WM_BUTTON1DOWN)
         {
-            unsigned key = index / 3 + 1;
-            BOOL down = index % 3 == 0;
+            unsigned key = index / BUTTON_MESSAGE_STRIDE + VK_BUTTON1;
+            BOOL down = index % BUTTON_MESSAGE_STRIDE == 0;
             if (down && !anchor->key_down[key])
                 anchor->key_toggled[key] ^= 1;
             anchor->key_down[key] = down;
@@ -64,45 +92,47 @@ static unsigned virtual_key(uint32 key)
     switch (key)
     {
         case LX_HOST_KEY_BACKSPACE:
-            return 5;
+            return VK_BACKSPACE;
         case LX_HOST_KEY_TAB:
-            return 6;
+            return VK_TAB;
         case LX_HOST_KEY_RETURN:
-            return 8;
+            return VK_NEWLINE;
         case LX_HOST_KEY_KP_ENTER:
-            return 0x1e;
+            return VK_ENTER;
         case LX_HOST_KEY_ESCAPE:
-            return 0xf;
+            return VK_ESC;
         case LX_HOST_KEY_HOME:
-            return 0x14;
+            return VK_HOME;
         case LX_HOST_KEY_END:
-            return 0x13;
+            return VK_END;
         case LX_HOST_KEY_LEFT:
-            return 0x15;
+            return VK_LEFT;
         case LX_HOST_KEY_RIGHT:
-            return 0x17;
+            return VK_RIGHT;
         case LX_HOST_KEY_UP:
-            return 0x16;
+            return VK_UP;
         case LX_HOST_KEY_DOWN:
-            return 0x18;
+            return VK_DOWN;
         case LX_HOST_KEY_DELETE:
-            return 0x1b;
+            return VK_DELETE;
         case LX_HOST_KEY_INSERT:
-            return 0x1a;
+            return VK_INSERT;
         case LX_HOST_KEY_PAGEUP:
-            return 0x11;
+            return VK_PAGEUP;
         case LX_HOST_KEY_PAGEDOWN:
-            return 0x12;
+            return VK_PAGEDOWN;
         case LX_HOST_KEY_SHIFT:
-            return 9;
+            return VK_SHIFT;
         case LX_HOST_KEY_CTRL:
-            return 10;
+            return VK_CTRL;
         case LX_HOST_KEY_ALT:
-            return 11;
+            return VK_ALT;
         default:
             break;
     }
-    return key >= LX_HOST_KEY_F1 && key < LX_HOST_KEY_F1 + 24 ? 0x20 + key - LX_HOST_KEY_F1 : 0;
+    return key >= LX_HOST_KEY_F1 && key < LX_HOST_KEY_F1 + (VK_F24 - VK_F1 + 1)
+               ? VK_F1 + key - LX_HOST_KEY_F1
+               : 0;
 }
 
 typedef struct NavigationKey
@@ -146,29 +176,31 @@ BOOL releaseInputState(AnchorBlock *anchor, ULONG timestamp)
     BOOL posted = FALSE;
     if (window)
     {
-        for (unsigned scan = 1; scan < 256; scan++)
-            if (anchor->physical_keys[scan] & 2)
+        for (unsigned scan = 1; scan < KEY_TABLE_SIZE; scan++)
+            if (anchor->physical_keys[scan] & PHYS_KEY_HELD)
             {
-                unsigned key = scan == 0x1d                   ? 10
-                               : scan == 0x38                 ? 11
-                               : scan == 0x2a || scan == 0x36 ? 9
-                               : scan == 0x1c                 ? 8
-                               : scan == 0x5a                 ? 0x1e
-                               : scan >= 0x3b && scan <= 0x44 ? 0x20 + scan - 0x3b
-                               : scan == 0x57 || scan == 0x58 ? 0x2a + scan - 0x57
-                                                              : 0;
+                unsigned key = scan == SCAN_CTRL                                     ? VK_CTRL
+                               : scan == SCAN_ALT                                    ? VK_ALT
+                               : scan == SCAN_LEFT_SHIFT || scan == SCAN_RIGHT_SHIFT ? VK_SHIFT
+                               : scan == SCAN_ENTER                                  ? VK_NEWLINE
+                               : scan == SCAN_KP_ENTER                               ? VK_ENTER
+                               : scan >= SCAN_F1 && scan <= SCAN_F10  ? VK_F1 + scan - SCAN_F1
+                               : scan == SCAN_F11 || scan == SCAN_F12 ? VK_F11 + scan - SCAN_F11
+                                                                      : 0;
                 for (unsigned i = 0; i < sizeof navigation_keys / sizeof *navigation_keys; i++)
                     if (navigation_keys[i].scan == scan)
                         key = virtual_key(navigation_keys[i].key);
-                posted |= postTimestampedMsg(
-                    anchor, window->hwnd, WM_CHAR,
-                    (MPARAM)(uintptr_t)(0x44 | (key ? 2 : 0) | 1u << 16 | scan << 24),
-                    (MPARAM)(uintptr_t)(key << 16), timestamp);
+                posted |= postTimestampedMsg(anchor, window->hwnd, WM_CHAR,
+                                             (MPARAM)(uintptr_t)(KC_KEYUP | KC_SCANCODE |
+                                                                 (key ? KC_VIRTUALKEY : 0) |
+                                                                 1u << 16 | scan << 24),
+                                             (MPARAM)(uintptr_t)(key << 16), timestamp);
             }
-        for (unsigned button = 1; button <= 3; button++)
+        for (unsigned button = VK_BUTTON1; button <= VK_BUTTON3; button++)
             if (anchor->key_down[button])
-                posted |= postTimestampedMsg(anchor, window->hwnd, WM_BUTTON1UP + (button - 1) * 3,
-                                             0, 0, timestamp);
+                posted |= postTimestampedMsg(anchor, window->hwnd,
+                                             WM_BUTTON1UP + (button - 1) * BUTTON_MESSAGE_STRIDE, 0,
+                                             0, timestamp);
     }
     memset(anchor->physical_keys, 0, sizeof anchor->physical_keys);
     memset(anchor->key_down, 0, sizeof anchor->key_down);
@@ -183,22 +215,23 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
         if (navigation_keys[i].key == event->key)
             navigation = &navigation_keys[i];
     unsigned scan = navigation                           ? navigation->scan
-                    : event->key == LX_HOST_KEY_KP_ENTER ? 0x5a
+                    : event->key == LX_HOST_KEY_KP_ENTER ? SCAN_KP_ENTER
                                                          : event->scancode;
     if ((event->type == LX_HOST_EVENT_KEY_DOWN || event->type == LX_HOST_EVENT_KEY_UP) && scan &&
-        scan < 256)
+        scan < KEY_TABLE_SIZE)
     {
         uint8 *state = &anchor->physical_keys[scan];
-        *state = event->type == LX_HOST_EVENT_KEY_DOWN ? 3 : (*state & 1);
+        *state = event->type == LX_HOST_EVENT_KEY_DOWN ? PHYS_KEY_HELD | PHYS_KEY_PRESSED
+                                                       : (*state & PHYS_KEY_PRESSED);
     }
     Window *window = getWindowFromHWND(anchor, anchor->focus);
     if (!window || window->destroying)
         return FALSE;
     if (!windowAcceptsInput(window))
         return FALSE;
-    ULONG flags = (event->modifiers & LX_HOST_MOD_SHIFT ? 8 : 0) |
-                  (event->modifiers & LX_HOST_MOD_CTRL ? 16 : 0) |
-                  (event->modifiers & LX_HOST_MOD_ALT ? 32 : 0);
+    ULONG flags = (event->modifiers & LX_HOST_MOD_SHIFT ? KC_SHIFT : 0) |
+                  (event->modifiers & LX_HOST_MOD_CTRL ? KC_CTRL : 0) |
+                  (event->modifiers & LX_HOST_MOD_ALT ? KC_ALT : 0);
     if (event->type == LX_HOST_EVENT_TEXT)
         flags = anchor->text_modifiers;
 
@@ -221,15 +254,15 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
                 continue;
             posted |= postTimestampedMsg(
                 anchor, window->hwnd, WM_CHAR,
-                (MPARAM)(uintptr_t)(flags | 1 | (anchor->text_scancode ? 4 : 0) |
-                                    (anchor->text_repeat ? 0x80 : 0) | 1u << 16 |
+                (MPARAM)(uintptr_t)(flags | KC_CHAR | (anchor->text_scancode ? KC_SCANCODE : 0) |
+                                    (anchor->text_repeat ? KC_PREVDOWN : 0) | 1u << 16 |
                                     anchor->text_scancode << 24),
                 (MPARAM)(uintptr_t)queue_character(anchor, point), (ULONG)event->timestamp);
         }
         return posted;
     }
     unsigned key = virtual_key(event->key);
-    if (!key && event->type == LX_HOST_EVENT_KEY_DOWN && !(flags & (16 | 32)))
+    if (!key && event->type == LX_HOST_EVENT_KEY_DOWN && !(flags & (KC_CTRL | KC_ALT)))
     {
         anchor->text_scancode = event->scancode;
         anchor->text_modifiers = flags;
@@ -237,33 +270,35 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return FALSE; /* Printable keydowns arrive as text. */
     }
     if (event->type == LX_HOST_EVENT_KEY_UP)
-        flags |= 0x40;
+        flags |= KC_KEYUP;
     if (event->repeat)
-        flags |= 0x80;
+        flags |= KC_PREVDOWN;
     ULONG character = event->key;
-    if ((flags & 8) && character >= 'a' && character <= 'z')
+    if ((flags & KC_SHIFT) && character >= 'a' && character <= 'z')
         character -= 'a' - 'A';
     ULONG parameter = key ? key << 16 : character;
-    unsigned control = event->key == LX_HOST_KEY_RETURN || event->key == LX_HOST_KEY_KP_ENTER ? 13
-                       : event->key == LX_HOST_KEY_TAB                                        ? 9
-                       : event->key == LX_HOST_KEY_BACKSPACE                                  ? 8
-                       : event->key == LX_HOST_KEY_ESCAPE                                     ? 27
-                                                                                              : 0;
+    unsigned control = event->key == LX_HOST_KEY_RETURN || event->key == LX_HOST_KEY_KP_ENTER ? '\r'
+                       : event->key == LX_HOST_KEY_TAB                                        ? '\t'
+                       : event->key == LX_HOST_KEY_BACKSPACE                                  ? '\b'
+                       : event->key == LX_HOST_KEY_ESCAPE ? '\033'
+                                                          : 0;
     if (control)
     {
         if (event->type == LX_HOST_EVENT_KEY_DOWN)
-            flags |= 1; /* KC_CHAR validates control characters only on keydown. */
+            flags |= KC_CHAR; /* Control characters are valid only on keydown. */
         parameter |= control;
         if (event->key == LX_HOST_KEY_ESCAPE || event->type == LX_HOST_EVENT_KEY_UP)
-            parameter |= (event->key == LX_HOST_KEY_KP_ENTER ? 0xe0 : scan) << 8;
+            parameter |= (event->key == LX_HOST_KEY_KP_ENTER ? EXTENDED_KEY_PREFIX : scan) << 8;
     }
     if (navigation)
         parameter |=
-            ((flags & 16 ? navigation->control_character : navigation->character) << 8) | 0xe0;
-    BOOL posted = postTimestampedMsg(
-        anchor, window->hwnd, WM_CHAR,
-        (MPARAM)(uintptr_t)(flags | (key ? 2 : 1) | (scan ? 4 : 0) | 1u << 16 | scan << 24),
-        (MPARAM)(uintptr_t)parameter, (ULONG)event->timestamp);
+            ((flags & KC_CTRL ? navigation->control_character : navigation->character) << 8) |
+            EXTENDED_KEY_PREFIX;
+    BOOL posted =
+        postTimestampedMsg(anchor, window->hwnd, WM_CHAR,
+                           (MPARAM)(uintptr_t)(flags | (key ? KC_VIRTUALKEY : KC_CHAR) |
+                                               (scan ? KC_SCANCODE : 0) | 1u << 16 | scan << 24),
+                           (MPARAM)(uintptr_t)parameter, (ULONG)event->timestamp);
     if (key && event->type != LX_HOST_EVENT_KEY_UP)
         posted |= postSemanticKey(anchor, window->hwnd, key, flags, (ULONG)event->timestamp);
     return posted;
@@ -274,15 +309,16 @@ BOOL WinSetKeyboardStateTable(HWND desktop, PBYTE table, BOOL set)
     AnchorBlock *a = getAnchorBlockNoHAB();
     if (!a || desktop != HWND_DESKTOP || !table)
         return FALSE;
-    for (unsigned i = 0; i < 256; i++)
+    for (unsigned i = 0; i < KEY_TABLE_SIZE; i++)
     {
         if (set)
         {
-            a->key_down[i] = (table[i] & 0x80) != 0;
-            a->key_toggled[i] = (table[i] & 1) != 0;
+            a->key_down[i] = (table[i] & KEY_TABLE_DOWN) != 0;
+            a->key_toggled[i] = (table[i] & KEY_TABLE_TOGGLED) != 0;
         }
         else
-            table[i] = (a->key_down[i] ? 0x80 : 0) | (a->key_toggled[i] ? 1 : 0);
+            table[i] =
+                (a->key_down[i] ? KEY_TABLE_DOWN : 0) | (a->key_toggled[i] ? KEY_TABLE_TOGGLED : 0);
     }
     return TRUE;
 }

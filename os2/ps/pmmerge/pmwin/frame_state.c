@@ -5,7 +5,8 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-/* Frame restore geometry uses the public QWS_*RESTORE words. */
+/* Frame windows: borders, control layout, minimize/maximize/restore, system commands and
+   tracking. Restore geometry uses the public QWS_*RESTORE words. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmwctlp.h"
@@ -15,10 +16,10 @@
 
 enum
 {
-    FRAME_XRESTORE = 0x0c,
-    FRAME_YRESTORE = 0x0e,
-    FRAME_CXRESTORE = 0x10,
-    FRAME_CYRESTORE = 0x12
+    MENU_BAR_HEIGHT = 24, /* 96-DPI pels */
+    TITLE_TEXT_INSET = 3, /* pels */
+    TITLE_FLASH_MS = 500,
+    MAX_FRAME_CONTROLS = 4096
 };
 
 BOOL prepareFrameState(Window *window, SWP *position)
@@ -26,7 +27,8 @@ BOOL prepareFrameState(Window *window, SWP *position)
     ULONG state = position->fl & (SWP_MINIMIZE | SWP_MAXIMIZE | SWP_RESTORE);
     if (!state)
         return TRUE;
-    if ((state & (state - 1)) || strcmp(window->window_class_name, "#1") || window->data_len < 0x14)
+    if ((state & (state - 1)) || strcmp(window->window_class_name, "#1") ||
+        window->data_len < QWS_CYRESTORE + sizeof(USHORT))
         return FALSE;
     if (sendWindowPos(window, WM_MINMAXFRAME, position))
     {
@@ -41,10 +43,10 @@ BOOL prepareFrameState(Window *window, SWP *position)
     {
         if (!(window->style & (WS_MAXIMIZED | WS_MINIMIZED)))
         {
-            WinSetWindowUShort(window->hwnd, FRAME_XRESTORE, window->w ? window->x : position->x);
-            WinSetWindowUShort(window->hwnd, FRAME_YRESTORE, window->h ? window->y : position->y);
-            WinSetWindowUShort(window->hwnd, FRAME_CXRESTORE, window->w ? window->w : position->cx);
-            WinSetWindowUShort(window->hwnd, FRAME_CYRESTORE, window->h ? window->h : position->cy);
+            WinSetWindowUShort(window->hwnd, QWS_XRESTORE, window->w ? window->x : position->x);
+            WinSetWindowUShort(window->hwnd, QWS_YRESTORE, window->h ? window->y : position->y);
+            WinSetWindowUShort(window->hwnd, QWS_CXRESTORE, window->w ? window->w : position->cx);
+            WinSetWindowUShort(window->hwnd, QWS_CYRESTORE, window->h ? window->h : position->cy);
         }
         if (window->parent == &desktop_window &&
             ((window->style & WS_MINIMIZED) || state == SWP_MINIMIZE))
@@ -58,10 +60,10 @@ BOOL prepareFrameState(Window *window, SWP *position)
         }
         else if (window->parent != &desktop_window)
         {
-            position->x = (SHORT)WinQueryWindowUShort(window->hwnd, 0x14); /* QWS_XMINIMIZE */
-            position->y = (SHORT)WinQueryWindowUShort(window->hwnd, 0x16); /* QWS_YMINIMIZE */
-            position->cx = WinQuerySysValue(HWND_DESKTOP, 38);             /* SV_CXICON */
-            position->cy = WinQuerySysValue(HWND_DESKTOP, 39);             /* SV_CYICON */
+            position->x = (SHORT)WinQueryWindowUShort(window->hwnd, QWS_XMINIMIZE);
+            position->y = (SHORT)WinQueryWindowUShort(window->hwnd, QWS_YMINIMIZE);
+            position->cx = WinQuerySysValue(HWND_DESKTOP, SV_CXICON);
+            position->cy = WinQuerySysValue(HWND_DESKTOP, SV_CYICON);
             position->fl |= SWP_MOVE | SWP_SIZE;
         }
         window->style = (window->style & ~(WS_MINIMIZED | WS_MAXIMIZED)) |
@@ -73,13 +75,13 @@ BOOL prepareFrameState(Window *window, SWP *position)
             lx_host_window_minimize(window->heavy.window, FALSE);
         if (!(position->fl & SWP_MOVE))
         {
-            position->x = (SHORT)WinQueryWindowUShort(window->hwnd, FRAME_XRESTORE);
-            position->y = (SHORT)WinQueryWindowUShort(window->hwnd, FRAME_YRESTORE);
+            position->x = (SHORT)WinQueryWindowUShort(window->hwnd, QWS_XRESTORE);
+            position->y = (SHORT)WinQueryWindowUShort(window->hwnd, QWS_YRESTORE);
         }
         if (!(position->fl & SWP_SIZE))
         {
-            position->cx = WinQueryWindowUShort(window->hwnd, FRAME_CXRESTORE);
-            position->cy = WinQueryWindowUShort(window->hwnd, FRAME_CYRESTORE);
+            position->cx = WinQueryWindowUShort(window->hwnd, QWS_CXRESTORE);
+            position->cy = WinQueryWindowUShort(window->hwnd, QWS_CYRESTORE);
         }
         position->fl |= SWP_MOVE | SWP_SIZE;
         window->style &= ~(WS_MAXIMIZED | WS_MINIMIZED);
@@ -89,22 +91,6 @@ BOOL prepareFrameState(Window *window, SWP *position)
 
 /* Borders are measured in device pels, using the same published metrics for
    queries, frame/client conversion, formatting and painting. */
-enum
-{
-    FRAME_TITLE = 0x1,
-    FRAME_SYSTEM = 0x2,
-    FRAME_MENU = 0x4,
-    FRAME_SIZE = 0x8,
-    FRAME_MIN = 0x10,
-    FRAME_MAX = 0x20,
-    FRAME_VERTICAL = 0x40,
-    FRAME_HORIZONTAL = 0x80,
-    FRAME_DIALOG = 0x100,
-    FRAME_THIN = 0x200,
-    STYLE_DIALOG = 0x80,
-    STYLE_THIN = 0x100,
-    STYLE_SIZE = 0x800
-};
 
 BOOL isFrameWindow(const Window *window)
 {
@@ -129,7 +115,7 @@ BOOL frameControlSuppressed(const Window *window)
 
 BOOL frameResizable(const Window *window)
 {
-    return isFrameWindow(window) && (window->style & STYLE_SIZE) != 0;
+    return isFrameWindow(window) && (window->style & FS_SIZEBORDER) != 0;
 }
 
 void applyHostWindowChrome(Window *window)
@@ -154,13 +140,14 @@ POINTL frameBorderSize(const Window *window)
     POINTL border = {0, 0};
     if (!isFrameWindow(window) || !frameGuestChrome(window))
         return border;
+    /* Each SV_CX* border metric is followed by its SV_CY* counterpart. */
     LONG metric = -1;
-    if ((window->frame_flags & FRAME_SIZE) || (window->style & STYLE_SIZE))
-        metric = 4; /* SV_CXSIZEBORDER / SV_CYSIZEBORDER */
-    else if ((window->frame_flags & FRAME_DIALOG) || (window->style & STYLE_DIALOG))
-        metric = 28; /* SV_CXDLGFRAME / SV_CYDLGFRAME */
-    else if ((window->frame_flags & FRAME_THIN) || (window->style & STYLE_THIN))
-        metric = 26; /* SV_CXBORDER / SV_CYBORDER */
+    if ((window->frame_flags & FCF_SIZEBORDER) || (window->style & FS_SIZEBORDER))
+        metric = SV_CXSIZEBORDER;
+    else if ((window->frame_flags & FCF_DLGBORDER) || (window->style & FS_DLGBORDER))
+        metric = SV_CXDLGFRAME;
+    else if ((window->frame_flags & FCF_BORDER) || (window->style & FS_BORDER))
+        metric = SV_CXBORDER;
     if (metric >= 0)
     {
         border.x = WinQuerySysValue(HWND_DESKTOP, metric);
@@ -173,7 +160,7 @@ static LONG frame_title_height(Window *window)
 {
     return frameGuestChrome(window) && !(window->style & WS_MINIMIZED) &&
                    WinWindowFromID(window->hwnd, FID_TITLEBAR)
-               ? WinQuerySysValue(HWND_DESKTOP, 30)
+               ? WinQuerySysValue(HWND_DESKTOP, SV_CYTITLEBAR)
                : 0;
 }
 
@@ -183,10 +170,10 @@ BOOL frameClientRect(Window *window, PRECTL rect, BOOL client)
         return FALSE;
     POINTL border = frameBorderSize(window);
     LONG top = border.y + frame_title_height(window) +
-               (WinWindowFromID(window->hwnd, FID_MENU) ? lx_pm_display_scale(24) : 0);
-    LONG right =
-        border.x +
-        (WinWindowFromID(window->hwnd, FID_VERTSCROLL) ? WinQuerySysValue(HWND_DESKTOP, 22) : 0);
+               (WinWindowFromID(window->hwnd, FID_MENU) ? lx_pm_display_scale(MENU_BAR_HEIGHT) : 0);
+    LONG right = border.x + (WinWindowFromID(window->hwnd, FID_VERTSCROLL)
+                                 ? WinQuerySysValue(HWND_DESKTOP, SV_CXVSCROLL)
+                                 : 0);
     LONG bottom =
         border.y +
         (WinWindowFromID(window->hwnd, FID_HORZSCROLL) ? WinQuerySysValue(HWND_DESKTOP, 25) : 0);
@@ -251,11 +238,10 @@ ULONG frameFormatPositions(Window *window, MPARAM output, MPARAM client_rect)
     HWND system = WinWindowFromID(window->hwnd, FID_SYSMENU);
     HWND buttons = WinWindowFromID(window->hwnd, FID_MINMAX);
     LONG system_width = system && title ? title : 0;
-    LONG button_width =
-        buttons && title
-            ? WinQuerySysValue(HWND_DESKTOP, 33) *
-                  (!!(window->frame_flags & FRAME_MIN) + !!(window->frame_flags & FRAME_MAX))
-            : 0;
+    LONG button_width = buttons && title ? WinQuerySysValue(HWND_DESKTOP, SV_CXMINMAXBUTTON) *
+                                               (!!(window->frame_flags & FCF_MINBUTTON) +
+                                                !!(window->frame_flags & FCF_MAXBUTTON))
+                                         : 0;
     if (title)
     {
         top -= title;
@@ -268,8 +254,9 @@ ULONG frameFormatPositions(Window *window, MPARAM output, MPARAM client_rect)
     HWND menu = WinWindowFromID(window->hwnd, FID_MENU);
     if (menu)
     {
-        top -= lx_pm_display_scale(24);
-        frame_position(positions, &count, menu, border.x, top, width, lx_pm_display_scale(24));
+        top -= lx_pm_display_scale(MENU_BAR_HEIGHT);
+        frame_position(positions, &count, menu, border.x, top, width,
+                       lx_pm_display_scale(MENU_BAR_HEIGHT));
     }
     RECTL client = {0, 0, window->w, window->h};
     if (!frameClientRect(window, &client, TRUE))
@@ -297,7 +284,7 @@ void formatFrame(Window *window)
     ULONG capacity = (ULONG)(uintptr_t)sendMessage(window, WM_QUERYFRAMECTLCOUNT, 0, 0);
     if (getWindowFromHWND(anchor, handle) != window)
         return;
-    if (!capacity || capacity > 4096)
+    if (!capacity || capacity > MAX_FRAME_CONTROLS)
     {
         window->formatting_frame = FALSE;
         return;
@@ -309,7 +296,9 @@ void formatFrame(Window *window)
     if (TWOINE_PORTABLE_LOADER && GProcessState.execution)
     {
         mapping =
-            lx_execution_map(GProcessState.execution, 0, (bytes + 4095) & ~(size_t)4095, 3, 0);
+            lx_execution_map(GProcessState.execution, 0,
+                             (bytes + PM_GUEST_PAGE_SIZE - 1) & ~(size_t)(PM_GUEST_PAGE_SIZE - 1),
+                             LX_GUEST_READ | LX_GUEST_WRITE, 0);
         storage = mapping ? lx_execution_mapping_host(mapping) : NULL;
         address = mapping ? lx_execution_mapping_address(mapping) : 0;
     }
@@ -351,7 +340,7 @@ void paintFrameBorder(Window *window, HPS space)
         RECTL rect = {0, 0, window->w, window->h};
         WinFillRect(space, &rect, CLR_PALEGRAY);
         WinDrawText(space, -1, window->text ? window->text : "", &rect, CLR_BLACK, CLR_PALEGRAY,
-                    0x500); /* DT_CENTER | DT_VCENTER */
+                    DT_CENTER | DT_VCENTER);
     }
     POINTL border = frameBorderSize(window);
     for (LONG edge = 0; edge < border.x || edge < border.y; edge++)
@@ -422,7 +411,7 @@ BOOL frameTrackMessage(Window *window, ULONG message, MPARAM first)
         return TRUE;
     LONG dx = point.x - window->frame_track_start.x, dy = point.y - window->frame_track_start.y;
     RECTL original = window->frame_track_rect;
-    if (window->frame_tracking == 0x8001) /* SC_MOVE */
+    if (window->frame_tracking == SC_MOVE)
         WinSetWindowPos(frame->hwnd, HWND_TOP, original.xLeft + dx, original.yBottom + dy, 0, 0,
                         SWP_MOVE);
     else
@@ -443,18 +432,18 @@ MRESULT frameSystemCommand(Window *window, USHORT command)
 {
     if (!isFrameWindow(window))
         return 0;
-    ULONG flags = command == 0x8002   ? SWP_MINIMIZE
-                  : command == 0x8003 ? SWP_MAXIMIZE
-                  : command == 0x8008 ? SWP_RESTORE
-                                      : 0;
+    ULONG flags = command == SC_MINIMIZE   ? SWP_MINIMIZE
+                  : command == SC_MAXIMIZE ? SWP_MAXIMIZE
+                  : command == SC_RESTORE  ? SWP_RESTORE
+                                           : 0;
     if (flags)
     {
         WinSetWindowPos(window->hwnd, HWND_TOP, 0, 0, 0, 0, flags);
         WinInvalidateRect(window->hwnd, NULL, TRUE);
     }
-    else if (command == 0x8004) /* SC_CLOSE preserves application WM_CLOSE handling. */
+    else if (command == SC_CLOSE) /* Posting WM_CLOSE preserves the application's handling. */
         WinPostMsg(window->hwnd, WM_CLOSE, 0, 0);
-    else if (command == 0x8001 || (command == 0x8000 && (window->frame_flags & FRAME_SIZE)))
+    else if (command == SC_MOVE || (command == SC_SIZE && (window->frame_flags & FCF_SIZEBORDER)))
     {
         POINTL point;
         if (WinQueryPointerPos(HWND_DESKTOP, &point) &&
@@ -477,13 +466,13 @@ MRESULT OS2API frameControlProcedure(HWND handle, ULONG message, MPARAM first, M
         if (message == WM_BUTTON1DOWN && !frameControlSuppressed(window))
         {
             ULONG point = (ULONG)(uintptr_t)first;
-            startFrameTracking(window, window->parent, 0x8001,
+            startFrameTracking(window, window->parent, SC_MOVE,
                                (POINTL){(SHORT)point, (SHORT)(point >> 16)});
             return 0;
         }
-        if (message == WM_BUTTON1DBLCLK && (window->parent->frame_flags & FRAME_MAX))
-            return frameSystemCommand(window->parent,
-                                      (window->parent->style & WS_MAXIMIZED) ? 0x8008 : 0x8003);
+        if (message == WM_BUTTON1DBLCLK && (window->parent->frame_flags & FCF_MAXBUTTON))
+            return frameSystemCommand(
+                window->parent, (window->parent->style & WS_MAXIMIZED) ? SC_RESTORE : SC_MAXIMIZE);
     }
     if (message == WM_PAINT)
     {
@@ -492,14 +481,15 @@ MRESULT OS2API frameControlProcedure(HWND handle, ULONG message, MPARAM first, M
         if (space)
         {
             BOOL active = anchor->active == topLevelWindow(anchor, handle);
-            if (window->parent && window->parent->flash && ((currentSystemTicks() / 500) & 1))
+            if (window->parent && window->parent->flash &&
+                ((currentSystemTicks() / TITLE_FLASH_MS) & 1))
                 active = !active;
-            LONG background = active ? -23 : -22; /* SYSCLR_ACTIVE/INACTIVETITLE */
-            LONG foreground = active ? -28 : -29; /* SYSCLR_ACTIVE/INACTIVETITLETEXT */
+            LONG background = active ? SYSCLR_ACTIVETITLE : SYSCLR_INACTIVETITLE;
+            LONG foreground = active ? SYSCLR_ACTIVETITLETEXT : SYSCLR_INACTIVETITLETEXT;
             WinFillRect(space, &rect, background);
-            RECTL text = {3, 0, window->w - 3, window->h};
+            RECTL text = {TITLE_TEXT_INSET, 0, window->w - TITLE_TEXT_INSET, window->h};
             WinDrawText(space, -1, window->text ? window->text : "", &text, foreground, background,
-                        0x400);
+                        DT_LEFT | DT_VCENTER);
             WinEndPaint(space);
         }
         return 0;
@@ -515,24 +505,24 @@ BOOL WinCreateFrameControls(HWND handle, PFRAMECDATA data, PSZ title)
     if (!window || !data || data->cb != sizeof *data)
         return FALSE;
     window->frame_flags |= data->flCreateFlags;
-    if (data->flCreateFlags & FRAME_SIZE)
-        window->style |= STYLE_SIZE;
-    if (data->flCreateFlags & FRAME_DIALOG)
-        window->style |= STYLE_DIALOG;
-    if (data->flCreateFlags & FRAME_THIN)
-        window->style |= STYLE_THIN;
+    if (data->flCreateFlags & FCF_SIZEBORDER)
+        window->style |= FS_SIZEBORDER;
+    if (data->flCreateFlags & FCF_DLGBORDER)
+        window->style |= FS_DLGBORDER;
+    if (data->flCreateFlags & FCF_BORDER)
+        window->style |= FS_BORDER;
     if (title && (!window->text || strcmp(window->text, title)))
         if (!WinSetWindowText(handle, title))
             return FALSE;
-    if ((data->flCreateFlags & FRAME_TITLE) && !WinWindowFromID(handle, FID_TITLEBAR))
+    if ((data->flCreateFlags & FCF_TITLEBAR) && !WinWindowFromID(handle, FID_TITLEBAR))
         if (!WinCreateWindow(handle, (PSZ)WC_TITLEBAR, title ? title : window->text, WS_VISIBLE, 0,
                              0, 1, 1, handle, HWND_TOP, FID_TITLEBAR, NULL, NULL))
             return FALSE;
-    if ((data->flCreateFlags & FRAME_SYSTEM) && !WinWindowFromID(handle, FID_SYSMENU) &&
+    if ((data->flCreateFlags & FCF_SYSMENU) && !WinWindowFromID(handle, FID_SYSMENU) &&
         !createSystemMenu(window, window->frame_flags))
         return FALSE;
-    if ((data->flCreateFlags & (FRAME_MIN | FRAME_MAX)) && !WinWindowFromID(handle, FID_MINMAX) &&
-        !createMinMaxMenu(window, window->frame_flags))
+    if ((data->flCreateFlags & (FCF_MINBUTTON | FCF_MAXBUTTON)) &&
+        !WinWindowFromID(handle, FID_MINMAX) && !createMinMaxMenu(window, window->frame_flags))
         return FALSE;
     HMODULE resources = data->hmodResources;
     LxHandleBorrow resource_lease = {0};
@@ -552,13 +542,13 @@ BOOL WinCreateFrameControls(HWND handle, PFRAMECDATA data, PSZ title)
             lx_handle_borrow(GProcessState.main_module->handle, LX_HANDLE_MODULE, &resource_lease))
             resources = GProcessState.main_module->handle;
     }
-    if ((data->flCreateFlags & FRAME_MENU) && !WinWindowFromID(handle, FID_MENU) &&
+    if ((data->flCreateFlags & FCF_MENU) && !WinWindowFromID(handle, FID_MENU) &&
         !WinLoadMenu(handle, resources, data->idResources))
     {
         lx_handle_release(&resource_lease);
         return FALSE;
     }
-    if (data->flCreateFlags & 0x8000) /* FCF_ACCELTABLE */
+    if (data->flCreateFlags & FCF_ACCELTABLE)
     {
         ULONG table = WinLoadAccelTable(anchor->hab, resources, data->idResources);
         if (table && !WinSetAccelTable(anchor->hab, table, handle))

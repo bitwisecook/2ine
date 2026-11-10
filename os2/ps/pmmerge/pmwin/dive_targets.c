@@ -4,6 +4,16 @@
 #include "os2/include/private/pmgrep.h"
 #include "host/sync.h"
 
+/* A submitted frame has a visible-rectangle list or is DIVE_UNCLIPPED. Pixels outside the
+   visible rectangles are marked with DIVE_SKIP_PIXEL, a bit above the 24-bit RGB value. */
+#define DIVE_UNCLIPPED 0xffffffffUL
+
+enum
+{
+    DIVE_SKIP_PIXEL = 0x01000000,
+    MAX_DIVE_RECTANGLES = 65536
+};
+
 typedef struct PmDiveTarget
 {
     struct PmDiveTarget *next;
@@ -38,7 +48,7 @@ static BOOL write_pixels(HPS ps, LONG x, LONG y, unsigned width, unsigned height
 {
     BOOL partial = FALSE;
     for (size_t i = 0; i < (size_t)width * height; i++)
-        partial = partial || (pixels[i] & 0x01000000u);
+        partial = partial || (pixels[i] & DIVE_SKIP_PIXEL);
     if (!partial)
         return lx_pm_raster_write(ps, x, y, width, height, pixels);
     for (unsigned row = 0; row < height; row++)
@@ -47,10 +57,10 @@ static BOOL write_pixels(HPS ps, LONG x, LONG y, unsigned width, unsigned height
         unsigned column = 0;
         while (column < width)
         {
-            while (column < width && (line[column] & 0x01000000u))
+            while (column < width && (line[column] & DIVE_SKIP_PIXEL))
                 column++;
             unsigned start = column;
-            while (column < width && !(line[column] & 0x01000000u))
+            while (column < width && !(line[column] & DIVE_SKIP_PIXEL))
                 column++;
             if (column > start &&
                 !lx_pm_raster_write(ps, x + start, y + row, column - start, 1, line + start))
@@ -116,13 +126,15 @@ void lx_pm_dive_release(void *context)
 BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned height,
                      const uint32_t *pixels, ULONG count, const RECTL *rectangles)
 {
-    if (!context || !target_mutex || !pixels || !width || !height || width > 16384 ||
-        height > 16384 || (uint64_t)width * height > 16777216 ||
-        (count != 0xffffffffUL && count > 65536) || (count && count != 0xffffffffUL && !rectangles))
+    if (!context || !target_mutex || !pixels || !width || !height ||
+        width > LX_PM_RASTER_MAX_DIMENSION || height > LX_PM_RASTER_MAX_DIMENSION ||
+        (uint64_t)width * height > LX_PM_RASTER_MAX_PELS ||
+        (count != DIVE_UNCLIPPED && count > MAX_DIVE_RECTANGLES) ||
+        (count && count != DIVE_UNCLIPPED && !rectangles))
         return FALSE;
     uint32_t *copy = malloc((size_t)width * height * 4);
-    RECTL *clips = count && count != 0xffffffffUL ? malloc((size_t)count * sizeof *clips) : NULL;
-    if (!copy || (count && count != 0xffffffffUL && !clips))
+    RECTL *clips = count && count != DIVE_UNCLIPPED ? malloc((size_t)count * sizeof *clips) : NULL;
+    if (!copy || (count && count != DIVE_UNCLIPPED && !clips))
     {
         free(copy);
         free(clips);
@@ -133,7 +145,7 @@ BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned hei
         memcpy(clips, rectangles, (size_t)count * sizeof *clips);
     /* Apply visibility before coalescing partial submissions. Unchanged pixels
        cannot erase an older pending update, including one with different clips. */
-    if (count != 0xffffffffUL)
+    if (count != DIVE_UNCLIPPED)
     {
         size_t stride = (size_t)width + 1;
         int32_t *coverage = calloc(stride * (height + 1), sizeof *coverage);
@@ -164,14 +176,14 @@ BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned hei
                 int32_t visible = running + (y ? coverage[(size_t)(y - 1) * stride + x] : 0);
                 coverage[(size_t)y * stride + x] = visible;
                 if (!visible)
-                    copy[(size_t)y * width + x] = 0x01000000u;
+                    copy[(size_t)y * width + x] = DIVE_SKIP_PIXEL;
             }
         }
         free(coverage);
     }
     free(clips);
     clips = NULL;
-    count = 0xffffffffUL;
+    count = DIVE_UNCLIPPED;
     lx_host_mutex_lock(target_mutex, UINT32_MAX);
     PmDiveTarget *target = context;
     BOOL ok = target->window != NULL;
@@ -181,7 +193,7 @@ BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned hei
         if (target->pixels && target->x == x && target->y == y && target->width == width &&
             target->height == height)
             for (size_t i = 0; i < (size_t)width * height; i++)
-                if (copy[i] & 0x01000000u)
+                if (copy[i] & DIVE_SKIP_PIXEL)
                     copy[i] = target->pixels[i];
         clear_frame(target);
         target->pixels = copy;
@@ -255,7 +267,7 @@ void lx_pm_dive_pump(void *context)
         HPS ps = WinGetPS(window->hwnd);
         if (ps)
         {
-            if (target->count == 0xffffffffUL)
+            if (target->count == DIVE_UNCLIPPED)
                 write_pixels(ps, target->x - origin.x, target->y - origin.y, target->width,
                              target->height, target->pixels);
             else

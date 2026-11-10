@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Painting entry points: WinBeginPaint, WinEndPaint, WinFillRect and WinDrawBorder. */
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 
@@ -127,13 +128,15 @@ BOOL WinDrawBorder(HPS handle, PRECTL rect, LONG cx, LONG cy, LONG foreground, L
     TRACE_NATIVE("WinDrawBorder(%u, %p, %d, %d, %d, %d, %u)", (uint)handle, rect, (int)cx, (int)cy,
                  (int)foreground, (int)background, (uint)flags);
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || !rect || cx < 0 || cy < 0 || (flags & ~0x11bu) || (flags & 7) > 3)
+    if (!ps || !rect || cx < 0 || cy < 0 ||
+        (flags & ~(ULONG)(DB_STANDARD | DB_AREAATTRS | DB_INTERIOR | DB_AREAMIXMODE)) ||
+        (flags & DB_ROP) > DB_AREAMIXMODE)
         return FALSE;
     int64_t dx = cx, dy = cy;
-    if (flags & 0x100)
+    if (flags & DB_STANDARD)
     {
-        dx *= WinQuerySysValue(HWND_DESKTOP, 26);
-        dy *= WinQuerySysValue(HWND_DESKTOP, 27);
+        dx *= WinQuerySysValue(HWND_DESKTOP, SV_CXBORDER);
+        dy *= WinQuerySysValue(HWND_DESKTOP, SV_CYBORDER);
     }
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     LONG width = bitmap       ? (LONG)bitmap->width
@@ -145,14 +148,18 @@ BOOL WinDrawBorder(HPS handle, PRECTL rect, LONG cx, LONG cy, LONG foreground, L
     RECTL bounds = {0, 0, width, height}, drawing;
     if (!WinIntersectRect(0, &drawing, rect, &bounds))
         return TRUE;
-    uint32_t *pixels = malloc((size_t)(drawing.xRight - drawing.xLeft) * 4);
+    uint32_t *pixels = malloc((size_t)(drawing.xRight - drawing.xLeft) * sizeof *pixels);
     if (!pixels)
         return FALSE;
     LONG fore = lx_pm_resolve_color(handle, foreground),
          back = lx_pm_resolve_color(handle, background);
-    BOOL ok = (flags & 0x10) || (fore >= 0 && back >= 0);
-    LONG operation = flags & 7;
-    LONG mix = operation == 1 ? 4 : operation == 2 ? 12 : operation == 3 ? ps->primitive_mix[3] : 2;
+    BOOL ok = (flags & DB_AREAATTRS) || (fore >= 0 && back >= 0);
+    LONG operation = flags & DB_ROP;
+    /* Primitive bundle arrays are indexed by PRIM_ value minus one. */
+    LONG mix = operation == DB_PATINVERT     ? FM_XOR
+               : operation == DB_DESTINVERT  ? FM_INVERT
+               : operation == DB_AREAMIXMODE ? ps->primitive_mix[PRIM_AREA - 1]
+                                             : FM_OVERPAINT;
     for (LONG y = drawing.yBottom; ok && y < drawing.yTop; y++)
     {
         ok = lx_pm_raster_read(handle, drawing.xLeft, y, drawing.xRight - drawing.xLeft, 1, pixels);
@@ -162,17 +169,18 @@ BOOL WinDrawBorder(HPS handle, PRECTL rect, LONG cx, LONG cy, LONG foreground, L
                             (int64_t)x < (int64_t)rect->xRight - dx &&
                             (int64_t)y >= (int64_t)rect->yBottom + dy &&
                             (int64_t)y < (int64_t)rect->yTop - dy;
-            if (interior && !(flags & 8))
+            if (interior && !(flags & DB_INTERIOR))
                 continue;
             uint32_t source;
             BOOL ink = TRUE;
             ok = lx_pm_pattern_pixel(handle, x, y, &source, &ink);
-            if (!(flags & 0x10))
+            if (!(flags & DB_AREAATTRS))
                 source = (uint32_t)(ink != interior ? fore : back);
             else if (interior)
             {
-                LONG swapped = lx_pm_resolve_color(handle, ink ? ps->primitive_back[3]
-                                                               : ps->primitive_color[3]);
+                LONG swapped =
+                    lx_pm_resolve_color(handle, ink ? ps->primitive_back[PRIM_AREA - 1]
+                                                    : ps->primitive_color[PRIM_AREA - 1]);
                 if (swapped < 0)
                     ok = FALSE;
                 source = (uint32_t)swapped;

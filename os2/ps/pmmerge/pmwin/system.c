@@ -3,8 +3,14 @@
 #include "os2/include/private/pmwinp.h"
 #include "os2/include/private/pmgrep.h"
 
-static LONG changed_colors[41], changed_values[108];
-static unsigned char color_changed[41], value_changed[108];
+/* Colours are indexed from SYSCLR_SHADOWHILITEBGND, the lowest system colour index. */
+static LONG changed_colors[SYSCLR_CSYSCOLORS], changed_values[SV_CSYSVALUES];
+static unsigned char color_changed[SYSCLR_CSYSCOLORS], value_changed[SV_CSYSVALUES];
+
+enum
+{
+    MAX_RGB = 0xffffff
+};
 
 static LONG display_metric(LONG pixels)
 {
@@ -13,7 +19,6 @@ static LONG display_metric(LONG pixels)
 
 LONG WinQuerySysColor(HWND desktop, LONG index, LONG reserved)
 {
-    /* SYSCLR_SHADOWHILITEBGND (-50) through SYSCLR_HELPHILITE (-10). */
     static const LONG colors[] = {
         0x808080, /* SYSCLR_SHADOWHILITEBGND */
         0xffffff, /* SYSCLR_SHADOWHILITEFGND */
@@ -62,11 +67,12 @@ LONG WinQuerySysColor(HWND desktop, LONG index, LONG reserved)
         return 0;
     if (desktop != HWND_DESKTOP)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
-    if (reserved || index < -50 || index > -10)
+    if (reserved || index < SYSCLR_SHADOWHILITEBGND || index > SYSCLR_HELPHILITE)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
-    return __atomic_load_n(&color_changed[index + 50], __ATOMIC_ACQUIRE)
-               ? __atomic_load_n(&changed_colors[index + 50], __ATOMIC_RELAXED)
-               : colors[index + 50];
+    LONG slot = index - SYSCLR_SHADOWHILITEBGND;
+    return __atomic_load_n(&color_changed[slot], __ATOMIC_ACQUIRE)
+               ? __atomic_load_n(&changed_colors[slot], __ATOMIC_RELAXED)
+               : colors[slot];
 }
 
 LONG WinQuerySysValue(HWND desktop, LONG index)
@@ -76,140 +82,139 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         return 0;
     if (desktop != HWND_DESKTOP)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
-    if (index >= 0 && index < 108 && __atomic_load_n(&value_changed[index], __ATOMIC_ACQUIRE))
+    if (index >= 0 && index < SV_CSYSVALUES &&
+        __atomic_load_n(&value_changed[index], __ATOMIC_ACQUIRE))
         return __atomic_load_n(&changed_values[index], __ATOMIC_RELAXED);
     /* Pixel metrics describe the controls provided by this PM implementation. */
     switch (index)
     {
-        case 0:
-            return 0; /* SV_SWAPBUTTON */
-        case 1:
-            return 500; /* SV_DBLCLKTIME */
-        case 2:
-        case 3:
-            return display_metric(4); /* double-click rectangle */
-        case 4:
-        case 5:
-            return display_metric(4); /* sizing borders */
-        case 6:
-            return 1; /* SV_ALARM */
-        case 9:
-            return 500; /* cursor blink */
-        case 10:
-            return 300; /* initial scroll delay */
-        case 11:
-            return 50; /* scroll repeat */
-        case 20:
-        case 36:
-            return desktop_window.w;
-        case 21:
-            return desktop_window.h;
-        case 22:
-        case 23:
-        case 24:
-        case 25:
-            return display_metric(16);
-        case 26:
-        case 27:
-            return display_metric(1);
-        case 28:
-        case 29:
+        case SV_SWAPBUTTON:
+            return 0;
+        case SV_DBLCLKTIME:
+            return 500;
+        case SV_CXDBLCLK:
+        case SV_CYDBLCLK:
+        case SV_CXSIZEBORDER:
+        case SV_CYSIZEBORDER:
             return display_metric(4);
-        case 30:
-        case 34:
-        case 35:
-            return display_metric(20);
-        case 31:
-        case 32:
-        case 33:
+        case SV_ALARM:
+            return 1;
+        case SV_CURSORRATE:
+            return 500;
+        case SV_FIRSTSCROLLRATE:
+            return 300;
+        case SV_SCROLLRATE:
+            return 50;
+        case SV_CXSCREEN:
+        case SV_CXFULLSCREEN:
+            return desktop_window.w;
+        case SV_CYSCREEN:
+            return desktop_window.h;
+        case SV_CXVSCROLL:
+        case SV_CYHSCROLL:
+        case SV_CYVSCROLLARROW:
+        case SV_CXHSCROLLARROW:
             return display_metric(16);
-        case 37:
+        case SV_CXBORDER:
+        case SV_CYBORDER:
+            return display_metric(1);
+        case SV_CXDLGFRAME:
+        case SV_CYDLGFRAME:
+            return display_metric(4);
+        case SV_CYTITLEBAR:
+        case SV_CYMINMAXBUTTON:
+        case SV_CYMENU:
+            return display_metric(20);
+        case SV_CYVSLIDER:
+        case SV_CXHSLIDER:
+        case SV_CXMINMAXBUTTON:
+            return display_metric(16);
+        case SV_CYFULLSCREEN:
             return desktop_window.h > display_metric(20) ? desktop_window.h - display_metric(20)
                                                          : 0;
-        case 38:
-        case 39:
-        case 40:
-        case 41:
+        case SV_CXICON:
+        case SV_CYICON:
+        case SV_CXPOINTER:
+        case SV_CYPOINTER:
             return display_metric(32);
-        case 42:
-            return 0; /* SV_DEBUG */
-        case 43:
-            return 3; /* pointer buttons */
-        case 44:
-            return queryPointerLevel(); /* SV_POINTERLEVEL */
-        case 45:
-        case 46:
+        case SV_DEBUG:
             return 0;
-        case 47:
-            return 65535; /* timer IDs */
-        case 48:
-            return 1; /* pointer present */
-        case 49:
-        case 50:
+        case SV_CMOUSEBUTTONS:
+            return 3;
+        case SV_POINTERLEVEL:
+            return queryPointerLevel();
+        case SV_CURSORLEVEL:
+        case SV_TRACKRECTLEVEL:
+            return 0;
+        case SV_CTIMERS:
+            return 65535;
+        case SV_MOUSEPRESENT:
+        case SV_CXALIGN:
+        case SV_CYALIGN:
             return 1;
-        case 12:
-        case 57:
-        case 58:
-        case 64:
-        case 65:
-        case 66:
-        case 67:
-        case 80: /* SV_CONTEXTHELP has no default mouse event. */
-        case 84:
-        case 85:
-        case 86:
-        case 87:
-        case 88:
-        case 89:
-        case 90:
-        case 91:
-        case 92:
-        case 93:
-        case 94:
-        case 95:
-        case 96:
-        case 97:
-        case 98:
+        case SV_NUMBEREDLISTS:
+        case SV_EXTRAKEYBEEP:
+        case SV_SETLIGHTS:
+        case SV_MENUROLLDOWNDELAY:
+        case SV_MENUROLLUPDELAY:
+        case SV_ALTMNEMONIC:
+        case SV_TASKLISTMOUSEACCESS:
+        case SV_CONTEXTHELP: /* No mouse event requests context help by default. */
+        case SV_BEGINDRAGKB:
+        case SV_ENDDRAGKB:
+        case SV_SELECTKB:
+        case SV_OPENKB:
+        case SV_CONTEXTMENUKB:
+        case SV_CONTEXTHELPKB:
+        case SV_TEXTEDITKB:
+        case SV_BEGINSELECTKB:
+        case SV_ENDSELECTKB:
+        case SV_ANIMATION:
+        case SV_ANIMATIONSPEED:
+        case SV_MONOICONS:
+        case SV_KBDALTERED:
+        case SV_PRINTSCREEN:
+        case SV_LOCKSTARTINPUT:
             return 0;
-        case 13:
-        case 14:
-            return 440; /* warning and note alarm frequency */
-        case 15:
-            return 220; /* error alarm frequency */
-        case 16:
-        case 17:
-        case 18:
-            return 80; /* alarm durations */
-        case 59:
-            return 1; /* SV_INSERTMODE */
-        case 68:
-            return display_metric(32) * 2; /* SV_CXICONTEXTWIDTH */
-        case 69:
-            return 2; /* SV_CICONTEXTLINES */
-        case 70:
-            return 200; /* SV_CHORDTIME */
-        case 71:
-        case 72:
-            return display_metric(4); /* chord rectangle */
-        case 73:
-        case 74:
-            return display_metric(4); /* motion start distance */
-        case 75:
-            return WM_BUTTON2MOTIONSTART; /* SV_BEGINDRAG */
-        case 76:
-            return WM_BUTTON2UP; /* SV_ENDDRAG */
-        case 77:
-            return WM_BUTTON1CLICK; /* SV_SINGLESELECT */
-        case 78:
-            return WM_BUTTON1DBLCLK; /* SV_OPEN */
-        case 79:
-            return WM_BUTTON2CLICK; /* SV_CONTEXTMENU */
-        case 81:
-            return WM_BUTTON1CLICK | 0x20 << 16; /* SV_TEXTEDIT, with KC_ALT */
-        case 82:
-            return WM_BUTTON1MOTIONSTART; /* SV_BEGINSELECT */
-        case 83:
-            return WM_BUTTON1UP; /* SV_ENDSELECT */
+        case SV_WARNINGFREQ:
+        case SV_NOTEFREQ:
+            return 440; /* Hz */
+        case SV_ERRORFREQ:
+            return 220; /* Hz */
+        case SV_WARNINGDURATION:
+        case SV_NOTEDURATION:
+        case SV_ERRORDURATION:
+            return 80; /* ms */
+        case SV_INSERTMODE:
+            return 1;
+        case SV_CXICONTEXTWIDTH:
+            return display_metric(32) * 2;
+        case SV_CICONTEXTLINES:
+            return 2;
+        case SV_CHORDTIME:
+            return 200;
+        case SV_CXCHORD:
+        case SV_CYCHORD:
+        case SV_CXMOTIONSTART:
+        case SV_CYMOTIONSTART:
+            return display_metric(4);
+        /* Mouse gestures pack the event message with its KC_* shift state in the high word. */
+        case SV_BEGINDRAG:
+            return WM_BUTTON2MOTIONSTART;
+        case SV_ENDDRAG:
+            return WM_BUTTON2UP;
+        case SV_SINGLESELECT:
+            return WM_BUTTON1CLICK;
+        case SV_OPEN:
+            return WM_BUTTON1DBLCLK;
+        case SV_CONTEXTMENU:
+            return WM_BUTTON2CLICK;
+        case SV_TEXTEDIT:
+            return WM_BUTTON1CLICK | KC_ALT << 16;
+        case SV_BEGINSELECT:
+            return WM_BUTTON1MOTIONSTART;
+        case SV_ENDSELECT:
+            return WM_BUTTON1UP;
         default:
             SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
     }
@@ -218,28 +223,30 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
 BOOL WinSetSysColors(HWND desktop, ULONG options, ULONG format, LONG first, ULONG count,
                      PLONG input)
 {
-    if (desktop != HWND_DESKTOP || !getAnchorBlockNoHAB() || (options & ~5u) || format > 1 ||
-        count > 82 || (count && !input) || (format && count % 2))
+    if (desktop != HWND_DESKTOP || !getAnchorBlockNoHAB() ||
+        (options & ~(ULONG)(LCOL_RESET | LCOL_PURECOLOR)) || format > LCOLF_INDRGB ||
+        count > SYSCLR_CSYSCOLORS * 2 || (count && !input) || (format && count % 2))
         return FALSE;
-    if (!format && (first < -50 || (int64_t)first + count > -9))
+    if (!format &&
+        (first < SYSCLR_SHADOWHILITEBGND || (int64_t)first + count > SYSCLR_HELPHILITE + 1))
         return FALSE;
     /* LCOL_RESET restores the initial colors before applying this request. */
-    if (options & 1)
-        for (unsigned i = 0; i < 41; i++)
+    if (options & LCOL_RESET)
+        for (unsigned i = 0; i < SYSCLR_CSYSCOLORS; i++)
             __atomic_store_n(&color_changed[i], 0, __ATOMIC_RELEASE);
-    LONG indices[82], colors[82];
+    LONG indices[SYSCLR_CSYSCOLORS * 2], colors[SYSCLR_CSYSCOLORS * 2];
     ULONG n = format ? count / 2 : count;
     for (ULONG i = 0; i < n; i++)
     {
         LONG index = format ? input[i * 2] : first + i,
              color = format ? input[i * 2 + 1] : input[i];
-        if (index < -50 || index > -10)
+        if (index < SYSCLR_SHADOWHILITEBGND || index > SYSCLR_HELPHILITE)
             return FALSE;
-        if (color >= -50 && color <= -10)
+        if (color >= SYSCLR_SHADOWHILITEBGND && color <= SYSCLR_HELPHILITE)
             color = WinQuerySysColor(desktop, color, 0);
-        if (color < 0 || color > 0xffffff)
+        if (color < 0 || color > MAX_RGB)
             return FALSE;
-        indices[i] = index + 50;
+        indices[i] = index - SYSCLR_SHADOWHILITEBGND;
         colors[i] = color;
     }
     for (ULONG i = 0; i < n; i++)
@@ -247,7 +254,7 @@ BOOL WinSetSysColors(HWND desktop, ULONG options, ULONG format, LONG first, ULON
         __atomic_store_n(&changed_colors[indices[i]], colors[i], __ATOMIC_RELAXED);
         __atomic_store_n(&color_changed[indices[i]], 1, __ATOMIC_RELEASE);
     }
-    WinBroadcastMsg(HWND_DESKTOP, 0x2b, 0, 0, 5);
+    WinBroadcastMsg(HWND_DESKTOP, WM_SYSCOLORCHANGE, 0, 0, BMSG_SEND | BMSG_DESCENDANTS);
     WinInvalidateRect(HWND_DESKTOP, NULL, TRUE);
     return TRUE;
 }
@@ -256,16 +263,19 @@ BOOL WinSetSysValue(HWND desktop, LONG index, LONG value)
 {
     if (desktop != HWND_DESKTOP || !getAnchorBlockNoHAB())
         return FALSE;
-    /* Settable identities are 0-6, 9-18 and 57-107. */
-    if (index < 0 || index > 107 || (index > 18 && index < 57) || index == 7 || index == 8)
+    /* Settable values are SV_SWAPBUTTON to SV_ERRORDURATION, less the reserved pair, and
+       SV_EXTRAKEYBEEP upward; the metrics between them describe this implementation. */
+    if (index < 0 || index >= SV_CSYSVALUES ||
+        (index > SV_ERRORDURATION && index < SV_EXTRAKEYBEEP) || index == SV_RESERVEDFIRST1 ||
+        index == SV_RESERVEDLAST1)
     {
         WinSetErrorInfo(PMERR_PARAMETER_OUT_OF_RANGE, 0);
         return FALSE;
     }
     /* A sizing border never becomes narrower than the plain border. */
-    if (index == 4 || index == 5)
+    if (index == SV_CXSIZEBORDER || index == SV_CYSIZEBORDER)
     {
-        LONG minimum = WinQuerySysValue(desktop, index + 22);
+        LONG minimum = WinQuerySysValue(desktop, index - SV_CXSIZEBORDER + SV_CXBORDER);
         if (value < minimum)
             value = minimum;
     }

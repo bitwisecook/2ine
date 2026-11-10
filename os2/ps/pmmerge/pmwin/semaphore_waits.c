@@ -16,7 +16,7 @@ APIRET WinWaitEventSem(HEV handle, ULONG timeout)
     TRACE_NATIVE("WinWaitEventSem(%u, %u)", handle, timeout);
     typedef APIRET(OS2API * WaitFn)(HEV, ULONG);
     WaitFn wait = (WaitFn)semaphore_service("DosWaitEventSem");
-    return wait ? wait(handle, timeout) : 50;
+    return wait ? wait(handle, timeout) : ERROR_NOT_SUPPORTED;
 }
 
 APIRET WinRequestMutexSem(HMTX handle, ULONG timeout)
@@ -24,7 +24,7 @@ APIRET WinRequestMutexSem(HMTX handle, ULONG timeout)
     TRACE_NATIVE("WinRequestMutexSem(%u, %u)", handle, timeout);
     typedef APIRET(OS2API * WaitFn)(HMTX, ULONG);
     WaitFn wait = (WaitFn)semaphore_service("DosRequestMutexSem");
-    return wait ? wait(handle, timeout) : 50;
+    return wait ? wait(handle, timeout) : ERROR_NOT_SUPPORTED;
 }
 
 APIRET WinWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
@@ -32,5 +32,5 @@ APIRET WinWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
     TRACE_NATIVE("WinWaitMuxWaitSem(%u, %u, %p)", handle, timeout, user);
     typedef APIRET(OS2API * WaitFn)(HMUX, ULONG, PULONG);
     WaitFn wait = (WaitFn)semaphore_service("DosWaitMuxWaitSem");
-    return wait ? wait(handle, timeout, user) : 50;
+    return wait ? wait(handle, timeout, user) : ERROR_NOT_SUPPORTED;
 }

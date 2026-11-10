@@ -9,11 +9,25 @@
 #include "emulator/abi.h"
 #include <ctype.h>
 
+/* Toolkit bsedos.h resource types. */
+enum
+{
+    RT_STRING = 5,
+    RT_MESSAGE = 10
+};
+
+enum
+{
+    STRINGS_PER_BUNDLE = 16,
+    BUNDLE_CODEPAGE_SIZE = 2,
+    PM_RESOURCES_LIMIT = 8 * 1024 * 1024
+};
+
 LONG WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity, PCHAR output)
 {
     TRACE_NATIVE("WinLoadString(%u, %u, %u, %d, %p)", (uint)hab, (uint)module, (uint)id,
                  (int)capacity, output);
-    return loadStringTable(module, 5, id, capacity, output);
+    return loadStringTable(module, RT_STRING, id, capacity, output);
 }
 
 /* PM's own resources live in PMMRGRES.DLL. They are read from the installed file at run
@@ -30,7 +44,7 @@ static void load_pm_resources(void)
                      : NULL;
     LxHostFsError status;
     if (path)
-        pm_resources = lx_host_file_snapshot(path, 8 * 1024 * 1024, &pm_resources_size, &status);
+        pm_resources = lx_host_file_snapshot(path, PM_RESOURCES_LIMIT, &pm_resources_size, &status);
     free(path);
 }
 
@@ -39,8 +53,9 @@ LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR 
     if (!output || capacity <= 0 || id > UINT16_MAX)
         return 0;
     output[0] = 0;
-    const ULONG bundle = id / 16 + 1;
-    BOOL system = module == (HMODULE)-1;
+    /* Bundle n holds string IDs 16 * (n - 1) to 16 * n - 1. */
+    const ULONG bundle = id / STRINGS_PER_BUNDLE + 1;
+    BOOL system = module == PM_RESOURCE_MODULE;
     size_t system_size = 0;
     ULONG size = 0;
     void *data = NULL;
@@ -49,7 +64,7 @@ LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR 
         lx_host_once(&pm_resources_once, load_pm_resources);
         data = tb_executable_resource(pm_resources, pm_resources_size, type, bundle, &system_size);
         size = (ULONG)system_size;
-        if (!data || size < 2)
+        if (!data || size < BUNDLE_CODEPAGE_SIZE)
         {
             free(data);
             return 0;
@@ -57,18 +72,18 @@ LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR 
     }
     else if (!GProcessState.queryResourceSize || !GProcessState.getResource ||
              !GProcessState.freeResource ||
-             GProcessState.queryResourceSize(module, type, bundle, &size) || size < 2 ||
-             GProcessState.getResource(module, type, bundle, &data))
+             GProcessState.queryResourceSize(module, type, bundle, &size) ||
+             size < BUNDLE_CODEPAGE_SIZE || GProcessState.getResource(module, type, bundle, &data))
         return 0;
     const uint8 *bytes = data;
-    size_t at = 2;
+    size_t at = BUNDLE_CODEPAGE_SIZE;
     LONG result = 0;
-    for (unsigned i = 0; i <= (id & 15) && at < size; i++)
+    for (unsigned i = 0; i <= (id & (STRINGS_PER_BUNDLE - 1)) && at < size; i++)
     {
         unsigned length = bytes[at++];
         if (length > size - at)
             break;
-        if (i == (id & 15) && length && !bytes[at + length - 1])
+        if (i == (id & (STRINGS_PER_BUNDLE - 1)) && length && !bytes[at + length - 1])
         {
             size_t count = length - 1;
             if (count >= (size_t)capacity)
@@ -109,5 +124,5 @@ BOOL WinDeleteLibrary(HAB hab, ULONG handle)
 LONG WinLoadMessage(HAB hab, HMODULE module, ULONG id, LONG capacity, PSZ output)
 {
     (void)hab;
-    return loadStringTable(module, 10, id, capacity, output);
+    return loadStringTable(module, RT_MESSAGE, id, capacity, output);
 }
