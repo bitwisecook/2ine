@@ -6,29 +6,29 @@
 #include "os2/include/private/pmp.h"
 #include "os2/include/pmstddlg.h"
 #include "os2/include/bsedos.h"
+#include "os2/ps/awe/win32.h"
 #include <stdio.h>
 
 enum
 {
-    OFN_READONLY = 1,
-    OFN_OVERWRITEPROMPT = 2,
-    OFN_HIDEREADONLY = 4,
-    OFN_NOCHANGEDIR = 8,
-    OFN_SHOWHELP = 0x10,
-    OFN_ENABLEHOOK = 0x20,
-    OFN_ENABLETEMPLATE = 0x40,
-    OFN_ALLOWMULTISELECT = 0x200,
-    OFN_EXTENSIONDIFFERENT = 0x400,
-    OFN_PATHMUSTEXIST = 0x800,
-    OFN_FILEMUSTEXIST = 0x1000,
-    OFN_CREATEPROMPT = 0x2000,
-    OFN_NOREADONLYRETURN = 0x8000,
-    OFN_NOTESTFILECREATE = 0x10000,
-    OFN_NONETWORKBUTTON = 0x20000,
-    OFN_NOLONGNAMES = 0x40000,
-    OPENFILENAME_SIZE = 76,
     FILTER_LIMIT = 128,
-    DIALOG_BYTES = 65536
+    /* One mapping holds the FILEDLG, the type-list pointers and their strings. */
+    DIALOG_BYTES = 65536,
+    FILTER_TEXT_LIMIT = 1024,
+    DEFAULT_EXTENSION_LIMIT = 256,
+    CAPTION_LIMIT = 32768,
+    /* Reject nMaxFile values no real caller uses before probing guest memory. */
+    FILE_BUFFER_LIMIT = 1048576,
+    /* The shortest directory that keeps its separator: "C:\\". */
+    DRIVE_ROOT_LENGTH = 3
+};
+
+/* PM USERBUTTON, received with BN_PAINT. */
+enum
+{
+    USERBUTTON_WINDOW = 0,
+    USERBUTTON_STATE = 8,
+    USERBUTTON_SIZE = 16
 };
 
 typedef struct FileDialog
@@ -58,7 +58,7 @@ void open32CommonDialogError(ULONG error)
 BOOL open32FileDialogWindow(ULONG handle)
 {
     for (FileDialog *dialog = file_dialogs; dialog; dialog = dialog->previous)
-        for (ULONG parent = handle; parent; parent = WinQueryWindow(parent, 5))
+        for (ULONG parent = handle; parent; parent = WinQueryWindow(parent, QW_PARENT))
             if (dialog->window && parent == dialog->window)
                 return TRUE;
     return FALSE;
@@ -70,9 +70,10 @@ static BOOL fail(ULONG error)
     return FALSE;
 }
 
-static BOOL read_record(FileDialog *dialog, uint8 record[OPENFILENAME_SIZE])
+static BOOL read_record(FileDialog *dialog, uint8 record[WIN32_OPENFILENAME_SIZE])
 {
-    return lx_execution_read(GProcessState.execution, dialog->address, record, OPENFILENAME_SIZE);
+    return lx_execution_read(GProcessState.execution, dialog->address, record,
+                             WIN32_OPENFILENAME_SIZE);
 }
 
 static char *copy_text(ULONG address, size_t capacity)
@@ -100,31 +101,34 @@ static ULONG hook(FileDialog *dialog, ULONG message, ULONG first, ULONG second)
 
 static void select_type(FileDialog *dialog)
 {
-    LONG index =
-        (LONG)(intptr_t)WinSendDlgItemMsg(dialog->window, 262, 0x165, (MPARAM)(intptr_t)-1, 0);
+    LONG index = (LONG)(intptr_t)WinSendDlgItemMsg(dialog->window, DID_FILTER_CB, LM_QUERYSELECTION,
+                                                   (MPARAM)(intptr_t)LIT_FIRST, 0);
     if (index < 0 || (ULONG)index >= dialog->count)
         return;
     dialog->selected = (ULONG)index;
     uint8 value[4];
     lx_guest_store_u32(value, dialog->selected + 1);
-    lx_execution_write(GProcessState.execution, dialog->address + 24, value, sizeof value);
+    lx_execution_write(GProcessState.execution, dialog->address + WIN32_OPENFILENAME_FILTER_INDEX,
+                       value, sizeof value);
     lx_pm_file_set_filter(dialog->window, dialog->patterns[index]);
 }
 
-static BOOL publish_name(FileDialog *dialog, char full[260])
+static BOOL publish_name(FileDialog *dialog, char full[CCHMAXPATH])
 {
-    uint8 record[OPENFILENAME_SIZE];
+    uint8 record[WIN32_OPENFILENAME_SIZE];
     if (!read_record(dialog, record))
-        return fail(0xffff);
-    ULONG pointer = lx_guest_load_u32(record + 28), capacity = lx_guest_load_u32(record + 32);
+        return fail(WIN32_CDERR_DIALOGFAILURE);
+    ULONG pointer = lx_guest_load_u32(record + WIN32_OPENFILENAME_FILE),
+          capacity = lx_guest_load_u32(record + WIN32_OPENFILENAME_MAX_FILE);
     char *base = strrchr(full, '\\');
     base = base ? base + 1 : full;
     char *extension = strrchr(base, '.');
-    char *defext = copy_text(lx_guest_load_u32(record + 60), 256);
+    char *defext =
+        copy_text(lx_guest_load_u32(record + WIN32_OPENFILENAME_DEF_EXT), DEFAULT_EXTENSION_LIMIT);
     if (!extension && defext && *defext)
     {
         size_t length = strlen(full), extra = strcspn(defext, ".; ");
-        if (extra && length + extra + 2 <= 260)
+        if (extra && length + extra + 2 <= CCHMAXPATH)
         {
             full[length++] = '.';
             memcpy(full + length, defext, extra);
@@ -132,9 +136,10 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
             extension = full + length - 1;
         }
     }
-    ULONG flags = lx_guest_load_u32(record + 52) & ~OFN_EXTENSIONDIFFERENT;
+    ULONG flags =
+        lx_guest_load_u32(record + WIN32_OPENFILENAME_FLAGS) & ~WIN32_OFN_EXTENSIONDIFFERENT;
     if (extension && defext && strcasecmp(extension + 1, defext))
-        flags |= OFN_EXTENSIONDIFFERENT;
+        flags |= WIN32_OFN_EXTENSIONDIFFERENT;
     free(defext);
     size_t length = strlen(full);
     if (length + 1 > capacity)
@@ -143,45 +148,48 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
         lx_guest_store_u16(size, (uint16)(length + 1));
         if (capacity >= 2)
             lx_execution_write(GProcessState.execution, pointer, size, sizeof size);
-        common_error = 0x3003;
+        common_error = WIN32_FNERR_BUFFERTOOSMALL;
         WinDismissDlg(dialog->window, 0);
         return FALSE;
     }
     ULONG attributes = GetFileAttributes(full);
-    if ((flags & OFN_FILEMUSTEXIST) && attributes == UINT32_MAX)
+    if ((flags & WIN32_OFN_FILEMUSTEXIST) && attributes == UINT32_MAX)
     {
-        WinSetDlgItemText(dialog->window, 270, "The file does not exist");
+        WinSetDlgItemText(dialog->window, DID_DIRECTORY_SELECTED, "The file does not exist");
         return FALSE;
     }
-    if ((flags & OFN_NOREADONLYRETURN) && attributes != UINT32_MAX && (attributes & 1))
+    if ((flags & WIN32_OFN_NOREADONLYRETURN) && attributes != UINT32_MAX &&
+        (attributes & WIN32_FILE_ATTRIBUTE_READONLY))
     {
-        WinSetDlgItemText(dialog->window, 270, "The file is read only");
+        WinSetDlgItemText(dialog->window, DID_DIRECTORY_SELECTED, "The file is read only");
         return FALSE;
     }
-    if (flags & OFN_PATHMUSTEXIST)
+    if (flags & WIN32_OFN_PATHMUSTEXIST)
     {
-        char parent[260];
+        char parent[CCHMAXPATH];
         memcpy(parent, full, length + 1);
         size_t part = (size_t)(base - full);
-        parent[part > 3 ? part - 1 : part] = 0;
+        parent[part > DRIVE_ROOT_LENGTH ? part - 1 : part] = 0;
         ULONG attr = GetFileAttributes(parent);
-        if (attr == UINT32_MAX || !(attr & 0x10))
+        if (attr == UINT32_MAX || !(attr & WIN32_FILE_ATTRIBUTE_DIRECTORY))
         {
-            WinSetDlgItemText(dialog->window, 270, "The folder does not exist");
+            WinSetDlgItemText(dialog->window, DID_DIRECTORY_SELECTED, "The folder does not exist");
             return FALSE;
         }
     }
     const char *question = NULL;
-    if (dialog->save && (flags & OFN_OVERWRITEPROMPT) && attributes != UINT32_MAX)
+    if (dialog->save && (flags & WIN32_OFN_OVERWRITEPROMPT) && attributes != UINT32_MAX)
         question = "The file already exists. Replace it?";
-    else if ((flags & OFN_CREATEPROMPT) && attributes == UINT32_MAX)
+    else if ((flags & WIN32_OFN_CREATEPROMPT) && attributes == UINT32_MAX)
         question = "The file does not exist. Create it?";
-    if (question && WinMessageBox(HWND_DESKTOP, dialog->window, (PSZ)question,
-                                  dialog->save ? "Save As" : "Open", 0, 0x14) != 6)
+    if (question &&
+        WinMessageBox(HWND_DESKTOP, dialog->window, (PSZ)question,
+                      dialog->save ? "Save As" : "Open", 0, MB_YESNO | MB_QUERY) != MBID_YES)
         return FALSE;
     if (!lx_execution_write(GProcessState.execution, pointer, full, length + 1))
-        return fail(0xffff);
-    ULONG title = lx_guest_load_u32(record + 36), title_capacity = lx_guest_load_u32(record + 40);
+        return fail(WIN32_CDERR_DIALOGFAILURE);
+    ULONG title = lx_guest_load_u32(record + WIN32_OPENFILENAME_FILE_TITLE),
+          title_capacity = lx_guest_load_u32(record + WIN32_OPENFILENAME_MAX_FILE_TITLE);
     if (title && title_capacity)
     {
         size_t count = strlen(base);
@@ -189,15 +197,22 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
             count = title_capacity - 1;
         if (!lx_execution_write(GProcessState.execution, title, base, count) ||
             !lx_execution_write(GProcessState.execution, title + (ULONG)count, "", 1))
-            return fail(0xffff);
+            return fail(WIN32_CDERR_DIALOGFAILURE);
     }
-    lx_guest_store_u32(record + 24, dialog->count ? dialog->selected + 1 : 0);
-    lx_guest_store_u32(record + 52, flags);
-    lx_guest_store_u16(record + 56, (uint16)(base - full));
-    lx_guest_store_u16(record + 58, extension ? (uint16)(extension + 1 - full) : 0);
-    if (!lx_execution_write(GProcessState.execution, dialog->address + 24, record + 24, 4) ||
-        !lx_execution_write(GProcessState.execution, dialog->address + 52, record + 52, 8))
-        return fail(0xffff);
+    lx_guest_store_u32(record + WIN32_OPENFILENAME_FILTER_INDEX,
+                       dialog->count ? dialog->selected + 1 : 0);
+    lx_guest_store_u32(record + WIN32_OPENFILENAME_FLAGS, flags);
+    lx_guest_store_u16(record + WIN32_OPENFILENAME_FILE_OFFSET, (uint16)(base - full));
+    lx_guest_store_u16(record + WIN32_OPENFILENAME_FILE_EXTENSION,
+                       extension ? (uint16)(extension + 1 - full) : 0);
+    /* Flags, nFileOffset and nFileExtension are contiguous: write all three at once. */
+    if (!lx_execution_write(GProcessState.execution,
+                            dialog->address + WIN32_OPENFILENAME_FILTER_INDEX,
+                            record + WIN32_OPENFILENAME_FILTER_INDEX, 4) ||
+        !lx_execution_write(GProcessState.execution, dialog->address + WIN32_OPENFILENAME_FLAGS,
+                            record + WIN32_OPENFILENAME_FLAGS,
+                            WIN32_OPENFILENAME_DEF_EXT - WIN32_OPENFILENAME_FLAGS))
+        return fail(WIN32_CDERR_DIALOGFAILURE);
     if (hook(dialog, dialog->file_ok, 0, dialog->address))
         return FALSE;
     dialog->accepted = TRUE;
@@ -206,31 +221,34 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
 
 static ULONG draw_button(FileDialog *dialog, ULONG id, ULONG pointer)
 {
-    uint8 button[16], item[48] = {0};
+    uint8 button[USERBUTTON_SIZE], item[WIN32_DRAWITEMSTRUCT_SIZE] = {0};
     if (!lx_execution_read(GProcessState.execution, pointer, button, sizeof button))
         return 0;
-    ULONG window = lx_guest_load_u32(button), state = lx_guest_load_u32(button + 8);
+    ULONG window = lx_guest_load_u32(button + USERBUTTON_WINDOW),
+          state = lx_guest_load_u32(button + USERBUTTON_STATE);
     RECTL rect;
     if (!WinQueryWindowRect(window, &rect))
         return 0;
     ULONG dc = GetDC(window);
-    LxGuestMapping *mapping =
-        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                               LX_GUEST_READ | LX_GUEST_WRITE, 0);
     ULONG result = 0;
     if (dc && mapping)
     {
-        lx_guest_store_u32(item, 4); /* ODT_BUTTON */
-        lx_guest_store_u32(item + 4, id);
-        lx_guest_store_u32(item + 12, 1); /* ODA_DRAWENTIRE */
-        lx_guest_store_u32(item + 16, (state & 0x100 ? 1 : 0) | (state & 0x200 ? 4 : 0) |
-                                          (state & 0x400 ? 0x20 : 0) |
-                                          (WinQueryFocus(HWND_DESKTOP) == window ? 0x10 : 0));
-        lx_guest_store_u32(item + 20, window);
-        lx_guest_store_u32(item + 24, dc);
-        lx_guest_store_u32(item + 36, (ULONG)(rect.xRight - rect.xLeft));
-        lx_guest_store_u32(item + 40, (ULONG)(rect.yTop - rect.yBottom));
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_CONTROL_TYPE, WIN32_ODT_BUTTON);
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_CONTROL_ID, id);
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_ACTION, WIN32_ODA_DRAWENTIRE);
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_STATE,
+                           (state & BDS_HILITED ? WIN32_ODS_SELECTED : 0) |
+                               (state & BDS_DISABLED ? WIN32_ODS_DISABLED : 0) |
+                               (state & BDS_DEFAULT ? WIN32_ODS_DEFAULT : 0) |
+                               (WinQueryFocus(HWND_DESKTOP) == window ? WIN32_ODS_FOCUS : 0));
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_WINDOW, window);
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_DC, dc);
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_RIGHT, (ULONG)(rect.xRight - rect.xLeft));
+        lx_guest_store_u32(item + WIN32_DRAWITEMSTRUCT_BOTTOM, (ULONG)(rect.yTop - rect.yBottom));
         memcpy(lx_execution_mapping_host(mapping), item, sizeof item);
-        result = hook(dialog, 0x2b, id, lx_execution_mapping_address(mapping));
+        result = hook(dialog, WIN32_WM_DRAWITEM, id, lx_execution_mapping_address(mapping));
     }
     if (mapping)
         lx_execution_unmap(GProcessState.execution, mapping);
@@ -253,19 +271,19 @@ static uint32 file_dispatch(uint8 *arguments)
     {
         dialog->window = handle;
         if (dialog->count)
-            WinSendDlgItemMsg(handle, 262, 0x164, (MPARAM)(uintptr_t)dialog->selected,
-                              (MPARAM)(uintptr_t)TRUE);
-        if (dialog->flags & OFN_HIDEREADONLY)
-            WinShowWindow(WinWindowFromID(handle, 269), FALSE);
-        if (!(dialog->flags & OFN_SHOWHELP))
-            WinShowWindow(WinWindowFromID(handle, 267), FALSE);
-        hook(dialog, 0x110, first, dialog->address);
+            WinSendDlgItemMsg(handle, DID_FILTER_CB, LM_SELECTITEM,
+                              (MPARAM)(uintptr_t)dialog->selected, (MPARAM)(uintptr_t)TRUE);
+        if (dialog->flags & WIN32_OFN_HIDEREADONLY)
+            WinShowWindow(WinWindowFromID(handle, DID_READ_ONLY), FALSE);
+        if (!(dialog->flags & WIN32_OFN_SHOWHELP))
+            WinShowWindow(WinWindowFromID(handle, DID_HELP_PB), FALSE);
+        hook(dialog, WIN32_WM_INITDIALOG, first, dialog->address);
         select_type(dialog);
         return 0;
     }
-    if (message == WM_USER + 41)
+    if (message == FDM_VALIDATE)
     {
-        char full[260];
+        char full[CCHMAXPATH];
         if (!lx_execution_read(GProcessState.execution, first, full, sizeof full) ||
             !memchr(full, 0, sizeof full) || !publish_name(dialog, full))
             return FALSE;
@@ -275,16 +293,18 @@ static uint32 file_dispatch(uint8 *arguments)
     {
         ULONG child = WinWindowFromID(handle, first & 0xffff);
         char name[16];
-        if (message == WM_CONTROL && first >> 16 == 3 &&
+        /* A BS_USERBUTTON in a custom template is owner-drawn by the Windows hook. */
+        if (message == WM_CONTROL && first >> 16 == BN_PAINT &&
             WinQueryClassName(child, sizeof name, name) && !strcmp(name, "#3") &&
-            (WinQueryWindowULong(child, -2) & 15) == 7)
+            (WinQueryWindowULong(child, QWL_STYLE) & BS_PRIMARYSTYLES) == BS_USERBUTTON)
             return draw_button(dialog, first & 0xffff, second);
-        if (hook(dialog, 0x111,
+        if (hook(dialog, WIN32_WM_COMMAND,
                  message == WM_CONTROL ? open32ControlNotification(child, first) : first, child))
             return 0;
-        if (message == WM_CONTROL && (first & 0xffff) == 262 && first >> 16 == 4)
+        if (message == WM_CONTROL && (first & 0xffff) == DID_FILTER_CB &&
+            first >> 16 == CBN_LBSELECT)
             select_type(dialog);
-        if (message == WM_COMMAND && (first & 0xffff) == 267)
+        if (message == WM_COMMAND && (first & 0xffff) == DID_HELP_PB)
         {
             if (dialog->native->ulUser)
                 SendMessage(dialog->native->ulUser, dialog->help, handle, dialog->address);
@@ -292,7 +312,7 @@ static uint32 file_dispatch(uint8 *arguments)
         }
     }
     else if (message == WM_DESTROY)
-        hook(dialog, 2, 0, 0);
+        hook(dialog, WIN32_WM_DESTROY, 0, 0);
     else
     {
         QMSG native = {.hwnd = handle,
@@ -311,50 +331,57 @@ static BOOL common_dialog(PVOID address, BOOL save)
 {
     common_error = 0;
     uintptr_t pointer = (uintptr_t)address;
-    uint8 record[OPENFILENAME_SIZE];
+    uint8 record[WIN32_OPENFILENAME_SIZE];
     if (pointer > UINT32_MAX ||
         !lx_execution_read(GProcessState.execution, (ULONG)pointer, record, sizeof record))
-        return fail(1);
-    ULONG size = lx_guest_load_u32(record), flags = lx_guest_load_u32(record + 52);
+        return fail(WIN32_CDERR_STRUCTSIZE);
+    ULONG size = lx_guest_load_u32(record),
+          flags = lx_guest_load_u32(record + WIN32_OPENFILENAME_FLAGS);
     TRACE_NATIVE("Open32 file dialog size=%u flags=%08x custom=%08x", (uint)size, (uint)flags,
-                 (uint)lx_guest_load_u32(record + 16));
-    if (size != OPENFILENAME_SIZE)
-        return fail(1);
+                 (uint)lx_guest_load_u32(record + WIN32_OPENFILENAME_CUSTOM_FILTER));
+    if (size != WIN32_OPENFILENAME_SIZE)
+        return fail(WIN32_CDERR_STRUCTSIZE);
     if (!lx_execution_memory(GProcessState.execution, (ULONG)pointer, size, LX_GUEST_WRITE))
-        return fail(0xffff);
+        return fail(WIN32_CDERR_DIALOGFAILURE);
     /* The picker offers one file. ALLOWMULTISELECT callers receive the ordinary
        full-path result required for a single selection. */
-    ULONG supported = OFN_READONLY | OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY | OFN_NOCHANGEDIR |
-                      OFN_SHOWHELP | OFN_ENABLEHOOK | OFN_ENABLETEMPLATE | OFN_ALLOWMULTISELECT |
-                      OFN_EXTENSIONDIFFERENT | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST |
-                      OFN_CREATEPROMPT | OFN_NOREADONLYRETURN | OFN_NOTESTFILECREATE |
-                      OFN_NONETWORKBUTTON | OFN_NOLONGNAMES;
-    if (flags & ~supported || lx_guest_load_u32(record + 16))
+    ULONG supported = WIN32_OFN_READONLY | WIN32_OFN_OVERWRITEPROMPT | WIN32_OFN_HIDEREADONLY |
+                      WIN32_OFN_NOCHANGEDIR | WIN32_OFN_SHOWHELP | WIN32_OFN_ENABLEHOOK |
+                      WIN32_OFN_ENABLETEMPLATE | WIN32_OFN_ALLOWMULTISELECT |
+                      WIN32_OFN_EXTENSIONDIFFERENT | WIN32_OFN_PATHMUSTEXIST |
+                      WIN32_OFN_FILEMUSTEXIST | WIN32_OFN_CREATEPROMPT |
+                      WIN32_OFN_NOREADONLYRETURN | WIN32_OFN_NOTESTFILECREATE |
+                      WIN32_OFN_NONETWORKBUTTON | WIN32_OFN_NOLONGNAMES;
+    if (flags & ~supported || lx_guest_load_u32(record + WIN32_OPENFILENAME_CUSTOM_FILTER))
     {
         open32SetError(ERROR_NOT_SUPPORTED);
-        return fail(0xffff);
+        return fail(WIN32_CDERR_DIALOGFAILURE);
     }
-    ULONG callback = flags & OFN_ENABLEHOOK ? lx_guest_load_u32(record + 68) : 0;
-    if ((flags & OFN_ENABLEHOOK) && !open32ValidProcedure(callback))
-        return fail(11);
-    ULONG file = lx_guest_load_u32(record + 28), capacity = lx_guest_load_u32(record + 32);
-    ULONG title = lx_guest_load_u32(record + 36), title_capacity = lx_guest_load_u32(record + 40);
-    if (!capacity || capacity > 1048576 ||
+    ULONG callback =
+        flags & WIN32_OFN_ENABLEHOOK ? lx_guest_load_u32(record + WIN32_OPENFILENAME_HOOK) : 0;
+    if ((flags & WIN32_OFN_ENABLEHOOK) && !open32ValidProcedure(callback))
+        return fail(WIN32_CDERR_NOHOOK);
+    ULONG file = lx_guest_load_u32(record + WIN32_OPENFILENAME_FILE),
+          capacity = lx_guest_load_u32(record + WIN32_OPENFILENAME_MAX_FILE);
+    ULONG title = lx_guest_load_u32(record + WIN32_OPENFILENAME_FILE_TITLE),
+          title_capacity = lx_guest_load_u32(record + WIN32_OPENFILENAME_MAX_FILE_TITLE);
+    if (!capacity || capacity > FILE_BUFFER_LIMIT ||
         !lx_execution_memory(GProcessState.execution, file, capacity,
                              LX_GUEST_READ | LX_GUEST_WRITE) ||
         (title && title_capacity &&
          !lx_execution_memory(GProcessState.execution, title, title_capacity, LX_GUEST_WRITE)))
-        return fail(0x3002);
+        return fail(WIN32_FNERR_INVALIDFILENAME);
     char *filename = copy_text(file, capacity),
-         *directory = copy_text(lx_guest_load_u32(record + 44), 260);
-    char *caption = copy_text(lx_guest_load_u32(record + 48), 32768);
-    if (!filename || (lx_guest_load_u32(record + 44) && !directory) ||
-        (lx_guest_load_u32(record + 48) && !caption))
+         *directory =
+             copy_text(lx_guest_load_u32(record + WIN32_OPENFILENAME_INITIAL_DIR), CCHMAXPATH);
+    char *caption = copy_text(lx_guest_load_u32(record + WIN32_OPENFILENAME_TITLE), CAPTION_LIMIT);
+    if (!filename || (lx_guest_load_u32(record + WIN32_OPENFILENAME_INITIAL_DIR) && !directory) ||
+        (lx_guest_load_u32(record + WIN32_OPENFILENAME_TITLE) && !caption))
     {
         free(filename);
         free(directory);
         free(caption);
-        return fail(0x3002);
+        return fail(WIN32_FNERR_INVALIDFILENAME);
     }
     FileDialog dialog = {.address = (ULONG)pointer,
                          .hook = callback,
@@ -363,28 +390,28 @@ static BOOL common_dialog(PVOID address, BOOL save)
                          .previous = file_dialogs};
     dialog.mapping = lx_execution_map(GProcessState.execution, 0, DIALOG_BYTES,
                                       LX_GUEST_READ | LX_GUEST_WRITE, 0);
-    dialog.procedure =
-        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    dialog.procedure = lx_execution_map(GProcessState.execution, 0, OPEN32_PAGE_SIZE,
+                                        LX_GUEST_READ | LX_GUEST_WRITE, 0);
     BOOL result = FALSE;
     if (!dialog.mapping || !dialog.procedure)
     {
-        common_error = 9;
+        common_error = WIN32_CDERR_MEMALLOCFAILURE;
         goto cleanup;
     }
     dialog.native = lx_execution_mapping_host(dialog.mapping);
     memset(dialog.native, 0, sizeof *dialog.native);
     dialog.native->cbSize = sizeof *dialog.native;
-    dialog.native->fl = save ? 0x200 : 0x100;
-    dialog.native->ulUser = lx_guest_load_u32(record + 4);
+    dialog.native->fl = save ? FDS_SAVEAS_DIALOG : FDS_OPEN_DIALOG;
+    dialog.native->ulUser = lx_guest_load_u32(record + WIN32_OPENFILENAME_OWNER);
     size_t offset = sizeof *dialog.native + (FILTER_LIMIT + 1) * 4;
-    ULONG filter = lx_guest_load_u32(record + 12);
+    ULONG filter = lx_guest_load_u32(record + WIN32_OPENFILENAME_FILTER);
     uint8 *types = (uint8 *)dialog.native + sizeof *dialog.native;
     while (filter && dialog.count < FILTER_LIMIT)
     {
-        char *description = copy_text(filter, 1024);
+        char *description = copy_text(filter, FILTER_TEXT_LIMIT);
         if (!description)
         {
-            common_error = 0x3002;
+            common_error = WIN32_FNERR_INVALIDFILENAME;
             goto cleanup;
         }
         if (!*description)
@@ -393,13 +420,13 @@ static BOOL common_dialog(PVOID address, BOOL save)
             break;
         }
         filter += (ULONG)strlen(description) + 1;
-        char *pattern = copy_text(filter, 260);
+        char *pattern = copy_text(filter, CCHMAXPATH);
         ULONG text = add_text(&dialog, &offset, description);
         free(description);
         if (!pattern || !*pattern || !text)
         {
             free(pattern);
-            common_error = 0x3002;
+            common_error = WIN32_FNERR_INVALIDFILENAME;
             goto cleanup;
         }
         filter += (ULONG)strlen(pattern) + 1;
@@ -409,7 +436,7 @@ static BOOL common_dialog(PVOID address, BOOL save)
     lx_guest_store_u32(types + dialog.count * 4, 0);
     if (dialog.count)
     {
-        ULONG selected = lx_guest_load_u32(record + 24);
+        ULONG selected = lx_guest_load_u32(record + WIN32_OPENFILENAME_FILTER_INDEX);
         dialog.selected = selected && selected <= dialog.count ? selected - 1 : 0;
         dialog.native->papszITypeList =
             lx_execution_mapping_address(dialog.mapping) + sizeof *dialog.native;
@@ -419,29 +446,30 @@ static BOOL common_dialog(PVOID address, BOOL save)
         dialog.native->pszTitle = add_text(&dialog, &offset, caption);
     int length;
     if (*filename && (strchr(filename, ':') || *filename == '\\' || *filename == '/'))
-        length = snprintf(dialog.native->szFullFile, 260, "%s", filename);
+        length = snprintf(dialog.native->szFullFile, CCHMAXPATH, "%s", filename);
     else
-        length = snprintf(dialog.native->szFullFile, 260, "%s%s%s", directory ? directory : "",
-                          directory && *directory && directory[strlen(directory) - 1] != '\\' &&
-                                  directory[strlen(directory) - 1] != '/'
-                              ? "\\"
-                              : "",
-                          filename);
-    if (length < 0 || length >= 260)
+        length =
+            snprintf(dialog.native->szFullFile, CCHMAXPATH, "%s%s%s", directory ? directory : "",
+                     directory && *directory && directory[strlen(directory) - 1] != '\\' &&
+                             directory[strlen(directory) - 1] != '/'
+                         ? "\\"
+                         : "",
+                     filename);
+    if (length < 0 || length >= CCHMAXPATH)
     {
-        common_error = 0x3002;
+        common_error = WIN32_FNERR_INVALIDFILENAME;
         goto cleanup;
     }
-    if (flags & OFN_ENABLETEMPLATE)
+    if (flags & WIN32_OFN_ENABLETEMPLATE)
     {
-        ULONG resource = lx_guest_load_u32(record + 72);
+        ULONG resource = lx_guest_load_u32(record + WIN32_OPENFILENAME_TEMPLATE_NAME);
         if (!resource || resource > UINT16_MAX)
         {
-            common_error = 3;
+            common_error = WIN32_CDERR_NOTEMPLATE;
             goto cleanup;
         }
-        dialog.native->fl |= 2;
-        dialog.native->hMod = lx_guest_load_u32(record + 8);
+        dialog.native->fl |= FDS_CUSTOM;
+        dialog.native->hMod = lx_guest_load_u32(record + WIN32_OPENFILENAME_INSTANCE);
         if ((!dialog.native->hMod || dialog.native->hMod == UINT32_MAX) &&
             GProcessState.main_module)
             dialog.native->hMod = GProcessState.main_module->handle;
@@ -449,11 +477,12 @@ static BOOL common_dialog(PVOID address, BOOL save)
     }
     const LxExecutionApi32 api = {file_dispatch, 16, 0, LX_ABI_STACK32};
     if (!lx_execution_emit_bridge32(GProcessState.execution,
-                                    lx_execution_mapping_host(dialog.procedure), 4096, &api) ||
+                                    lx_execution_mapping_host(dialog.procedure), OPEN32_PAGE_SIZE,
+                                    &api) ||
         !lx_execution_protect(GProcessState.execution, dialog.procedure,
                               LX_GUEST_READ | LX_GUEST_EXECUTE))
     {
-        common_error = 9;
+        common_error = WIN32_CDERR_MEMALLOCFAILURE;
         goto cleanup;
     }
     dialog.native->pfnDlgProc = lx_execution_mapping_address(dialog.procedure);
@@ -462,7 +491,7 @@ static BOOL common_dialog(PVOID address, BOOL save)
     dialog.help = RegisterWindowMessage("commdlg_help");
     if (!open32Presentation())
     {
-        common_error = 2;
+        common_error = WIN32_CDERR_INITIALIZATION;
         goto cleanup;
     }
     file_dialogs = &dialog;
@@ -471,8 +500,8 @@ static BOOL common_dialog(PVOID address, BOOL save)
     file_dialogs = dialog.previous;
     open32NativeControlsPrune();
     if (!handle && !common_error)
-        common_error = 0xffff;
-    result = dialog.accepted && dialog.native->lReturn == 1;
+        common_error = WIN32_CDERR_DIALOGFAILURE;
+    result = dialog.accepted && dialog.native->lReturn == DID_OK;
 cleanup:
     for (ULONG i = 0; i < dialog.count; i++)
         free(dialog.patterns[i]);
