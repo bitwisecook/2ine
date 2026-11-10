@@ -4,26 +4,50 @@
 #include "os2/include/private/pmgrep.h"
 #include <math.h>
 
+/* MATRIXLF as a LONG array: fxM11, fxM12, lM13, fxM21, fxM22, lM23, lM31, lM32, lM33. The fx
+   elements are FIXED 16.16 values. */
+enum
+{
+    M11,
+    M12,
+    M13,
+    M21,
+    M22,
+    M23,
+    M31,
+    M32,
+    M33
+};
+
+static const double FIXED_ONE = 65536.0;
+
+/* Longest point array converted in one call. */
+enum
+{
+    CONVERT_MAX_POINTS = 65536
+};
+
 static void unit_scale(PresentationSpace *ps, LONG *pels, LONG *units)
 {
     *pels = (LONG)lx_pm_dc_dpi(ps->dc);
+    /* Page units per inch. */
     switch (ps->page_units)
     {
-        case 0x0c:
+        case PU_LOMETRIC:
             *units = 254;
-            break; /* 0.1 millimetre */
-        case 0x10:
+            break;
+        case PU_HIMETRIC:
             *units = 2540;
-            break; /* 0.01 millimetre */
-        case 0x14:
+            break;
+        case PU_LOENGLISH:
             *units = 100;
-            break; /* 0.01 inch */
-        case 0x18:
+            break;
+        case PU_HIENGLISH:
             *units = 1000;
-            break; /* 0.001 inch */
-        case 0x1c:
+            break;
+        case PU_TWIPS:
             *units = 1440;
-            break; /* twips */
+            break;
         default:
             *pels = *units = 1;
             break;
@@ -60,9 +84,11 @@ static BOOL convert_coordinate(LONG value, LONG origin, LONG span, LONG page, BO
 
 static BOOL matrix_point(const LONG *m, POINTL *p, BOOL inverse)
 {
-    double a = m[0] / 65536.0, b = m[1] / 65536.0, c = m[3] / 65536.0, d = m[4] / 65536.0;
-    double x = p->x, y = p->y, tx = m[6], ty = m[7], w = m[8];
-    if (m[2] || m[5] || w != 1)
+    double a = m[M11] / FIXED_ONE, b = m[M12] / FIXED_ONE, c = m[M21] / FIXED_ONE,
+           d = m[M22] / FIXED_ONE;
+    double x = p->x, y = p->y, tx = m[M31], ty = m[M32], w = m[M33];
+    /* Only affine matrices are supported. */
+    if (m[M13] || m[M23] || w != 1)
         return FALSE;
     if (inverse)
     {
@@ -133,8 +159,8 @@ BOOL lx_pm_transform_point(PresentationSpace *ps, POINTL *point, BOOL to_device)
 BOOL lx_pm_convert_points(HPS handle, LONG source, LONG target, LONG count, PPOINTL points)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || source < 1 || source > 5 || target < 1 || target > 5 || count < 0 || count > 65536 ||
-        (count && !points))
+    if (!ps || source < CVTC_WORLD || source > CVTC_DEVICE || target < CVTC_WORLD ||
+        target > CVTC_DEVICE || count < 0 || count > CONVERT_MAX_POINTS || (count && !points))
         return FALSE;
     POINTL *converted = count ? malloc((size_t)count * sizeof *converted) : NULL;
     if (count && !converted)
@@ -145,21 +171,21 @@ BOOL lx_pm_convert_points(HPS handle, LONG source, LONG target, LONG count, PPOI
         POINTL p = points[i];
         /* Device/page conversion uses the common viewport mapper with matrices temporarily disabled. */
         BOOL enabled = ps->gpi.initialized;
-        if (source == 5)
+        if (source == CVTC_DEVICE)
         {
             ps->gpi.initialized = FALSE;
             ok = lx_pm_transform_point(ps, &p, FALSE);
             ps->gpi.initialized = enabled;
         }
-        if (ok && enabled && source >= 3 && target <= 2)
+        if (ok && enabled && source >= CVTC_DEFAULTPAGE && target <= CVTC_MODEL)
             ok = matrix_point(ps->gpi.view, &p, TRUE);
-        if (ok && enabled && source >= 2 && target == 1)
+        if (ok && enabled && source >= CVTC_MODEL && target == CVTC_WORLD)
             ok = matrix_point(ps->gpi.model, &p, TRUE);
-        if (ok && enabled && source == 1 && target >= 2)
+        if (ok && enabled && source == CVTC_WORLD && target >= CVTC_MODEL)
             ok = matrix_point(ps->gpi.model, &p, FALSE);
-        if (ok && enabled && source <= 2 && target >= 3)
+        if (ok && enabled && source <= CVTC_MODEL && target >= CVTC_DEFAULTPAGE)
             ok = matrix_point(ps->gpi.view, &p, FALSE);
-        if (ok && target == 5)
+        if (ok && target == CVTC_DEVICE)
         {
             ps->gpi.initialized = FALSE;
             ok = lx_pm_transform_point(ps, &p, TRUE);
@@ -293,9 +319,9 @@ void lx_pm_pick_line(PresentationSpace *ps, const POINTL *from, const POINTL *to
 LONG lx_pm_hits(PresentationSpace *ps)
 {
     if (!ps || !ps->gpi.pick_hit)
-        return 1;
+        return GPI_OK;
     ps->gpi.pick_hit = FALSE;
-    return 2;
+    return GPI_HITS;
 }
 
 void lx_pm_boundary(PresentationSpace *ps, LONG x, LONG y, LONG width, LONG height)

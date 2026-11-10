@@ -4,6 +4,29 @@
 #include "os2/include/private/pmgrep.h"
 #include "os2/ps/common/pm_text.h"
 
+enum
+{
+    /* FIXED: a 16.16 fixed-point number. */
+    FIXED_ONE = 65536,
+    /* Longest string drawn in one call. */
+    TEXT_MAX_LENGTH = 65536,
+    /* The PM default font is 16 pels high on a 96 DPI display. */
+    DEFAULT_FONT_PELS = 16,
+    REFERENCE_DPI = 96,
+    POINTS_PER_INCH = 72,
+    MAX_FONT_POINTS = 384
+};
+
+/* Host font catalogue slots: a family's first slot plus its style bits. */
+enum
+{
+    HOST_FONT_SANS = 0,
+    HOST_FONT_SERIF = 4,
+    HOST_FONT_MONOSPACED = 8,
+    HOST_FONT_BOLD = 1,
+    HOST_FONT_ITALIC = 2
+};
+
 LONG lx_pm_char_extra(PresentationSpace *ps)
 {
     if (!ps || !ps->gpi.initialized || !ps->gpi.char_extra)
@@ -13,14 +36,14 @@ LONG lx_pm_char_extra(PresentationSpace *ps)
     if (!lx_pm_transform_point(ps, &origin, TRUE) || !lx_pm_transform_point(ps, &extra, TRUE))
         return 0;
     int64_t delta = (int64_t)extra.x - origin.x;
-    return (LONG)((delta + (delta < 0 ? -32768 : 32768)) / 65536);
+    return (LONG)((delta + (delta < 0 ? -FIXED_ONE / 2 : FIXED_ONE / 2)) / FIXED_ONE);
 }
 
 LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *bounds)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || !point || count < 0 || count > 65536 || (count && !text))
+    if (!ps || !point || count < 0 || count > TEXT_MAX_LENGTH || (count && !text))
         return 0;
     LxHostFont *font = lx_pm_font(handle);
     LONG rgb = lx_pm_resolve_color(handle, color);
@@ -75,7 +98,7 @@ static LONG draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregr
         return 0;
     if (count == -1)
         count = (LONG)strlen(text);
-    if (count > 65536)
+    if (count > TEXT_MAX_LENGTH)
         return 0;
     LxHostFont *font = lx_pm_font(handle);
     LxHostFontMetrics metrics;
@@ -96,7 +119,7 @@ static LONG draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregr
     LONG used = 0;
     for (LONG i = 0; i < count; i++)
     {
-        if ((flags & 0x2000) && text[i] == '~' && i + 1 < count)
+        if ((flags & DT_MNEMONIC) && text[i] == '~' && i + 1 < count)
         {
             if (text[i + 1] != '~')
                 continue;
@@ -120,7 +143,7 @@ static LONG draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregr
             last_space = i;
             space_width = width;
         }
-        if (copy[i] == '\n' || ((flags & 0x4000) && width + advance > available && i > start))
+        if (copy[i] == '\n' || ((flags & DT_WORDBREAK) && width + advance > available && i > start))
         {
             LONG end = i;
             if (copy[i] != '\n' && last_space >= start)
@@ -141,32 +164,33 @@ static LONG draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregr
     }
     lengths[lines] = used - start;
     widths[lines++] = width;
-    LONG height = metrics.ascent + metrics.descent + ((flags & 0x80) ? metrics.leading : 0);
+    LONG height =
+        metrics.ascent + metrics.descent + ((flags & DT_EXTERNALLEADING) ? metrics.leading : 0);
     LONG total_height = height * lines, max_width = 0;
     for (LONG i = 0; i < lines; i++)
         if (widths[i] > max_width)
             max_width = widths[i];
     LONG top = rect->yTop;
-    if (flags & 0x400)
+    if (flags & DT_VCENTER)
         top = rect->yBottom + (rect->yTop - rect->yBottom + total_height) / 2;
-    else if (flags & 0x800)
+    else if (flags & DT_BOTTOM)
         top = rect->yBottom + total_height;
     LONG result = count;
-    if (flags & 2)
+    if (flags & DT_QUERYEXTENT)
     {
         rect->xRight = rect->xLeft + max_width;
         rect->yBottom = rect->yTop - total_height;
     }
     else
     {
-        if (!sink && (flags & 0x8000) && !WinFillRect(handle, rect, background))
+        if (!sink && (flags & DT_ERASERECT) && !WinFillRect(handle, rect, background))
             result = 0;
         for (LONG line = 0; result && line < lines; line++)
         {
             LONG x = rect->xLeft;
-            if (flags & 0x100)
+            if (flags & DT_CENTER)
                 x += (available - widths[line]) / 2;
-            else if (flags & 0x200)
+            else if (flags & DT_RIGHT)
                 x += available - widths[line];
             if (sink)
             {
@@ -183,7 +207,8 @@ static LONG draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregr
             }
             POINTL point = {x, top - line * height - metrics.ascent};
             if (!lx_pm_text(handle, &point, lengths[line], copy + starts[line],
-                            (flags & 0x40) ? ps->primitive_color[1] : foreground,
+                            (flags & DT_TEXTATTRS) ? ps->primitive_color[PRIM_CHAR - 1]
+                                                   : foreground,
                             clip ? rect : NULL))
                 result = 0;
         }
@@ -205,7 +230,8 @@ LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregro
 LONG lx_pm_draw_text_lines(HPS handle, LONG count, PCH text, PRECTL rect, ULONG flags,
                            LxPmTextLine sink, void *context)
 {
-    return draw_text(handle, count, text, rect, 0, 0, flags & ~2u, FALSE, FALSE, sink, context);
+    return draw_text(handle, count, text, rect, 0, 0, flags & ~(unsigned)DT_QUERYEXTENT, FALSE,
+                     FALSE, sink, context);
 }
 
 LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
@@ -278,31 +304,32 @@ LxHostFont *lx_pm_font(HPS hps)
     if (!ps)
         return NULL;
     unsigned dpi = lx_pm_dc_dpi(ps->dc);
-    unsigned index = 0, pixels = (16 * dpi + 48) / 96;
+    unsigned index = HOST_FONT_SANS,
+             pixels = (DEFAULT_FONT_PELS * dpi + REFERENCE_DPI / 2) / REFERENCE_DPI;
     char attribute[128] = {0};
-    ULONG bytes = ps->window ? WinQueryPresParam(ps->window->hwnd, 15, 0, NULL,
+    ULONG bytes = ps->window ? WinQueryPresParam(ps->window->hwnd, PP_FONTNAMESIZE, 0, NULL,
                                                  sizeof attribute - 1, attribute, 0)
                              : 0;
     if (bytes && memchr(attribute, 0, bytes))
     {
         char *end;
         unsigned long points = strtoul(attribute, &end, 10);
-        if (points && points <= 384 && *end == '.')
+        if (points && points <= MAX_FONT_POINTS && *end == '.')
         {
             const char *family = end + 1;
-            pixels = (unsigned)(points * dpi + 36) / 72;
+            pixels = (unsigned)(points * dpi + POINTS_PER_INCH / 2) / POINTS_PER_INCH;
             if (!strncasecmp(family, "Courier", 7) || !strncasecmp(family, "System Monospaced", 17))
-                index = 8;
+                index = HOST_FONT_MONOSPACED;
             else if (!strncasecmp(family, "Tms Rmn", 7) ||
                      !strncasecmp(family, "Times New Roman", 15))
-                index = 4;
+                index = HOST_FONT_SERIF;
             unsigned style = 0;
             for (const char *p = family; *p; p++)
             {
                 if (!strncasecmp(p, "Bold", 4))
-                    style |= 1;
+                    style |= HOST_FONT_BOLD;
                 if (!strncasecmp(p, "Italic", 6))
-                    style |= 2;
+                    style |= HOST_FONT_ITALIC;
             }
             index += style;
         }
@@ -313,7 +340,7 @@ LxHostFont *lx_pm_font(HPS hps)
         pixels = ps->logical_fonts[ps->charset].pixels;
     }
     if (ps->char_height > 0)
-        pixels = (unsigned)((ps->char_height + 32768LL) / 65536);
+        pixels = (unsigned)((ps->char_height + (long long)FIXED_ONE / 2) / FIXED_ONE);
     if (!pixels)
         pixels = 1;
     if (!ps->font || ps->font_index != index || ps->font_pixels != pixels)
