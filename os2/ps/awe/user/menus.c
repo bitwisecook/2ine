@@ -1,10 +1,54 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 menus retain PM menu windows and their normal message behavior. */
 #include "os2/include/private/export.h"
+#include "os2/include/bsedos.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/include/private/pmwinp.h"
 #include "emulator/abi.h"
+
+enum
+{
+    /* The MF_* bits a Windows menu item keeps as its state, stored in the PM item's hItem. */
+    MENU_STATE_FLAGS = WIN32_MF_GRAYED | WIN32_MF_DISABLED | WIN32_MF_BITMAP | WIN32_MF_CHECKED |
+                       WIN32_MF_POPUP | WIN32_MF_MENUBARBREAK | WIN32_MF_MENUBREAK |
+                       WIN32_MF_HILITE | WIN32_MF_SEPARATOR,
+    MENU_DISABLED_FLAGS = WIN32_MF_GRAYED | WIN32_MF_DISABLED,
+    /* GetMenuState reports a popup's item count in bits 8-15. */
+    MENU_STATE_COUNT_SHIFT = 8,
+    /* Bounds on item counts and nesting, which also stop submenu cycles. */
+    MENU_ITEMS_MAX = 4096,
+    MENU_DEPTH_MAX = 32,
+    LOADED_MENU_DEPTH_MAX = 16,
+    LOADED_MENU_ITEMS_MAX = 65536,
+    /* PM menu text separates the accelerator column with a backspace, Windows with a tab. */
+    PM_MENU_ACCELERATOR_SEPARATOR = '\b',
+    /* PM menu resources and native menu text without a code page use 437. */
+    PM_MENU_CODEPAGE = 437,
+    /* Pixels the client loses to a menu bar. */
+    MENU_BAR_HEIGHT = 24,
+    /* Pixels added to the Windows popup y before flipping it to PM coordinates. */
+    POPUP_Y_OFFSET = 15,
+    /* Keep the popup on screen, and let every mouse button and the keyboard drive it. */
+    POPUP_MENU_FLAGS = PU_HCONSTRAIN | PU_VCONSTRAIN | PU_MOUSEBUTTON1 | PU_MOUSEBUTTON2 |
+                       PU_MOUSEBUTTON3 | PU_KEYBOARD
+};
+
+/* An MT menu template header with no items: ULONG cb, code page, a reserved word and the item
+   count. */
+enum
+{
+    MT_HEADER_SIZE = 10
+};
+
+/* RT_RESNAMES: a ULONG count, that many ULONG identities, then the names in the same order. */
+enum
+{
+    RT_RESNAMES = 255,
+    RESNAMES_COUNT_SIZE = 4,
+    RESNAMES_ID_SIZE = 4,
+    RESNAMES_SIZE_MAX = 1048576
+};
 
 typedef struct MenuText
 {
@@ -80,7 +124,7 @@ static ULONG create_menu(BOOL popup)
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
-    uint8 empty[10] = {0};
+    uint8 empty[MT_HEADER_SIZE] = {0};
     lx_guest_store_u32(empty, sizeof empty);
     menu->handle = WinCreateMenu(HWND_DESKTOP, empty);
     if (!menu->handle)
@@ -145,10 +189,10 @@ static Window *menu_window(ULONG handle)
 
 static PmMenuItem *menu_item(Window **target, ULONG item, ULONG flags, unsigned depth)
 {
-    if (!*target || depth > 32)
+    if (!*target || depth > MENU_DEPTH_MAX)
         return NULL;
     PmMenu *menu = (*target)->menu;
-    if (flags & 0x400)
+    if (flags & WIN32_MF_BYPOSITION)
         return item < menu->count ? &menu->items[item] : NULL;
     for (size_t i = 0; i < menu->count; i++)
     {
@@ -167,7 +211,7 @@ static PmMenuItem *menu_item(Window **target, ULONG item, ULONG flags, unsigned 
 
 static BOOL menu_contains(Window *menu, Window *target, unsigned depth)
 {
-    if (menu == target || depth >= 32)
+    if (menu == target || depth >= MENU_DEPTH_MAX)
         return TRUE;
     for (size_t i = 0; i < menu->menu->count; i++)
     {
@@ -187,7 +231,7 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
         open32SetError(ERROR_INVALID_MENU_HANDLE);
         return FALSE;
     }
-    if (flags & (4 | 0x100))
+    if (flags & (WIN32_MF_BITMAP | WIN32_MF_OWNERDRAW))
     {
         open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
@@ -195,20 +239,20 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
     LONG index;
     if (position == UINT32_MAX)
         index = (LONG)window->menu->count;
-    else if (flags & 0x400)
+    else if (flags & WIN32_MF_BYPOSITION)
         index = position <= window->menu->count ? (LONG)position : -1;
     else
     {
         PmMenuItem *before = menu_item(&window, position, flags, 0);
         index = before ? before->item.iPosition : -1;
     }
-    if (index < 0 || window->menu->count >= 4096)
+    if (index < 0 || window->menu->count >= MENU_ITEMS_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    Window *submenu = flags & 0x10 ? menu_window(identifier) : NULL;
-    if ((flags & 0x10) && !submenu)
+    Window *submenu = flags & WIN32_MF_POPUP ? menu_window(identifier) : NULL;
+    if ((flags & WIN32_MF_POPUP) && !submenu)
     {
         open32SetError(ERROR_INVALID_MENU_HANDLE);
         return FALSE;
@@ -248,18 +292,20 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
                 c = '~';
         }
         else if (c == '\t')
-            c = 8;
-        copy[used++] = (char)WinCpTranslateChar(0, 1004, c, 437);
+            c = PM_MENU_ACCELERATOR_SEPARATOR;
+        copy[used++] = (char)WinCpTranslateChar(0, WIN32_CP_WINANSI, c, PM_MENU_CODEPAGE);
     }
     copy[used] = 0;
     MENUITEM record = {(SHORT)index,
-                       (USHORT)((flags & 0x800 ? 4 : 0) | (submenu ? 0x10 : 0) |
-                                (find_menu(window->hwnd)->system ? 0x40 : 0)),
-                       (USHORT)((flags & 3 ? 0x4000 : 0) | (flags & 8 ? 0x2000 : 0)),
+                       (USHORT)((flags & WIN32_MF_SEPARATOR ? MIS_SEPARATOR : 0) |
+                                (submenu ? MIS_SUBMENU : 0) |
+                                (find_menu(window->hwnd)->system ? MIS_SYSCOMMAND : 0)),
+                       (USHORT)((flags & MENU_DISABLED_FLAGS ? MIA_DISABLED : 0) |
+                                (flags & WIN32_MF_CHECKED ? MIA_CHECKED : 0)),
                        (USHORT)identifier,
                        submenu ? submenu->hwnd : 0,
-                       flags & 0x8FF};
-    LONG result = (LONG)(intptr_t)WinSendMsg(window->hwnd, 0x180, &record, copy);
+                       flags & MENU_STATE_FLAGS};
+    LONG result = (LONG)(intptr_t)WinSendMsg(window->hwnd, MM_INSERTITEM, &record, copy);
     free(copy);
     if (result < 0)
     {
@@ -298,14 +344,14 @@ LONG GetMenuItemCount(ULONG handle)
 ULONG GetMenuItemID(ULONG handle, LONG position)
 {
     Window *window = menu_window(handle);
-    PmMenuItem *item = menu_item(&window, (ULONG)position, 0x400, 0);
+    PmMenuItem *item = menu_item(&window, (ULONG)position, WIN32_MF_BYPOSITION, 0);
     return item && !item->item.hwndSubMenu ? item->item.id : UINT32_MAX;
 }
 
 ULONG GetSubMenu(ULONG handle, LONG position)
 {
     Window *window = menu_window(handle);
-    PmMenuItem *item = menu_item(&window, (ULONG)position, 0x400, 0);
+    PmMenuItem *item = menu_item(&window, (ULONG)position, WIN32_MF_BYPOSITION, 0);
     return item ? item->item.hwndSubMenu : 0;
 }
 
@@ -318,11 +364,11 @@ ULONG GetMenuState(ULONG handle, ULONG identity, ULONG flags)
         open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return UINT32_MAX;
     }
-    ULONG result = item->item.hItem & 0x8FF;
+    ULONG result = item->item.hItem & MENU_STATE_FLAGS;
     if (item->item.hwndSubMenu)
     {
         Window *sub = menu_window(item->item.hwndSubMenu);
-        result |= 0x10 | (sub ? (sub->menu->count & 255) << 8 : 0);
+        result |= WIN32_MF_POPUP | (sub ? (sub->menu->count & 255) << MENU_STATE_COUNT_SHIFT : 0);
     }
     return result;
 }
@@ -336,10 +382,10 @@ ULONG CheckMenuItem(ULONG handle, ULONG identity, ULONG flags)
         open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return UINT32_MAX;
     }
-    ULONG old = item->item.hItem & 8;
-    item->item.hItem = (item->item.hItem & ~8u) | (flags & 8);
-    item->item.afAttribute =
-        (USHORT)((item->item.afAttribute & ~0x2000u) | (flags & 8 ? 0x2000 : 0));
+    ULONG old = item->item.hItem & WIN32_MF_CHECKED;
+    item->item.hItem = (item->item.hItem & ~(ULONG)WIN32_MF_CHECKED) | (flags & WIN32_MF_CHECKED);
+    item->item.afAttribute = (USHORT)((item->item.afAttribute & ~(unsigned)MIA_CHECKED) |
+                                      (flags & WIN32_MF_CHECKED ? MIA_CHECKED : 0));
     WinInvalidateRect(window->hwnd, NULL, FALSE);
     return old;
 }
@@ -353,10 +399,11 @@ ULONG EnableMenuItem(ULONG handle, ULONG identity, ULONG flags)
         open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return UINT32_MAX;
     }
-    ULONG old = item->item.hItem & 3;
-    item->item.hItem = (item->item.hItem & ~3u) | (flags & 3);
-    item->item.afAttribute =
-        (USHORT)((item->item.afAttribute & ~0x4000u) | (flags & 3 ? 0x4000 : 0));
+    ULONG old = item->item.hItem & MENU_DISABLED_FLAGS;
+    item->item.hItem =
+        (item->item.hItem & ~(ULONG)MENU_DISABLED_FLAGS) | (flags & MENU_DISABLED_FLAGS);
+    item->item.afAttribute = (USHORT)((item->item.afAttribute & ~(unsigned)MIA_DISABLED) |
+                                      (flags & MENU_DISABLED_FLAGS ? MIA_DISABLED : 0));
     WinInvalidateRect(window->hwnd, NULL, FALSE);
     return old;
 }
@@ -440,14 +487,14 @@ ULONG GetMenu(ULONG handle)
         open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
-    return window->style & 0x40000000u ? 0 : window->menu;
+    return window->style & WIN32_WS_CHILD ? 0 : window->menu;
 }
 
 BOOL SetMenu(ULONG handle, ULONG menu)
 {
     TRACE_NATIVE("SetMenu(%u, %u)", (uint)handle, (uint)menu);
     Open32Window *window = open32FindWindow(handle);
-    if (!window || (window->style & 0x40000000u))
+    if (!window || (window->style & WIN32_WS_CHILD))
     {
         open32SetError(window ? ERROR_INVALID_PARAMETER : ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
@@ -471,7 +518,7 @@ BOOL SetMenu(ULONG handle, ULONG menu)
             return FALSE;
         }
         WinSetOwner(old, 0);
-        WinSetWindowUShort(old, -1, 0); /* QWS_ID */
+        WinSetWindowUShort(old, QWS_ID, 0);
     }
     if (menu && !lx_pm_menu_attach(menu, handle))
     {
@@ -493,7 +540,7 @@ BOOL SetMenu(ULONG handle, ULONG menu)
         return FALSE;
     if (client != handle)
     {
-        LONG height = bounds.yTop - (menu ? 24 : 0);
+        LONG height = bounds.yTop - (menu ? MENU_BAR_HEIGHT : 0);
         if (height <= 0 || !WinSetWindowPos(client, HWND_BOTTOM, 0, 0, bounds.xRight, height,
                                             SWP_MOVE | SWP_SIZE | SWP_SHOW))
             return FALSE;
@@ -528,7 +575,7 @@ ULONG GetSystemMenu(ULONG handle, BOOL revert)
             DestroyMenu(previous);
         return 0;
     }
-    if (!(window->style & 0x00080000u))
+    if (!(window->style & WIN32_WS_SYSMENU))
         return 0;
     if (window->system_menu && IsMenu(window->system_menu))
         return window->system_menu;
@@ -536,17 +583,30 @@ ULONG GetSystemMenu(ULONG handle, BOOL revert)
     if (!menu)
         return 0;
     find_menu(menu)->system = TRUE;
-    BOOL minimized = (window->style & 0x20000000u) != 0;
-    BOOL maximized = (window->style & 0x01000000u) != 0;
+    BOOL minimized = (window->style & WIN32_WS_MINIMIZE) != 0;
+    BOOL maximized = (window->style & WIN32_WS_MAXIMIZE) != 0;
     BOOL ok =
-        AppendMenu(menu, minimized || maximized ? 0 : 1, 0xF120, "&Restore") &&
-        AppendMenu(menu, minimized || maximized ? 1 : 0, 0xF010, "&Move") &&
-        AppendMenu(menu, minimized || maximized || !(window->style & 0x00040000) ? 1 : 0, 0xF000,
-                   "&Size") &&
-        AppendMenu(menu, minimized || !(window->style & 0x00020000) ? 1 : 0, 0xF020, "Mi&nimize") &&
-        AppendMenu(menu, maximized || !(window->style & 0x00010000) ? 1 : 0, 0xF030, "Ma&ximize") &&
-        AppendMenu(menu, 0x800, 0, NULL) &&
-        AppendMenu(menu, window->class->style & 0x200 ? 1 : 0, 0xF060, "&Close\tAlt+F4") &&
+        AppendMenu(menu, minimized || maximized ? WIN32_MF_ENABLED : WIN32_MF_GRAYED,
+                   WIN32_SC_RESTORE, "&Restore") &&
+        AppendMenu(menu, minimized || maximized ? WIN32_MF_GRAYED : WIN32_MF_ENABLED, WIN32_SC_MOVE,
+                   "&Move") &&
+        AppendMenu(menu,
+                   minimized || maximized || !(window->style & WIN32_WS_THICKFRAME)
+                       ? WIN32_MF_GRAYED
+                       : WIN32_MF_ENABLED,
+                   WIN32_SC_SIZE, "&Size") &&
+        AppendMenu(menu,
+                   minimized || !(window->style & WIN32_WS_MINIMIZEBOX) ? WIN32_MF_GRAYED
+                                                                        : WIN32_MF_ENABLED,
+                   WIN32_SC_MINIMIZE, "Mi&nimize") &&
+        AppendMenu(menu,
+                   maximized || !(window->style & WIN32_WS_MAXIMIZEBOX) ? WIN32_MF_GRAYED
+                                                                        : WIN32_MF_ENABLED,
+                   WIN32_SC_MAXIMIZE, "Ma&ximize") &&
+        AppendMenu(menu, WIN32_MF_SEPARATOR, 0, NULL) &&
+        AppendMenu(menu,
+                   window->class->style & WIN32_CS_NOCLOSE ? WIN32_MF_GRAYED : WIN32_MF_ENABLED,
+                   WIN32_SC_CLOSE, "&Close\tAlt+F4") &&
         lx_pm_menu_owner(menu, handle);
     if (!ok)
     {
@@ -583,24 +643,17 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
         unsigned long value = strtoul(name + 1, &end, 10);
         return end == name + 1 || *end || value > UINT16_MAX ? 0 : (ULONG)value;
     }
-
-    enum
-    {
-        resource_names = 255,
-        maximum_name_table = 1048576
-    };
-
     ULONG size = 0, result = 0;
     void *data = NULL;
     if (!GProcessState.queryResourceSize || !GProcessState.getResource ||
-        GProcessState.queryResourceSize(module, resource_names, type, &size) || size < 4 ||
-        size > maximum_name_table ||
-        GProcessState.getResource(module, resource_names, type, &data) || !data)
+        GProcessState.queryResourceSize(module, RT_RESNAMES, type, &size) ||
+        size < RESNAMES_COUNT_SIZE || size > RESNAMES_SIZE_MAX ||
+        GProcessState.getResource(module, RT_RESNAMES, type, &data) || !data)
         return 0;
     const uint8 *bytes = data;
     ULONG count = lx_guest_load_u32(bytes);
-    BOOL valid = count <= (size - 4) / 4;
-    size_t offset = valid ? 4 + (size_t)count * 4 : size;
+    BOOL valid = count <= (size - RESNAMES_COUNT_SIZE) / RESNAMES_ID_SIZE;
+    size_t offset = valid ? RESNAMES_COUNT_SIZE + (size_t)count * RESNAMES_ID_SIZE : size;
     for (ULONG i = 0; valid && i < count; i++)
     {
         const uint8 *end = memchr(bytes + offset, 0, size - offset);
@@ -612,7 +665,9 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
         if (!result && resource_name_equal(name, (const char *)bytes + offset))
         {
             /* RT_RESNAMES uses DWORD identities; RF_ORDINALID marks an ordinal. */
-            ULONG value = lx_guest_load_u32(bytes + 4 + (size_t)i * 4) & ~UINT32_C(0x80000000);
+            ULONG value =
+                lx_guest_load_u32(bytes + RESNAMES_COUNT_SIZE + (size_t)i * RESNAMES_ID_SIZE) &
+                ~UINT32_C(0x80000000);
             if (value > UINT16_MAX)
                 valid = FALSE;
             else
@@ -632,7 +687,7 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
 
 static ULONG menu_resource_id(ULONG module, PSZ name)
 {
-    return open32ResourceIdentity(module, name, 3); /* RT_MENU */
+    return open32ResourceIdentity(module, name, RT_MENU);
 }
 
 static char *loaded_menu_text(const char *source, ULONG codepage)
@@ -656,10 +711,10 @@ static char *loaded_menu_text(const char *source, ULONG codepage)
         }
         else if (c == '&')
             text[used++] = '&';
-        else if (c == 8 || c == '\t')
+        else if (c == PM_MENU_ACCELERATOR_SEPARATOR || c == '\t')
             c = '\t';
         else
-            c = WinCpTranslateChar(0, codepage, c, 1004);
+            c = WinCpTranslateChar(0, codepage, c, WIN32_CP_WINANSI);
         text[used++] = (char)c;
     }
     text[used] = 0;
@@ -669,7 +724,7 @@ static char *loaded_menu_text(const char *source, ULONG codepage)
 static BOOL adopt_loaded_menu(HWND handle, Open32Menu **pending, unsigned depth, size_t *nodes)
 {
     Window *window = lx_pm_menu_window(handle);
-    if (!window || depth > 16 || ++*nodes > 65536)
+    if (!window || depth > LOADED_MENU_DEPTH_MAX || ++*nodes > LOADED_MENU_ITEMS_MAX)
         return FALSE;
     Open32Menu *menu = calloc(1, sizeof *menu);
     if (!menu)
@@ -678,8 +733,9 @@ static BOOL adopt_loaded_menu(HWND handle, Open32Menu **pending, unsigned depth,
     menu->popup = depth != 0;
     menu->next = *pending;
     *pending = menu;
-    ULONG codepage = window->menu->codepage ? window->menu->codepage : 437;
-    ULONG display_codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+    ULONG codepage = window->menu->codepage ? window->menu->codepage : PM_MENU_CODEPAGE;
+    ULONG display_codepage =
+        GProcessState.process_codepage ? GProcessState.process_codepage : PM_MENU_CODEPAGE;
     MenuText **link = &menu->texts;
     for (size_t i = 0; i < window->menu->count; i++)
     {
@@ -696,13 +752,13 @@ static BOOL adopt_loaded_menu(HWND handle, Open32Menu **pending, unsigned depth,
         for (size_t n = 0; item->text && item->text[n]; n++)
         {
             UCHAR c = (UCHAR)item->text[n];
-            item->text[n] =
-                c == '\t' ? 8 : (char)WinCpTranslateChar(0, codepage, c, display_codepage);
+            item->text[n] = c == '\t' ? PM_MENU_ACCELERATOR_SEPARATOR
+                                      : (char)WinCpTranslateChar(0, codepage, c, display_codepage);
         }
-        item->item.hItem = (item->item.afStyle & 4 ? 0x800u : 0) |
-                           (item->item.afAttribute & 0x2000 ? 8u : 0) |
-                           (item->item.afAttribute & 0x4000 ? 1u : 0) |
-                           (item->item.afAttribute & 0x8000 ? 0x80u : 0);
+        item->item.hItem = (item->item.afStyle & MIS_SEPARATOR ? (ULONG)WIN32_MF_SEPARATOR : 0) |
+                           (item->item.afAttribute & MIA_CHECKED ? (ULONG)WIN32_MF_CHECKED : 0) |
+                           (item->item.afAttribute & MIA_DISABLED ? (ULONG)WIN32_MF_GRAYED : 0) |
+                           (item->item.afAttribute & MIA_HILITED ? (ULONG)WIN32_MF_HILITE : 0);
         if (item->item.hwndSubMenu &&
             !adopt_loaded_menu(item->item.hwndSubMenu, pending, depth + 1, nodes))
             return FALSE;
@@ -771,9 +827,9 @@ BOOL ModifyMenu(ULONG handle, ULONG identity, ULONG flags, ULONG identifier, PSZ
     }
     ULONG position = item->item.iPosition, target = window->hwnd;
     /* Insert first so allocation failure retains the original item. */
-    if (!InsertMenu(target, position, flags | 0x400, identifier, text))
+    if (!InsertMenu(target, position, flags | WIN32_MF_BYPOSITION, identifier, text))
         return FALSE;
-    return RemoveMenu(target, position + 1, 0x400);
+    return RemoveMenu(target, position + 1, WIN32_MF_BYPOSITION);
 }
 
 BOOL TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved, ULONG owner,
@@ -787,27 +843,28 @@ BOOL TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved, UL
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    LONG width = WinQuerySysValue(HWND_DESKTOP, 20), height = WinQuerySysValue(HWND_DESKTOP, 21);
-    if (flags & 4) /* TPM_CENTERALIGN */
+    LONG width = WinQuerySysValue(HWND_DESKTOP, SV_CXSCREEN),
+         height = WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN);
+    if (flags & WIN32_TPM_CENTERALIGN)
         x -= popup->w / 2;
     else
     {
-        if ((flags & 8) && popup->w < x) /* TPM_RIGHTALIGN */
+        if ((flags & WIN32_TPM_RIGHTALIGN) && popup->w < x)
             x -= popup->w - 1;
         else if (width <= popup->w + x)
             x -= popup->w - 1;
     }
     find_menu(handle)->popup = TRUE;
-    /* PU_HCONSTRAIN, PU_VCONSTRAIN, every mouse button and the keyboard. */
-    if (!WinPopupMenu(HWND_DESKTOP, owner, handle, x, height - (y + 15), 0, 0x3C6))
+    if (!WinPopupMenu(HWND_DESKTOP, owner, handle, x, height - (y + POPUP_Y_OFFSET), 0,
+                      POPUP_MENU_FLAGS))
         return FALSE;
     /* Windows returns after the menu closes, with its command already queued. */
     while (WinIsWindowVisible(handle))
     {
-        uint8 message[28];
+        uint8 message[WIN32_MSG_SIZE];
         if (!GetMessage(message, 0, 0, 0))
         {
-            PostQuitMessage((LONG)lx_guest_load_u32(message + 8));
+            PostQuitMessage((LONG)lx_guest_load_u32(message + WIN32_MSG_WPARAM));
             break;
         }
         TranslateMessage(message);

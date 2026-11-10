@@ -11,8 +11,10 @@
 static RECTL load_rectangle(PVOID input)
 {
     const uint8 *p = input;
-    return (RECTL){(LONG)lx_guest_load_u32(p), (LONG)lx_guest_load_u32(p + 4),
-                   (LONG)lx_guest_load_u32(p + 8), (LONG)lx_guest_load_u32(p + 12)};
+    return (RECTL){(LONG)lx_guest_load_u32(p + WIN32_RECT_LEFT),
+                   (LONG)lx_guest_load_u32(p + WIN32_RECT_TOP),
+                   (LONG)lx_guest_load_u32(p + WIN32_RECT_RIGHT),
+                   (LONG)lx_guest_load_u32(p + WIN32_RECT_BOTTOM)};
 }
 
 static BOOL store_rectangle(PVOID output, RECTL rect)
@@ -22,10 +24,10 @@ static BOOL store_rectangle(PVOID output, RECTL rect)
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    lx_guest_store_u32(output, (ULONG)rect.xLeft);
-    lx_guest_store_u32((uint8 *)output + 4, (ULONG)rect.yBottom);
-    lx_guest_store_u32((uint8 *)output + 8, (ULONG)rect.xRight);
-    lx_guest_store_u32((uint8 *)output + 12, (ULONG)rect.yTop);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_LEFT, (ULONG)rect.xLeft);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_TOP, (ULONG)rect.yBottom);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_RIGHT, (ULONG)rect.xRight);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_BOTTOM, (ULONG)rect.yTop);
     return TRUE;
 }
 

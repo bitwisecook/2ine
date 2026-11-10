@@ -7,6 +7,14 @@
 #include "host/sync.h"
 #include "host/clipboard.h"
 
+enum
+{
+    /* Larger clipboard items are refused rather than copied between guest and host. */
+    CLIPBOARD_SIZE_MAX = 16 * 1024 * 1024,
+    /* The process code page when the guest has not set one. */
+    DEFAULT_PROCESS_CODEPAGE = 437
+};
+
 typedef struct ClipboardMemory
 {
     ULONG format, handle;
@@ -78,7 +86,7 @@ ULONG SetClipboardViewer(ULONG window)
     viewer->next = viewers;
     viewers = viewer;
     lx_host_monitor_unlock(monitor);
-    SendMessage(window, 0x308, 0, 0);
+    SendMessage(window, WIN32_WM_DRAWCLIPBOARD, 0, 0);
     return previous;
 }
 
@@ -109,7 +117,7 @@ BOOL ChangeClipboardChain(ULONG window, ULONG next)
     free(removed);
     lx_host_monitor_unlock(monitor);
     if (head && head != window)
-        SendMessage(head, 0x30D, window, next);
+        SendMessage(head, WIN32_WM_CHANGECBCHAIN, window, next);
     return TRUE;
 }
 
@@ -143,7 +151,7 @@ void open32ClipboardCleanup(void)
 BOOL IsClipboardFormatAvailable(ULONG format)
 {
     ULONG flags;
-    return format && format <= 0xffff &&
+    return format && format <= UINT16_MAX &&
            WinQueryClipbrdFmtInfo(open32Presentation(), format, &flags);
 }
 
@@ -199,14 +207,15 @@ ULONG CountClipboardFormats(void)
 ULONG EnumClipboardFormats(ULONG format)
 {
     ULONG hab = open32Presentation(), next = WinEnumClipbrdFmts(hab, format);
-    while (next && next != 1 && next != 2 && next < 0xc000)
+    /* Skip PM's private formats; Windows sees text, bitmaps and registered formats. */
+    while (next && next != WIN32_CF_TEXT && next != WIN32_CF_BITMAP && next < WIN32_MAXINTATOM)
         next = WinEnumClipbrdFmts(hab, next);
     return next;
 }
 
 ULONG GetClipboardFormatName(ULONG format, PSZ output, LONG capacity)
 {
-    if (format < 0xc000 || format > 0xffff || !output || capacity <= 0)
+    if (format < WIN32_MAXINTATOM || format > UINT16_MAX || !output || capacity <= 0)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -235,21 +244,25 @@ static ClipboardMemory *remember_memory(ULONG format, ULONG handle)
 
 ULONG SetClipboardData(ULONG format, ULONG handle)
 {
-    if (!format || (format != 1 && format != 2 && format < 0xc000) || format > 0xffff)
+    if (!format ||
+        (format != WIN32_CF_TEXT && format != WIN32_CF_BITMAP && format < WIN32_MAXINTATOM) ||
+        format > UINT16_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG hab = open32Presentation();
     discard_clipboard_memory(0);
-    if (!handle || format == 2)
+    /* A bitmap handle passes to PM as is; other data is copied out of guest memory. */
+    if (!handle || format == WIN32_CF_BITMAP)
     {
-        if (!WinSetClipbrdData(hab, handle, format, format == 2 ? 0x200 : 0x400))
+        if (!WinSetClipbrdData(hab, handle, format,
+                               format == WIN32_CF_BITMAP ? CFI_HANDLE : CFI_POINTER))
             open32SetError(ERROR_CLIPBOARD_NOT_OPEN);
         return handle;
     }
     ULONG size = GlobalSize(handle), address = GlobalLock(handle);
-    void *bytes = size && size <= 16 * 1024 * 1024 ? malloc(size) : NULL;
+    void *bytes = size && size <= CLIPBOARD_SIZE_MAX ? malloc(size) : NULL;
     int valid =
         address && bytes && lx_execution_read(GProcessState.execution, address, bytes, size);
     if (address)
@@ -261,16 +274,18 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
         return 0;
     }
     size_t length = size;
-    if (format == 1)
+    if (format == WIN32_CF_TEXT)
     {
         const char *end = memchr(bytes, 0, size);
-        void *utf8 = end ? lx_host_clipboard_text_utf8(
-                               1004, bytes, (const char *)end - (const char *)bytes, &length)
-                         : NULL;
+        void *utf8 =
+            end ? lx_host_clipboard_text_utf8(WIN32_CP_WINANSI, bytes,
+                                              (const char *)end - (const char *)bytes, &length)
+                : NULL;
         free(bytes);
-        bytes = utf8 ? lx_host_clipboard_text_os2(
-                           GProcessState.process_codepage ? GProcessState.process_codepage : 437,
-                           utf8, length, &length)
+        bytes = utf8 ? lx_host_clipboard_text_os2(GProcessState.process_codepage
+                                                      ? GProcessState.process_codepage
+                                                      : DEFAULT_PROCESS_CODEPAGE,
+                                                  utf8, length, &length)
                      : NULL;
         free(utf8);
     }
@@ -294,9 +309,9 @@ ULONG GetClipboardData(ULONG format)
 {
     ULONG hab = open32Presentation();
     discard_clipboard_memory(0);
-    if (format == 2)
+    if (format == WIN32_CF_BITMAP)
         return WinQueryClipbrdData(hab, format);
-    if (!format || (format != 1 && format < 0xc000) || format > 0xffff)
+    if (!format || (format != WIN32_CF_TEXT && format < WIN32_MAXINTATOM) || format > UINT16_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -306,22 +321,24 @@ ULONG GetClipboardData(ULONG format)
             return item->handle;
     size_t size = 0;
     void *bytes = lx_pm_clipboard_copy_bytes(hab, format, &size);
-    if (bytes && format == 1)
+    if (bytes && format == WIN32_CF_TEXT)
     {
-        void *utf8 = lx_host_clipboard_text_utf8(
-            GProcessState.process_codepage ? GProcessState.process_codepage : 437, bytes, size,
-            &size);
+        void *utf8 = lx_host_clipboard_text_utf8(GProcessState.process_codepage
+                                                     ? GProcessState.process_codepage
+                                                     : DEFAULT_PROCESS_CODEPAGE,
+                                                 bytes, size, &size);
         free(bytes);
-        bytes = utf8 ? lx_host_clipboard_text_os2(1004, utf8, size, &size) : NULL;
+        bytes = utf8 ? lx_host_clipboard_text_os2(WIN32_CP_WINANSI, utf8, size, &size) : NULL;
         free(utf8);
     }
-    if (!bytes || size >= 16 * 1024 * 1024)
+    if (!bytes || size >= CLIPBOARD_SIZE_MAX)
     {
         free(bytes);
         open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
-    ULONG handle = GlobalAlloc(0x42, (ULONG)size + 1), address = handle ? GlobalLock(handle) : 0;
+    ULONG handle = GlobalAlloc(WIN32_GHND, (ULONG)size + 1),
+          address = handle ? GlobalLock(handle) : 0;
     BOOL copied = address && lx_execution_write(GProcessState.execution, address, bytes, size + 1);
     if (address)
         GlobalUnlock(handle);
@@ -347,7 +364,7 @@ LONG GetPriorityClipboardFormat(PVOID formats, LONG count)
         return 0;
     for (LONG i = 0; i < count; i++)
     {
-        ULONG format = lx_guest_load_u32((uint8 *)formats + i * 4);
+        ULONG format = lx_guest_load_u32((uint8 *)formats + i * WIN32_DWORD_SIZE);
         if (IsClipboardFormatAvailable(format))
             return (LONG)format;
     }

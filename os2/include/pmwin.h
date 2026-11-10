@@ -1346,6 +1346,23 @@ extern "C"
         MIA_HILITED = 0x8000
     };
 
+    /* WinPopupMenu flags */
+    enum
+    {
+        PU_POSITIONONITEM = 0x0001,
+        PU_HCONSTRAIN = 0x0002,
+        PU_VCONSTRAIN = 0x0004,
+        PU_NONE = 0x0000,
+        PU_MOUSEBUTTON1DOWN = 0x0008,
+        PU_MOUSEBUTTON2DOWN = 0x0010,
+        PU_MOUSEBUTTON3DOWN = 0x0018,
+        PU_SELECTITEM = 0x0020,
+        PU_MOUSEBUTTON1 = 0x0040,
+        PU_MOUSEBUTTON2 = 0x0080,
+        PU_MOUSEBUTTON3 = 0x0100,
+        PU_KEYBOARD = 0x0200
+    };
+
 #pragma pack(push, 2)
 
     typedef struct
