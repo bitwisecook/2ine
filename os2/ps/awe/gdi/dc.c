@@ -10,6 +10,26 @@
 #include "os2/ps/awe/user/input/keyboard.h"
 #include "os2/ps/awe/user/windows/windows.h"
 #include "os2/include/private/pmdevp.h"
+
+enum
+{
+    /* BitBlt's widest and tallest copy, in device pixels. */
+    BLT_EXTENT_MAX = 16384,
+    /* A ternary raster operation keeps its operation index in bits 16-23. */
+    RASTER_OPERATION_INDEX_SHIFT = 16,
+    RASTER_OPERATION_INDEX_MASK = 0xff,
+    RGB_WHITE = 0xFFFFFF,
+    /* A compatible bitmap made while no bitmap is selected matches the display. */
+    DISPLAY_BITMAP_DEPTH = 24
+};
+
+/* The high byte of a COLORREF is 0 for an RGB value or 2 for PALETTERGB. */
+enum
+{
+    COLORREF_FLAGS_MASK = 0xFF000000u,
+    COLORREF_PALETTE_RGB = 0x02000000u
+};
+
 static _Thread_local Open32DC *contexts;
 
 Open32DC *open32FindDC(ULONG handle)
@@ -62,31 +82,32 @@ static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
     dc->ps = ps;
     dc->window = window;
     dc->kind = kind;
-    dc->map_mode = 1;
-    dc->poly_fill_mode = 1;
-    dc->stretch_mode = 1;
+    dc->map_mode = WIN32_MM_TEXT;
+    dc->poly_fill_mode = ALTERNATE;
+    dc->stretch_mode = BLACKONWHITE;
     dc->window_width = dc->window_height = dc->viewport_width = dc->viewport_height = 1;
-    dc->background_mode = 2;
-    dc->rop2 = 13;
-    dc->background_color = 0xFFFFFF;
-    GpiCreateLogColorTable(ps, 0, 3, 0, 0, NULL);
+    dc->background_mode = OPAQUE;
+    dc->rop2 = R2_COPYPEN;
+    dc->background_color = RGB_WHITE;
+    /* Win32 colours are RGB values, so the PS works in RGB mode. */
+    GpiCreateLogColorTable(ps, 0, LCOLF_RGB, 0, 0, NULL);
     GpiSetColor(ps, 0);
-    GpiSetBackColor(ps, 0xFFFFFF);
-    GpiSetBackMix(ps, 2);
-    open32SelectFont(dc, GetStockObject(13));
+    GpiSetBackColor(ps, RGB_WHITE);
+    GpiSetBackMix(ps, BM_OVERPAINT);
+    open32SelectFont(dc, GetStockObject(SYSTEM_FONT));
     if (!dc->font.resource)
     {
         free(dc);
         return NULL;
     }
-    open32SelectBrush(dc, GetStockObject(0));
+    open32SelectBrush(dc, GetStockObject(WHITE_BRUSH));
     if (!dc->brush.resource)
     {
         lx_handle_release(&dc->font);
         free(dc);
         return NULL;
     }
-    open32SelectPen(dc, GetStockObject(7));
+    open32SelectPen(dc, GetStockObject(BLACK_PEN));
     if (!dc->pen.resource)
     {
         lx_handle_release(&dc->brush);
@@ -129,22 +150,22 @@ static BOOL discard_context(Open32DC *dc)
         GpiSetClipRegion(dc->ps, 0, NULL);
         GpiDestroyRegion(dc->ps, dc->clip_region);
     }
-    if (dc->kind == 1)
+    if (dc->kind == OPEN32_DC_MEMORY)
     {
         GpiSetBitmap(dc->ps, 0);
         if (dc->default_bitmap)
             GpiDeleteBitmap(dc->default_bitmap);
         GpiDestroyPS(dc->ps);
     }
-    else if (dc->kind == 2)
+    else if (dc->kind == OPEN32_DC_PAINT)
         WinEndPaint(dc->ps);
-    else if (dc->kind == 5 || dc->kind == 6)
+    else if (dc->kind == OPEN32_DC_PRINTER || dc->kind == OPEN32_DC_PRINTER_INFORMATION)
     {
         HDC printer = GpiQueryDevice(dc->ps);
         GpiDestroyPS(dc->ps);
         DevCloseDC(printer);
     }
-    else if (dc->kind != 7)
+    else if (dc->kind != OPEN32_DC_PS_WRAPPER)
         WinReleasePS(dc->ps);
     lx_handle_release(&dc->pen);
     lx_handle_release(&dc->palette);
@@ -170,7 +191,7 @@ ULONG GetDC(ULONG window)
     /* Foreign windows expose display capabilities through a local screen PS. */
     BOOL foreign = !WinQueryWindowDC(target);
     HPS ps = WinGetPS(foreign ? HWND_DESKTOP : target);
-    Open32DC *dc = ps ? register_context(ps, window, 3) : NULL;
+    Open32DC *dc = ps ? register_context(ps, window, OPEN32_DC_WINDOW) : NULL;
     if (!dc)
     {
         if (ps)
@@ -185,7 +206,7 @@ ULONG GetDC(ULONG window)
 LONG ReleaseDC(ULONG window, ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || dc->kind != 3 || dc->window != window)
+    if (!dc || dc->kind != OPEN32_DC_WINDOW || dc->window != window)
     {
         open32SetError(ERROR_INVALID_HANDLE);
         return 0;
@@ -207,7 +228,7 @@ ULONG CreateCompatibleDC(ULONG source)
     }
     SIZEL size = {0, 0};
     HPS ps = GpiCreatePS(0, 0, &size, 0);
-    Open32DC *dc = ps ? register_context(ps, 0, 1) : NULL;
+    Open32DC *dc = ps ? register_context(ps, 0, OPEN32_DC_MEMORY) : NULL;
     if (!dc)
     {
         if (ps)
@@ -215,6 +236,7 @@ ULONG CreateCompatibleDC(ULONG source)
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
+    /* As in Win32, a new memory DC holds a 1x1 monochrome bitmap. */
     dc->default_bitmap = lx_pm_bitmap_create(1, 1, 1, 1);
     if (!dc->default_bitmap || GpiSetBitmap(ps, dc->default_bitmap) == UINT32_MAX)
     {
@@ -228,7 +250,9 @@ ULONG CreateCompatibleDC(ULONG source)
 BOOL DeleteDC(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || (dc->kind != 1 && dc->kind != 4 && dc->kind != 5 && dc->kind != 6 && dc->kind != 8))
+    if (!dc || (dc->kind != OPEN32_DC_MEMORY && dc->kind != OPEN32_DC_DISPLAY_INFORMATION &&
+                dc->kind != OPEN32_DC_PRINTER && dc->kind != OPEN32_DC_PRINTER_INFORMATION &&
+                dc->kind != OPEN32_DC_DISPLAY))
     {
         open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
@@ -256,7 +280,7 @@ ULONG SelectObject(ULONG handle, ULONG object)
             open32MetafileObject(handle, object);
         return selected;
     }
-    if (!dc || dc->kind != 1 || !bitmap)
+    if (!dc || dc->kind != OPEN32_DC_MEMORY || !bitmap)
     {
         lx_handle_release(&borrow);
         open32SetError(ERROR_INVALID_HANDLE);
@@ -287,7 +311,7 @@ BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG so
         return StretchBlt(destination, x, y, width, height, source, source_x, source_y, width,
                           height, operation);
     if (!open32CanDraw(destination) || !open32CanDraw(source) || width <= 0 || height <= 0 ||
-        width > 16384 || height > 16384)
+        width > BLT_EXTENT_MAX || height > BLT_EXTENT_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
@@ -305,7 +329,9 @@ BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG so
                         {(LONG)right, (LONG)(bottom + height)},
                         {source_x, (LONG)src_bottom},
                         {source_x + width, (LONG)(src_bottom + height)}};
-    return open32BitmapBlt(destination, source, points, (LONG)((operation >> 16) & 255));
+    return open32BitmapBlt(
+        destination, source, points,
+        (LONG)((operation >> RASTER_OPERATION_INDEX_SHIFT) & RASTER_OPERATION_INDEX_MASK));
 }
 
 ULONG BeginPaint(ULONG window, PVOID output)
@@ -318,7 +344,7 @@ ULONG BeginPaint(ULONG window, PVOID output)
     RECTL rect;
     open32CaretPaint(window, TRUE);
     HPS ps = WinBeginPaint(open32ClientWindow(window), 0, &rect);
-    Open32DC *context = ps ? register_context(ps, window, 2) : NULL;
+    Open32DC *context = ps ? register_context(ps, window, OPEN32_DC_PAINT) : NULL;
     if (!context)
     {
         if (ps)
@@ -336,13 +362,14 @@ ULONG BeginPaint(ULONG window, PVOID output)
         return 0;
     }
     open32ValidateQueuedPaint(window);
-    uint8 bytes[64] = {0};
-    lx_guest_store_u32(bytes, ps);
-    lx_guest_store_u32(bytes + 4, !open32EraseBackground(window, ps));
-    lx_guest_store_u32(bytes + 8, (ULONG)rect.xLeft);
-    lx_guest_store_u32(bytes + 12, (ULONG)(open32DCHeight(ps) - rect.yTop));
-    lx_guest_store_u32(bytes + 16, (ULONG)rect.xRight);
-    lx_guest_store_u32(bytes + 20, (ULONG)(open32DCHeight(ps) - rect.yBottom));
+    uint8 bytes[WIN32_PAINTSTRUCT_SIZE] = {0};
+    uint8 *paint = bytes + WIN32_PAINTSTRUCT_PAINT;
+    lx_guest_store_u32(bytes + WIN32_PAINTSTRUCT_HDC, ps);
+    lx_guest_store_u32(bytes + WIN32_PAINTSTRUCT_ERASE, !open32EraseBackground(window, ps));
+    lx_guest_store_u32(paint + WIN32_RECT_LEFT, (ULONG)rect.xLeft);
+    lx_guest_store_u32(paint + WIN32_RECT_TOP, (ULONG)(open32DCHeight(ps) - rect.yTop));
+    lx_guest_store_u32(paint + WIN32_RECT_RIGHT, (ULONG)rect.xRight);
+    lx_guest_store_u32(paint + WIN32_RECT_BOTTOM, (ULONG)(open32DCHeight(ps) - rect.yBottom));
     memcpy(output, bytes, sizeof bytes);
     return ps;
 }
@@ -350,7 +377,7 @@ ULONG BeginPaint(ULONG window, PVOID output)
 BOOL EndPaint(ULONG window, PVOID input)
 {
     Open32DC *dc = input ? open32FindDC(lx_guest_load_u32(input)) : NULL;
-    if (!dc || dc->kind != 2 || dc->window != window)
+    if (!dc || dc->kind != OPEN32_DC_PAINT || dc->window != window)
     {
         open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
@@ -363,16 +390,16 @@ BOOL EndPaint(ULONG window, PVOID input)
 LONG SetBkMode(ULONG handle, LONG mode)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || (mode != 1 && mode != 2))
+    if (!dc || (mode != TRANSPARENT && mode != OPAQUE))
     {
         open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG previous = dc->background_mode;
-    if (!GpiSetBackMix(handle, mode == 1 ? 5 : 2))
+    if (!GpiSetBackMix(handle, mode == TRANSPARENT ? BM_LEAVEALONE : BM_OVERPAINT))
         return 0;
     dc->background_mode = mode;
-    open32MetafileWords(handle, 0x102, 1, &mode);
+    open32MetafileWords(handle, WIN32_META_SETBKMODE, 1, &mode);
     return previous;
 }
 
@@ -384,7 +411,8 @@ static LONG rgb_color(ULONG color)
 ULONG SetTextColor(ULONG handle, ULONG color)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
+    if (!dc ||
+        ((color & COLORREF_FLAGS_MASK) && (color & COLORREF_FLAGS_MASK) != COLORREF_PALETTE_RGB))
     {
         open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return UINT32_MAX;
@@ -393,14 +421,15 @@ ULONG SetTextColor(ULONG handle, ULONG color)
     if (!GpiSetColor(handle, rgb_color(color)))
         return UINT32_MAX;
     dc->text_color = color;
-    open32MetafileColor(handle, 0x209, color);
+    open32MetafileColor(handle, WIN32_META_SETTEXTCOLOR, color);
     return previous;
 }
 
 ULONG SetBkColor(ULONG handle, ULONG color)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
+    if (!dc ||
+        ((color & COLORREF_FLAGS_MASK) && (color & COLORREF_FLAGS_MASK) != COLORREF_PALETTE_RGB))
     {
         open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return UINT32_MAX;
@@ -409,7 +438,7 @@ ULONG SetBkColor(ULONG handle, ULONG color)
     if (!GpiSetBackColor(handle, rgb_color(color)))
         return UINT32_MAX;
     dc->background_color = color;
-    open32MetafileColor(handle, 0x201, color);
+    open32MetafileColor(handle, WIN32_META_SETBKCOLOR, color);
     return previous;
 }
 
@@ -437,9 +466,10 @@ ULONG CreateCompatibleBitmap(ULONG handle, LONG width, LONG height)
     }
     PresentationSpace *ps = lx_pm_font_space(handle);
     PmBitmap *selected = ps->bitmap_lease.resource;
-    ULONG result = width && height ? lx_pm_bitmap_create((ULONG)width, (ULONG)height, 1,
-                                                         selected ? selected->depth : 24)
-                                   : lx_pm_bitmap_create(1, 1, 1, 1);
+    ULONG result = width && height
+                       ? lx_pm_bitmap_create((ULONG)width, (ULONG)height, 1,
+                                             selected ? selected->depth : DISPLAY_BITMAP_DEPTH)
+                       : lx_pm_bitmap_create(1, 1, 1, 1);
     if (!result)
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return result;
@@ -493,7 +523,7 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
         return 0;
     }
     HPS ps = WinGetPS(HWND_DESKTOP);
-    if (!ps || !register_context(ps, 0, 4))
+    if (!ps || !register_context(ps, 0, OPEN32_DC_DISPLAY_INFORMATION))
     {
         if (ps)
             WinReleasePS(ps);
@@ -506,17 +536,19 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
 BOOL open32CanDraw(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    return dc && dc->kind != 4 && dc->kind != 6 && !dc->foreign_window;
+    return dc && dc->kind != OPEN32_DC_DISPLAY_INFORMATION &&
+           dc->kind != OPEN32_DC_PRINTER_INFORMATION && !dc->foreign_window;
 }
 
 ULONG open32CreatePrinterContext(unsigned kind, BOOL information)
 {
     if (!open32Presentation())
         return 0;
-    HDC printer = lx_pm_open_printer_dc(0, information ? 6 : 2, kind);
+    HDC printer = lx_pm_open_printer_dc(0, information ? OD_INFO : OD_QUEUED, kind);
     SIZEL size = {0, 0};
     HPS ps = printer ? GpiCreatePS(0, printer, &size, PU_PELS | GPIA_ASSOC) : 0;
-    if (!ps || !register_context(ps, 0, information ? 6 : 5))
+    if (!ps ||
+        !register_context(ps, 0, information ? OPEN32_DC_PRINTER_INFORMATION : OPEN32_DC_PRINTER))
     {
         if (ps)
             GpiDestroyPS(ps);
@@ -560,7 +592,7 @@ ULONG CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
             return 0;
         }
         HPS ps = WinGetPS(HWND_DESKTOP);
-        if (!ps || !register_context(ps, 0, 8))
+        if (!ps || !register_context(ps, 0, OPEN32_DC_DISPLAY))
         {
             if (ps)
                 WinReleasePS(ps);
@@ -583,7 +615,7 @@ ULONG GetWindowDC(ULONG window)
         return 0;
     }
     HPS ps = WinGetPS(window);
-    if (!ps || !register_context(ps, window, 3))
+    if (!ps || !register_context(ps, window, OPEN32_DC_WINDOW))
     {
         if (ps)
             WinReleasePS(ps);
@@ -602,7 +634,7 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
     }
     Open32DC *dc = open32FindDC(ps);
     if (!dc)
-        dc = register_context(ps, window, 7);
+        dc = register_context(ps, window, OPEN32_DC_PS_WRAPPER);
     if (!dc)
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
@@ -611,10 +643,10 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
     /* The target rectangle applies only when a driver name selects a device mapping. */
     if (driver && rectangle)
     {
-        LONG l = (LONG)lx_guest_load_u32(rectangle),
-             t = (LONG)lx_guest_load_u32((uint8 *)rectangle + 4),
-             r = (LONG)lx_guest_load_u32((uint8 *)rectangle + 8),
-             b = (LONG)lx_guest_load_u32((uint8 *)rectangle + 12);
+        LONG l = (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_LEFT),
+             t = (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_TOP),
+             r = (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_RIGHT),
+             b = (LONG)lx_guest_load_u32((uint8 *)rectangle + WIN32_RECT_BOTTOM);
         if (r < l || b < t)
         {
             open32SetError(ERROR_INVALID_PARAMETER);
@@ -624,7 +656,7 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
         LONG page_width = open32DCWidth(ps), page_height = open32DCHeight(ps);
         if (r > l && b > t && page_width > 0 && page_height > 0)
         {
-            dc->map_mode = 8;
+            dc->map_mode = WIN32_MM_ANISOTROPIC;
             dc->window_x = dc->window_y = 0;
             dc->window_width = page_width;
             dc->window_height = page_height;
@@ -646,6 +678,6 @@ VOID DeleteHDCObjects(ULONG ps)
         return;
     }
     /* Only HPSToHDC wrappers own state here; ordinary DCs are left untouched. */
-    if (dc->kind == 7)
+    if (dc->kind == OPEN32_DC_PS_WRAPPER)
         discard_context(dc);
 }

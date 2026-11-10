@@ -62,7 +62,7 @@ LONG SaveDC(ULONG handle)
     {
         saved->state.clip_region = GpiCreateRegion(handle, 0, NULL);
         if (!saved->state.clip_region ||
-            !GpiCombineRegion(handle, saved->state.clip_region, dc->clip_region, 0, 2))
+            !GpiCombineRegion(handle, saved->state.clip_region, dc->clip_region, 0, CRGN_COPY))
             goto failed;
     }
     if (dc->saved && dc->saved->level == INT32_MAX)
@@ -73,7 +73,7 @@ LONG SaveDC(ULONG handle)
         goto failed;
     saved->next = dc->saved;
     dc->saved = saved;
-    open32MetafileWords(handle, 0x1e, 0, NULL);
+    open32MetafileWords(handle, WIN32_META_SAVEDC, 0, NULL);
     return saved->level;
 failed:
     release_state(saved);
@@ -100,7 +100,7 @@ BOOL RestoreDC(ULONG handle, LONG level)
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    if (dc->kind == 1 && GpiSetBitmap(handle, saved->bitmap_handle) == UINT32_MAX)
+    if (dc->kind == OPEN32_DC_MEMORY && GpiSetBitmap(handle, saved->bitmap_handle) == UINT32_MAX)
     {
         open32SetError(ERROR_BUSY);
         return FALSE;
@@ -150,7 +150,7 @@ BOOL RestoreDC(ULONG handle, LONG level)
         release_state(discard);
     }
     if (restored)
-        open32MetafileWords(handle, 0x127, 1, &level);
+        open32MetafileWords(handle, WIN32_META_RESTOREDC, 1, &level);
     return restored;
 }
 

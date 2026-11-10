@@ -7,6 +7,28 @@
 #include "os2/include/pmgpi.h"
 #include "os2/ps/awe/gdi/dc.h"
 
+enum
+{
+    /* The largest bitmap and transfer: 16384 pels a side and 16 Mi pels in all. */
+    BITMAP_SIDE_MAX = 16384,
+    BITMAP_PIXELS_MAX = 16 * 1024 * 1024,
+    /* CreateBitmapIndirect copies at most 64 MiB of caller rows. */
+    BITMAP_RECORD_BYTES_MAX = 64 * 1024 * 1024,
+    BITMAP_BITS_MAX = 32,
+    TRUE_COLOR_BITS = 24,
+    INDEXED_DEPTH_MAX = 8,
+    INDEXED_COLORS_MAX = 256,
+    MONOCHROME_COLORS = 2,
+    RGB_WHITE = 0xFFFFFF,
+    RGB_MASK = 0xFFFFFF,
+    /* DDB rows are padded to whole 16-bit words. */
+    BITMAP_ROW_ALIGN_BITS = 16,
+    BITMAP_ROW_ALIGN_BYTES = 2,
+    /* StretchBlt passes its pels to StretchDIBits as a 32-bit BGRX DIB. */
+    STRETCH_DIB_BITS = 32,
+    STRETCH_DIB_BYTES_PER_PEL = 4
+};
+
 /* Windows mask transfers convert between monochrome bits and DC colors before
    applying the raster operation. PM's RGB raster backing has no implicit GDI
    conversion: copying colored pixels into a one-bit mask retains color noise. */
@@ -58,9 +80,9 @@ static BOOL bitmap_blt(ULONG destination, ULONG source, PPOINTL points, LONG rop
     if (source_mono == destination_mono)
         return GpiBitBlt(destination, source, 4, points, rop, 0) == 1;
     LONG width = points[3].x - points[2].x, height = points[3].y - points[2].y;
-    if (width <= 0 || height <= 0 || (uint64)width * height > 16777216)
+    if (width <= 0 || height <= 0 || (uint64)width * height > BITMAP_PIXELS_MAX)
         return FALSE;
-    ULONG converted = lx_pm_bitmap_create((unsigned)width, (unsigned)height, 1, 24);
+    ULONG converted = lx_pm_bitmap_create((unsigned)width, (unsigned)height, 1, TRUE_COLOR_BITS);
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = converted ? lx_pm_bitmap(converted, &borrow) : NULL;
     SIZEL size = {0, 0};
@@ -78,12 +100,12 @@ static BOOL bitmap_blt(ULONG destination, ULONG source, PPOINTL points, LONG rop
         for (size_t i = 0; i < (size_t)width * height; i++)
         {
             uint32 pixel = bitmap->pixels[i];
-            BOOL bit = source_mono
-                           ? (source_bitmap->palette_count == 2 ? pixel == source_bitmap->palette[1]
-                                                                : pixel != 0)
-                           : pixel == background;
+            BOOL bit = source_mono ? (source_bitmap->palette_count == MONOCHROME_COLORS
+                                          ? pixel == source_bitmap->palette[1]
+                                          : pixel != 0)
+                                   : pixel == background;
             bitmap->pixels[i] =
-                destination_mono ? (bit ? 0xFFFFFF : 0) : (bit ? background : foreground);
+                destination_mono ? (bit ? RGB_WHITE : 0) : (bit ? background : foreground);
         }
         POINTL copy[4] = {points[0], points[1], {0, 0}, {width, height}};
         ok = GpiSetBitmap(memory, converted) != UINT32_MAX &&
@@ -109,19 +131,21 @@ BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
     PresentationSpace *space = lx_pm_font_space(destination);
     Open32DC *dc = open32FindDC(destination);
     uint32 rgb = 0;
+    /* A ROP3 index reads the pattern when its high nibble (pattern set) differs from its low
+       nibble (pattern clear). */
     if (!space || !dc || !((rop ^ (rop >> 4)) & 15) ||
         !open32BrushPixel(dc, points[0].x, points[0].y, &rgb))
         return bitmap_blt(destination, source, points, rop);
-    LONG saved_color = space->primitive_color[3];
+    LONG saved_color = space->primitive_color[PRIM_AREA - 1];
     LONG saved_pattern = space->pattern, saved_set = space->pattern_set;
     BOOL saved_mode = space->rgb_colors;
     space->rgb_colors = TRUE;
-    space->primitive_color[3] = (LONG)(rgb & 0xFFFFFF);
-    space->pattern = 16;
+    space->primitive_color[PRIM_AREA - 1] = (LONG)(rgb & RGB_MASK);
+    space->pattern = PATSYM_SOLID;
     space->pattern_set = 0;
     BOOL result = bitmap_blt(destination, source, points, rop);
     space->rgb_colors = saved_mode;
-    space->primitive_color[3] = saved_color;
+    space->primitive_color[PRIM_AREA - 1] = saved_color;
     space->pattern = saved_pattern;
     space->pattern_set = saved_set;
     return result;
@@ -130,7 +154,7 @@ BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
 ULONG LoadBitmap(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadBitmap(%u, %p)", module, name);
-    ULONG resource = FindResource(module, name, (PSZ)(uintptr_t)2);
+    ULONG resource = FindResource(module, name, (PSZ)(uintptr_t)WIN32_RT_BITMAP);
     if (!resource)
         return 0;
     if ((!module || module == UINT32_MAX) && GProcessState.main_module)
@@ -151,34 +175,36 @@ ULONG LoadBitmap(HMODULE module, PSZ name)
 
 BOOL open32BitmapBytes(LONG width, LONG height, ULONG planes, ULONG depth, size_t *bytes)
 {
-    if (width < 1 || height < 1 || width > 16384 || height > 16384 ||
-        (uint64_t)width * height > 16777216)
+    if (width < 1 || height < 1 || width > BITMAP_SIDE_MAX || height > BITMAP_SIDE_MAX ||
+        (uint64_t)width * height > BITMAP_PIXELS_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* Plane count multiplies the depth of the chunky raster that backs every bitmap. */
     ULONG bits = planes * depth;
-    if (!planes || planes > 32 || depth > 32 ||
+    if (!planes || planes > BITMAP_BITS_MAX || depth > BITMAP_BITS_MAX ||
         (bits != 1 && bits != 2 && bits != 4 && bits != 8 && bits != 16 && bits != 24 &&
          bits != 32))
     {
         open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
-    *bytes = ((size_t)width * bits + 15) / 16 * 2 * (size_t)height;
+    *bytes = ((size_t)width * bits + BITMAP_ROW_ALIGN_BITS - 1) / BITMAP_ROW_ALIGN_BITS *
+             BITMAP_ROW_ALIGN_BYTES * (size_t)height;
     return TRUE;
 }
 
 void open32BitmapPalette(ULONG depth, uint32 colors[256])
 {
+    /* 1-bit: black and white; 2-bit: a grey ramp; 4-bit: the VGA colours; 8-bit: 3-3-2 RGB. */
     static const uint32 vga[16] = {0,        0x800000, 0x008000, 0x808000, 0x000080, 0x800080,
                                    0x008080, 0xC0C0C0, 0x808080, 0xFF0000, 0x00FF00, 0xFFFF00,
                                    0x0000FF, 0xFF00FF, 0x00FFFF, 0xFFFFFF};
-    memset(colors, 0, 256 * sizeof *colors);
-    unsigned count = depth <= 8 ? 1u << depth : 0;
+    memset(colors, 0, INDEXED_COLORS_MAX * sizeof *colors);
+    unsigned count = depth <= INDEXED_DEPTH_MAX ? 1u << depth : 0;
     for (unsigned i = 0; i < count; i++)
-        colors[i] = depth == 1   ? (i ? 0xFFFFFF : 0)
+        colors[i] = depth == 1   ? (i ? RGB_WHITE : 0)
                     : depth == 2 ? i * 0x555555
                     : depth == 4 ? vga[i]
                                  : ((i >> 5) * 255 / 7) << 16 | (((i >> 2) & 7) * 255 / 7) << 8 |
@@ -204,7 +230,7 @@ ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bit
     if (bits)
     {
         size_t stride = bytes / (size_t)height;
-        if (depth <= 8)
+        if (depth <= INDEXED_DEPTH_MAX)
         {
             bitmap->palette_count = 1u << depth;
             open32BitmapPalette(depth, bitmap->palette);
@@ -215,7 +241,7 @@ ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bit
             for (unsigned x = 0; x < (unsigned)width; x++)
             {
                 uint32 rgb;
-                if (depth <= 8)
+                if (depth <= INDEXED_DEPTH_MAX)
                 {
                     unsigned bit = x * depth,
                              index = (row[bit / 8] >> (8 - depth - bit % 8)) & ((1u << depth) - 1);
@@ -223,6 +249,7 @@ ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bit
                 }
                 else if (depth == 16)
                 {
+                    /* 16-bit DDB pels are 5-5-5 RGB. */
                     ULONG value = lx_guest_load_u16(row + x * 2);
                     rgb = (value & 0x7c00) << 9 | (value & 0x3e0) << 6 | (value & 0x1f) << 3;
                 }
@@ -290,7 +317,7 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
-    uint32 palette[256];
+    uint32 palette[INDEXED_COLORS_MAX];
     open32BitmapPalette(bitmap->depth, palette);
     if (bitmap->palette_count)
         memcpy(palette, bitmap->palette, bitmap->palette_count * 4);
@@ -299,7 +326,7 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
         {
             uint32 rgb = bitmap->pixels[(size_t)(bitmap->height - 1 - y) * bitmap->width + x];
             uint8 *row = encoded + y * stride;
-            if (bitmap->depth <= 8)
+            if (bitmap->depth <= INDEXED_DEPTH_MAX)
             {
                 unsigned bit = x * bitmap->depth,
                          index = bitmap_nearest(palette, 1u << bitmap->depth, rgb);
@@ -324,7 +351,7 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
             {
                 uint8 *row = encoded + y * stride;
                 uint32 rgb;
-                if (bitmap->depth <= 8)
+                if (bitmap->depth <= INDEXED_DEPTH_MAX)
                 {
                     unsigned bit = x * bitmap->depth,
                              index = (row[bit / 8] >> (8 - bitmap->depth - bit % 8)) &
@@ -380,14 +407,16 @@ ULONG _CreateBitmapIndirect(PVOID input)
         return 0;
     }
     const uint8 *p = input;
-    LONG w = (LONG)lx_guest_load_u32(p + 4), h = (LONG)lx_guest_load_u32(p + 8),
-         stride = (LONG)lx_guest_load_u32(p + 12);
-    ULONG planes = lx_guest_load_u16(p + 16), depth = lx_guest_load_u16(p + 18),
-          address = lx_guest_load_u32(p + 20);
+    LONG w = (LONG)lx_guest_load_u32(p + WIN32_BITMAP_WIDTH),
+         h = (LONG)lx_guest_load_u32(p + WIN32_BITMAP_HEIGHT),
+         stride = (LONG)lx_guest_load_u32(p + WIN32_BITMAP_WIDTH_BYTES);
+    ULONG planes = lx_guest_load_u16(p + WIN32_BITMAP_PLANES),
+          depth = lx_guest_load_u16(p + WIN32_BITMAP_BITS_PIXEL),
+          address = lx_guest_load_u32(p + WIN32_BITMAP_BITS);
     /* An odd row pitch fails without an error code. */
     if (stride & 1)
         return 0;
-    if (planes > 32 || depth > 32 || w < 0 || h < 0)
+    if (planes > BITMAP_BITS_MAX || depth > BITMAP_BITS_MAX || w < 0 || h < 0)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -406,7 +435,7 @@ ULONG _CreateBitmapIndirect(PVOID input)
         return CreateBitmap(w, h, planes, depth, NULL);
     size_t exact = bytes / (size_t)h, pitch = (size_t)(ULONG)stride;
     LxGuestBorrow bits = {0};
-    if (pitch < exact || pitch * (size_t)h > 64u * 1024 * 1024 ||
+    if (pitch < exact || pitch * (size_t)h > (size_t)BITMAP_RECORD_BYTES_MAX ||
         !lx_execution_borrow(GProcessState.execution, address, pitch * (size_t)h, LX_GUEST_READ,
                              &bits))
     {
@@ -438,13 +467,16 @@ ULONG CreateDIBitmap(ULONG dc, PVOID header, ULONG options, PVOID bits, PVOID in
     }
     if (!bits)
         options = 0;
-    if (!header || lx_guest_load_u32(header) != 40 || ((options & 4) && !info))
+    if (!header ||
+        lx_guest_load_u32((uint8 *)header + WIN32_BITMAPINFOHEADER_STRUCT_SIZE) !=
+            WIN32_BITMAPINFOHEADER_SIZE ||
+        ((options & WIN32_CBM_INIT) && !info))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    LONG w = (LONG)lx_guest_load_u32((uint8 *)header + 4),
-         h = (LONG)lx_guest_load_u32((uint8 *)header + 8);
+    LONG w = (LONG)lx_guest_load_u32((uint8 *)header + WIN32_BITMAPINFOHEADER_WIDTH),
+         h = (LONG)lx_guest_load_u32((uint8 *)header + WIN32_BITMAPINFOHEADER_HEIGHT);
     if (h == INT32_MIN)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -454,7 +486,7 @@ ULONG CreateDIBitmap(ULONG dc, PVOID header, ULONG options, PVOID bits, PVOID in
     ULONG result = CreateCompatibleBitmap(dc, w, height);
     if (!result)
         return 0;
-    if (options & 4)
+    if (options & WIN32_CBM_INIT)
     {
         if (SetDIBits(dc, result, 0, (ULONG)height, bits, info, usage) != height)
         {
@@ -491,14 +523,14 @@ BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source,
     int64_t width = llabs((int64_t)xx - sx), height = llabs((int64_t)yy - sy);
     if (!width || !height)
         return TRUE;
-    if (width > 16384 || height > 16384 || width * height > 16777216)
+    if (width > BITMAP_SIDE_MAX || height > BITMAP_SIDE_MAX || width * height > BITMAP_PIXELS_MAX)
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     LONG left = sx < xx ? sx : xx, top = sy < yy ? sy : yy;
-    uint32 *pixels = malloc((size_t)width * height * 4);
-    uint8 *bits = malloc((size_t)width * height * 4);
+    uint32 *pixels = malloc((size_t)width * height * sizeof *pixels);
+    uint8 *bits = malloc((size_t)width * height * STRETCH_DIB_BYTES_PER_PEL);
     BOOL ok = pixels && bits &&
               lx_pm_raster_read(source, left, open32DCHeight(source) - top - (LONG)height,
                                 (unsigned)width, (unsigned)height, pixels);
@@ -518,8 +550,9 @@ BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source,
             {
                 if (source_mono)
                 {
-                    BOOL bit = source_bitmap->palette_count >= 2 ? rgb == source_bitmap->palette[1]
-                                                                 : rgb != 0;
+                    BOOL bit = source_bitmap->palette_count >= MONOCHROME_COLORS
+                                   ? rgb == source_bitmap->palette[1]
+                                   : rgb != 0;
                     ULONG color = bit ? target_dc->background_color : target_dc->text_color;
                     rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
                 }
@@ -528,23 +561,25 @@ BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source,
                     ULONG color = dc->background_color;
                     uint32 background =
                         (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
-                    rgb = rgb == background ? 0xffffff : 0;
+                    rgb = rgb == background ? RGB_WHITE : 0;
                 }
             }
-            bits[i * 4] = (uint8)rgb;
-            bits[i * 4 + 1] = (uint8)(rgb >> 8);
-            bits[i * 4 + 2] = (uint8)(rgb >> 16);
-            bits[i * 4 + 3] = 0;
+            uint8 *pel = bits + i * STRETCH_DIB_BYTES_PER_PEL;
+            pel[0] = (uint8)rgb;
+            pel[1] = (uint8)(rgb >> 8);
+            pel[2] = (uint8)(rgb >> 16);
+            pel[3] = 0;
         }
-        uint8 info[40] = {0};
-        lx_guest_store_u32(info, 40);
-        lx_guest_store_u32(info + 4, (ULONG)width);
-        lx_guest_store_u32(info + 8, (ULONG)height);
-        lx_guest_store_u16(info + 12, 1);
-        lx_guest_store_u16(info + 14, 32);
+        uint8 info[WIN32_BITMAPINFOHEADER_SIZE] = {0};
+        lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_STRUCT_SIZE, WIN32_BITMAPINFOHEADER_SIZE);
+        lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_WIDTH, (ULONG)width);
+        lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_HEIGHT, (ULONG)height);
+        lx_guest_store_u16(info + WIN32_BITMAPINFOHEADER_PLANES, 1);
+        lx_guest_store_u16(info + WIN32_BITMAPINFOHEADER_BIT_COUNT, STRETCH_DIB_BITS);
         ok = StretchDIBits(destination, x, y, w, h, sx > xx ? (LONG)width : 0,
                            sy < yy ? 0 : (LONG)height, sx > xx ? -(LONG)width : (LONG)width,
-                           sy < yy ? (LONG)height : -(LONG)height, bits, info, 0, rop) != 0;
+                           sy < yy ? (LONG)height : -(LONG)height, bits, info, WIN32_DIB_RGB_COLORS,
+                           rop) != 0;
     }
     free(bits);
     free(pixels);

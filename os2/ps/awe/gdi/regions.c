@@ -8,6 +8,24 @@
 #include <math.h>
 #include "os2/ps/awe/user/windows/windows.h"
 
+enum
+{
+    /* Bounds on polygon regions: polygons, total vertices and rows spanned. */
+    POLYGON_REGION_ITEMS_MAX = 65536,
+    /* Scan conversion is refused when rows times vertices exceeds this much work. */
+    POLYGON_REGION_WORK_MAX = 67108864,
+    REGION_SPANS_INITIAL = 256,
+    REGION_SPANS_MAX = 16777216,
+    /* Round and elliptic regions are built a scanline at a time. */
+    ROUND_REGION_SIZE_MAX = 65536,
+    FRAME_REGION_WIDTH_MAX = 32768,
+    /* Polygon vertex counts are 32-bit INTs. */
+    INT_BYTES = 4
+};
+
+/* Region coordinates are kept within plus or minus 2^26. */
+static const LONG REGION_COORDINATE_LIMIT = 1L << 26;
+
 static void free_region(void *data)
 {
     PmRegion *region = data;
@@ -17,12 +35,14 @@ static void free_region(void *data)
 
 static LONG region_type(const PmRegion *region)
 {
-    return !region->count ? 1 : region->count == 1 ? 2 : 3;
+    return !region->count       ? WIN32_NULLREGION
+           : region->count == 1 ? WIN32_SIMPLEREGION
+                                : WIN32_COMPLEXREGION;
 }
 
 static BOOL rectangle(PmRegion *region, LONG left, LONG top, LONG right, LONG bottom)
 {
-    const LONG minimum = -(1L << 26), maximum = (1L << 26) - 1;
+    const LONG minimum = -REGION_COORDINATE_LIMIT, maximum = REGION_COORDINATE_LIMIT - 1;
     if (left < minimum || left > maximum || top < minimum || top > maximum || right < minimum ||
         right > maximum || bottom < minimum || bottom > maximum)
     {
@@ -34,7 +54,7 @@ static BOOL rectangle(PmRegion *region, LONG left, LONG top, LONG right, LONG bo
     PmRegion source = {0};
     source.rects = &rect;
     source.count = left != right && top != bottom;
-    if (!regionBoolean(region, &source, NULL, 2))
+    if (!regionBoolean(region, &source, NULL, CRGN_COPY))
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
@@ -71,9 +91,10 @@ ULONG CreateRectRgnIndirect(PVOID input)
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    return CreateRectRgn(
-        (LONG)lx_guest_load_u32(input), (LONG)lx_guest_load_u32((uint8 *)input + 4),
-        (LONG)lx_guest_load_u32((uint8 *)input + 8), (LONG)lx_guest_load_u32((uint8 *)input + 12));
+    return CreateRectRgn((LONG)lx_guest_load_u32((uint8 *)input + WIN32_RECT_LEFT),
+                         (LONG)lx_guest_load_u32((uint8 *)input + WIN32_RECT_TOP),
+                         (LONG)lx_guest_load_u32((uint8 *)input + WIN32_RECT_RIGHT),
+                         (LONG)lx_guest_load_u32((uint8 *)input + WIN32_RECT_BOTTOM));
 }
 
 BOOL SetRectRgn(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
@@ -91,8 +112,9 @@ BOOL SetRectRgn(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
 
 LONG CombineRgn(ULONG destination, ULONG first, ULONG second, LONG mode)
 {
-    static const LONG modes[] = {0, 6, 1, 4, 7, 2};
-    if (mode < 1 || mode > 5)
+    /* The PM combination for each RGN_* mode. */
+    static const LONG modes[] = {0, CRGN_AND, CRGN_OR, CRGN_XOR, CRGN_DIFF, CRGN_COPY};
+    if (mode < WIN32_RGN_AND || mode > WIN32_RGN_COPY)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -101,7 +123,7 @@ LONG CombineRgn(ULONG destination, ULONG first, ULONG second, LONG mode)
     LONG result = 0;
     if (lx_handle_borrow(destination, LX_HANDLE_OPEN32_REGION, &out) &&
         lx_handle_borrow(first, LX_HANDLE_OPEN32_REGION, &a) &&
-        (mode == 5 || lx_handle_borrow(second, LX_HANDLE_OPEN32_REGION, &b)))
+        (mode == WIN32_RGN_COPY || lx_handle_borrow(second, LX_HANDLE_OPEN32_REGION, &b)))
     {
         if (regionBoolean(out.resource, a.resource, b.resource, modes[mode]))
             result = region_type(out.resource);
@@ -143,10 +165,10 @@ LONG GetRgnBox(ULONG handle, PVOID output)
                 box.yTop = r->yTop;
         }
     }
-    lx_guest_store_u32(output, (ULONG)box.xLeft);
-    lx_guest_store_u32((uint8 *)output + 4, (ULONG)box.yBottom);
-    lx_guest_store_u32((uint8 *)output + 8, (ULONG)box.xRight);
-    lx_guest_store_u32((uint8 *)output + 12, (ULONG)box.yTop);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_LEFT, (ULONG)box.xLeft);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_TOP, (ULONG)box.yBottom);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_RIGHT, (ULONG)box.xRight);
+    lx_guest_store_u32((uint8 *)output + WIN32_RECT_BOTTOM, (ULONG)box.yTop);
     LONG result = region_type(region);
     lx_handle_release(&borrow);
     return result;
@@ -230,7 +252,9 @@ static LONG clip_rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG b
         return 0;
     }
     const LONG recorded[] = {left, top, right, bottom};
-    open32MetafileWords(handle, mode == 6 ? 0x416 : 0x415, 4, recorded);
+    open32MetafileWords(
+        handle, mode == CRGN_AND ? WIN32_META_INTERSECTCLIPRECT : WIN32_META_EXCLUDECLIPRECT, 4,
+        recorded);
     if (!open32MapPoint(dc, &left, &top, TRUE) || !open32MapPoint(dc, &right, &bottom, TRUE))
         return 0;
     if (left > right)
@@ -283,12 +307,12 @@ static LONG clip_rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG b
 
 LONG IntersectClipRect(ULONG dc, LONG left, LONG top, LONG right, LONG bottom)
 {
-    return clip_rectangle(dc, left, top, right, bottom, 6); /* CRGN_AND */
+    return clip_rectangle(dc, left, top, right, bottom, CRGN_AND);
 }
 
 LONG ExcludeClipRect(ULONG dc, LONG left, LONG top, LONG right, LONG bottom)
 {
-    return clip_rectangle(dc, left, top, right, bottom, 7); /* CRGN_DIFF */
+    return clip_rectangle(dc, left, top, right, bottom, CRGN_DIFF);
 }
 
 LONG GetClipBox(ULONG handle, PVOID output)
@@ -305,15 +329,16 @@ LONG GetClipBox(ULONG handle, PVOID output)
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    if (result == 1)
-        memset(output, 0, 16);
+    if (result == WIN32_NULLREGION)
+        memset(output, 0, WIN32_RECT_SIZE);
     else
     {
         LONG height = open32DCHeight(handle);
-        lx_guest_store_u32(output, (ULONG)rectangle.xLeft);
-        lx_guest_store_u32((uint8 *)output + 4, (ULONG)(height - rectangle.yTop));
-        lx_guest_store_u32((uint8 *)output + 8, (ULONG)rectangle.xRight);
-        lx_guest_store_u32((uint8 *)output + 12, (ULONG)(height - rectangle.yBottom));
+        lx_guest_store_u32((uint8 *)output + WIN32_RECT_LEFT, (ULONG)rectangle.xLeft);
+        lx_guest_store_u32((uint8 *)output + WIN32_RECT_TOP, (ULONG)(height - rectangle.yTop));
+        lx_guest_store_u32((uint8 *)output + WIN32_RECT_RIGHT, (ULONG)rectangle.xRight);
+        lx_guest_store_u32((uint8 *)output + WIN32_RECT_BOTTOM,
+                           (ULONG)(height - rectangle.yBottom));
     }
     return result;
 }
@@ -346,8 +371,9 @@ static ULONG round_region(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
         b = v;
     }
     int64_t w = (int64_t)r - l, h = (int64_t)b - t;
-    if (w > 65536 || h > 65536 || l < -(1L << 26) || r >= (1L << 26) || t < -(1L << 26) ||
-        b >= (1L << 26))
+    if (w > ROUND_REGION_SIZE_MAX || h > ROUND_REGION_SIZE_MAX || l < -REGION_COORDINATE_LIMIT ||
+        r >= REGION_COORDINATE_LIMIT || t < -REGION_COORDINATE_LIMIT ||
+        b >= REGION_COORDINATE_LIMIT)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -386,7 +412,7 @@ static ULONG round_region(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
     PmRegion raw = {0};
     raw.rects = spans;
     raw.count = n;
-    BOOL ok = regionBoolean(region, &raw, NULL, 2);
+    BOOL ok = regionBoolean(region, &raw, NULL, CRGN_COPY);
     free(spans);
     if (!ok)
     {
@@ -420,9 +446,10 @@ ULONG CreateEllipticRgnIndirect(PVOID p)
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    return CreateEllipticRgn((LONG)lx_guest_load_u32(p), (LONG)lx_guest_load_u32((uint8 *)p + 4),
-                             (LONG)lx_guest_load_u32((uint8 *)p + 8),
-                             (LONG)lx_guest_load_u32((uint8 *)p + 12));
+    return CreateEllipticRgn((LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_LEFT),
+                             (LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_TOP),
+                             (LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_RIGHT),
+                             (LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_BOTTOM));
 }
 
 typedef struct RegionSpans
@@ -436,8 +463,8 @@ static BOOL region_span(void *context, LONG y, LONG left, LONG right)
     RegionSpans *spans = context;
     if (spans->count == spans->capacity)
     {
-        size_t next = spans->capacity ? spans->capacity * 2 : 256;
-        if (next > 16777216)
+        size_t next = spans->capacity ? spans->capacity * 2 : REGION_SPANS_INITIAL;
+        if (next > REGION_SPANS_MAX)
             return FALSE;
         RECTL *more = realloc(spans->rects, next * sizeof *more);
         if (!more)
@@ -451,7 +478,7 @@ static BOOL region_span(void *context, LONG y, LONG left, LONG right)
 
 ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
 {
-    if (!points || !counts || polygons < 1 || polygons > 65536 ||
+    if (!points || !counts || polygons < 1 || polygons > POLYGON_REGION_ITEMS_MAX ||
         (mode != ALTERNATE && mode != WINDING))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -461,8 +488,8 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
     LONG top = INT32_MAX, bottom = INT32_MIN;
     for (LONG i = 0; i < polygons; i++)
     {
-        LONG n = (LONG)lx_guest_load_u32((uint8 *)counts + i * 4);
-        if (n < 0 || n > 65536 - total)
+        LONG n = (LONG)lx_guest_load_u32((uint8 *)counts + i * INT_BYTES);
+        if (n < 0 || n > POLYGON_REGION_ITEMS_MAX - total)
         {
             open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
@@ -471,9 +498,10 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
     }
     for (size_t i = 0; i < total; i++)
     {
-        LONG x = (LONG)lx_guest_load_u32((uint8 *)points + i * 8),
-             y = (LONG)lx_guest_load_u32((uint8 *)points + i * 8 + 4);
-        if (x < -(1L << 26) || x >= (1L << 26) || y < -(1L << 26) || y >= (1L << 26))
+        LONG x = (LONG)lx_guest_load_u32((uint8 *)points + i * WIN32_POINT_SIZE + WIN32_POINT_X),
+             y = (LONG)lx_guest_load_u32((uint8 *)points + i * WIN32_POINT_SIZE + WIN32_POINT_Y);
+        if (x < -REGION_COORDINATE_LIMIT || x >= REGION_COORDINATE_LIMIT ||
+            y < -REGION_COORDINATE_LIMIT || y >= REGION_COORDINATE_LIMIT)
         {
             open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
@@ -485,7 +513,8 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
     }
     if (!total)
         return CreateRectRgn(0, 0, 0, 0);
-    if ((int64_t)bottom - top > 65536 || (uint64)(bottom - top) * total > 67108864)
+    if ((int64_t)bottom - top > POLYGON_REGION_ITEMS_MAX ||
+        (uint64)(bottom - top) * total > POLYGON_REGION_WORK_MAX)
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
@@ -496,10 +525,11 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
     RegionSpans spans = {NULL, 0, 0};
     BOOL ok = shape && contours && region;
     for (size_t i = 0; ok && i < total; i++)
-        shape[i] = (PmScanPoint){(LONG)lx_guest_load_u32((uint8 *)points + i * 8),
-                                 (LONG)lx_guest_load_u32((uint8 *)points + i * 8 + 4)};
+        shape[i] = (PmScanPoint){
+            (LONG)lx_guest_load_u32((uint8 *)points + i * WIN32_POINT_SIZE + WIN32_POINT_X),
+            (LONG)lx_guest_load_u32((uint8 *)points + i * WIN32_POINT_SIZE + WIN32_POINT_Y)};
     for (LONG p = 0; ok && p < polygons; p++)
-        contours[p] = lx_guest_load_u32((uint8 *)counts + p * 4);
+        contours[p] = lx_guest_load_u32((uint8 *)counts + p * INT_BYTES);
     if (ok)
         ok = lx_pm_scan_polygons(shape, contours, (size_t)polygons,
                                  mode == WINDING ? LX_PM_SCAN_WINDING : LX_PM_SCAN_ALTERNATE,
@@ -511,7 +541,7 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
         PmRegion raw = {0};
         raw.rects = spans.rects;
         raw.count = spans.count;
-        ok = regionBoolean(region, &raw, NULL, 2);
+        ok = regionBoolean(region, &raw, NULL, CRGN_COPY);
     }
     free(spans.rects);
     if (!ok)
@@ -531,7 +561,7 @@ ULONG CreatePolygonRgn(PVOID points, LONG count, LONG mode)
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    uint8 n[4];
+    uint8 n[INT_BYTES];
     lx_guest_store_u32(n, (ULONG)count);
     return CreatePolyPolygonRgn(points, n, 1, mode);
 }
@@ -544,7 +574,7 @@ BOOL EqualRgn(ULONG first, ULONG second)
         lx_handle_borrow(second, LX_HANDLE_OPEN32_REGION, &b))
     {
         PmRegion difference = {0};
-        if (regionBoolean(&difference, a.resource, b.resource, 4))
+        if (regionBoolean(&difference, a.resource, b.resource, CRGN_XOR))
             same = difference.count == 0;
         else
             open32SetError(ERROR_NOT_ENOUGH_MEMORY);
@@ -572,7 +602,8 @@ LONG OffsetRgn(ULONG h, LONG dx, LONG dy)
         RECTL b = r->rects[i];
         int64_t l = (int64_t)b.xLeft + dx, t = (int64_t)b.yBottom + dy, rr = (int64_t)b.xRight + dx,
                 bb = (int64_t)b.yTop + dy;
-        if (l < -(1L << 26) || rr >= (1L << 26) || t < -(1L << 26) || bb >= (1L << 26))
+        if (l < -REGION_COORDINATE_LIMIT || rr >= REGION_COORDINATE_LIMIT ||
+            t < -REGION_COORDINATE_LIMIT || bb >= REGION_COORDINATE_LIMIT)
         {
             valid = FALSE;
             break;
@@ -624,8 +655,10 @@ BOOL RectInRegion(ULONG h, PVOID p)
         open32SetError(p ? ERROR_INVALID_HANDLE : ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    LONG l = (LONG)lx_guest_load_u32(p), t = (LONG)lx_guest_load_u32((uint8 *)p + 4),
-         r = (LONG)lx_guest_load_u32((uint8 *)p + 8), b = (LONG)lx_guest_load_u32((uint8 *)p + 12);
+    LONG l = (LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_LEFT),
+         t = (LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_TOP),
+         r = (LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_RIGHT),
+         b = (LONG)lx_guest_load_u32((uint8 *)p + WIN32_RECT_BOTTOM);
     PmRegion *region = borrow.resource;
     BOOL found = FALSE;
     for (size_t i = 0; i < region->count; i++)
@@ -676,7 +709,7 @@ LONG GetClipRgn(ULONG h, ULONG out)
                 converted.rects[i] =
                     (RECTL){b.xLeft, height - b.yTop, b.xRight, height - b.yBottom};
             }
-            if (regionBoolean(target, &converted, NULL, 2))
+            if (regionBoolean(target, &converted, NULL, CRGN_COPY))
                 result = 1;
         }
     }
@@ -690,9 +723,9 @@ LONG GetClipRgn(ULONG h, ULONG out)
 
 LONG ExtSelectClipRgn(ULONG h, ULONG region, LONG mode)
 {
-    if (mode == 5)
+    if (mode == WIN32_RGN_COPY)
         return SelectClipRgn(h, region);
-    if (mode < 1 || mode > 4 || !region || !open32FindDC(h))
+    if (mode < WIN32_RGN_AND || mode > WIN32_RGN_DIFF || !region || !open32FindDC(h))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
@@ -718,10 +751,12 @@ BOOL RectVisible(ULONG h, PVOID p)
         open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
-    uint8 logical[16];
-    memcpy(logical, p, 16);
-    LONG l = (LONG)lx_guest_load_u32(logical), t = (LONG)lx_guest_load_u32(logical + 4),
-         r = (LONG)lx_guest_load_u32(logical + 8), b = (LONG)lx_guest_load_u32(logical + 12);
+    uint8 logical[WIN32_RECT_SIZE];
+    memcpy(logical, p, WIN32_RECT_SIZE);
+    LONG l = (LONG)lx_guest_load_u32(logical + WIN32_RECT_LEFT),
+         t = (LONG)lx_guest_load_u32(logical + WIN32_RECT_TOP),
+         r = (LONG)lx_guest_load_u32(logical + WIN32_RECT_RIGHT),
+         b = (LONG)lx_guest_load_u32(logical + WIN32_RECT_BOTTOM);
     if (!open32MapPoint(dc, &l, &t, TRUE) || !open32MapPoint(dc, &r, &b, TRUE))
         return FALSE;
     if (l > r)
@@ -736,11 +771,11 @@ BOOL RectVisible(ULONG h, PVOID p)
         t = b;
         b = v;
     }
-    lx_guest_store_u32(logical, (ULONG)l);
-    lx_guest_store_u32(logical + 4, (ULONG)t);
-    lx_guest_store_u32(logical + 8, (ULONG)r);
-    lx_guest_store_u32(logical + 12, (ULONG)b);
-    uint8 box[16];
+    lx_guest_store_u32(logical + WIN32_RECT_LEFT, (ULONG)l);
+    lx_guest_store_u32(logical + WIN32_RECT_TOP, (ULONG)t);
+    lx_guest_store_u32(logical + WIN32_RECT_RIGHT, (ULONG)r);
+    lx_guest_store_u32(logical + WIN32_RECT_BOTTOM, (ULONG)b);
+    uint8 box[WIN32_RECT_SIZE];
     if (!GetClipBox(h, box))
         return FALSE;
     ULONG clip = CreateRectRgnIndirect(box);
@@ -764,12 +799,12 @@ BOOL FillRgn(ULONG h, ULONG region, ULONG brush)
     BOOL ok = TRUE;
     for (size_t i = 0; ok && i < r->count; i++)
     {
-        uint8 b[16];
+        uint8 b[WIN32_RECT_SIZE];
         RECTL q = r->rects[i];
-        lx_guest_store_u32(b, (ULONG)q.xLeft);
-        lx_guest_store_u32(b + 4, (ULONG)q.yBottom);
-        lx_guest_store_u32(b + 8, (ULONG)q.xRight);
-        lx_guest_store_u32(b + 12, (ULONG)q.yTop);
+        lx_guest_store_u32(b + WIN32_RECT_LEFT, (ULONG)q.xLeft);
+        lx_guest_store_u32(b + WIN32_RECT_TOP, (ULONG)q.yBottom);
+        lx_guest_store_u32(b + WIN32_RECT_RIGHT, (ULONG)q.xRight);
+        lx_guest_store_u32(b + WIN32_RECT_BOTTOM, (ULONG)q.yTop);
         ok = FillRect(h, b, brush) != 0;
     }
     lx_handle_release(&borrow);
@@ -796,29 +831,29 @@ BOOL FrameRgn(ULONG h, ULONG region, ULONG brush, LONG width, LONG height)
     }
     width = width < 0 ? (width == INT32_MIN ? INT32_MAX : -width) : width;
     height = height < 0 ? (height == INT32_MIN ? INT32_MAX : -height) : height;
-    if (width > 32768 || height > 32768)
+    if (width > FRAME_REGION_WIDTH_MAX || height > FRAME_REGION_WIDTH_MAX)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG interior = CreateRectRgn(0, 0, 0, 0), copy = CreateRectRgn(0, 0, 0, 0),
           border = CreateRectRgn(0, 0, 0, 0);
-    BOOL ok = interior && copy && border && CombineRgn(interior, region, 0, 5);
+    BOOL ok = interior && copy && border && CombineRgn(interior, region, 0, WIN32_RGN_COPY);
     /* Erosion by a rectangular pen separates into a horizontal then a vertical pass. */
     for (LONG dx = -width; ok && dx <= width; dx++)
         if (dx)
-            ok = CombineRgn(copy, region, 0, 5) && OffsetRgn(copy, dx, 0) &&
-                 CombineRgn(interior, interior, copy, 1);
+            ok = CombineRgn(copy, region, 0, WIN32_RGN_COPY) && OffsetRgn(copy, dx, 0) &&
+                 CombineRgn(interior, interior, copy, WIN32_RGN_AND);
     ULONG eroded = ok ? CreateRectRgn(0, 0, 0, 0) : 0;
-    ok = ok && eroded && CombineRgn(eroded, interior, 0, 5);
+    ok = ok && eroded && CombineRgn(eroded, interior, 0, WIN32_RGN_COPY);
     for (LONG dy = -height; ok && dy <= height; dy++)
         if (dy)
-            ok = CombineRgn(copy, eroded, 0, 5) && OffsetRgn(copy, 0, dy) &&
-                 CombineRgn(interior, interior, copy, 1);
+            ok = CombineRgn(copy, eroded, 0, WIN32_RGN_COPY) && OffsetRgn(copy, 0, dy) &&
+                 CombineRgn(interior, interior, copy, WIN32_RGN_AND);
     if (eroded)
         open32DeleteRegion(eroded);
     if (ok)
-        ok = CombineRgn(border, region, interior, 4) && FillRgn(h, border, brush);
+        ok = CombineRgn(border, region, interior, WIN32_RGN_DIFF) && FillRgn(h, border, brush);
     if (border)
         open32DeleteRegion(border);
     if (copy)
@@ -849,12 +884,12 @@ LONG GetUpdateRgn(ULONG window, ULONG output, BOOL erase)
             raw.rects[i] =
                 (RECTL){damage.xLeft, height - damage.yTop, damage.xRight, height - damage.yBottom};
         }
-        ok = regionBoolean(borrow.resource, &raw, NULL, 2);
+        ok = regionBoolean(borrow.resource, &raw, NULL, CRGN_COPY);
     }
     free(raw.rects);
     LONG result = ok ? region_type(borrow.resource) : 0;
     lx_handle_release(&borrow);
-    if (ok && erase && result > 1)
+    if (ok && erase && result > WIN32_NULLREGION)
         GetUpdateRect(window, NULL, TRUE);
     if (!ok)
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);

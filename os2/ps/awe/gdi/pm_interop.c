@@ -10,6 +10,14 @@
 #include "os2/include/private/pmgpip.h"
 #include "os2/include/private/pmdevp.h"
 
+enum
+{
+    /* WinTranslateDeviceRects converts at most this many rectangles per call. */
+    TRANSLATE_RECTS_MAX = 65536,
+    /* Palettes translate with up to 256 entries in either direction. */
+    TRANSLATE_PALETTE_ENTRIES_MAX = 256
+};
+
 /* Translating one object again yields the same partner while both handles stay valid. */
 typedef struct TranslatedHandle
 {
@@ -23,9 +31,9 @@ static BOOL native_handle_valid(ULONG handle, ULONG type)
 {
     LxHandleBorrow borrow = {0};
     BOOL valid = lx_handle_borrow(handle,
-                                  type == 5   ? LX_HANDLE_PM_PALETTE
-                                  : type == 8 ? LX_HANDLE_PM_REGION
-                                              : LX_HANDLE_PM_METAFILE,
+                                  type == WIN32_OBJ_PAL      ? LX_HANDLE_PM_PALETTE
+                                  : type == WIN32_OBJ_REGION ? LX_HANDLE_PM_REGION
+                                                             : LX_HANDLE_PM_METAFILE,
                                   &borrow);
     lx_handle_release(&borrow);
     return valid;
@@ -67,7 +75,7 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
     (void)direction;
     if (!h && !window)
         return FALSE;
-    if (count < 0 || count > 65536 || (count && !rectangles))
+    if (count < 0 || count > TRANSLATE_RECTS_MAX || (count && !rectangles))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
@@ -94,16 +102,17 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
     }
     for (LONG i = 0; i < count; i++)
     {
-        uint8 *p = (uint8 *)rectangles + i * 16;
-        LONG top = (LONG)lx_guest_load_u32(p + 4), bottom = (LONG)lx_guest_load_u32(p + 12);
+        uint8 *p = (uint8 *)rectangles + i * WIN32_RECT_SIZE;
+        LONG top = (LONG)lx_guest_load_u32(p + WIN32_RECT_TOP),
+             bottom = (LONG)lx_guest_load_u32(p + WIN32_RECT_BOTTOM);
         int64_t t = (int64_t)height - bottom, b = (int64_t)height - top;
         if (t < INT32_MIN || t > INT32_MAX || b < INT32_MIN || b > INT32_MAX)
         {
             open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
-        lx_guest_store_u32(p + 4, (ULONG)t);
-        lx_guest_store_u32(p + 12, (ULONG)b);
+        lx_guest_store_u32(p + WIN32_RECT_TOP, (ULONG)t);
+        lx_guest_store_u32(p + WIN32_RECT_BOTTOM, (ULONG)b);
     }
     return TRUE;
 }
@@ -111,12 +120,14 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
 ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type)
 {
     direction &= 255;
-    if (type != 5 && type != 7 && type != 8 && type != 9)
+    if (type != WIN32_OBJ_PAL && type != WIN32_OBJ_BITMAP && type != WIN32_OBJ_REGION &&
+        type != WIN32_OBJ_METAFILE)
         return 0;
     ULONG cached = translated_handle(object, direction, type);
     if (cached)
         return cached;
-    if (type == 7)
+    /* Open32 and PM share bitmap handles. */
+    if (type == WIN32_OBJ_BITMAP)
     {
         LxHandleBorrow borrow = {0};
         BOOL ok = lx_pm_bitmap(object, &borrow) != NULL;
@@ -124,49 +135,55 @@ ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type
         if (ok)
             return object;
     }
-    if (type == 5)
+    if (type == WIN32_OBJ_PAL)
     {
-        if (direction == 0)
+        if (direction == WINX2PM)
         {
             ULONG n = GetPaletteEntries(object, 0, 0, NULL);
-            if (!n || n > 256)
+            if (!n || n > TRANSLATE_PALETTE_ENTRIES_MAX)
             {
                 open32SetError(ERROR_INVALID_PARAMETER);
                 return 0;
             }
-            uint8 entries[1024];
-            ULONG colors[256];
+            uint8 entries[TRANSLATE_PALETTE_ENTRIES_MAX * WIN32_PALETTEENTRY_SIZE];
+            ULONG colors[TRANSLATE_PALETTE_ENTRIES_MAX];
             if (GetPaletteEntries(object, 0, n, entries) != n)
                 return 0;
             for (ULONG i = 0; i < n; i++)
-                colors[i] = (ULONG)entries[i * 4] << 16 | (ULONG)entries[i * 4 + 1] << 8 |
-                            entries[i * 4 + 2];
+            {
+                const uint8 *entry = entries + i * WIN32_PALETTEENTRY_SIZE;
+                colors[i] = (ULONG)entry[WIN32_PALETTEENTRY_RED] << 16 |
+                            (ULONG)entry[WIN32_PALETTEENTRY_GREEN] << 8 |
+                            entry[WIN32_PALETTEENTRY_BLUE];
+            }
             ULONG native = GpiCreatePalette(open32Presentation(), 0, 0, n, colors);
             return remember_handle(object, native, type, native);
         }
         LONG n = GpiQueryPaletteInfo(object, 0, 0, 0, 0, NULL);
-        if (n < 1 || n > 256)
+        if (n < 1 || n > TRANSLATE_PALETTE_ENTRIES_MAX)
         {
             open32SetError(ERROR_INVALID_HANDLE);
             return 0;
         }
-        ULONG colors[256];
+        ULONG colors[TRANSLATE_PALETTE_ENTRIES_MAX];
         if (GpiQueryPaletteInfo(object, 0, 0, 0, (ULONG)n, colors) != n)
             return 0;
-        uint8 entries[1028];
-        lx_guest_store_u16(entries, 0x300);
-        lx_guest_store_u16(entries + 2, (uint16)n);
+        uint8 entries[WIN32_LOGPALETTE_ENTRIES +
+                      TRANSLATE_PALETTE_ENTRIES_MAX * WIN32_PALETTEENTRY_SIZE];
+        lx_guest_store_u16(entries + WIN32_LOGPALETTE_VERSION, WIN32_PALETTE_VERSION);
+        lx_guest_store_u16(entries + WIN32_LOGPALETTE_ENTRY_COUNT, (uint16)n);
         for (LONG i = 0; i < n; i++)
         {
-            entries[4 + i * 4] = (uint8)(colors[i] >> 16);
-            entries[5 + i * 4] = (uint8)(colors[i] >> 8);
-            entries[6 + i * 4] = (uint8)colors[i];
-            entries[7 + i * 4] = 0;
+            uint8 *entry = entries + WIN32_LOGPALETTE_ENTRIES + i * WIN32_PALETTEENTRY_SIZE;
+            entry[WIN32_PALETTEENTRY_RED] = (uint8)(colors[i] >> 16);
+            entry[WIN32_PALETTEENTRY_GREEN] = (uint8)(colors[i] >> 8);
+            entry[WIN32_PALETTEENTRY_BLUE] = (uint8)colors[i];
+            entry[WIN32_PALETTEENTRY_FLAGS] = 0;
         }
         ULONG palette = CreatePalette(entries);
         return remember_handle(palette, object, type, palette);
     }
-    if (type == 8)
+    if (type == WIN32_OBJ_REGION)
     {
         LxHandleBorrow borrow = {0};
         LxHandleKind kind = direction ? LX_HANDLE_PM_REGION : LX_HANDLE_OPEN32_REGION;
@@ -180,7 +197,7 @@ ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type
                 LxHandleBorrow out = {0};
                 if (result && lx_handle_borrow(result, LX_HANDLE_OPEN32_REGION, &out))
                 {
-                    if (!regionBoolean(out.resource, r, NULL, 2))
+                    if (!regionBoolean(out.resource, r, NULL, CRGN_COPY))
                     {
                         DeleteObject(result);
                         result = 0;
@@ -204,7 +221,7 @@ ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type
     }
     /* A native metafile object carries Windows metafile bytes across the two APIs; GPI order
        streams have no WMF reading, so they do not translate back. */
-    if (type == 9 && direction)
+    if (type == WIN32_OBJ_METAFILE && direction)
     {
         LONG length = GpiQueryMetaFileLength(object);
         uint8 *bytes = length > 0 ? malloc((size_t)length) : NULL;
@@ -215,7 +232,7 @@ ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type
         if (result)
             return remember_handle(result, object, type, result);
     }
-    else if (type == 9)
+    else if (type == WIN32_OBJ_METAFILE)
     {
         ULONG length = GetMetaFileBitsEx(object, 0, NULL);
         uint8 *bytes = length ? malloc(length) : NULL;

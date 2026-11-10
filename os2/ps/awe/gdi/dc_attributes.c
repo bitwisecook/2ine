@@ -7,6 +7,18 @@
 #include "os2/include/private/pmwinp.h"
 #include <math.h>
 
+/* The coordinate pairs state_pair reads. */
+enum
+{
+    PAIR_POSITION,
+    PAIR_VIEWPORT_ORIGIN,
+    PAIR_WINDOW_ORIGIN,
+    PAIR_VIEWPORT_EXTENT,
+    PAIR_WINDOW_EXTENT,
+    /* GetBkColor reports the RGB part of the COLORREF. */
+    COLORREF_RGB_MASK = 0xFFFFFF
+};
+
 static BOOL state_pair(ULONG handle, PVOID output, unsigned kind)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -18,19 +30,19 @@ static BOOL state_pair(ULONG handle, PVOID output, unsigned kind)
     LONG x, y;
     switch (kind)
     {
-        case 0:
+        case PAIR_POSITION:
             x = dc->position_x;
             y = dc->position_y;
             break;
-        case 1:
+        case PAIR_VIEWPORT_ORIGIN:
             x = dc->viewport_x;
             y = dc->viewport_y;
             break;
-        case 2:
+        case PAIR_WINDOW_ORIGIN:
             x = dc->window_x;
             y = dc->window_y;
             break;
-        case 3:
+        case PAIR_VIEWPORT_EXTENT:
             x = dc->viewport_width;
             y = dc->viewport_height;
             break;
@@ -39,34 +51,34 @@ static BOOL state_pair(ULONG handle, PVOID output, unsigned kind)
             y = dc->window_height;
             break;
     }
-    lx_guest_store_u32(output, (ULONG)x);
-    lx_guest_store_u32((uint8 *)output + 4, (ULONG)y);
+    lx_guest_store_u32((uint8 *)output + WIN32_POINT_X, (ULONG)x);
+    lx_guest_store_u32((uint8 *)output + WIN32_POINT_Y, (ULONG)y);
     return TRUE;
 }
 
 BOOL GetCurrentPositionEx(ULONG h, PVOID p)
 {
-    return state_pair(h, p, 0);
+    return state_pair(h, p, PAIR_POSITION);
 }
 
 BOOL GetViewportOrgEx(ULONG h, PVOID p)
 {
-    return state_pair(h, p, 1);
+    return state_pair(h, p, PAIR_VIEWPORT_ORIGIN);
 }
 
 BOOL GetWindowOrgEx(ULONG h, PVOID p)
 {
-    return state_pair(h, p, 2);
+    return state_pair(h, p, PAIR_WINDOW_ORIGIN);
 }
 
 BOOL GetViewportExtEx(ULONG h, PVOID p)
 {
-    return state_pair(h, p, 3);
+    return state_pair(h, p, PAIR_VIEWPORT_EXTENT);
 }
 
 BOOL GetWindowExtEx(ULONG h, PVOID p)
 {
-    return state_pair(h, p, 4);
+    return state_pair(h, p, PAIR_WINDOW_EXTENT);
 }
 
 ULONG GetBkColor(ULONG h)
@@ -74,7 +86,7 @@ ULONG GetBkColor(ULONG h)
     Open32DC *dc = open32FindDC(h);
     if (!dc)
         open32SetError(ERROR_INVALID_HANDLE);
-    return dc ? dc->background_color & 0xFFFFFF : UINT32_MAX;
+    return dc ? dc->background_color & COLORREF_RGB_MASK : UINT32_MAX;
 }
 
 ULONG GetTextColor(ULONG h)
@@ -104,14 +116,14 @@ LONG GetPolyFillMode(ULONG h)
 LONG SetPolyFillMode(ULONG h, LONG value)
 {
     Open32DC *dc = open32FindDC(h);
-    if (!dc || value < 1 || value > 2)
+    if (!dc || value < ALTERNATE || value > WINDING)
     {
         open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG old = dc->poly_fill_mode;
     dc->poly_fill_mode = value;
-    open32MetafileWords(h, 0x106, 1, &value);
+    open32MetafileWords(h, WIN32_META_SETPOLYFILLMODE, 1, &value);
     return old;
 }
 
@@ -124,11 +136,11 @@ LONG SetStretchBltMode(ULONG h, LONG value)
         return 0;
     }
     /* PMWINX maps BLACKONWHITE, WHITEONBLACK and COLORONCOLOR; any other mode returns 0. */
-    if (value < 1 || value > 3)
+    if (value < BLACKONWHITE || value > COLORONCOLOR)
         return 0;
     LONG old = dc->stretch_mode;
     dc->stretch_mode = value;
-    open32MetafileWords(h, 0x107, 1, &value);
+    open32MetafileWords(h, WIN32_META_SETSTRETCHBLTMODE, 1, &value);
     return old;
 }
 
@@ -142,7 +154,7 @@ LONG SetTextCharacterExtra(ULONG h, LONG value)
     }
     LONG old = dc->character_extra;
     dc->character_extra = value;
-    open32MetafileWords(h, 0x108, 1, &value);
+    open32MetafileWords(h, WIN32_META_SETTEXTCHAREXTRA, 1, &value);
     return old;
 }
 
@@ -157,7 +169,7 @@ BOOL SetTextJustification(ULONG h, LONG extra, LONG breaks)
     dc->justify_extra = breaks ? extra : 0;
     dc->justify_breaks = breaks;
     const LONG words[] = {extra, breaks};
-    open32MetafileWords(h, 0x20a, 2, words);
+    open32MetafileWords(h, WIN32_META_SETTEXTJUSTIFICATION, 2, words);
     return TRUE;
 }
 
@@ -171,15 +183,15 @@ ULONG GetCurrentObject(ULONG h, ULONG type)
     }
     switch (type)
     {
-        case 1:
+        case WIN32_OBJ_PEN:
             return dc->pen_handle;
-        case 2:
+        case WIN32_OBJ_BRUSH:
             return dc->brush_handle;
-        case 5:
+        case WIN32_OBJ_PAL:
             return dc->palette_handle;
-        case 6:
+        case WIN32_OBJ_FONT:
             return dc->font_handle;
-        case 7:
+        case WIN32_OBJ_BITMAP:
         {
             PresentationSpace *ps = lx_pm_font_space(h);
             PmBitmap *b = ps ? ps->bitmap_lease.resource : NULL;
@@ -237,7 +249,7 @@ static BOOL scale_extent(ULONG h, LONG xn, LONG xd, LONG yn, LONG yd, PVOID old,
         return FALSE;
     }
     /* Viewport scaling outside the free modes, or with a zero factor, changes nothing. */
-    if (viewport && (!xn || !xd || !yn || !yd || dc->map_mode < 7))
+    if (viewport && (!xn || !xd || !yn || !yd || dc->map_mode < WIN32_MM_ISOTROPIC))
         return TRUE;
     if (!xd || !yd)
     {
@@ -288,14 +300,14 @@ ULONG SetPixel(ULONG h, LONG x, LONG y, ULONG color)
 LONG SetROP2(ULONG handle, LONG mode)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || mode < 1 || mode > 16)
+    if (!dc || mode < R2_BLACK || mode > R2_WHITE)
     {
         open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG previous = dc->rop2;
     dc->rop2 = mode;
-    open32MetafileWords(handle, 0x104, 1, &mode);
+    open32MetafileWords(handle, WIN32_META_SETROP2, 1, &mode);
     return previous;
 }
 

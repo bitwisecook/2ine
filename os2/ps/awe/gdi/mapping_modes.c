@@ -5,6 +5,19 @@
 #include "os2/ps/awe/gdi/dc.h"
 #include <math.h>
 
+enum
+{
+    /* LPtoDP and DPtoLP convert at most this many points per call. */
+    MAP_POINTS_MAX = 65536,
+    /* The origin or extent set_mapping changes. */
+    MAPPING_VIEWPORT_ORIGIN = 0,
+    MAPPING_WINDOW_ORIGIN = 1,
+    MAPPING_VIEWPORT_EXTENT = 2,
+    MAPPING_WINDOW_EXTENT = 3,
+    /* SetWorldTransform's mode for open32WorldTransform, beside the MWT_* modes. */
+    WORLD_TRANSFORM_REPLACE = 0
+};
+
 LONG GetMapMode(ULONG dc)
 {
     Open32DC *context = open32FindDC(dc);
@@ -24,24 +37,25 @@ LONG SetMapMode(ULONG dc, LONG mode)
         open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
-    if (mode < 1 || mode > 8)
+    if (mode < WIN32_MM_TEXT || mode > WIN32_MM_ANISOTROPIC)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG previous = context->map_mode;
     context->map_mode = mode;
-    open32MetafileWords(dc, 0x103, 1, &mode);
-    if (mode == 1)
+    open32MetafileWords(dc, WIN32_META_SETMAPMODE, 1, &mode);
+    if (mode == WIN32_MM_TEXT)
         context->window_width = context->window_height = context->viewport_width =
             context->viewport_height = 1;
-    else if (mode < 7)
+    else if (mode < WIN32_MM_ISOTROPIC)
     {
-        /* Metric, English and twip modes are logical units per inch with y increasing upward. */
+        /* Metric, English and twip modes are logical units per inch with y increasing upward:
+           0.1 mm, 0.01 mm, 0.01 inch, 0.001 inch and 1/1440 inch. */
         static const LONG units[] = {254, 2540, 100, 1000, 1440};
-        context->window_width = context->window_height = units[mode - 2];
-        context->viewport_width = GetDeviceCaps(dc, 88);
-        context->viewport_height = -GetDeviceCaps(dc, 90);
+        context->window_width = context->window_height = units[mode - WIN32_MM_LOMETRIC];
+        context->viewport_width = GetDeviceCaps(dc, WIN32_LOGPIXELSX);
+        context->viewport_height = -GetDeviceCaps(dc, WIN32_LOGPIXELSY);
     }
     return previous;
 }
@@ -146,19 +160,20 @@ BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device)
 static BOOL map_points(ULONG handle, PVOID points, LONG count, BOOL device)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || count < 0 || count > 65536 || (count && !points))
+    if (!dc || count < 0 || count > MAP_POINTS_MAX || (count && !points))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     for (LONG i = 0; i < count; i++)
     {
-        uint8 *wire = (uint8 *)points + i * 8;
-        LONG x = (LONG)lx_guest_load_u32(wire), y = (LONG)lx_guest_load_u32(wire + 4);
+        uint8 *wire = (uint8 *)points + i * WIN32_POINT_SIZE;
+        LONG x = (LONG)lx_guest_load_u32(wire + WIN32_POINT_X),
+             y = (LONG)lx_guest_load_u32(wire + WIN32_POINT_Y);
         if (!open32MapPoint(dc, &x, &y, device))
             return FALSE;
-        lx_guest_store_u32(wire, (ULONG)x);
-        lx_guest_store_u32(wire + 4, (ULONG)y);
+        lx_guest_store_u32(wire + WIN32_POINT_X, (ULONG)x);
+        lx_guest_store_u32(wire + WIN32_POINT_Y, (ULONG)y);
     }
     return TRUE;
 }
@@ -199,72 +214,73 @@ static BOOL set_mapping(ULONG handle, LONG x, LONG y, PVOID previous, unsigned k
         open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
-    LONG *first = kind == 0   ? &dc->viewport_x
-                  : kind == 1 ? &dc->window_x
-                  : kind == 2 ? &dc->viewport_width
-                              : &dc->window_width;
-    LONG *second = kind == 0   ? &dc->viewport_y
-                   : kind == 1 ? &dc->window_y
-                   : kind == 2 ? &dc->viewport_height
-                               : &dc->window_height;
-    if (kind >= 2 && dc->map_mode >= 7 && (!x || !y))
+    LONG *first = kind == MAPPING_VIEWPORT_ORIGIN   ? &dc->viewport_x
+                  : kind == MAPPING_WINDOW_ORIGIN   ? &dc->window_x
+                  : kind == MAPPING_VIEWPORT_EXTENT ? &dc->viewport_width
+                                                    : &dc->window_width;
+    LONG *second = kind == MAPPING_VIEWPORT_ORIGIN   ? &dc->viewport_y
+                   : kind == MAPPING_WINDOW_ORIGIN   ? &dc->window_y
+                   : kind == MAPPING_VIEWPORT_EXTENT ? &dc->viewport_height
+                                                     : &dc->window_height;
+    /* Extents are fixed by the mapping mode except in MM_ISOTROPIC and MM_ANISOTROPIC. */
+    if (kind >= MAPPING_VIEWPORT_EXTENT && dc->map_mode >= WIN32_MM_ISOTROPIC && (!x || !y))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (previous)
     {
-        lx_guest_store_u32(previous, (ULONG)*first);
-        lx_guest_store_u32((uint8 *)previous + 4, (ULONG)*second);
+        lx_guest_store_u32((uint8 *)previous + WIN32_POINT_X, (ULONG)*first);
+        lx_guest_store_u32((uint8 *)previous + WIN32_POINT_Y, (ULONG)*second);
     }
-    if (kind < 2 || dc->map_mode >= 7)
+    if (kind < MAPPING_VIEWPORT_EXTENT || dc->map_mode >= WIN32_MM_ISOTROPIC)
     {
         *first = x;
         *second = y;
     }
-    if (kind >= 2 && dc->map_mode == 7)
+    if (kind >= MAPPING_VIEWPORT_EXTENT && dc->map_mode == WIN32_MM_ISOTROPIC)
         isotropic_viewport(dc);
     const LONG values[] = {x, y};
     open32MetafileWords(handle,
-                        kind == 0   ? 0x20d
-                        : kind == 1 ? 0x20b
-                        : kind == 2 ? 0x20e
-                                    : 0x20c,
+                        kind == MAPPING_VIEWPORT_ORIGIN   ? WIN32_META_SETVIEWPORTORG
+                        : kind == MAPPING_WINDOW_ORIGIN   ? WIN32_META_SETWINDOWORG
+                        : kind == MAPPING_VIEWPORT_EXTENT ? WIN32_META_SETVIEWPORTEXT
+                                                          : WIN32_META_SETWINDOWEXT,
                         2, values);
     return TRUE;
 }
 
 BOOL SetViewportOrgEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
-    return set_mapping(dc, x, y, previous, 0);
+    return set_mapping(dc, x, y, previous, MAPPING_VIEWPORT_ORIGIN);
 }
 
 BOOL SetWindowOrgEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
-    return set_mapping(dc, x, y, previous, 1);
+    return set_mapping(dc, x, y, previous, MAPPING_WINDOW_ORIGIN);
 }
 
 BOOL SetViewportExtEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
-    return set_mapping(dc, x, y, previous, 2);
+    return set_mapping(dc, x, y, previous, MAPPING_VIEWPORT_EXTENT);
 }
 
 BOOL SetWindowExtEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
-    return set_mapping(dc, x, y, previous, 3);
+    return set_mapping(dc, x, y, previous, MAPPING_WINDOW_EXTENT);
 }
 
-/* Mode 0 replaces the transform; MWT_IDENTITY 1 clears it; MWT_LEFTMULTIPLY 2 and
-   MWT_RIGHTMULTIPLY 3 compose with the current one. */
+/* Mode 0 replaces the transform; MWT_IDENTITY clears it; MWT_LEFTMULTIPLY and
+   MWT_RIGHTMULTIPLY compose with the current one. */
 BOOL open32WorldTransform(ULONG h, const double m[6], ULONG mode)
 {
     Open32DC *dc = open32FindDC(h);
-    if (!dc || mode > 3)
+    if (!dc || mode > WIN32_MWT_RIGHTMULTIPLY)
     {
         open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
-    if (mode == 1)
+    if (mode == WIN32_MWT_IDENTITY)
     {
         dc->world_active = FALSE;
         return TRUE;
@@ -272,8 +288,9 @@ BOOL open32WorldTransform(ULONG h, const double m[6], ULONG mode)
     double current[6] = {1, 0, 0, 1, 0, 0}, out[6];
     if (dc->world_active)
         memcpy(current, dc->world, sizeof current);
-    const double *a = mode == 3 ? current : m, *b = mode == 3 ? m : current;
-    if (mode)
+    const double *a = mode == WIN32_MWT_RIGHTMULTIPLY ? current : m,
+                 *b = mode == WIN32_MWT_RIGHTMULTIPLY ? m : current;
+    if (mode != WORLD_TRANSFORM_REPLACE)
     {
         out[0] = a[0] * b[0] + a[1] * b[2];
         out[1] = a[0] * b[1] + a[1] * b[3];

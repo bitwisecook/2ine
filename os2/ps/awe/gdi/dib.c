@@ -5,35 +5,75 @@
 #include "os2/include/private/pmgrep.h"
 #include <math.h>
 
+enum
+{
+    /* The largest DIB side, and the most pels one transfer draws. */
+    DIB_SIDE_MAX = 16384,
+    BLIT_AREA_MAX = 16 * 1024 * 1024,
+    /* BLACKONWHITE/WHITEONBLACK shrinking gives up after this many source reads. */
+    STRETCH_SAMPLES_MAX = 64 * 1024 * 1024,
+    /* DIB rows are padded to whole 32-bit words. */
+    DIB_ROW_ALIGN_BITS = 32,
+    DIB_ROW_ALIGN_BYTES = 4,
+    /* A DIB_PAL_COLORS colour table holds 16-bit palette indices. */
+    PAL_COLORS_ENTRY_SIZE = 2,
+    /* BI_BITFIELDS puts red, green and blue DWORD masks after the header. */
+    BITFIELDS_RED = 0,
+    BITFIELDS_GREEN = 4,
+    BITFIELDS_BLUE = 8,
+    BITFIELDS_SIZE = 12,
+    /* A colour-table query (no pels) asks for formats below 16 bits per pel. */
+    COLOR_TABLE_DEPTH_LIMIT = 16,
+    INDEXED_DEPTH_MAX = 8,
+    INDEXED_COLORS_MAX = 256,
+    TRUE_COLOR_BITS = 24,
+    RGB_MASK = 0xFFFFFF,
+    RGB_WHITE = 0xFFFFFF,
+    /* A ternary raster operation keeps its operation index in bits 16-23. */
+    RASTER_OPERATION_INDEX_SHIFT = 16,
+    RASTER_OPERATION_INDEX_MASK = 0xff,
+    /* BI_RLE8/BI_RLE4 escapes: a zero count byte followed by one of these. */
+    RLE_END_OF_LINE = 0,
+    RLE_END_OF_BITMAP = 1,
+    RLE_DELTA = 2
+};
+
 BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
                       size_t *information_bytes, size_t *pixel_bytes)
 {
-    if (!information || lx_guest_load_u32(information) != 40 || usage > 1)
+    if (!information ||
+        lx_guest_load_u32((uint8 *)information + WIN32_BITMAPINFOHEADER_STRUCT_SIZE) !=
+            WIN32_BITMAPINFOHEADER_SIZE ||
+        usage > WIN32_DIB_PAL_COLORS)
     {
-        open32SetError(usage > 1 ? ERROR_NOT_SUPPORTED : ERROR_INVALID_PARAMETER);
+        open32SetError(usage > WIN32_DIB_PAL_COLORS ? ERROR_NOT_SUPPORTED
+                                                    : ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     const uint8 *info = information;
-    unsigned depth = lx_guest_load_u16(info + 14);
-    *information_bytes = 40;
+    unsigned depth = lx_guest_load_u16(info + WIN32_BITMAPINFOHEADER_BIT_COUNT);
+    *information_bytes = WIN32_BITMAPINFOHEADER_SIZE;
     *pixel_bytes = 0;
     if (!depth)
         return TRUE;
-    LONG width = (LONG)lx_guest_load_u32(info + 4), height = (LONG)lx_guest_load_u32(info + 8);
+    LONG width = (LONG)lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_WIDTH),
+         height = (LONG)lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_HEIGHT);
     uint64_t rows = height < 0 ? -(int64_t)height : height;
-    ULONG compression = lx_guest_load_u32(info + 16);
-    BOOL compressed = compression == 1 || compression == 2;
-    if (width < 1 || width > 16384 || !rows || rows > 16384 || start > rows ||
-        lx_guest_load_u16(info + 12) != 1 ||
+    ULONG compression = lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_COMPRESSION);
+    BOOL compressed = compression == WIN32_BI_RLE8 || compression == WIN32_BI_RLE4;
+    if (width < 1 || width > DIB_SIDE_MAX || !rows || rows > DIB_SIDE_MAX || start > rows ||
+        lx_guest_load_u16(info + WIN32_BITMAPINFOHEADER_PLANES) != 1 ||
         (depth != 1 && depth != 4 && depth != 8 && depth != 16 && depth != 24 && depth != 32) ||
-        compression > 3 || (compression == 1 && depth != 8) || (compression == 2 && depth != 4) ||
-        (compression == 3 && depth != 16 && depth != 32) || (compressed && height < 0))
+        compression > WIN32_BI_BITFIELDS || (compression == WIN32_BI_RLE8 && depth != 8) ||
+        (compression == WIN32_BI_RLE4 && depth != 4) ||
+        (compression == WIN32_BI_BITFIELDS && depth != 16 && depth != 32) ||
+        (compressed && height < 0))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    unsigned colors = lx_guest_load_u32(info + 32);
-    if (depth <= 8)
+    unsigned colors = lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_CLR_USED);
+    if (depth <= INDEXED_DEPTH_MAX)
     {
         if (colors > (1u << depth))
         {
@@ -41,15 +81,19 @@ BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
             return FALSE;
         }
         /* DIB_RGB_COLORS tables hold RGBQUADs; DIB_PAL_COLORS tables hold palette indices. */
-        *information_bytes += (colors ? colors : 1u << depth) * (usage ? 2 : 4);
+        *information_bytes +=
+            (colors ? colors : 1u << depth) * (usage ? PAL_COLORS_ENTRY_SIZE : WIN32_RGBQUAD_SIZE);
     }
     else
         /* Bitfield masks precede any optional palette, which true-color pels do not use. */
-        *information_bytes += (compression == 3 ? 12 : 0) + (size_t)colors * 4;
-    uint64_t stride = (((uint64_t)width * depth + 31) / 32) * 4;
+        *information_bytes += (compression == WIN32_BI_BITFIELDS ? BITFIELDS_SIZE : 0) +
+                              (size_t)colors * WIN32_RGBQUAD_SIZE;
+    uint64_t stride = (((uint64_t)width * depth + DIB_ROW_ALIGN_BITS - 1) / DIB_ROW_ALIGN_BITS) *
+                      DIB_ROW_ALIGN_BYTES;
     if (count > rows - start)
         count = (ULONG)(rows - start);
-    *pixel_bytes = compressed ? lx_guest_load_u32(info + 20) : (size_t)(stride * count);
+    *pixel_bytes = compressed ? lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_SIZE_IMAGE)
+                              : (size_t)(stride * count);
     return TRUE;
 }
 
@@ -81,14 +125,14 @@ static BOOL rle_expand(const uint8 *input, size_t size, unsigned width, unsigned
                 RLE_PUT(depth == 8 ? second : i & 1 ? second & 15 : second >> 4);
             continue;
         }
-        if (second == 0)
+        if (second == RLE_END_OF_LINE)
         {
             x = 0;
             y++;
         }
-        else if (second == 1)
+        else if (second == RLE_END_OF_BITMAP)
             return TRUE;
-        else if (second == 2)
+        else if (second == RLE_DELTA)
         {
             if (at + 2 > size)
                 return FALSE;
@@ -97,6 +141,7 @@ static BOOL rle_expand(const uint8 *input, size_t size, unsigned width, unsigned
         }
         else
         {
+            /* An absolute run of literal pels, padded to a 16-bit boundary. */
             size_t bytes = depth == 8 ? second : (second + 1) / 2;
             if (bytes > size - at)
                 return FALSE;
@@ -128,10 +173,11 @@ static unsigned mask_channel(ULONG value, ULONG mask)
 static uint32 palette_color(ULONG dc, ULONG index)
 {
     Open32DC *context = open32FindDC(dc);
-    uint8 entry[4] = {0};
+    uint8 entry[WIN32_PALETTEENTRY_SIZE] = {0};
     if (context)
         GetPaletteEntries(context->palette_handle, index, 1, entry);
-    return (uint32)entry[0] << 16 | (uint32)entry[1] << 8 | entry[2];
+    return (uint32)entry[WIN32_PALETTEENTRY_RED] << 16 |
+           (uint32)entry[WIN32_PALETTEENTRY_GREEN] << 8 | entry[WIN32_PALETTEENTRY_BLUE];
 }
 
 static unsigned nearest(const uint32 *colors, unsigned count, uint32 rgb)
@@ -170,7 +216,7 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         /* Without pixels the caller is asking about the bitmap, so its header need not
            be complete. A depth of 1-15 asks for the colour table of that format. */
         uint8 *query = information;
-        unsigned requested = lx_guest_load_u16(query + 14);
+        unsigned requested = lx_guest_load_u16(query + WIN32_BITMAPINFOHEADER_BIT_COUNT);
         LxHandleBorrow source = {0};
         PmBitmap *described = lx_pm_bitmap(handle, &source);
         if (!described)
@@ -179,22 +225,26 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
             open32SetError(ERROR_INVALID_HANDLE);
             return 0;
         }
-        if (lx_guest_load_u32(query) != 40 && (!requested || requested >= 16))
+        if (lx_guest_load_u32(query + WIN32_BITMAPINFOHEADER_STRUCT_SIZE) !=
+                WIN32_BITMAPINFOHEADER_SIZE &&
+            (!requested || requested >= COLOR_TABLE_DEPTH_LIMIT))
         {
             lx_handle_release(&source);
             open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         unsigned depth = requested ? requested : described->depth;
-        lx_guest_store_u32(query + 4, described->width);
-        lx_guest_store_u32(query + 8, described->height);
-        lx_guest_store_u16(query + 12, 1);
-        lx_guest_store_u16(query + 14, depth);
-        if (!lx_guest_load_u32(query + 20))
-            lx_guest_store_u32(query + 20,
-                               ((described->width * depth + 31) / 32) * 4 * described->height);
+        lx_guest_store_u32(query + WIN32_BITMAPINFOHEADER_WIDTH, described->width);
+        lx_guest_store_u32(query + WIN32_BITMAPINFOHEADER_HEIGHT, described->height);
+        lx_guest_store_u16(query + WIN32_BITMAPINFOHEADER_PLANES, 1);
+        lx_guest_store_u16(query + WIN32_BITMAPINFOHEADER_BIT_COUNT, depth);
+        if (!lx_guest_load_u32(query + WIN32_BITMAPINFOHEADER_SIZE_IMAGE))
+            lx_guest_store_u32(
+                query + WIN32_BITMAPINFOHEADER_SIZE_IMAGE,
+                ((described->width * depth + DIB_ROW_ALIGN_BITS - 1) / DIB_ROW_ALIGN_BITS) *
+                    DIB_ROW_ALIGN_BYTES * described->height);
         lx_handle_release(&source);
-        if (!requested || requested >= 16)
+        if (!requested || requested >= COLOR_TABLE_DEPTH_LIMIT)
             return 1;
         count = 0;
     }
@@ -209,39 +259,45 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         return 0;
     }
     uint8 *info = information;
-    unsigned depth = lx_guest_load_u16(info + 14);
-    LONG height = (LONG)lx_guest_load_u32(info + 8);
-    if (lx_guest_load_u32(info + 4) != bitmap->width ||
+    unsigned depth = lx_guest_load_u16(info + WIN32_BITMAPINFOHEADER_BIT_COUNT);
+    LONG height = (LONG)lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_HEIGHT);
+    if (lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_WIDTH) != bitmap->width ||
         (uint64_t)(height < 0 ? -(int64_t)height : height) != bitmap->height)
     {
         lx_handle_release(&borrow);
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    uint32 colors[256] = {0};
-    if (lx_guest_load_u32(info + 16) == 1 || lx_guest_load_u32(info + 16) == 2)
+    uint32 colors[INDEXED_COLORS_MAX] = {0};
+    if (lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_COMPRESSION) == WIN32_BI_RLE8 ||
+        lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_COMPRESSION) == WIN32_BI_RLE4)
     {
         lx_handle_release(&borrow);
         open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
-    unsigned color_count = depth <= 8 ? (unsigned)((info_bytes - 40) / (usage ? 2 : 4)) : 0;
+    unsigned color_count = depth <= INDEXED_DEPTH_MAX
+                               ? (unsigned)((info_bytes - WIN32_BITMAPINFOHEADER_SIZE) /
+                                            (usage ? PAL_COLORS_ENTRY_SIZE : WIN32_RGBQUAD_SIZE))
+                               : 0;
     open32BitmapPalette(depth, colors);
     for (unsigned i = 0; i < color_count; i++)
     {
         if (usage)
         {
             colors[i] = palette_color(dc, i);
-            lx_guest_store_u16(info + 40 + i * 2, (uint16)i);
+            lx_guest_store_u16(info + WIN32_BITMAPINFOHEADER_SIZE + i * PAL_COLORS_ENTRY_SIZE,
+                               (uint16)i);
             continue;
         }
         if (depth == bitmap->depth && bitmap->palette_count)
             colors[i] = i < bitmap->palette_count ? bitmap->palette[i] : 0;
-        lx_guest_store_u32(info + 40 + i * 4, colors[i]);
+        lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_SIZE + i * WIN32_RGBQUAD_SIZE, colors[i]);
     }
-    unsigned stride = ((bitmap->width * depth + 31) / 32) * 4;
-    lx_guest_store_u32(info + 20, stride * bitmap->height);
-    lx_guest_store_u32(info + 32, color_count);
+    unsigned stride = ((bitmap->width * depth + DIB_ROW_ALIGN_BITS - 1) / DIB_ROW_ALIGN_BITS) *
+                      DIB_ROW_ALIGN_BYTES;
+    lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_SIZE_IMAGE, stride * bitmap->height);
+    lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_CLR_USED, color_count);
     if (count > bitmap->height - start)
         count = bitmap->height - start;
     if (bits && pixel_bytes)
@@ -254,7 +310,7 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
             for (unsigned x = 0; x < bitmap->width; x++)
             {
                 uint32 rgb = bitmap->pixels[(size_t)source * bitmap->width + x];
-                if (depth <= 8)
+                if (depth <= INDEXED_DEPTH_MAX)
                 {
                     unsigned index = nearest(colors, color_count, rgb), bit = x * depth;
                     output[bit / 8] |= (uint8)(index << (8 - depth - bit % 8));
@@ -292,7 +348,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     if (!open32DibBuffers(information, start, count, usage, &info_bytes, &pixel_bytes))
         return 0;
     const uint8 *info = information;
-    unsigned depth = lx_guest_load_u16(info + 14);
+    unsigned depth = lx_guest_load_u16(info + WIN32_BITMAPINFOHEADER_BIT_COUNT);
     if (!depth || (pixel_bytes && !bits))
     {
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -306,8 +362,8 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
-    LONG height = (LONG)lx_guest_load_u32(info + 8);
-    if (lx_guest_load_u32(info + 4) != bitmap->width ||
+    LONG height = (LONG)lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_HEIGHT);
+    if (lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_WIDTH) != bitmap->width ||
         (uint64_t)(height < 0 ? -(int64_t)height : height) != bitmap->height)
     {
         lx_handle_release(&borrow);
@@ -321,26 +377,34 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         lx_handle_release(&borrow);
         return 0;
     }
-    uint32 palette[256] = {0}, destination_colors[256];
-    unsigned colors = depth <= 8 ? (unsigned)((info_bytes - 40) / (usage ? 2 : 4)) : 0;
-    ULONG compression = lx_guest_load_u32(info + 16);
+    uint32 palette[INDEXED_COLORS_MAX] = {0}, destination_colors[INDEXED_COLORS_MAX];
+    unsigned colors = depth <= INDEXED_DEPTH_MAX
+                          ? (unsigned)((info_bytes - WIN32_BITMAPINFOHEADER_SIZE) /
+                                       (usage ? PAL_COLORS_ENTRY_SIZE : WIN32_RGBQUAD_SIZE))
+                          : 0;
+    ULONG compression = lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_COMPRESSION);
+    /* Without BI_BITFIELDS, 16-bit pels are 5-5-5 RGB and 32-bit pels 8-8-8. */
     ULONG red_mask = depth == 32 ? 0xFF0000 : 0x7C00, green_mask = depth == 32 ? 0xFF00 : 0x3E0,
           blue_mask = depth == 32 ? 0xFF : 0x1F;
-    if (compression == 3)
+    if (compression == WIN32_BI_BITFIELDS)
     {
-        red_mask = lx_guest_load_u32(info + 40);
-        green_mask = lx_guest_load_u32(info + 44);
-        blue_mask = lx_guest_load_u32(info + 48);
+        const uint8 *masks = info + WIN32_BITMAPINFOHEADER_SIZE;
+        red_mask = lx_guest_load_u32(masks + BITFIELDS_RED);
+        green_mask = lx_guest_load_u32(masks + BITFIELDS_GREEN);
+        blue_mask = lx_guest_load_u32(masks + BITFIELDS_BLUE);
     }
     for (unsigned i = 0; i < colors; i++)
-        palette[i] = usage ? palette_color(dc, lx_guest_load_u16(info + 40 + i * 2))
-                           : lx_guest_load_u32(info + 40 + i * 4) & 0xFFFFFF;
+        palette[i] =
+            usage ? palette_color(dc, lx_guest_load_u16(info + WIN32_BITMAPINFOHEADER_SIZE +
+                                                        i * PAL_COLORS_ENTRY_SIZE))
+                  : lx_guest_load_u32(info + WIN32_BITMAPINFOHEADER_SIZE + i * WIN32_RGBQUAD_SIZE) &
+                        RGB_MASK;
     open32BitmapPalette(bitmap->depth, destination_colors);
     if (bitmap->depth == depth && colors)
         memcpy(destination_colors, palette, sizeof palette);
     else if (bitmap->palette_count)
         memcpy(destination_colors, bitmap->palette, sizeof bitmap->palette);
-    uint32 *decoded = malloc((size_t)bitmap->width * count * 4);
+    uint32 *decoded = malloc((size_t)bitmap->width * count * sizeof *decoded);
     if (!decoded)
     {
         lx_handle_release(&borrow);
@@ -348,9 +412,10 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         return 0;
     }
     BOOL valid = TRUE;
-    unsigned stride = ((bitmap->width * depth + 31) / 32) * 4;
+    unsigned stride = ((bitmap->width * depth + DIB_ROW_ALIGN_BITS - 1) / DIB_ROW_ALIGN_BITS) *
+                      DIB_ROW_ALIGN_BYTES;
     uint8 *expanded = NULL;
-    if (compression == 1 || compression == 2)
+    if (compression == WIN32_BI_RLE8 || compression == WIN32_BI_RLE4)
     {
         expanded = calloc((size_t)stride * bitmap->height, 1);
         if (!expanded)
@@ -370,7 +435,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         for (unsigned x = 0; x < bitmap->width; x++)
         {
             uint32 rgb;
-            if (depth <= 8)
+            if (depth <= INDEXED_DEPTH_MAX)
             {
                 unsigned bit = x * depth,
                          index = (source[bit / 8] >> (8 - depth - bit % 8)) & ((1u << depth) - 1);
@@ -381,7 +446,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
                 }
                 rgb = palette[index];
             }
-            else if (depth == 16 || compression == 3)
+            else if (depth == 16 || compression == WIN32_BI_BITFIELDS)
             {
                 ULONG value = depth == 16 ? lx_guest_load_u16(source + x * 2)
                                           : lx_guest_load_u32(source + x * 4);
@@ -393,14 +458,14 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
                 const uint8 *pixel = source + x * (depth / 8);
                 rgb = (uint32)pixel[2] << 16 | (uint32)pixel[1] << 8 | pixel[0];
             }
-            if (bitmap->depth <= 8)
+            if (bitmap->depth <= INDEXED_DEPTH_MAX)
                 rgb = destination_colors[nearest(destination_colors, 1u << bitmap->depth, rgb)];
             decoded[(size_t)row * bitmap->width + x] = rgb;
         }
     }
     if (valid)
     {
-        if (bitmap->depth <= 8)
+        if (bitmap->depth <= INDEXED_DEPTH_MAX)
         {
             bitmap->palette_count = 1u << bitmap->depth;
             memcpy(bitmap->palette, destination_colors, sizeof bitmap->palette);
@@ -409,7 +474,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         {
             unsigned target = height < 0 ? bitmap->height - 1 - start - row : start + row;
             memcpy(bitmap->pixels + (size_t)target * bitmap->width,
-                   decoded + (size_t)row * bitmap->width, (size_t)bitmap->width * 4);
+                   decoded + (size_t)row * bitmap->width, (size_t)bitmap->width * sizeof *decoded);
         }
     }
     free(decoded);
@@ -439,7 +504,7 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
         last_x = maximum_x;
     if (last_y > maximum_y)
         last_y = maximum_y;
-    uint32 combined = mode == BLACKONWHITE ? 0xffffff : 0;
+    uint32 combined = mode == BLACKONWHITE ? RGB_WHITE : 0;
     for (LONG v = first_y; v < last_y; v++)
         for (LONG u = first_x; u < last_x; u++)
         {
@@ -447,7 +512,7 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
                        (fmin(v1, v + 1.0) - fmax(v0, (double)v));
             if (w <= 0)
                 continue;
-            if (++*work > 67108864)
+            if (++*work > STRETCH_SAMPLES_MAX)
             {
                 open32SetError(ERROR_NOT_ENOUGH_MEMORY);
                 return FALSE;
@@ -461,7 +526,7 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
                 return FALSE;
             }
             uint32 pixel = bitmap->pixels[(size_t)y * bitmap->width + x];
-            if (mode == 1)
+            if (mode == BLACKONWHITE)
                 combined &= pixel;
             else
                 combined |= pixel;
@@ -587,9 +652,9 @@ static BOOL rotated_blit(ULONG handle, Open32DC *dc, const PmBitmap *bitmap, LON
     bottom = bottom > canvas_height ? canvas_height : bottom;
     if (left >= right || top >= bottom)
         return TRUE;
-    if ((size_t)(right - left) * (size_t)(bottom - top) > 16777216)
+    if ((size_t)(right - left) * (size_t)(bottom - top) > BLIT_AREA_MAX)
         return FALSE;
-    unsigned rop = (operation >> 16) & 255;
+    unsigned rop = (operation >> RASTER_OPERATION_INDEX_SHIFT) & RASTER_OPERATION_INDEX_MASK;
     RotatedBlit blit = {dc,
                         bitmap,
                         canvas_height,
@@ -620,7 +685,8 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
                  usage, operation);
     Open32DC *dc = open32FindDC(handle);
     size_t info_bytes, pixel_bytes;
-    if (!dc || dc->foreign_window || dc->kind == 4 || dc->kind == 6 || !bits ||
+    if (!dc || dc->foreign_window || dc->kind == OPEN32_DC_DISPLAY_INFORMATION ||
+        dc->kind == OPEN32_DC_PRINTER_INFORMATION || !bits ||
         !open32DibBuffers(information, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
         !pixel_bytes)
     {
@@ -631,8 +697,9 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
         return 0;
     open32MetafileDib(handle, x, y, width, height, source_x, source_y, source_width, source_height,
                       bits, information, usage, operation);
-    LONG image_width = (LONG)lx_guest_load_u32((uint8 *)information + 4);
-    LONG image_height = (LONG)lx_guest_load_u32((uint8 *)information + 8);
+    LONG image_width = (LONG)lx_guest_load_u32((uint8 *)information + WIN32_BITMAPINFOHEADER_WIDTH);
+    LONG image_height =
+        (LONG)lx_guest_load_u32((uint8 *)information + WIN32_BITMAPINFOHEADER_HEIGHT);
     LONG rows = image_height < 0 ? -image_height : image_height;
     int64_t sx_end = (int64_t)source_x + source_width;
     int64_t sy_end = (int64_t)source_y + source_height;
@@ -646,7 +713,7 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
     }
     if (open32Rotated(dc))
     {
-        ULONG temporary = CreateBitmap(image_width, rows, 1, 24, NULL);
+        ULONG temporary = CreateBitmap(image_width, rows, 1, TRUE_COLOR_BITS, NULL);
         LxHandleBorrow lease = {0};
         PmBitmap *decoded = temporary ? lx_pm_bitmap(temporary, &lease) : NULL;
         BOOL drawn =
@@ -684,17 +751,17 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
     if (left >= right || top >= bottom)
         return source_height < 0 ? -source_height : source_height;
     size_t area = (size_t)(right - left) * (size_t)(bottom - top);
-    if (area > 16777216)
+    if (area > BLIT_AREA_MAX)
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
-    ULONG bitmap_handle = CreateBitmap(image_width, rows, 1, 24, NULL);
+    ULONG bitmap_handle = CreateBitmap(image_width, rows, 1, TRUE_COLOR_BITS, NULL);
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = bitmap_handle ? lx_pm_bitmap(bitmap_handle, &borrow) : NULL;
     BOOL ok = bitmap &&
               SetDIBits(handle, bitmap_handle, 0, (ULONG)rows, bits, information, usage) == rows;
-    unsigned rop = (operation >> 16) & 255;
+    unsigned rop = (operation >> RASTER_OPERATION_INDEX_SHIFT) & RASTER_OPERATION_INDEX_MASK;
     StretchBlit blit = {dc,       bitmap,       canvas_height, x,    y,
                         dw,       dh,           image_height,  rows, source_x,
                         source_y, source_width, source_height, rop,  lx_pm_rop_uses_pattern(rop),
@@ -728,8 +795,8 @@ LONG SetDIBitsToDevice(ULONG dc, LONG x, LONG y, LONG width, LONG height, LONG s
         open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
-    LONG image_width = (LONG)lx_guest_load_u32((uint8 *)info + 4),
-         rows = (LONG)lx_guest_load_u32((uint8 *)info + 8);
+    LONG image_width = (LONG)lx_guest_load_u32((uint8 *)info + WIN32_BITMAPINFOHEADER_WIDTH),
+         rows = (LONG)lx_guest_load_u32((uint8 *)info + WIN32_BITMAPINFOHEADER_HEIGHT);
     ULONG total = (ULONG)(rows < 0 ? -rows : rows);
     if (count > total - first)
         count = total - first;
@@ -755,10 +822,11 @@ LONG SetDIBitsToDevice(ULONG dc, LONG x, LONG y, LONG width, LONG height, LONG s
         return 0;
     }
     memcpy(copy, info, info_size);
-    lx_guest_store_u32(copy + 8, rows < 0 ? (ULONG) - (LONG)count : count);
+    lx_guest_store_u32(copy + WIN32_BITMAPINFOHEADER_HEIGHT,
+                       rows < 0 ? (ULONG) - (LONG)count : count);
     LONG result =
         StretchDIBits(dc, x, (LONG)(y + skipped), width, (LONG)(high - low), sx,
-                      (LONG)(low - first), width, (LONG)(high - low), bits, copy, usage, 0xcc0020);
+                      (LONG)(low - first), width, (LONG)(high - low), bits, copy, usage, SRCCOPY);
     free(copy);
     return result ? (LONG)count : 0;
 }
