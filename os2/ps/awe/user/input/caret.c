@@ -5,6 +5,18 @@
 #include "os2/include/private/pmgrep.h"
 #include "os2/include/private/pmp.h"
 
+enum
+{
+    /* CreateCaret's bitmap argument 1 asks for a grey (checkered) caret. */
+    CARET_GREY_BITMAP = 1,
+    /* Pixels; bounds the raster buffer each blink reads and writes. */
+    CARET_EXTENT_MAX = 512,
+    /* Inverting every RGB bit makes the second blink restore the pixels. */
+    CARET_INVERT_MASK = 0xFFFFFF,
+    /* Milliseconds; the Windows default caret blink time. */
+    CARET_BLINK_TIME_DEFAULT = 530
+};
+
 typedef struct Caret
 {
     ULONG owner, bitmap, timer;
@@ -15,7 +27,7 @@ typedef struct Caret
 } Caret;
 
 static _Thread_local Caret caret;
-static _Thread_local ULONG blink_time = 530;
+static _Thread_local ULONG blink_time = CARET_BLINK_TIME_DEFAULT;
 
 static BOOL invert_caret(void)
 {
@@ -35,7 +47,7 @@ static BOOL invert_caret(void)
     if (right <= left || bottom <= top)
         return TRUE;
     unsigned width = (unsigned)(right - left), height = (unsigned)(bottom - top);
-    uint32 *pixels = malloc((size_t)width * height * 4);
+    uint32 *pixels = malloc((size_t)width * height * sizeof *pixels);
     HPS ps = pixels ? WinGetPS(drawable) : 0;
     BOOL result =
         ps && lx_pm_raster_read(ps, (LONG)left, bounds.yTop - (LONG)bottom, width, height, pixels);
@@ -50,8 +62,9 @@ static BOOL invert_caret(void)
                 uint32 mask =
                     image ? image->pixels[(size_t)(image->height - 1 - local_y) * image->width +
                                           local_x]
-                    : caret.bitmap == 1 && ((local_x + local_y) & 1) ? 0
-                                                                     : 0xFFFFFF;
+                    : caret.bitmap == CARET_GREY_BITMAP && ((local_x + local_y) & 1)
+                        ? 0
+                        : CARET_INVERT_MASK;
                 pixels[(size_t)y * width + x] ^= mask;
             }
         result =
@@ -100,7 +113,7 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
         return FALSE;
     }
     LxHandleBorrow image = {0};
-    if (bitmap > 1)
+    if (bitmap > CARET_GREY_BITMAP)
     {
         PmBitmap *source = lx_pm_bitmap(bitmap, &image);
         if (!source)
@@ -112,10 +125,10 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
         height = (LONG)source->height;
     }
     if (!width)
-        width = GetSystemMetrics(5);
+        width = GetSystemMetrics(WIN32_SM_CXBORDER);
     if (!height)
-        height = GetSystemMetrics(6);
-    if (width < 1 || height < 1 || width > 512 || height > 512)
+        height = GetSystemMetrics(WIN32_SM_CYBORDER);
+    if (width < 1 || height < 1 || width > CARET_EXTENT_MAX || height > CARET_EXTENT_MAX)
     {
         lx_handle_release(&image);
         open32SetError(ERROR_INVALID_PARAMETER);
@@ -130,9 +143,9 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
                     .visibility = -1,
                     .phase = TRUE,
                     .image = image};
-    if (blink_time != UINT32_MAX)
+    if (blink_time != WIN32_INFINITE)
         caret.timer = lx_pm_timer_create(owner, blink_time, blink);
-    if (!caret.timer && blink_time != UINT32_MAX)
+    if (!caret.timer && blink_time != WIN32_INFINITE)
     {
         DestroyCaret();
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
@@ -204,7 +217,7 @@ BOOL GetCaretPos(PVOID output)
         return FALSE;
     }
     lx_guest_store_u32(output, (ULONG)caret.x);
-    lx_guest_store_u32((uint8 *)output + 4, (ULONG)caret.y);
+    lx_guest_store_u32((uint8 *)output + WIN32_POINT_Y, (ULONG)caret.y);
     return TRUE;
 }
 
@@ -220,10 +233,10 @@ BOOL SetCaretBlinkTime(ULONG interval)
         open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
-    ULONG replacement = caret.owner && interval != UINT32_MAX
+    ULONG replacement = caret.owner && interval != WIN32_INFINITE
                             ? lx_pm_timer_create(caret.owner, interval, blink)
                             : 0;
-    if (caret.owner && interval != UINT32_MAX && !replacement)
+    if (caret.owner && interval != WIN32_INFINITE && !replacement)
     {
         open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
@@ -261,5 +274,5 @@ void open32CaretCleanup(void)
 {
     if (caret.owner)
         DestroyCaret();
-    blink_time = 530;
+    blink_time = CARET_BLINK_TIME_DEFAULT;
 }

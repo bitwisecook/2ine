@@ -18,7 +18,7 @@ ULONG LoadCursor(HMODULE module, PSZ name)
             open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
-        return (uintptr_t)name <= 0xffff
+        return (uintptr_t)name <= UINT16_MAX
                    ? WinLoadPointer(HWND_DESKTOP, module, (ULONG)(uintptr_t)name)
                    : 0;
     }
@@ -26,34 +26,34 @@ ULONG LoadCursor(HMODULE module, PSZ name)
     if (!module)
         switch ((uintptr_t)name)
         {
-            case 32512:
-                id = 1;
-                break; /* IDC_ARROW */
-            case 32513:
-                id = 2;
-                break; /* IDC_IBEAM */
-            case 32514:
-            case 32650:
-                id = 3;
-                break; /* IDC_WAIT */
-            case 32642:
-                id = 6;
-                break; /* IDC_SIZENWSE */
-            case 32643:
-                id = 7;
-                break; /* IDC_SIZENESW */
-            case 32644:
-                id = 8;
-                break; /* IDC_SIZEWE */
-            case 32645:
-                id = 9;
-                break; /* IDC_SIZENS */
-            case 32646:
-                id = 5;
-                break; /* IDC_SIZEALL */
-            case 32648:
-                id = 18;
-                break; /* IDC_NO */
+            case WIN32_IDC_ARROW:
+                id = SPTR_ARROW;
+                break;
+            case WIN32_IDC_IBEAM:
+                id = SPTR_TEXT;
+                break;
+            case WIN32_IDC_WAIT:
+            case WIN32_IDC_APPSTARTING:
+                id = SPTR_WAIT;
+                break;
+            case WIN32_IDC_SIZENWSE:
+                id = SPTR_SIZENWSE;
+                break;
+            case WIN32_IDC_SIZENESW:
+                id = SPTR_SIZENESW;
+                break;
+            case WIN32_IDC_SIZEWE:
+                id = SPTR_SIZEWE;
+                break;
+            case WIN32_IDC_SIZENS:
+                id = SPTR_SIZENS;
+                break;
+            case WIN32_IDC_SIZEALL:
+                id = SPTR_MOVE;
+                break;
+            case WIN32_IDC_NO:
+                id = SPTR_ILLEGAL;
+                break;
         }
     ULONG result = id ? lx_pm_system_pointer(id) : 0;
     if (!result)
@@ -79,8 +79,7 @@ ULONG SetCursor(ULONG cursor)
     current_cursor = cursor;
     /* A valid guest cursor remains current even if a headless host cannot display it. */
     if (!WinSetPointer(HWND_DESKTOP, cursor))
-        open32SetError(
-            ERROR_NOT_SUPPORTED); /* ERROR_NOT_SUPPORTED: resource validity and presentation differ. */
+        open32SetError(ERROR_NOT_SUPPORTED);
     lx_handle_release(&borrow);
     return previous;
 }
@@ -92,12 +91,7 @@ BOOL DestroyCursor(ULONG cursor)
 
 static BOOL cursor_y(LONG input, LONG *output)
 {
-    enum
-    {
-        screen_height = 21
-    }; /* SV_CYSCREEN */
-
-    LONG height = WinQuerySysValue(HWND_DESKTOP, screen_height);
+    LONG height = WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN);
     if (height <= 0)
     {
         open32SetError(ERROR_GEN_FAILURE);
@@ -137,7 +131,7 @@ BOOL GetCursorPos(PVOID output)
     if (!cursor_y(point.y, &y))
         return FALSE;
     lx_guest_store_u32(output, (ULONG)point.x);
-    lx_guest_store_u32((uint8 *)output + 4, (ULONG)y);
+    lx_guest_store_u32((uint8 *)output + WIN32_POINT_Y, (ULONG)y);
     return TRUE;
 }
 

@@ -1,10 +1,39 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared Open32 icons retain validated copies of original OS/2 pointer resources. */
 #include "os2/include/private/export.h"
+#include "os2/include/bsedos.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/gdi/dc.h"
 #include "os2/include/private/pmgrep.h"
 #include "host/fs.h"
+
+/* OS/2 pointer resource and file layouts: an optional BITMAPARRAYFILEHEADER, then a
+   BITMAPFILEHEADER (usType, cbSize, hotspot, offBits) and the BITMAPINFOHEADER's cbFix. */
+enum
+{
+    BITMAPARRAYFILEHEADER_SIZE = 14,
+    BITMAPFILEHEADER_OFFBITS = 10,
+    BITMAPFILEHEADER_SIZE = 14,
+    /* A file header and the smallest (12-byte) bitmap header. */
+    POINTER_MIN_SIZE = 26,
+    /* cbFix of BITMAPINFOHEADER, of the Windows-sized and of the full BITMAPINFOHEADER2. */
+    BITMAPINFOHEADER_SIZE = 12,
+    BITMAPINFOHEADER2_WINDOWS_SIZE = 40,
+    BITMAPINFOHEADER2_SIZE = 64
+};
+
+enum
+{
+    /* Bytes; refuses implausible pointer resources and files before copying them. */
+    ICON_RESOURCE_SIZE_MAX = 1024 * 1024,
+    ICON_FILE_SIZE_MAX = 16 * 1024 * 1024,
+    /* Colour icons beyond 8 bits per pel are created without the colour bitmap. */
+    ICON_COLOR_BITS_LIMIT = 16,
+    ICON_MASK_BITS = 0xffffff,
+    /* ExtractIcon's result for a caller that gives no file, as Open32 returns it. */
+    EXTRACT_ICON_NO_FILE = 1,
+    DIB_PIXEL_SIZE = 4
+};
 
 typedef struct Open32Icon
 {
@@ -30,7 +59,7 @@ ULONG LoadIcon(HMODULE module, PSZ name)
     TRACE_NATIVE("LoadIcon(%u, %p)", module, name);
     if ((!module || module == UINT32_MAX) && GProcessState.main_module)
         module = GProcessState.main_module->handle;
-    ULONG resource = FindResource(module, name, (PSZ)(uintptr_t)3);
+    ULONG resource = FindResource(module, name, (PSZ)(uintptr_t)WIN32_RT_ICON);
     if (!resource)
         return 0;
     for (Open32Icon *icon = icons; icon; icon = icon->next)
@@ -39,21 +68,24 @@ ULONG LoadIcon(HMODULE module, PSZ name)
     ULONG size = 0;
     void *data = NULL;
     if (!GProcessState.queryResourceSize || !GProcessState.getResource ||
-        GProcessState.queryResourceSize(module, 1, resource & 0xFFFF, &size) || size < 26 ||
-        size > 1048576 || GProcessState.getResource(module, 1, resource & 0xFFFF, &data))
+        GProcessState.queryResourceSize(module, RT_POINTER, resource & 0xFFFF, &size) ||
+        size < POINTER_MIN_SIZE || size > ICON_RESOURCE_SIZE_MAX ||
+        GProcessState.getResource(module, RT_POINTER, resource & 0xFFFF, &data))
     {
         open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     const uint8 *bytes = data;
-    ULONG offset = lx_guest_load_u16(bytes) == 0x4142 ? 14 : 0;
+    ULONG offset = lx_guest_load_u16(bytes) == BFT_BITMAPARRAY ? BITMAPARRAYFILEHEADER_SIZE : 0;
     Open32Icon *icon = NULL;
-    if (size - offset >= 26 && (lx_guest_load_u16(bytes + offset) == 0x4943 ||
-                                lx_guest_load_u16(bytes + offset) == 0x4349))
+    if (size - offset >= POINTER_MIN_SIZE && (lx_guest_load_u16(bytes + offset) == BFT_COLORICON ||
+                                              lx_guest_load_u16(bytes + offset) == BFT_ICON))
     {
-        ULONG header = lx_guest_load_u32(bytes + offset + 14);
-        if ((header == 12 || header == 40 || header == 64) && header <= size - offset - 14 &&
-            lx_guest_load_u32(bytes + offset + 10) < size)
+        ULONG header = lx_guest_load_u32(bytes + offset + BITMAPFILEHEADER_SIZE);
+        if ((header == BITMAPINFOHEADER_SIZE || header == BITMAPINFOHEADER2_WINDOWS_SIZE ||
+             header == BITMAPINFOHEADER2_SIZE) &&
+            header <= size - offset - BITMAPFILEHEADER_SIZE &&
+            lx_guest_load_u32(bytes + offset + BITMAPFILEHEADER_OFFBITS) < size)
         {
             icon = calloc(1, sizeof *icon);
             if (icon)
@@ -121,7 +153,7 @@ ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG dept
 {
     (void)module;
     size_t mask_bytes;
-    if (!xor_bits || planes * depth >= 16)
+    if (!xor_bits || planes * depth >= ICON_COLOR_BITS_LIMIT)
     {
         planes = depth = 1;
         xor_bits = NULL;
@@ -142,7 +174,7 @@ ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG dept
     PmPointerImage *image = icon ? calloc(1, sizeof *image) : NULL;
     if (image)
     {
-        image->pixels = calloc((size_t)width * height, 4);
+        image->pixels = calloc((size_t)width * height, sizeof *image->pixels);
         image->mask = malloc((size_t)width * height);
     }
     BOOL ok = image && image->pixels && image->mask;
@@ -202,13 +234,15 @@ BOOL DrawIcon(ULONG dc, LONG x, LONG y, ULONG handle)
     ok = ok && open32MapPoint(open32FindDC(dc), &device_x, &device_y, TRUE);
     if (ok && open32IsMetafile(dc))
     {
-        uint8 info[40] = {0};
-        lx_guest_store_u32(info, 40);
-        lx_guest_store_u32(info + 4, image->width);
-        lx_guest_store_u32(info + 8, image->height);
-        lx_guest_store_u16(info + 12, 1);
-        lx_guest_store_u16(info + 14, 32);
-        size_t bytes = (size_t)image->width * image->height * 4;
+        /* The metafile receives the mask (SRCAND) and then the image (SRCINVERT) as 32-bit
+           DIBs. */
+        uint8 info[WIN32_BITMAPINFOHEADER_SIZE] = {0};
+        lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_STRUCT_SIZE, WIN32_BITMAPINFOHEADER_SIZE);
+        lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_WIDTH, image->width);
+        lx_guest_store_u32(info + WIN32_BITMAPINFOHEADER_HEIGHT, image->height);
+        lx_guest_store_u16(info + WIN32_BITMAPINFOHEADER_PLANES, 1);
+        lx_guest_store_u16(info + WIN32_BITMAPINFOHEADER_BIT_COUNT, 32);
+        size_t bytes = (size_t)image->width * image->height * DIB_PIXEL_SIZE;
         uint8 *bits = malloc(bytes);
         if (!bits)
             ok = FALSE;
@@ -216,17 +250,18 @@ BOOL DrawIcon(ULONG dc, LONG x, LONG y, ULONG handle)
         {
             for (unsigned pass = 0; pass < 2; pass++)
             {
-                for (size_t i = 0; i < bytes / 4; i++)
+                for (size_t i = 0; i < bytes / DIB_PIXEL_SIZE; i++)
                 {
-                    uint32 rgb = pass ? image->pixels[i] : (image->mask[i] ? 0xffffff : 0);
-                    bits[i * 4] = (uint8)rgb;
-                    bits[i * 4 + 1] = (uint8)(rgb >> 8);
-                    bits[i * 4 + 2] = (uint8)(rgb >> 16);
-                    bits[i * 4 + 3] = 0;
+                    uint32 rgb = pass ? image->pixels[i] : (image->mask[i] ? ICON_MASK_BITS : 0);
+                    /* 32-bit DIB pixels are blue, green, red and an unused byte. */
+                    bits[i * DIB_PIXEL_SIZE] = (uint8)rgb;
+                    bits[i * DIB_PIXEL_SIZE + 1] = (uint8)(rgb >> 8);
+                    bits[i * DIB_PIXEL_SIZE + 2] = (uint8)(rgb >> 16);
+                    bits[i * DIB_PIXEL_SIZE + 3] = 0;
                 }
                 open32MetafileDib(dc, x, y, (LONG)image->width, (LONG)image->height, 0, 0,
                                   (LONG)image->width, (LONG)image->height, bits, info, 0,
-                                  pass ? 0x660046 : 0x8800c6);
+                                  pass ? SRCINVERT : SRCAND);
             }
             free(bits);
         }
@@ -244,7 +279,8 @@ BOOL DrawIcon(ULONG dc, LONG x, LONG y, ULONG handle)
             if (ok)
             {
                 size_t i = (size_t)row * image->width + col;
-                uint32 pixel = (destination & (image->mask[i] ? 0xffffff : 0)) ^ image->pixels[i];
+                uint32 pixel =
+                    (destination & (image->mask[i] ? ICON_MASK_BITS : 0)) ^ image->pixels[i];
                 ok = lx_pm_raster_write(dc, (LONG)px, (LONG)py, 1, 1, &pixel);
             }
         }
@@ -270,19 +306,20 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     if (!path || !*path)
     {
         open32SetError(ERROR_INVALID_PARAMETER);
-        return 1; /* The value Open32 gives a caller with no file. */
+        return EXTRACT_ICON_NO_FILE;
     }
     uint32 error = 0;
     char *host = GProcessState.makeUnixPath ? GProcessState.makeUnixPath(path, &error) : NULL;
     size_t size = 0;
     LxHostFsError status;
-    uint8 *bytes = host ? lx_host_file_snapshot(host, 16u * 1024u * 1024u, &size, &status) : NULL;
+    uint8 *bytes = host ? lx_host_file_snapshot(host, ICON_FILE_SIZE_MAX, &size, &status) : NULL;
     free(host);
     if (!bytes)
     {
         open32SetError(error ? error : ERROR_FILE_NOT_FOUND);
         return 0;
     }
+    /* An index of -1 asks for the number of icons in the file. */
     PmPointerImage *image = pmPointerImage(bytes, size);
     if (image)
     {
@@ -326,11 +363,12 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     if (!module)
         return 0;
     ULONG found = 0, resource = 0;
-    for (ULONG id = 1; id <= 65535; id++)
+    for (ULONG id = 1; id <= UINT16_MAX; id++)
     {
         ULONG resource_size;
         if (GProcessState.queryResourceSize &&
-            !GProcessState.queryResourceSize(module, 1, id, &resource_size) && resource_size)
+            !GProcessState.queryResourceSize(module, RT_POINTER, id, &resource_size) &&
+            resource_size)
         {
             if (found == index)
                 resource = id;
@@ -344,8 +382,8 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     {
         void *data = NULL;
         ULONG length;
-        if (!GProcessState.queryResourceSize(module, 1, resource, &length) &&
-            !GProcessState.getResource(module, 1, resource, &data))
+        if (!GProcessState.queryResourceSize(module, RT_POINTER, resource, &length) &&
+            !GProcessState.getResource(module, RT_POINTER, resource, &data))
         {
             Open32Icon *icon = calloc(1, sizeof *icon);
             if (icon)

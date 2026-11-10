@@ -45,9 +45,10 @@ BOOL ClipCursor(PVOID rectangle)
     const uint8 *wire = rectangle;
     LONG width = WinQuerySysValue(HWND_DESKTOP, SV_CXSCREEN),
          height = WinQuerySysValue(HWND_DESKTOP, SV_CYSCREEN);
-    LONG left = (LONG)lx_guest_load_u32(wire), top = height - (LONG)lx_guest_load_u32(wire + 4);
-    LONG right = (LONG)lx_guest_load_u32(wire + 8);
-    LONG bottom = height - (LONG)lx_guest_load_u32(wire + 12);
+    LONG left = (LONG)lx_guest_load_u32(wire + WIN32_RECT_LEFT),
+         top = height - (LONG)lx_guest_load_u32(wire + WIN32_RECT_TOP);
+    LONG right = (LONG)lx_guest_load_u32(wire + WIN32_RECT_RIGHT);
+    LONG bottom = height - (LONG)lx_guest_load_u32(wire + WIN32_RECT_BOTTOM);
     RECTL bounds = {left > 0 ? left : 0, bottom > 0 ? bottom : 0,
                     right < width - 1 ? right : width - 1, top < height - 1 ? top : height - 1};
     lx_pm_set_pointer_clip(&bounds);
