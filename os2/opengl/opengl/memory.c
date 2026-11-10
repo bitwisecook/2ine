@@ -2,6 +2,7 @@
 /* OpenGL pointer extents include pixel-store offsets and evaluator strides.
    Temporary aligned snapshots keep host pointers out of retained guest state. */
 #include "os2/opengl/opengl/internal.h"
+#include <limits.h>
 
 uint32_t gl_word(const uint8_t *a, unsigned offset)
 {
@@ -152,7 +153,7 @@ size_t gl_query_count(uint32_t p)
         case GL_MODELVIEW_MATRIX:
         case GL_PROJECTION_MATRIX:
         case GL_TEXTURE_MATRIX:
-            return 16;
+            return GL_MATRIX_ELEMENTS;
         case GL_CURRENT_COLOR:
         case GL_CURRENT_TEXTURE_COORDS:
         case GL_CURRENT_RASTER_COLOR:
@@ -178,9 +179,11 @@ size_t gl_query_count(uint32_t p)
         case GL_MAP2_GRID_SEGMENTS:
             return 2;
         default:
-            /* GL 1.1 has no variable-length general state queries. Reject later
-           extension tokens whose output lengths are not part of this ABI. */
-            return p < 0x3000 || (p >= GL_POLYGON_OFFSET_FACTOR && p <= GL_EDGE_FLAG_ARRAY_STRIDE)
+            /* GL 1.1 has no variable-length general state queries, and every single-value
+               state token lies below GL_CLIP_PLANE0 or in the GL 1.1 range. Reject later
+               extension tokens whose output lengths are not part of this ABI. */
+            return p < GL_CLIP_PLANE0 ||
+                           (p >= GL_POLYGON_OFFSET_FACTOR && p <= GL_EDGE_FLAG_ARRAY_STRIDE)
                        ? 1
                        : SIZE_MAX;
     }
@@ -236,22 +239,30 @@ size_t gl_pixel_bytes(GlContext *c, int32_t width, int32_t height, uint32_t form
         skip_rows < 0 || skip_pixels < 0)
         return SIZE_MAX;
     uint64_t row = (uint64_t)(row_length ? row_length : width) * components * unit;
+    /* GL_BITMAP rows are packed one bit per pixel. */
     if (type == GL_BITMAP)
-        row = (row + 7) / 8;
+        row = (row + CHAR_BIT - 1) / CHAR_BIT;
     row = (row + alignment - 1) & ~(uint64_t)(alignment - 1);
     uint64_t last = ((uint64_t)skip_pixels + width) * components * unit;
     if (type == GL_BITMAP)
-        last = (last + 7) / 8;
+        last = (last + CHAR_BIT - 1) / CHAR_BIT;
     if (row > GL_MAX_TRANSFER || last > GL_MAX_TRANSFER)
         return SIZE_MAX;
     uint64_t bytes = ((uint64_t)skip_rows + height - 1) * row + last;
     return bytes > GL_MAX_TRANSFER ? SIZE_MAX : (size_t)bytes;
 }
 
+/* A 32-bit texture size has at most 32 mipmap levels. */
+enum
+{
+    TEXTURE_MAX_LEVEL = 31
+};
+
 size_t gl_texture_bytes(GlContext *c, uint32_t target, int32_t level, uint32_t format,
                         uint32_t type)
 {
-    if ((target != GL_TEXTURE_1D && target != GL_TEXTURE_2D) || level < 0 || level > 31)
+    if ((target != GL_TEXTURE_1D && target != GL_TEXTURE_2D) || level < 0 ||
+        level > TEXTURE_MAX_LEVEL)
         return SIZE_MAX;
     int32_t width = 0, height = 1;
     c->api->glGetTexLevelParameteriv(target, level, GL_TEXTURE_WIDTH, &width);
@@ -339,8 +350,16 @@ void gl_fix_query(GlContext *c, uint32_t pname, void *output, size_t unit, int f
         value = lx_host_gl_buffer(c->host, pname == GL_READ_BUFFER);
     else
     {
+        enum
+        {
+            ARRAY_QUERY_SIZE,
+            ARRAY_QUERY_TYPE,
+            ARRAY_QUERY_STRIDE,
+            ARRAY_QUERY_FIELDS
+        };
+
         int index = -1, field = -1;
-        static const uint32_t queries[][3] = {
+        static const uint32_t queries[][ARRAY_QUERY_FIELDS] = {
             {GL_VERTEX_ARRAY_SIZE, GL_VERTEX_ARRAY_TYPE, GL_VERTEX_ARRAY_STRIDE},
             {0, GL_NORMAL_ARRAY_TYPE, GL_NORMAL_ARRAY_STRIDE},
             {GL_COLOR_ARRAY_SIZE, GL_COLOR_ARRAY_TYPE, GL_COLOR_ARRAY_STRIDE},
@@ -349,7 +368,7 @@ void gl_fix_query(GlContext *c, uint32_t pname, void *output, size_t unit, int f
              GL_TEXTURE_COORD_ARRAY_STRIDE},
             {0, 0, GL_EDGE_FLAG_ARRAY_STRIDE}};
         for (unsigned i = 0; i < GL_ARRAY_COUNT; i++)
-            for (unsigned n = 0; n < 3; n++)
+            for (unsigned n = 0; n < ARRAY_QUERY_FIELDS; n++)
                 if (queries[i][n] && queries[i][n] == pname)
                 {
                     index = i;
@@ -358,9 +377,11 @@ void gl_fix_query(GlContext *c, uint32_t pname, void *output, size_t unit, int f
         if (index < 0)
             return;
         GlArray *p = &c->arrays[index];
-        value = field == 0 ? (uint32_t)p->size : field == 1 ? p->type : (uint32_t)p->stride;
+        value = field == ARRAY_QUERY_SIZE   ? (uint32_t)p->size
+                : field == ARRAY_QUERY_TYPE ? p->type
+                                            : (uint32_t)p->stride;
     }
-    if (floating && unit == 8)
+    if (floating && unit == sizeof(double))
         *(double *)output = value;
     else if (floating)
         *(float *)output = (float)value;

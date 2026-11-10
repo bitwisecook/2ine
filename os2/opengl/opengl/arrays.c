@@ -3,6 +3,32 @@
    bounded snapshots and removes host pointers before releasing their storage. */
 #include "os2/opengl/opengl/internal.h"
 
+/* Component counts GL 1.1 allows for each client array. */
+enum
+{
+    ARRAY_MAX_COMPONENTS = 4,
+    VERTEX_MIN_COMPONENTS = 2,
+    NORMAL_COMPONENTS = 3,
+    COLOR_MIN_COMPONENTS = 3
+};
+
+/* glInterleavedArrays format rows: record size and per-array component counts, types and
+   byte offsets. Formats without a normal mark it with NO_NORMAL. */
+enum
+{
+    FORMAT_RECORD_SIZE,
+    FORMAT_VERTEX_COMPONENTS,
+    FORMAT_VERTEX_OFFSET,
+    FORMAT_COLOR_COMPONENTS,
+    FORMAT_COLOR_TYPE,
+    FORMAT_COLOR_OFFSET,
+    FORMAT_NORMAL_OFFSET,
+    FORMAT_TEXTURE_COMPONENTS,
+    FORMAT_TEXTURE_OFFSET,
+    FORMAT_FIELDS,
+    NO_NORMAL = -1
+};
+
 static int array_index(uint32_t array)
 {
     switch (array)
@@ -48,15 +74,16 @@ static int array_definition(int index, int size, uint32_t type, int stride)
     switch (index)
     {
         case GL_ARRAY_VERTEX:
-            return numeric && size >= 2 && size <= 4;
+            return numeric && size >= VERTEX_MIN_COMPONENTS && size <= ARRAY_MAX_COMPONENTS;
         case GL_ARRAY_TEXTURE:
-            return numeric && size >= 1 && size <= 4;
+            return numeric && size >= 1 && size <= ARRAY_MAX_COMPONENTS;
         case GL_ARRAY_NORMAL:
-            return (numeric || type == GL_BYTE) && size == 3;
+            return (numeric || type == GL_BYTE) && size == NORMAL_COMPONENTS;
         case GL_ARRAY_INDEX:
             return (numeric || type == GL_UNSIGNED_BYTE) && size == 1;
         case GL_ARRAY_COLOR:
-            return gl_type_size(type) && size >= 3 && size <= 4;
+            return gl_type_size(type) && size >= COLOR_MIN_COMPONENTS &&
+                   size <= ARRAY_MAX_COMPONENTS;
         case GL_ARRAY_EDGE:
             return type == GL_UNSIGNED_BYTE && size == 1;
         default:
@@ -79,7 +106,8 @@ static uint32_t define_array(uint8_t *a, int index, int fixed_size, uint32_t fix
     int stride = (int32_t)gl_word(a, offset);
     if (!array_definition(index, size, type, stride))
     {
-        gl_error(stride < 0 || size < 1 || size > 4 ? GL_INVALID_VALUE : GL_INVALID_ENUM);
+        gl_error(stride < 0 || size < 1 || size > ARRAY_MAX_COMPONENTS ? GL_INVALID_VALUE
+                                                                       : GL_INVALID_ENUM);
         return 0;
     }
     GlArray *array = &c->arrays[index];
@@ -94,7 +122,7 @@ uint32_t call_glVertexPointer(uint8_t *a)
 
 uint32_t call_glNormalPointer(uint8_t *a)
 {
-    return define_array(a, GL_ARRAY_NORMAL, 3, 0);
+    return define_array(a, GL_ARRAY_NORMAL, NORMAL_COMPONENTS, 0);
 }
 
 uint32_t call_glColorPointer(uint8_t *a)
@@ -288,7 +316,7 @@ uint32_t call_glPushClientAttrib(uint8_t *a)
     if (mask != GL_CLIENT_ALL_ATTRIB_BITS &&
         (mask & ~(GL_CLIENT_PIXEL_STORE_BIT | GL_CLIENT_VERTEX_ARRAY_BIT)))
         gl_error(GL_INVALID_VALUE);
-    else if (c->array_depth == 16)
+    else if (c->array_depth == GL_CLIENT_STACK_ENTRIES)
         gl_error(GL_STACK_OVERFLOW);
     else
     {
@@ -323,21 +351,22 @@ uint32_t call_glInterleavedArrays(uint8_t *a)
     GlContext *c = gl_current();
     if (!outside(c))
         return 0;
-    /* Byte offsets and total record sizes are defined by GL 1.1's formats. */
-    static const int formats[][9] = {{8, 2, 0, 0, 0, 0, -1, 0, 0},
-                                     {12, 3, 0, 0, 0, 0, -1, 0, 0},
-                                     {12, 2, 4, 4, GL_UNSIGNED_BYTE, 0, -1, 0, 0},
-                                     {16, 3, 4, 4, GL_UNSIGNED_BYTE, 0, -1, 0, 0},
-                                     {24, 3, 12, 3, GL_FLOAT, 0, -1, 0, 0},
-                                     {24, 3, 12, 0, 0, 0, 0, 0, 0},
-                                     {40, 3, 28, 4, GL_FLOAT, 0, 16, 0, 0},
-                                     {20, 3, 8, 0, 0, 0, -1, 2, 0},
-                                     {32, 4, 16, 0, 0, 0, -1, 4, 0},
-                                     {24, 3, 12, 4, GL_UNSIGNED_BYTE, 8, -1, 2, 0},
-                                     {32, 3, 20, 3, GL_FLOAT, 8, -1, 2, 0},
-                                     {32, 3, 20, 0, 0, 0, 8, 2, 0},
-                                     {48, 3, 36, 4, GL_FLOAT, 8, 24, 2, 0},
-                                     {60, 4, 44, 4, GL_FLOAT, 16, 32, 4, 0}};
+    /* GL 1.1's formats, in token order from GL_V2F. */
+    static const int formats[][FORMAT_FIELDS] = {
+        {8, 2, 0, 0, 0, 0, NO_NORMAL, 0, 0},
+        {12, 3, 0, 0, 0, 0, NO_NORMAL, 0, 0},
+        {12, 2, 4, 4, GL_UNSIGNED_BYTE, 0, NO_NORMAL, 0, 0},
+        {16, 3, 4, 4, GL_UNSIGNED_BYTE, 0, NO_NORMAL, 0, 0},
+        {24, 3, 12, 3, GL_FLOAT, 0, NO_NORMAL, 0, 0},
+        {24, 3, 12, 0, 0, 0, 0, 0, 0},
+        {40, 3, 28, 4, GL_FLOAT, 0, 16, 0, 0},
+        {20, 3, 8, 0, 0, 0, NO_NORMAL, 2, 0},
+        {32, 4, 16, 0, 0, 0, NO_NORMAL, 4, 0},
+        {24, 3, 12, 4, GL_UNSIGNED_BYTE, 8, NO_NORMAL, 2, 0},
+        {32, 3, 20, 3, GL_FLOAT, 8, NO_NORMAL, 2, 0},
+        {32, 3, 20, 0, 0, 0, 8, 2, 0},
+        {48, 3, 36, 4, GL_FLOAT, 8, 24, 2, 0},
+        {60, 4, 44, 4, GL_FLOAT, 16, 32, 4, 0}};
     uint32_t format = gl_word(a, 0), address = gl_word(a, 8);
     int32_t stride = (int32_t)gl_word(a, 4);
     if (format < GL_V2F || format > GL_T4F_C4F_N3F_V4F || stride < 0)
@@ -346,18 +375,24 @@ uint32_t call_glInterleavedArrays(uint8_t *a)
         return 0;
     }
     const int *f = formats[format - GL_V2F];
-    if (address > UINT32_MAX - (uint32_t)f[0])
+    if (address > UINT32_MAX - (uint32_t)f[FORMAT_RECORD_SIZE])
     {
         gl_error(GL_INVALID_VALUE);
         return 0;
     }
     if (!stride)
-        stride = f[0];
-    c->arrays[GL_ARRAY_VERTEX] = (GlArray){address + f[2], GL_FLOAT, f[1], stride, 1};
-    c->arrays[GL_ARRAY_COLOR] = (GlArray){address + f[5], f[4], f[3], stride, !!f[3]};
+        stride = f[FORMAT_RECORD_SIZE];
+    c->arrays[GL_ARRAY_VERTEX] = (GlArray){address + f[FORMAT_VERTEX_OFFSET], GL_FLOAT,
+                                           f[FORMAT_VERTEX_COMPONENTS], stride, 1};
+    c->arrays[GL_ARRAY_COLOR] =
+        (GlArray){address + f[FORMAT_COLOR_OFFSET], f[FORMAT_COLOR_TYPE],
+                  f[FORMAT_COLOR_COMPONENTS], stride, !!f[FORMAT_COLOR_COMPONENTS]};
     c->arrays[GL_ARRAY_NORMAL] =
-        (GlArray){address + (f[6] < 0 ? 0 : f[6]), GL_FLOAT, 3, stride, f[6] >= 0};
-    c->arrays[GL_ARRAY_TEXTURE] = (GlArray){address + f[8], GL_FLOAT, f[7], stride, !!f[7]};
+        (GlArray){address + (f[FORMAT_NORMAL_OFFSET] < 0 ? 0 : f[FORMAT_NORMAL_OFFSET]), GL_FLOAT,
+                  NORMAL_COMPONENTS, stride, f[FORMAT_NORMAL_OFFSET] >= 0};
+    c->arrays[GL_ARRAY_TEXTURE] =
+        (GlArray){address + f[FORMAT_TEXTURE_OFFSET], GL_FLOAT, f[FORMAT_TEXTURE_COMPONENTS],
+                  stride, !!f[FORMAT_TEXTURE_COMPONENTS]};
     c->arrays[GL_ARRAY_INDEX].enabled = c->arrays[GL_ARRAY_EDGE].enabled = 0;
     for (unsigned i = 0; i < GL_ARRAY_COUNT; i++)
     {
@@ -528,10 +563,11 @@ uint32_t call_glArrayElement(uint8_t *a)
         size_t unit = gl_type_size(p->type), bytes = unit * p->size;
         uint64_t address = (uint64_t)p->address + (uint64_t)index * (p->stride ? p->stride : bytes);
 
+        /* Large enough for the widest element: four doubles. */
         union
         {
             double alignment;
-            uint8_t bytes[32];
+            uint8_t bytes[ARRAY_MAX_COMPONENTS * sizeof(double)];
         } data;
 
         if (address > UINT32_MAX || !bytes || bytes > sizeof data.bytes ||

@@ -12,6 +12,14 @@
 
 #define GL_MAX_TRANSFER (64u * 1024u * 1024u)
 
+enum
+{
+    /* A 4x4 matrix, the largest fixed-size state query. */
+    GL_MATRIX_ELEMENTS = 16,
+    /* GL 1.1 requires at least 16 client attribute stack entries. */
+    GL_CLIENT_STACK_ENTRIES = 16
+};
+
 typedef struct GlMemory
 {
     LxGuestBorrow borrow;
@@ -61,7 +69,7 @@ typedef struct GlContext
     const LxHostGlApi *api;
     LxGuestMapping *strings;
     GlArray arrays[GL_ARRAY_COUNT];
-    GlArrayFrame array_stack[16];
+    GlArrayFrame array_stack[GL_CLIENT_STACK_ENTRIES];
     unsigned array_depth;
     void *selection, *feedback;
     uint32_t selection_address, feedback_address;

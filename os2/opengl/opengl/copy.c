@@ -2,6 +2,14 @@
 /* PGL copies server attributes, retaining independent client state and matrices. */
 #include "os2/opengl/opengl/internal.h"
 
+enum
+{
+    /* Bounds host-reported light and clip-plane counts so snapshots fit on the stack. */
+    HOST_PLANE_LIMIT = 256,
+    /* A 32x32 one-bit polygon stipple. */
+    POLYGON_STIPPLE_BYTES = 32 * 32 / 8
+};
+
 typedef struct GlCopy
 {
     GlContext *source, *destination;
@@ -40,7 +48,8 @@ static void copy_current(GlCopy *copy)
     const LxHostGlApi *api = bind_copy(copy, 1);
     int lighting = api->glIsEnabled(GL_LIGHTING), material = api->glIsEnabled(GL_COLOR_MATERIAL);
     int32_t mode, viewport[4], count;
-    double model[16], projection[16], texmatrix[16], depth[2];
+    double model[GL_MATRIX_ELEMENTS], projection[GL_MATRIX_ELEMENTS], texmatrix[GL_MATRIX_ELEMENTS],
+        depth[2];
     api->glGetIntegerv(GL_MATRIX_MODE, &mode);
     api->glGetIntegerv(GL_VIEWPORT, viewport);
     api->glGetDoublev(GL_DEPTH_RANGE, depth);
@@ -48,12 +57,12 @@ static void copy_current(GlCopy *copy)
     api->glGetDoublev(GL_PROJECTION_MATRIX, projection);
     api->glGetDoublev(GL_TEXTURE_MATRIX, texmatrix);
     api->glGetIntegerv(GL_MAX_CLIP_PLANES, &count);
-    if (count < 0 || count > 256)
+    if (count < 0 || count > HOST_PLANE_LIMIT)
     {
         copy->failed = 1;
         return;
     }
-    uint8_t enabled[256];
+    uint8_t enabled[HOST_PLANE_LIMIT];
     for (int n = 0; n < count; n++)
     {
         enabled[n] = api->glIsEnabled(GL_CLIP_PLANE0 + n);
@@ -75,7 +84,7 @@ static void copy_current(GlCopy *copy)
     {
         /* Generate the saved clip W, depth and eye distance independently.
            A zero-size bitmap moves the valid raster XY outside the viewport too. */
-        double transform[16] = {0};
+        double transform[GL_MATRIX_ELEMENTS] = {0};
         transform[12] = -position[3];
         transform[13] = -position[3];
         transform[14] = (position[2] * 2 - 1) * position[3];
@@ -86,6 +95,7 @@ static void copy_current(GlCopy *copy)
     }
     else
     {
+        /* x = 2 lies outside the clip volume, so the copied position is invalid too. */
         api->glLoadIdentity();
         api->glRasterPos4d(2, 0, 0, 1);
     }
@@ -126,8 +136,8 @@ static void copy_current(GlCopy *copy)
 
 static void copy_server(GlCopy *copy, uint32_t mask)
 {
-    double v[16] = {0};
-    int32_t i[16] = {0};
+    double v[GL_MATRIX_ELEMENTS] = {0};
+    int32_t i[GL_MATRIX_ELEMENTS] = {0};
 #define S() bind_copy(copy, 0)
 #define D() bind_copy(copy, 1)
 #define GET(p) S()->glGetDoublev(p, v)
@@ -208,7 +218,7 @@ static void copy_server(GlCopy *copy, uint32_t mask)
     }
     if (mask & GL_POLYGON_STIPPLE_BIT)
     {
-        uint8_t stipple[128];
+        uint8_t stipple[POLYGON_STIPPLE_BYTES];
         const LxHostGlApi *api = S();
         api->glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
         api->glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -303,9 +313,9 @@ static void copy_server(GlCopy *copy, uint32_t mask)
         D()->glFogfv(GL_FOG_COLOR, color);
     }
     INT(GL_MAX_LIGHTS);
-    unsigned lights = i[0] > 0 && i[0] <= 256 ? i[0] : 0;
+    unsigned lights = i[0] > 0 && i[0] <= HOST_PLANE_LIMIT ? i[0] : 0;
     INT(GL_MAX_CLIP_PLANES);
-    unsigned planes = i[0] > 0 && i[0] <= 256 ? i[0] : 0;
+    unsigned planes = i[0] > 0 && i[0] <= HOST_PLANE_LIMIT ? i[0] : 0;
     if (mask & (GL_LIGHTING_BIT | GL_ENABLE_BIT))
         for (unsigned n = 0; n < lights; n++)
             ENABLE(GL_LIGHT0 + n);
@@ -315,7 +325,7 @@ static void copy_server(GlCopy *copy, uint32_t mask)
     if (mask & GL_LIGHTING_BIT)
     {
         const uint32_t model[] = {GL_LIGHT_MODEL_LOCAL_VIEWER, GL_LIGHT_MODEL_TWO_SIDE};
-        for (unsigned n = 0; n < 2; n++)
+        for (unsigned n = 0; n < sizeof model / sizeof model[0]; n++)
         {
             INT(model[n]);
             D()->glLightModeli(model[n], i[0]);
@@ -331,7 +341,7 @@ static void copy_server(GlCopy *copy, uint32_t mask)
         const LxHostGlApi *api = D();
         int32_t matrix_mode;
         api->glGetIntegerv(GL_MATRIX_MODE, &matrix_mode);
-        double modelview[16];
+        double modelview[GL_MATRIX_ELEMENTS];
         api->glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
         api->glMatrixMode(GL_MODELVIEW);
         api->glLoadIdentity();
@@ -373,7 +383,7 @@ static void copy_server(GlCopy *copy, uint32_t mask)
         const LxHostGlApi *api = D();
         int32_t mode;
         api->glGetIntegerv(GL_MATRIX_MODE, &mode);
-        double modelview[16];
+        double modelview[GL_MATRIX_ELEMENTS];
         api->glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
         api->glMatrixMode(GL_MODELVIEW);
         api->glLoadIdentity();
@@ -409,7 +419,7 @@ static void copy_server(GlCopy *copy, uint32_t mask)
         for (uint32_t token = GL_PIXEL_MAP_I_TO_I; token <= GL_PIXEL_MAP_A_TO_A; token++)
         {
             INT(token + GL_PIXEL_MAP_I_TO_I_SIZE - GL_PIXEL_MAP_I_TO_I);
-            if (i[0] < 1 || i[0] > (int32_t)(GL_MAX_TRANSFER / 4))
+            if (i[0] < 1 || i[0] > (int32_t)(GL_MAX_TRANSFER / sizeof(float)))
             {
                 copy->failed = 1;
                 break;
@@ -498,7 +508,7 @@ static void copy_server(GlCopy *copy, uint32_t mask)
         const LxHostGlApi *api = D();
         int32_t mode;
         api->glGetIntegerv(GL_MATRIX_MODE, &mode);
-        double modelview[16];
+        double modelview[GL_MATRIX_ELEMENTS];
         api->glGetDoublev(GL_MODELVIEW_MATRIX, modelview);
         api->glMatrixMode(GL_MODELVIEW);
         api->glLoadIdentity();
