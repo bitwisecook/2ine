@@ -110,7 +110,7 @@ audio, printing, TLS and the rest. `host/core/<function>/` holds the
 platform-free half of each function, and every adapter mirrors that layout as
 `host/<adapter>/<function>/`, so the implementations of one function sit at the
 same relative path in each adapter. The functions are `system`, `process`,
-`thread`, `ipc`, `fs`, `net`, `fatal`, `window`, `input`, `desktop`, `audio`,
+`thread`, `ipc`, `fs`, `net`, `fatal`, `dialog`, `window`, `input`, `desktop`, `audio`,
 `clipboard`, `print`, `terminal`, `font` and `opengl`.
 
 | Adapter | Supplies |
@@ -119,7 +119,7 @@ same relative path in each adapter. The functions are `system`, `process`,
 | `posix/` | POSIX services shared by Linux and macOS |
 | `win/` | Partial Windows services (no Windows application build) |
 | `sdl/`, `openssl/`, `freetype/`, `curses/`, `mesa/` | Library adapters: windows, input, audio and clipboard; TLS; font rasterising; terminals; GL contexts |
-| `none/` | Stand-ins where a host has no desktop session, window chrome, native clipboard or process supervisor |
+| `none/` | Stand-ins where a host has no desktop session, window chrome, native clipboard, process supervisor or dialog helper |
 
 An adapter includes the public headers, `host/core/` and itself; Linux and
 macOS also include `posix/`. Only the OS adapters branch on the operating
@@ -182,7 +182,7 @@ checked guest mappings live in `emulator/execution/core/`;
 | `os2/config/` | Codecs for OS/2's configuration files: INI profiles (native and 2INEPRF1), CONFIG.SYS statements and search lists, Workplace Shell object records and setup strings; shared by PMSHAPI, PMWP and the ball |
 | `apps/lx_loader/` | `lx_loader`, the program that runs an OS/2 executable: fatal-dialog mode, installer operation supervisor and usage, then `lx_loader_run` |
 | `apps/cli/` | `2ine-ball`, the command-line client of the JSON facade |
-| `apps/gnome/` | The GNOME manager: the `twoine_gnome` package, `data/` (UI, icons, desktop and AppStream files), the `2ine-ball` launcher, `install.py` and `package.py` (deb/rpm/snap staging). See [gnome-app.md](gnome-app.md) |
+| `apps/gnome/` | The GNOME manager, a Rust GTK 4/libadwaita crate: `src/` (with `bin/dialog.rs`, the `2ine-dialog` helper the Linux runtime uses for print and failure dialogs), `tests/` (the UI suite), `data/` (Blueprint UI, icons, desktop and AppStream files), `flatpak/` (the Flatpak manifest), `install.py` and `package.py` (deb/rpm/snap staging). Cargo builds into `build/gnome` (`.cargo/config.toml`). See [gnome-app.md](gnome-app.md) |
 | `apps/macos/` | The macOS manager: Swift package (`Sources/BallCore`, `Sources/TwoineBall/{Views,Browsers,Components,Settings}`, symlinked C targets), `Tests/`, `Xcode/` and `Resources/` (icons, entitlements). See [macos-app.md](macos-app.md) |
 | `apps/common/` | Assets shared by the frontends (the ball document icon) |
 | `third_party/` | Vendored libraries with their licences: cJSON, SHA-256, FatFs, HWZIP, Deark's PACK decoders and the pinned libarchive API headers |

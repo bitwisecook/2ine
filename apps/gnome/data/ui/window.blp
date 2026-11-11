@@ -1,0 +1,300 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu main_menu {
+  section {
+    item (_("New Ball…"), "win.new")
+    item (_("Open Ball…"), "win.open")
+    item (_("Import Ball from ZIP…"), "win.import")
+  }
+
+  section {
+    submenu {
+      label: _("Ball");
+
+      section {
+        item (_("Rename…"), "win.rename-ball")
+        item (_("Move to Trash…"), "win.trash-ball")
+
+        item {
+          label: _("Remove Missing Ball from List");
+          action: "win.forget-ball";
+          hidden-when: "action-disabled";
+        }
+      }
+
+      section {
+        item (_("Export as ZIP…"), "win.export")
+        item (_("Open Folder"), "win.reveal")
+        item (_("Copy Path"), "win.copy")
+      }
+    }
+
+    submenu {
+      label: _("Runtime and OS/2 Files");
+
+      section {
+        item (_("Choose Runtime…"), "win.runtime")
+        item (_("Install OS/2 Files…"), "win.os2-files")
+        item (_("Rescan Dependencies"), "win.restore-libraries")
+      }
+    }
+
+    submenu {
+      label: _("Drives");
+
+      section {
+        item (_("Add Drive…"), "win.add-drive")
+        item (_("Create Disk Image…"), "win.create-disk")
+        item (_("Create Floppy Image…"), "win.create-floppy")
+      }
+    }
+  }
+
+  section {
+    item (_("Refresh"), "win.refresh")
+    item (_("Undo Ball Change"), "win.undo")
+    item (_("Redo Ball Change"), "win.redo")
+
+    item {
+      label: _("Stop Operation");
+      action: "win.stop";
+      hidden-when: "action-disabled";
+    }
+
+    item {
+      label: _("Force Stop Operation");
+      action: "win.force-stop";
+      hidden-when: "action-disabled";
+    }
+  }
+
+  section {
+    item (_("Preferences"), "win.preferences")
+    item (_("Keyboard Shortcuts"), "win.shortcuts")
+    item (_("Help"), "win.help")
+    item (_("About 2ine"), "win.about")
+  }
+}
+
+template $TwoineBallWindow: Adw.ApplicationWindow {
+  title: "2ine";
+  default-width: 1080;
+  default-height: 760;
+  width-request: 360;
+  height-request: 294;
+
+  Adw.Breakpoint {
+    condition ("max-width: 1400sp")
+
+    setters {
+      title_stack.visible-child-name: "title";
+      switcher_bar.reveal: true;
+    }
+  }
+
+  Adw.Breakpoint {
+    condition ("max-width: 750sp")
+
+    setters {
+      split.collapsed: true;
+      sidebar_menu.visible: true;
+      title_stack.visible-child-name: "title";
+      switcher_bar.reveal: true;
+    }
+  }
+
+  content: Adw.ToastOverlay overlay {
+    child: Adw.NavigationSplitView split {
+      min-sidebar-width: 220;
+      max-sidebar-width: 290;
+
+      sidebar: Adw.NavigationPage {
+        title: "2ine";
+
+        child: Adw.ToolbarView sidebar {
+          [top]
+          Adw.HeaderBar {
+            show-end-title-buttons: false;
+
+            [start]
+            Button {
+              icon-name: "list-add-symbolic";
+              tooltip-text: _("New Ball (Ctrl+N)");
+              action-name: "win.new";
+
+              accessibility {
+                label: _("New ball");
+              }
+            }
+
+            [end]
+            MenuButton sidebar_menu {
+              visible: false;
+              icon-name: "open-menu-symbolic";
+              tooltip-text: _("Main Menu");
+              primary: true;
+              menu-model: main_menu;
+
+              accessibility {
+                label: _("Main menu");
+              }
+            }
+          }
+
+          content: ScrolledWindow {
+            hscrollbar-policy: never;
+
+            child: ListBox ball_list {
+              selection-mode: single;
+
+              styles [
+                "navigation-sidebar",
+              ]
+
+              accessibility {
+                label: _("Balls");
+              }
+            };
+          };
+        };
+      };
+
+      content: Adw.NavigationPage detail {
+        title: "2ine";
+
+        child: Adw.ToolbarView {
+          [top]
+          Adw.HeaderBar header {
+            title-widget: Stack title_stack {
+              visible: false;
+              hhomogeneous: false;
+
+              StackPage {
+                name: "switcher";
+
+                child: Adw.ViewSwitcher view_switcher {
+                  policy: wide;
+
+                  accessibility {
+                    label: _("Ball sections");
+                  }
+                };
+              }
+
+              StackPage {
+                name: "title";
+                child: Adw.WindowTitle window_title {
+                  title: "2ine";
+                };
+              }
+            };
+
+            [start]
+            MenuButton media_menu {
+              visible: false;
+              icon-name: "media-optical-symbolic";
+              tooltip-text: _("Removable Media");
+
+              accessibility {
+                label: _("Removable media");
+              }
+            }
+
+            [end]
+            MenuButton detail_menu {
+              icon-name: "open-menu-symbolic";
+              tooltip-text: _("Main Menu");
+              primary: true;
+              menu-model: main_menu;
+
+              accessibility {
+                label: _("Main menu");
+              }
+            }
+
+            [end]
+            Adw.Spinner spinner {
+              visible: false;
+
+              accessibility {
+                label: _("Working");
+              }
+            }
+          }
+
+          [top]
+          Adw.Banner banner {
+            revealed: false;
+            use-markup: false;
+          }
+
+          [top]
+          Adw.Banner pending_banner {
+            revealed: false;
+            use-markup: false;
+          }
+
+          [bottom]
+          Adw.ViewSwitcherBar switcher_bar {
+            accessibility {
+              label: _("Ball sections");
+            }
+          }
+
+          content: Stack content {
+            vexpand: true;
+            transition-type: crossfade;
+
+            StackPage {
+              name: "empty";
+
+              child: Adw.StatusPage empty_page {
+                icon-name: "io.github.bitwisecook.Twoine.Ball";
+                title: _("Your OS/2 applications, at home");
+                description: _("Keep each application's drives, settings and installed files together in a ball of 2ine.");
+
+                child: Button {
+                  label: _("Create a Ball");
+                  action-name: "win.new";
+                  halign: center;
+
+                  styles [
+                    "suggested-action",
+                    "pill",
+                  ]
+                };
+              };
+            }
+
+            StackPage {
+              name: "unavailable";
+
+              child: Adw.StatusPage unavailable_page {
+                icon-name: "folder-missing-symbolic";
+
+                child: Button forget_button {
+                  label: _("Remove Missing Ball from List");
+                  action-name: "win.forget-ball";
+                  halign: center;
+
+                  styles [
+                    "pill",
+                  ]
+                };
+              };
+            }
+
+            StackPage {
+              name: "ball";
+
+              child: Adw.ViewStack stack {
+                vexpand: true;
+              };
+            }
+          };
+        };
+      };
+    };
+  };
+}

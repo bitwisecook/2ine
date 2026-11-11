@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Stage the native GNOME app and portable runtime; build Debian and RPM packages."""
+"""Stage the Rust GNOME app and portable runtime; build Debian and RPM packages."""
 
 import argparse
 import hashlib
@@ -45,7 +45,7 @@ def elf(path):
         return stream.read(len(ELF_MAGIC)) == ELF_MAGIC
 
 
-def stage(build, destination):
+def stage(build, destination, frontend):
     """Copy only declared runtime assets, close private ELF dependencies and relocate them."""
     if (destination / "usr/lib/2ine-ball").exists() or (destination / "usr/bin/2ine-ball").exists():
         raise ValueError(
@@ -53,60 +53,43 @@ def stage(build, destination):
         )
     if not (build / "lx_loader").is_file() or not (build / "libtwoine_ball.so").is_file():
         raise ValueError("Build the full portable runtime and shared ball engine first")
+    if not frontend.is_file() or not frontend.with_name("2ine-dialog").is_file():
+        raise ValueError(
+            "Build the GNOME frontend first: cargo build --release --manifest-path apps/gnome/Cargo.toml"
+        )
     app = destination / "usr/lib/2ine-ball"
     runtime = app / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)
     copy(ROOT / "VERSION", app / "VERSION")
-    for name in (
-        "__init__.py",
-        "__main__.py",
-        "app.py",
-        "navigation.py",
-        "applications.py",
-        "application_order.py",
-        "views.py",
-        "files.py",
-        "browser.py",
-        "browser_model.py",
-        "media.py",
-        "media_preferences.py",
-        "components.py",
-        "component_jobs.py",
-        "audio.py",
-        "ball_icons.py",
-        "ball_lifecycle.py",
-        "sessions.py",
-        "program_choice.py",
-        "lazy_folders.py",
-        "navigation_state.py",
-        "configuration.py",
-    ):
-        copy(GNOME / "twoine_gnome" / name, app / "twoine_gnome" / name)
-    # The frontend reaches the shared engine through the tools.ball adapter.
-    for name in ("tools/__init__.py", "tools/ball/__init__.py", "tools/ball/engine.py"):
-        copy(ROOT / name, app / name)
-    for name in ("window.ui", APP_ID + ".svg", APP_ID + "-symbolic.svg"):
-        copy(GNOME / "data" / name, app / "data" / name)
     for directory in ("fonts", "soundfonts"):
         shutil.copytree(build / directory, runtime / directory)
+    # The Rust frontend links the C ball engine statically and locates the
+    # runtime at ../lib/2ine-ball/runtime relative to itself.
     launcher = destination / "usr/bin/2ine-ball"
-    copy(ROOT / "apps/gnome/2ine-ball", launcher)
+    copy(frontend, launcher)
     launcher.chmod(0o755)
+    run(["strip", "--strip-unneeded", launcher])
+    # The runtime finds its native dialog helper beside lx_loader.
+    helper = runtime / "2ine-dialog"
+    copy(frontend.with_name("2ine-dialog"), helper)
+    helper.chmod(0o755)
+    run(["strip", "--strip-unneeded", helper])
+    data = GNOME / "data"
     copy(
-        GNOME / "data" / (APP_ID + ".desktop"),
+        data / (APP_ID + ".desktop"),
         destination / "usr/share/applications" / (APP_ID + ".desktop"),
     )
     copy(
-        GNOME / "data" / (APP_ID + ".metainfo.xml"),
+        data / (APP_ID + ".metainfo.xml"),
         destination / "usr/share/metainfo" / (APP_ID + ".metainfo.xml"),
     )
     copy(
-        GNOME / "data" / (APP_ID + ".mime.xml"),
+        data / (APP_ID + ".mime.xml"),
         destination / "usr/share/mime/packages" / (APP_ID + ".xml"),
     )
     for suffix, size in ((".svg", "scalable"), ("-symbolic.svg", "symbolic")):
         copy(
-            GNOME / "data" / (APP_ID + suffix),
+            data / "icons" / (APP_ID + suffix),
             destination / f"usr/share/icons/hicolor/{size}/apps" / (APP_ID + suffix),
         )
     copy(
@@ -210,7 +193,10 @@ def stage(build, destination):
 
 def libc_floor(stage_root):
     versions = []
-    for binary in (stage_root / "usr/lib/2ine-ball/runtime").iterdir():
+    for binary in [
+        stage_root / "usr/bin/2ine-ball",
+        *(stage_root / "usr/lib/2ine-ball/runtime").iterdir(),
+    ]:
         if binary.is_file() and elf(binary):
             symbols = run(["objdump", "-T", binary], capture_output=True, text=True).stdout
             versions.extend(
@@ -235,7 +221,7 @@ Maintainer: 2ine Contributors <noreply@github.com>
 Provides: 2ine-balls (= {version})
 Conflicts: 2ine-balls
 Replaces: 2ine-balls
-Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libstdc++6, libgcc-s1, libgl1, libegl1, libgles2, zenity, cups-client
+Depends: libgtk-4-1 (>= 4.18), libadwaita-1-0 (>= 1.9), libarchive13t64 | libarchive13, zlib1g, libc6 (>= {libc_floor(stage_root)}), libstdc++6, libgcc-s1, libgl1, libegl1, libgles2, cups-client
 Homepage: https://github.com/bitwisecook/2ine
 Description: Native GNOME manager for OS/2 applications
  A persistent ball of 2ine with private drives, settings and application state.
@@ -268,7 +254,7 @@ Release: 1
 Summary: Native GNOME manager for OS/2 applications
 License: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND Unlicense AND bzip2-1.0.6
 URL: https://github.com/bitwisecook/2ine
-Requires: python3 >= 3.11, python3-gobject, gtk4 >= 4.18, libadwaita >= 1.9, mesa-libGL, mesa-libEGL, libglvnd-gles, zenity, cups-client
+Requires: gtk4 >= 4.18, libadwaita >= 1.9, libarchive, zlib, mesa-libGL, mesa-libEGL, libglvnd-gles, cups-client
 Recommends: mesa-dri-drivers
 Provides: 2ine-balls = %{{version}}-%{{release}}
 Obsoletes: 2ine-balls < %{{version}}-%{{release}}
@@ -301,7 +287,13 @@ cp -a {shlex.quote(str(stage_root / "usr"))} %{{buildroot}}/
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--build", type=Path, required=True)
+    parser.add_argument("--build", type=Path, required=True, help="portable runtime build")
+    parser.add_argument(
+        "--frontend",
+        type=Path,
+        default=ROOT / "build/gnome/release/2ine-ball",
+        help="release build of the Rust GNOME frontend",
+    )
     parser.add_argument("--output", type=Path, default=ROOT / "build/gnome/packages")
     parser.add_argument("--stage", type=Path, help="stage only, e.g. for Snapcraft")
     parser.add_argument("--version", default=(ROOT / "VERSION").read_text().strip())
@@ -312,7 +304,9 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     stage_root = stage(
-        args.build.resolve(), args.stage.resolve() if args.stage else output / "stage"
+        args.build.resolve(),
+        args.stage.resolve() if args.stage else output / "stage",
+        args.frontend.resolve(),
     )
     (stage_root / "usr/lib/2ine-ball/VERSION").write_text(args.version + "\n")
     if args.stage:

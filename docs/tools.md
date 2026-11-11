@@ -10,7 +10,7 @@ Python 3.11+. No runtime dependencies outside the standard library.
 
 | Directory | Contents |
 |---|---|
-| `tools/codegen/` | `lxapigen.py`, `gen_opengl.py`, `gen_unithunk.py`, `project_sources.py`, `cvtasm.py`; `data/opengl.json`, `data/project-sources.json` |
+| `tools/codegen/` | `lxapigen.py`, `gen_opengl.py`, `gen_unithunk.py`, `project_sources.py`, `rust_licenses.py` (the notices of the crates linked into the GNOME manager, `docs/licenses/rust-crates.txt`), `cvtasm.py`; `data/opengl.json`, `data/project-sources.json` |
 | `tools/binary/` | `lx_dump.c` (built as `lx_dump`), `os2binary.py`, `os2imports.py`, `unimplemented.py`, `lotus_imports.py`, `extract_warp_fonts.py`; `data/os2imports.json` |
 | `tools/ball/` | `engine.py`, the Python adapter for the shared C ball engine, and `desktop.py`, its JSON stdin/stdout adapter |
 | `tools/ports/` | `build_doom.py`, `build_glquake.py`, `benchmark_games.py` for the sources in `ports/` |

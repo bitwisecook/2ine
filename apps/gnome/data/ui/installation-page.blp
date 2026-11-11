@@ -1,0 +1,114 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineInstallationPage: Adw.Bin {
+  child: ScrolledWindow {
+    hscrollbar-policy: never;
+
+    child: Adw.Clamp {
+      maximum-size: 780;
+
+      child: Box {
+        orientation: vertical;
+        spacing: 18;
+        margin-top: 18;
+        margin-bottom: 18;
+        margin-start: 18;
+        margin-end: 18;
+
+        Label {
+          label: _("Application Installation");
+          xalign: 0;
+          wrap: true;
+
+          styles [
+            "title-1",
+          ]
+        }
+
+        Label {
+          label: _("Choose an application installer from a drive, folder or image. Installed application launchers remain in Applications.");
+          xalign: 0;
+          wrap: true;
+        }
+
+        Adw.PreferencesGroup pending_group {
+          title: _("Waiting for OS/2 Support");
+          visible: false;
+
+          Adw.WrapBox {
+            child-spacing: 6;
+            line-spacing: 6;
+
+            Button components_button {
+              label: _("CMD and REXX Support…");
+              clicked => $on_components() swapped;
+            }
+
+            Button check_button {
+              label: _("Check Again");
+              clicked => $on_check() swapped;
+            }
+
+            Button continue_button {
+              label: _("Continue");
+              clicked => $on_continue() swapped;
+
+              styles [
+                "suggested-action",
+              ]
+            }
+
+            Button cancel_button {
+              label: _("Cancel Pending Launch");
+              clicked => $on_cancel() swapped;
+            }
+          }
+        }
+
+        Adw.Bin advice_slot {}
+
+        Adw.PreferencesGroup {
+          Adw.ActionRow {
+            title: _("Choose Application Installer…");
+            subtitle: _("Browse the ball's drives and attached media");
+            activatable: true;
+            use-markup: false;
+            activated => $on_choose_installer() swapped;
+
+            [suffix]
+            Image {
+              icon-name: "go-next-symbolic";
+            }
+          }
+
+          Adw.ActionRow {
+            title: _("Manage Installation Media…");
+            subtitle: _("Attach a CD image or folder before starting the installer");
+            activatable: true;
+            use-markup: false;
+            activated => $on_manage_media() swapped;
+
+            [suffix]
+            Image {
+              icon-name: "go-next-symbolic";
+            }
+          }
+
+          Adw.ActionRow {
+            title: _("Installed Applications");
+            subtitle: _("Launch and manage installed application shortcuts");
+            activatable: true;
+            use-markup: false;
+            activated => $on_applications() swapped;
+
+            [suffix]
+            Image {
+              icon-name: "go-next-symbolic";
+            }
+          }
+        }
+      };
+    };
+  };
+}

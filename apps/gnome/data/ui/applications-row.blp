@@ -1,0 +1,58 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineApplicationRow: Adw.ActionRow {
+  activatable: true;
+  use-markup: false;
+  subtitle-lines: 2;
+
+  [prefix]
+  Image icon {
+    icon-name: "application-x-executable-symbolic";
+    pixel-size: 40;
+  }
+
+  [suffix]
+  Button play_button {
+    icon-name: "media-playback-start-symbolic";
+    action-name: "win.launch-application";
+    valign: center;
+
+    styles [
+      "flat",
+    ]
+  }
+
+  [suffix]
+  Button sessions_button {
+    valign: center;
+    visible: false;
+
+    styles [
+      "flat",
+    ]
+  }
+
+  [suffix]
+  Button remove_button {
+    icon-name: "list-remove-symbolic";
+    tooltip-text: _("Remove Launcher");
+    action-name: "win.remove-application";
+    valign: center;
+
+    styles [
+      "flat",
+    ]
+  }
+
+  [suffix]
+  MenuButton more_button {
+    icon-name: "view-more-symbolic";
+    tooltip-text: _("Application Actions");
+    valign: center;
+
+    styles [
+      "flat",
+    ]
+  }
+}

@@ -27,20 +27,21 @@ host/
 | `freetype/` | Font discovery and rasterisation |
 | `curses/` | Character-cell terminal |
 | `mesa/` | EGL rendering contexts for OpenGL |
-| `none/` | Stubs for functions a port does not integrate natively |
+| `none/` | Stubs for functions a port does not integrate natively, including the dialog helper outside Linux |
 
 Public contracts: `memory.h`, `clock.h`, `system.h`, `process.h`,
 `process_supervisor.h`, `library.h`, `thread.h` (threads and
 `lx_host_thread_local_*` values), `sync.h`, `shared_memory.h`, `mailbox.h`,
 `fs.h`, `socket.h`, `network.h`, `tls.h` (the `lx_host_tls_*` transport),
 `fatal.h`, `window.h`, `input.h`, `desktop.h`, `video_frame.h`, `audio.h`,
-`clipboard.h`, `print.h`, `terminal.h`, `font.h`, `opengl.h`, `gl/dispatch.h`,
+`clipboard.h`, `print.h`, `dialog.h` (the native dialog helper), `terminal.h`, `font.h`, `opengl.h`, `gl/dispatch.h`,
 `gl/constants.h`, `codepage_tables.h` (data) and `abi.h`.
 
 Functions: `system` (memory, clocks, OS and CPU names), `process`, `thread`
 (threads, thread-local values, synchronization), `ipc` (shared memory,
 mailboxes), `fs`, `net` (sockets, resolver, interfaces, raw ICMP/UDP, TLS),
-`fatal` (report and dialog), `window`, `input`, `desktop`, `audio`,
+`fatal` (report and dialog), `dialog` (desktop dialogs
+from a separate helper process: `2ine-dialog` on Linux, none elsewhere), `window`, `input`, `desktop`, `audio`,
 `clipboard`, `print`, `terminal`, `font` and `opengl`. A missing adapter
 directory is a missing port.
 

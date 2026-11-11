@@ -11,6 +11,7 @@ set(TWOINE_HOST_FUNCTIONS
     net
     fatal
     fatal_dialog
+    dialog
     window
     input
     desktop
@@ -26,11 +27,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(TWOINE_HOST_SELECT_desktop none)
     set(TWOINE_HOST_SELECT_window sdl none)
     set(TWOINE_HOST_SELECT_fatal_dialog core sdl)
+    set(TWOINE_HOST_SELECT_dialog linux)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(TWOINE_HOST_PLATFORM macos)
     set(TWOINE_HOST_SELECT_desktop core posix macos)
     set(TWOINE_HOST_SELECT_window sdl macos)
     set(TWOINE_HOST_SELECT_fatal_dialog core macos)
+    # Cocoa presents macOS dialogs in-process.
+    set(TWOINE_HOST_SELECT_dialog none)
 elseif(WIN32)
     # The Windows adapters by function. fs, net and fatal have none, so the
     # configuration stops.
@@ -42,6 +46,7 @@ elseif(WIN32)
     set(TWOINE_HOST_SELECT_desktop none)
     set(TWOINE_HOST_SELECT_window sdl none)
     set(TWOINE_HOST_SELECT_fatal_dialog core sdl)
+    set(TWOINE_HOST_SELECT_dialog none)
     set(TWOINE_HOST_SELECT_clipboard core sdl win)
     set(TWOINE_HOST_SELECT_print core win)
     message(

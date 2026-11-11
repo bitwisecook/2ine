@@ -1,0 +1,47 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineFormDialog: Adw.Dialog {
+  content-width: 620;
+  content-height: 560;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      show-start-title-buttons: false;
+      show-end-title-buttons: false;
+
+      [start]
+      Button cancel_button {
+        label: _("Cancel");
+        clicked => $on_cancel() swapped;
+      }
+
+      [end]
+      Button accept_button {
+        label: _("Save");
+        clicked => $on_accept() swapped;
+
+        styles [
+          "suggested-action",
+        ]
+      }
+
+      [end]
+      Adw.Spinner spinner {
+        visible: false;
+      }
+    }
+
+    [top]
+    Adw.Banner error_banner {
+      revealed: false;
+      use-markup: false;
+    }
+
+    content: Box body {
+      orientation: vertical;
+      spacing: 12;
+    };
+  };
+}

@@ -1,0 +1,178 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+#
+# Flatpak build of the native GNOME ball manager and its portable OS/2 runtime.
+# Every input is pinned; the build runs without network access. Regenerate
+# cargo-sources.json after changing apps/gnome/Cargo.lock (see docs/flatpak.md).
+# Directory sources name the repository root relative to this manifest.
+app-id: io.github.bitwisecook.Twoine.Ball
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: 2ine-ball
+finish-args:
+  # GTK display, input and GPU access for the manager and guest windows.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # PCM, MIDI and PC-speaker output from guest applications.
+  - --socket=pulseaudio
+  # OS/2 TCP/IP, DNS and TLS bridging for guest applications.
+  - --share=network
+  # Balls, mapped folders and original installation media live in user folders.
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  # Show files in the file manager from Drives and Logs.
+  - --talk-name=org.freedesktop.FileManager1
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /lib/cmake
+  - /share/man
+  - '*.a'
+modules:
+  # host_tls.c requires OpenSSL 4.1 or later, newer than the platform's OpenSSL.
+  - name: openssl
+    buildsystem: simple
+    build-commands:
+      - ./Configure --prefix=/app --libdir=lib --openssldir=/etc/ssl shared no-tests no-docs
+      - make -j"$FLATPAK_BUILDER_N_JOBS"
+      - make install_sw
+    cleanup:
+      - /bin
+    sources:
+      - type: archive
+        url: https://github.com/openssl/openssl/releases/download/openssl-4.1.0/openssl-4.1.0.tar.gz
+        sha256: 50c17baf54cb008f6ce42d50deb4b28050a1aad711636cabd4b241c7e90cc2fd
+
+  # The portable Unicorn runtime with SDL, FFmpeg, FreeType and MIDI built from
+  # the same pinned sources the CMake project downloads for other builds.
+  - name: twoine-runtime
+    buildsystem: cmake-ninja
+    builddir: true
+    no-make-install: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DTWOINE_PORTABLE_LOADER=ON
+      - -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON
+      - -DCMAKE_INSTALL_RPATH=$ORIGIN
+      - -DOPENSSL_ROOT_DIR=/app
+      - -DTWOINE_UNICORN_SOURCE_DIR=/run/build/twoine-runtime/deps/unicorn
+      - -DTWOINE_SDL3_SOURCE_DIR=/run/build/twoine-runtime/deps/sdl3
+      - -DTWOINE_FFMPEG_SOURCE_DIR=/run/build/twoine-runtime/deps/ffmpeg
+      - -DTWOINE_FREETYPE_SOURCE_DIR=/run/build/twoine-runtime/deps/freetype
+      - -DTWOINE_FONT_DATA_DIR=/run/build/twoine-runtime/deps/fonts
+      - -DTWOINE_MIDI_DATA_DIR=/run/build/twoine-runtime/deps/midi
+      - -DTWOINE_FLUIDSYNTH_SOURCE_DIR=/run/build/twoine-runtime/deps/fluidsynth
+      - -DTWOINE_INSTPATCH_SOURCE_DIR=/run/build/twoine-runtime/deps/instpatch
+      - -DTWOINE_LIQUIDSFZ_SOURCE_DIR=/run/build/twoine-runtime/deps/liquidsfz
+    post-install:
+      - |
+        set -eu
+        runtime=/app/lib/2ine-ball/runtime
+        install -d "$runtime"
+        cp -a lx_loader 2ine-ball lib*.so* fonts soundfonts "$runtime"/
+        for file in runtime-capabilities.json 2ine-build.json ffmpeg-build.json; do
+          [ ! -f "$file" ] || install -m644 "$file" "$runtime/$file"
+        done
+        # Copy private libraries built outside the platform beside the loader.
+        for binary in "$runtime"/lx_loader "$runtime"/lib*.so*; do
+          ldd "$binary" | awk '/=> \// { print $3 }' | while read -r library; do
+            case "$library" in
+              /usr/*|/lib/*|/app/lib/2ine-ball/*) ;;
+              *) cp -n "$library" "$runtime"/ ;;
+            esac
+          done
+        done
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - build
+          - apps/gnome/flatpak
+      # The same Unicorn revision as CI; the embedded build verifies its sources.
+      - type: git
+        url: https://github.com/unicorn-engine/unicorn.git
+        commit: 8028ec436f2d9376525352dd38ed9ed6b9f6be10
+        dest: deps/unicorn
+      - type: archive
+        url: https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz
+        sha256: 9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
+        dest: deps/sdl3
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+        sha256: 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+        dest: deps/ffmpeg
+      - type: archive
+        url: https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz
+        sha256: 36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f
+        dest: deps/freetype
+      - type: archive
+        url: https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz
+        sha256: 7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0
+        dest: deps/fonts
+      - type: archive
+        url: https://github.com/FluidSynth/fluidsynth/archive/refs/tags/v2.4.8.tar.gz
+        sha256: d6d04e9014557906ee42aa1fe3cd580840ea482d4c3b1a45fddd45ec606d6e97
+        dest: deps/fluidsynth
+      - type: archive
+        url: https://github.com/swami/libinstpatch/archive/refs/tags/v1.1.7.tar.gz
+        sha256: b388ab6f843559fc2da94837c37dfd4cf5973cf7cc2a0ce3cb33260b81377e9f
+        dest: deps/instpatch
+      - type: archive
+        url: https://github.com/swesterfeld/liquidsfz/releases/download/0.4.2/liquidsfz-0.4.2.tar.bz2
+        sha256: fd93c122e3f92c83e82cd76050416d4e77c7bab3a91c84315bc249618d3d6e6e
+        dest: deps/liquidsfz
+      - type: file
+        url: https://raw.githubusercontent.com/schellingb/TinySoundFont/853a0a171759f1ddba0de1442133a75912bbeffa/tsf.h
+        sha256: 70d55963c98f60ebb81518eaa1f25d46888d5180eb5f5289fd6b74ffc177d197
+        dest: deps/midi
+      - type: file
+        url: https://raw.githubusercontent.com/schellingb/TinySoundFont/853a0a171759f1ddba0de1442133a75912bbeffa/LICENSE
+        sha256: ef10cb839de73fb6d5d32ea7151979e87809a6df70dc7e7ee8457ae1c9e7aa7e
+        dest: deps/midi
+        dest-filename: TinySoundFont-LICENSE
+      - type: file
+        url: https://github.com/pianobooster/fluid-soundfont/releases/download/v3.1/FluidR3_GM.sf2
+        sha256: 74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0
+        dest: deps/midi
+      - type: file
+        url: https://raw.githubusercontent.com/pianobooster/fluid-soundfont/v3.1/COPYING
+        sha256: 8ef830b65c97a976b86e34bb5fde08d99dfb1db13c4149b5b20bc837ac6c4568
+        dest: deps/midi
+        dest-filename: FluidR3-MIT.txt
+      - type: file
+        url: https://raw.githubusercontent.com/pianobooster/fluid-soundfont/v3.1/README
+        sha256: 2f92d462684629f207e43815115b79d7f1ce130d30ca8792b7d82b398a8306f9
+        dest: deps/midi
+        dest-filename: FluidR3-README.txt
+
+  # The Rust GTK 4/libadwaita manager. It links the C ball engine statically.
+  - name: twoine-gnome
+    buildsystem: simple
+    build-options:
+      env:
+        CARGO_HOME: /run/build/twoine-gnome/cargo
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo --offline build --release --locked --manifest-path apps/gnome/Cargo.toml
+      - install -Dm755 build/gnome/release/2ine-ball /app/bin/2ine-ball
+      - install -Dm755 build/gnome/release/2ine-dialog /app/lib/2ine-ball/runtime/2ine-dialog
+      - install -Dm644 apps/gnome/data/io.github.bitwisecook.Twoine.Ball.desktop /app/share/applications/io.github.bitwisecook.Twoine.Ball.desktop
+      - install -Dm644 apps/gnome/data/io.github.bitwisecook.Twoine.Ball.metainfo.xml /app/share/metainfo/io.github.bitwisecook.Twoine.Ball.metainfo.xml
+      - install -Dm644 apps/gnome/data/io.github.bitwisecook.Twoine.Ball.mime.xml /app/share/mime/packages/io.github.bitwisecook.Twoine.Ball.xml
+      - install -Dm644 apps/gnome/data/icons/io.github.bitwisecook.Twoine.Ball.svg /app/share/icons/hicolor/scalable/apps/io.github.bitwisecook.Twoine.Ball.svg
+      - install -Dm644 apps/gnome/data/icons/io.github.bitwisecook.Twoine.Ball-symbolic.svg /app/share/icons/hicolor/symbolic/apps/io.github.bitwisecook.Twoine.Ball-symbolic.svg
+      - install -Dm644 LICENSE.txt /app/share/licenses/io.github.bitwisecook.Twoine.Ball/LICENSE.txt
+    sources:
+      - type: dir
+        path: ../../..
+        skip:
+          - build
+          - apps/gnome/flatpak
+      - cargo-sources.json

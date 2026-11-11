@@ -15,7 +15,7 @@ its own ctest cases; test executables are written to the tests build directory.
 |---|---|
 | `storage/`, `host/`, `emulator/` | C unit tests of those components, and the scripts paired with their test executables |
 | `os2/{baseos,ps,awe,mm,mptn,opengl}/` | C tests of the OS/2 DLLs, by IBM group |
-| `ball/`, `environment/`, `emulator/launch/`, `apps/gnome/`, `tools/` | Python unit tests of the ball store and facade, the installation manager, launch planning, the GNOME frontend models and the tools |
+| `ball/`, `environment/`, `emulator/launch/`, `tools/` | Python unit tests of the ball store and facade, the installation manager, launch planning and the tools |
 | `integration/` | Scripts that run generated and original OS/2 programs: `harness/` (guest image builders, fixtures, X11 helpers), `emulator/`, `host/`, `os2/<group>/`, `ports/`, `applications/`, `ball/`, `apps/{gnome,macos}/` |
 | `programs/` | Guest program sources and retained fixtures |
 | `architecture/` | `check_boundaries.py`, the source-ownership checker (ctest `source_boundaries`) |
@@ -23,6 +23,12 @@ its own ctest cases; test executables are written to the tests build directory.
 Run the Python unit tests with
 `python3 -m unittest discover -s tests -t . -p 'test_*.py'`. Integration
 scripts import their helpers as `tests.integration.harness.<module>`.
+
+The Rust GNOME manager keeps its tests in its crate, as Cargo expects: unit
+tests beside the code in `apps/gnome/src/` and the `ui` suite, which drives the
+real window, in `apps/gnome/tests/`. `make gnome-test` runs them; see
+[the GNOME manager](gnome-app.md#verification). The macOS manager's tests are
+likewise in `apps/macos/Tests/`.
 
 `legacy_file_apis` builds synthetic NE/LX guests without an external compiler.
 It verifies writable preloaded NE stacks, NLS case mapping and export ordinals,

@@ -8,6 +8,7 @@ Each language has one formatter and one configuration file at the repository roo
     Python                ruff format and ruff check (pyproject.toml)
     Swift                 swift-format (.swift-format)
     CMake                 gersemi (.gersemirc)
+    Rust                  rustfmt through cargo fmt (apps/gnome/Cargo.toml)
 
 Python formatters run through uvx so the pinned version is used without
 installing it into the development environment.
@@ -24,7 +25,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RUFF = "ruff@0.15.20"
 GERSEMI = "gersemi@0.29.2"
-LANGUAGES = ("c", "python", "swift", "cmake")
+LANGUAGES = ("c", "python", "swift", "cmake", "rust")
+# The Rust crates; rustfmt comes with the toolchain named by each rust-version.
+RUST_MANIFESTS = ("apps/gnome/Cargo.toml",)
 
 # Third-party, reference and generated trees keep the layout of their origin.
 EXCLUDED_PREFIXES = ("research/", "third_party/", "build/")
@@ -69,6 +72,11 @@ def commands(language: str, check: bool) -> list[list[str]]:
     if language == "cmake":
         files = tracked("CMakeLists.txt", "*/CMakeLists.txt", "*.cmake")
         return [uvx(GERSEMI, "--check" if check else "-i", *files)]
+    if language == "rust":
+        if shutil.which("cargo") is None:
+            raise FileNotFoundError("cargo with rustfmt is required; install the Rust toolchain")
+        mode = ["--check"] if check else []
+        return [["cargo", "fmt", "--manifest-path", manifest, *mode] for manifest in RUST_MANIFESTS]
     raise ValueError(f"unknown language: {language}")
 
 
