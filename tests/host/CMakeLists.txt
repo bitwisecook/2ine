@@ -298,4 +298,23 @@ if(TARGET pmwinx)
         )
         add_test(NAME process_priority_linux_policy COMMAND twoine_process_priority_linux_tests)
     endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # A fake helper stands in for 2ine-dialog, so the protocol is tested
+        # without a desktop session.
+        add_executable(
+            twoine_host_dialog_linux_tests
+            linux/test_dialog_helper.c
+            ${PROJECT_SOURCE_DIR}/host/linux/dialog/helper.c
+            ${PROJECT_SOURCE_DIR}/host/linux/print/dialog.c
+        )
+        target_include_directories(
+            twoine_host_dialog_linux_tests
+            PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/host/include"
+        )
+        add_test(NAME host_dialog_linux_protocol COMMAND twoine_host_dialog_linux_tests)
+        set_tests_properties(
+            host_dialog_linux_protocol
+            PROPERTIES TIMEOUT 20 WORKING_DIRECTORY "${PROJECT_BINARY_DIR}"
+        )
+    endif()
 endif()

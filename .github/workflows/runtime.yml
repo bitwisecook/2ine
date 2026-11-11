@@ -17,7 +17,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes libarchive-dev
       - name: Install Linux application dependencies
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: sudo apt-get update && sudo apt-get install --yes libglib2.0-dev libsndfile1-dev libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 dbus-x11 patchelf rpm desktop-file-utils appstream
+        run: sudo apt-get update && sudo apt-get install --yes libglib2.0-dev libsndfile1-dev libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6 libgtk-4-dev libadwaita-1-dev blueprint-compiler dbus-x11 patchelf rpm desktop-file-utils appstream
       - name: Install Mac application synthesis dependencies
         if: runner.os == 'macOS' && matrix.profile == 'application'
         run: brew install glib libsndfile pkgconf
@@ -45,30 +45,26 @@ jobs:
         run: cmake --build build-runtime --config Release --parallel 2
       - name: Test
         run: ctest --test-dir build-runtime -C Release --output-on-failure
+      - name: Install Rust toolchain
+        if: runner.os == 'Linux' && matrix.profile == 'application'
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt && rustup default stable
       - name: Test native GNOME ball manager
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_ball.py --build build-runtime
-      - name: Test native GNOME drive and application editors
-        if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_features.py --build build-runtime
-      - name: Test native bank import, channel mapping and source credits
-        if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_audio.py --build build-runtime
-      - name: Test native configuration, ball lifecycle and adaptive navigation
-        if: runner.os == 'Linux' && matrix.profile == 'application'
         run: |
-          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_configuration.py --build build-runtime
-          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_ball_management.py --build build-runtime
-          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_native.py --build build-runtime
+          cargo fmt --manifest-path apps/gnome/Cargo.toml --check
+          cargo clippy --manifest-path apps/gnome/Cargo.toml --locked --all-targets -- -D warnings
+          TWOINE_TEST_BUILD="$PWD/build-runtime" xvfb-run -a dbus-run-session -- cargo test --manifest-path apps/gnome/Cargo.toml --locked
+          cargo build --release --manifest-path apps/gnome/Cargo.toml --locked
       - name: Validate GNOME metadata and build native packages
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: |
+          python3 tools/codegen/rust_licenses.py --check
           desktop-file-validate apps/gnome/data/*.desktop
           appstreamcli validate --no-net apps/gnome/data/*.metainfo.xml
-          python3 apps/gnome/package.py --build build-runtime
+          python3 apps/gnome/package.py --build build-runtime --frontend build/gnome/release/2ine-ball --output build-gnome/packages
       - name: Test relocated Debian package
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/apps/gnome/gnome_package.py build-gnome/packages/*.deb
+        run: xvfb-run -a dbus-run-session -- python3 tests/integration/apps/gnome/gnome_package.py build-gnome/packages/*.deb
       - name: Upload native Linux packages
         if: runner.os == 'Linux' && matrix.profile == 'application'
         uses: actions/upload-artifact@v4
@@ -95,6 +91,6 @@ jobs:
           name: gnome-packages
           path: packages
       - name: Install RPM on GNOME 51 libraries
-        run: dnf install -y packages/*.rpm mesa-dri-drivers xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon patchelf cpio
+        run: dnf install -y packages/*.rpm mesa-dri-drivers xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon patchelf cpio python3
       - name: Exercise installed frontend and relocated RPM
         run: xvfb-run -a dbus-run-session -- python3 tests/integration/apps/gnome/gnome_package.py packages/*.rpm

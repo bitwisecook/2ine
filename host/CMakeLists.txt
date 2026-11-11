@@ -173,13 +173,14 @@ function(twoine_add_host_services target backend)
     endif()
 endfunction()
 
-# Windows, input, desktop integration, audio, clipboard, printing, fonts and
-# the fatal-report dialog, linked into lib2ine.
+# Windows, input, desktop integration, audio, clipboard, printing, fonts, the
+# fatal-report dialog and the native dialog helper they use, linked into lib2ine.
 function(twoine_add_host_media target)
     twoine_add_host_functions(
         ${target}
         PRIVATE
         fatal_dialog
+        dialog
         window
         input
         desktop

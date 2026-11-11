@@ -13,6 +13,14 @@ jobs:
         run: python -m pip install "clang-format==$(cat tools/dev/clang-format-version)" uv
       - name: Check C, Objective-C, Python and CMake
         run: python tools/format.py --check c python cmake
+  rust-formatting:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the crate's Rust toolchain with rustfmt
+        run: rustup toolchain install 1.99 --profile minimal --component rustfmt && rustup default 1.99
+      - name: Check Rust
+        run: python3 tools/format.py --check rust
   swift-formatting:
     runs-on: ubuntu-24.04
     container: swift:6.4

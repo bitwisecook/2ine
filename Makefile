@@ -35,18 +35,27 @@ macos-engine:
 	cmake -S ball -B build-ball-engine -G Ninja
 	cmake --build build-ball-engine
 
-GNOME_RUNTIME_BUILD ?= $(CURDIR)/build-portable
-GNOME_OUTPUT ?= $(CURDIR)/build-gnome/packages
-.PHONY: gnome-app gnome-packages gnome-test gnome-snap
+GNOME_RUNTIME_BUILD ?= $(CURDIR)/build/runtime
+GNOME_OUTPUT ?= $(CURDIR)/build/gnome/packages
+CARGO ?= cargo
+.PHONY: gnome-app gnome-run gnome-packages gnome-test gnome-snap gnome-flatpak
 
 gnome-app:
-	$(PYTHON) -m apps.gnome.twoine_gnome --build "$(GNOME_RUNTIME_BUILD)"
+	$(CARGO) build --release --locked --manifest-path apps/gnome/Cargo.toml
 
-gnome-packages:
-	$(PYTHON) apps/gnome/package.py --build "$(GNOME_RUNTIME_BUILD)" --output "$(GNOME_OUTPUT)"
+gnome-run:
+	$(CARGO) run --manifest-path apps/gnome/Cargo.toml -- --build "$(GNOME_RUNTIME_BUILD)"
+
+gnome-packages: gnome-app
+	$(PYTHON) apps/gnome/package.py --build "$(GNOME_RUNTIME_BUILD)" --frontend build/gnome/release/2ine-ball --output "$(GNOME_OUTPUT)"
 
 gnome-test:
-	dbus-run-session -- xvfb-run -a $(PYTHON) tests/integration/apps/gnome/gnome_ball.py --build "$(GNOME_RUNTIME_BUILD)"
+	$(CARGO) fmt --manifest-path apps/gnome/Cargo.toml --check
+	$(CARGO) clippy --manifest-path apps/gnome/Cargo.toml --all-targets -- -D warnings
+	$(CARGO) test --manifest-path apps/gnome/Cargo.toml
 
 gnome-snap:
-	snapcraft pack --use-lxd --output "$(CURDIR)/build-gnome-snap"
+	snapcraft pack --use-lxd --output "$(CURDIR)/build/gnome/snap"
+
+gnome-flatpak:
+	flatpak-builder --user --install-deps-from=flathub --force-clean --state-dir build/flatpak/state --repo=build/flatpak/repo build/flatpak/app apps/gnome/flatpak/io.github.bitwisecook.Twoine.Ball.yml

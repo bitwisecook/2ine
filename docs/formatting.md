@@ -17,6 +17,7 @@ python3 tools/format.py --check c swift  # selected languages only
 | Python | ruff format + ruff check | `pyproject.toml` | `RUFF` in `tools/format.py` |
 | Swift | swift-format | `.swift-format` | Swift toolchain 6.4 |
 | CMake | gersemi | `.gersemirc` | `GERSEMI` in `tools/format.py` |
+| Rust | rustfmt (`cargo fmt`) | rustfmt defaults, the crate's edition | Rust toolchain 1.99 (`rust-version` in `apps/gnome/Cargo.toml`) |
 
 Ruff and gersemi run through `uvx`, so only `uv` needs installing. Install the
 pinned clang-format with `python3 -m pip install clang-format==21.1.8`, or set
@@ -42,4 +43,5 @@ generator's layout; validate it with `python3 tools/codegen/lxapigen.py --check`
 generated definitions.
 
 CI checks formatting without modifying sources. Build and runtime checks remain
-separate from formatting checks.
+separate from formatting checks; Clippy, with warnings denied, runs with the
+GNOME manager's build and tests (`make gnome-test`).

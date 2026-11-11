@@ -1,6 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* SDL selects the desktop's own message box, such as Zenity under GNOME. */
+/* A native dialog helper presents the failure where the host has one (the
+   GNOME 2ine-dialog on Linux); SDL's message box is the fallback. */
 #include "host/core/fatal/dialog_hooks.h"
+#include "host/dialog.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
@@ -30,6 +32,9 @@ static void open_report(const char *path)
 
 int lx_host_fatal_present(const char *title, const char *message, const char *report)
 {
+    const char *arguments[] = {"fatal", title, message, report, NULL};
+    if (lx_host_dialog_run(arguments, NULL) != LX_HOST_SAVE_ERROR)
+        return 0;
     SDL_MessageBoxButtonData buttons[2] = {
         {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT | SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT,
          BUTTON_CLOSE, "Close"},

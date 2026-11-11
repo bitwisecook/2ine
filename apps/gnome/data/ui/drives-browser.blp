@@ -1,0 +1,139 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $TwoineGuestBrowser: Box {
+  orientation: vertical;
+  spacing: 12;
+  vexpand: true;
+
+  Adw.WrapBox {
+    child-spacing: 6;
+    line-spacing: 6;
+
+    DropDown drives {
+      valign: center;
+
+      accessibility {
+        label: _("Drive");
+      }
+    }
+
+    Button up {
+      icon-name: "go-up-symbolic";
+      tooltip-text: _("Parent Folder");
+      valign: center;
+      clicked => $on_go_up() swapped;
+
+      accessibility {
+        label: _("Parent folder");
+      }
+    }
+
+    Entry address {
+      hexpand: true;
+      placeholder-text: "C:\\OS2";
+      activate => $on_go() swapped;
+
+      accessibility {
+        label: _("OS/2 folder");
+      }
+    }
+
+    Button {
+      icon-name: "go-next-symbolic";
+      tooltip-text: _("Go to Folder");
+      valign: center;
+      clicked => $on_go() swapped;
+
+      accessibility {
+        label: _("Go to folder");
+      }
+    }
+  }
+
+  Label status {
+    xalign: 0;
+    wrap: true;
+    wrap-mode: word_char;
+    selectable: true;
+
+    styles [
+      "dim-label",
+    ]
+  }
+
+  Adw.Spinner loading {
+    visible: false;
+    halign: center;
+
+    accessibility {
+      label: _("Opening folder");
+    }
+  }
+
+  CheckButton relevant_only {
+    label: _("Relevant Files Only");
+    active: true;
+    visible: false;
+    toggled => $on_relevant_toggled() swapped;
+  }
+
+  $TwoineFileList files {}
+
+  Adw.StatusPage empty_state {
+    title: _("This Folder Is Empty");
+    icon-name: "folder-symbolic";
+    visible: false;
+    vexpand: true;
+
+    styles [
+      "compact",
+    ]
+
+    child: Button empty_action {
+      halign: center;
+      visible: false;
+      clicked => $on_recover() swapped;
+
+      styles [
+        "pill",
+        "suggested-action",
+      ]
+    };
+  }
+
+  Adw.WrapBox controls {
+    child-spacing: 6;
+    line-spacing: 6;
+    align: 1;
+    visible: false;
+
+    Button copy_button {
+      label: _("Import Files…");
+      visible: false;
+      clicked => $on_import_files() swapped;
+    }
+
+    Button folder_button {
+      label: _("Import Folder…");
+      visible: false;
+      clicked => $on_import_folder() swapped;
+    }
+
+    Button default_button {
+      label: _("Use as Default Folder");
+      tooltip-text: _("Start programs on this drive in the current folder");
+      visible: false;
+      clicked => $on_set_default() swapped;
+    }
+
+    Button choose_button {
+      visible: false;
+      clicked => $on_confirm() swapped;
+
+      styles [
+        "suggested-action",
+      ]
+    }
+  }
+}

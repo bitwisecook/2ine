@@ -189,6 +189,8 @@ HOST_FUNCTIONS = {
     "fs",
     "net",
     "fatal",
+    # Desktop dialogs run in a separate helper process (2ine-dialog on Linux).
+    "dialog",
     "window",
     "input",
     "desktop",

@@ -18,5 +18,5 @@
   <supports><control>pointing</control><control>keyboard</control><control>touch</control></supports>
   <recommends><display_length compare="ge">360</display_length></recommends>
   <content_rating type="oars-1.1"/>
-  <releases><release version="0.3" date="2026-11-03"><description><p>Native settings navigation, adaptive registry, searchable application launchers and application preferences, with OS/2 media recovery and shared runtime controls.</p></description></release><release version="0.1" date="2026-11-02"/></releases>
+  <releases><release version="0.6" date="2026-11-08"><description><p>Rewritten as a native Rust, GTK 4 and libadwaita application with Blueprint interfaces, a header view switcher, a removable media menu, Workplace Shell registration logs and typed registry editing.</p></description></release><release version="0.3" date="2026-11-03"><description><p>Native settings navigation, adaptive registry, searchable application launchers and application preferences, with OS/2 media recovery and shared runtime controls.</p></description></release><release version="0.1" date="2026-11-02"/></releases>
 </component>
